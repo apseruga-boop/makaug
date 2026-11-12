@@ -4,6 +4,7 @@ const db = require('../config/database');
 const { cleanText } = require('../middleware/validation');
 const { isConfigured, sendGA4Event } = require('../services/ga4Service');
 const { resolveVisitorCountry } = require('../services/visitorCountryService');
+const { annotateEventPayload } = require('../services/analyticsEventFilter');
 
 const router = express.Router();
 
@@ -54,6 +55,7 @@ router.post('/event', async (req, res, next) => {
     }
 
     const countryCode = resolveVisitorCountry(req, params) || null;
+    const payload = annotateEventPayload(params, req);
 
     const saved = await db.query(
       `INSERT INTO analytics_events (
@@ -66,7 +68,7 @@ router.post('/event', async (req, res, next) => {
         country_code
       ) VALUES ($1,$2,$3,$4,$5,$6,$7)
       RETURNING id, created_at`,
-      [eventName, clientId, userPhone || null, pagePath || null, source, JSON.stringify(params), countryCode]
+      [eventName, clientId, userPhone || null, pagePath || null, source, JSON.stringify(payload), countryCode]
     );
 
     const ga4Result = await sendGA4Event({

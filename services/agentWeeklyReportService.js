@@ -6,6 +6,7 @@ const db = require('../config/database');
 const { countryName } = require('./visitorCountryService');
 const { generateMakaugAgentNumber } = require('./authFlowService');
 const { resolveAgentByNumber } = require('./agentPhoneService');
+const { countableListingViewSql } = require('./analyticsEventFilter');
 
 const REPORT_TIMEZONE_OFFSET = '+03:00'; // Africa/Kampala, no DST
 const REPORT_STATUSES = ['draft', 'approved', 'sent'];
@@ -95,6 +96,103 @@ function sourceLabel(value) {
   const key = String(value || 'direct').toLowerCase().replace(/^www\./, '').replace(/\.(com|co\.ug|org|net)$/, '');
   if (SOURCE_LABELS[key]) return SOURCE_LABELS[key];
   return key.charAt(0).toUpperCase() + key.slice(1, 28);
+}
+
+const SOCIAL_VIEW_CHANNELS = [
+  { key: 'facebook', label: 'Facebook' },
+  { key: 'instagram', label: 'Instagram' },
+  { key: 'tiktok', label: 'TikTok' },
+  { key: 'youtube', label: 'YouTube' },
+  { key: 'whatsapp_status', label: 'WhatsApp status' }
+];
+
+// Countries that often show up as cloud or scraper traffic on makaug.
+// Real buyer markets (UG, KE, TZ, RW, GB, US, AE, CA, AU, ZA) are left out.
+const LIKELY_DATACENTRE_COUNTRY_CODES = new Set(['SG', 'CN', 'NL', 'IE', 'FI', 'SC', 'HK', 'RU']);
+
+function cleanSocialViews(input = {}) {
+  const src = input && typeof input === 'object' ? input : {};
+  const out = {};
+  SOCIAL_VIEW_CHANNELS.forEach(({ key }) => {
+    const n = toInt(src[key]);
+    if (n) out[key] = n;
+  });
+  return out;
+}
+
+function socialViewsTotal(views = {}) {
+  return SOCIAL_VIEW_CHANNELS.reduce((sum, { key }) => sum + toInt(views[key]), 0);
+}
+
+function formatSocialViewsLine(views = {}) {
+  const parts = SOCIAL_VIEW_CHANNELS
+    .map(({ key, label }) => (toInt(views[key]) ? `${label} ${toInt(views[key]).toLocaleString('en-GB')}` : ''))
+    .filter(Boolean);
+  return parts.join(' · ');
+}
+
+function mergeReportExtras(computed = {}, existing = {}) {
+  const extras = { ...(computed || {}) };
+  const saved = cleanSocialViews(existing?.social_views);
+  if (Object.keys(saved).length) extras.social_views = saved;
+  else delete extras.social_views;
+  return extras;
+}
+
+function attachExtrasInsights(insights, extras = {}) {
+  const lines = Array.isArray(insights) ? insights.slice() : [];
+  if (extras.rank) lines.push(`You ranked #${extras.rank.position} of ${extras.rank.total} agents on makaug by listing views.`);
+  if (extras.busiest_day && extras.peak_hour) lines.push(`Busiest day was ${extras.busiest_day.day}; most views came ${extras.peak_hour.label} (Kampala time).`);
+  const topSource = (extras.traffic_sources || [])[0];
+  if (topSource) lines.push(`Most visitors found your listings via ${topSource.source === 'direct' ? 'direct visits' : topSource.source}.`);
+  return lines;
+}
+
+function countryVisitorTotals(topCountries = []) {
+  const list = Array.isArray(topCountries) ? topCountries : [];
+  const total = list.reduce((sum, c) => sum + toInt(c.visitors), 0);
+  const datacentre = list.filter((c) => LIKELY_DATACENTRE_COUNTRY_CODES.has(String(c.code || '').toUpperCase()));
+  const datacentreVisitors = datacentre.reduce((sum, c) => sum + toInt(c.visitors), 0);
+  const uganda = list.filter((c) => String(c.code || '').toUpperCase() === 'UG').reduce((sum, c) => sum + toInt(c.visitors), 0);
+  const abroadReal = list
+    .filter((c) => {
+      const code = String(c.code || '').toUpperCase();
+      return code && code !== 'UG' && !LIKELY_DATACENTRE_COUNTRY_CODES.has(code);
+    })
+    .reduce((sum, c) => sum + toInt(c.visitors), 0);
+  return {
+    total,
+    uganda,
+    abroadReal,
+    datacentreVisitors,
+    datacentreShare: total ? Math.round((datacentreVisitors / total) * 100) : 0,
+    ugandaShare: total ? Math.round((uganda / total) * 100) : 0,
+    datacentreNames: datacentre.slice(0, 3).map((c) => c.name).filter(Boolean)
+  };
+}
+
+function propertyOpenMatchSql(alias, idsParam, startParam, endParam) {
+  return `${alias}.event_name = 'property_open'
+         AND ${alias}.created_at >= $${startParam} AND ${alias}.created_at < $${endParam}
+         AND ${alias}.payload->>'property_id' = ANY($${idsParam}::text[])
+         AND ${countableListingViewSql(alias)}`;
+}
+
+function prepareBulkReportSends(reports = []) {
+  return (Array.isArray(reports) ? reports : []).map((report) => {
+    if (!report || !report.id) {
+      return { ok: false, error: 'Report not found' };
+    }
+    const status = String(report.status || '');
+    if (status !== 'approved' && status !== 'sent') {
+      return { ok: false, id: report.id, agent: report.agent, error: 'Approve the report before sending it to the agent' };
+    }
+    const to = String(report.agent?.whatsapp || report.agent?.phone || '').replace(/\D+/g, '');
+    if (!to || to.length < 9) {
+      return { ok: false, id: report.id, agent: report.agent, error: 'No WhatsApp number to send to' };
+    }
+    return { ok: true, id: report.id, agent: report.agent, to, report };
+  });
 }
 
 function cleanMetrics(input = {}) {
@@ -191,9 +289,7 @@ async function computePeriodMetrics(ids, startsAt, endsBefore) {
     db.query(
       `SELECT COUNT(*)::int AS views, COUNT(DISTINCT e.client_id)::int AS visitors
        FROM analytics_events e
-       WHERE e.event_name = 'property_open'
-         AND e.created_at >= $2 AND e.created_at < $3
-         AND e.payload->>'property_id' = ANY($1::text[])`,
+       WHERE ${propertyOpenMatchSql('e', 1, 2, 3)}`,
       [ids, startsAt, endsBefore]
     ),
     // Honest counts: one per person, repeats and test leads excluded.
@@ -243,8 +339,7 @@ async function computeTopListings(ids, startsAt, endsBefore, limit = 5) {
      v AS (
        SELECT e.payload->>'property_id' AS pid, COUNT(*)::int AS views, COUNT(DISTINCT e.client_id)::int AS visitors
        FROM analytics_events e
-       WHERE e.event_name = 'property_open' AND e.created_at >= $2 AND e.created_at < $3
-         AND e.payload->>'property_id' = ANY($1::text[])
+       WHERE ${propertyOpenMatchSql('e', 1, 2, 3)}
        GROUP BY 1
      ),
      q AS (
@@ -284,9 +379,8 @@ async function computeTopCountries(ids, startsAt, endsBefore, limit = 6) {
   const result = await db.query(
     `SELECT e.country_code AS code, COUNT(DISTINCT e.client_id)::int AS visitors
      FROM analytics_events e
-     WHERE e.event_name = 'property_open' AND e.created_at >= $2 AND e.created_at < $3
+     WHERE ${propertyOpenMatchSql('e', 1, 2, 3)}
        AND e.country_code IS NOT NULL
-       AND e.payload->>'property_id' = ANY($1::text[])
      GROUP BY 1
      ORDER BY 2 DESC
      LIMIT $4`,
@@ -317,24 +411,21 @@ async function computeExtras(agentId, ids, startsAt, endsBefore, metrics = {}) {
     safe(db.query(
       `SELECT LOWER(COALESCE(NULLIF(e.payload->>'traffic_source', ''), 'direct')) AS source, COUNT(DISTINCT e.client_id)::int AS visitors
        FROM analytics_events e
-       WHERE e.event_name = 'property_open' AND e.created_at >= $2 AND e.created_at < $3
-         AND e.payload->>'property_id' = ANY($1::text[])
+       WHERE ${propertyOpenMatchSql('e', 1, 2, 3)}
        GROUP BY 1 ORDER BY 2 DESC LIMIT 5`,
       [ids, startsAt, endsBefore]
     ), { rows: [] }),
     safe(db.query(
       `SELECT EXTRACT(DOW FROM e.created_at AT TIME ZONE 'Africa/Kampala')::int AS dow, COUNT(*)::int AS views
        FROM analytics_events e
-       WHERE e.event_name = 'property_open' AND e.created_at >= $2 AND e.created_at < $3
-         AND e.payload->>'property_id' = ANY($1::text[])
+       WHERE ${propertyOpenMatchSql('e', 1, 2, 3)}
        GROUP BY 1 ORDER BY 2 DESC LIMIT 1`,
       [ids, startsAt, endsBefore]
     ), { rows: [] }),
     safe(db.query(
       `SELECT (FLOOR(EXTRACT(HOUR FROM e.created_at AT TIME ZONE 'Africa/Kampala') / 2) * 2)::int AS band, COUNT(*)::int AS views
        FROM analytics_events e
-       WHERE e.event_name = 'property_open' AND e.created_at >= $2 AND e.created_at < $3
-         AND e.payload->>'property_id' = ANY($1::text[])
+       WHERE ${propertyOpenMatchSql('e', 1, 2, 3)}
        GROUP BY 1 ORDER BY 2 DESC LIMIT 1`,
       [ids, startsAt, endsBefore]
     ), { rows: [] }),
@@ -343,6 +434,7 @@ async function computeExtras(agentId, ids, startsAt, endsBefore, metrics = {}) {
          SELECT e.payload->>'property_id' AS pid, COUNT(*)::int AS views
          FROM analytics_events e
          WHERE e.event_name = 'property_open' AND e.created_at >= $2 AND e.created_at < $3
+           AND ${countableListingViewSql('e')}
          GROUP BY 1
        ),
        per_agent AS (
@@ -368,6 +460,7 @@ async function computeExtras(agentId, ids, startsAt, endsBefore, metrics = {}) {
        WHERE e.event_name = 'property_open' AND e.created_at >= date_trunc('week', NOW() AT TIME ZONE 'Africa/Kampala') AT TIME ZONE 'Africa/Kampala'
          AND e.country_code IS NOT NULL
          AND e.payload->>'property_id' = ANY($1::text[])
+         AND ${countableListingViewSql('e')}
        GROUP BY 1 ORDER BY 2 DESC LIMIT 6`,
       [ids]
     ), { rows: [] })
@@ -400,15 +493,21 @@ async function countActiveListings(agentId) {
   return toInt(result.rows[0]?.total);
 }
 
-function buildInsights({ metrics = {}, previous = {}, topListings = [], topCountries = [], activeListings = 0 } = {}) {
+function buildInsights({ metrics = {}, previous = {}, topListings = [], topCountries = [], activeListings = 0, extras = {} } = {}) {
   const insights = [];
   const nextSteps = [];
   const m = cleanMetrics(metrics);
   const p = cleanMetrics(previous);
   const totalEnquiries = m.enquiries + m.whatsapp_clicks;
   const prevEnquiries = p.enquiries + p.whatsapp_clicks;
+  const social = cleanSocialViews(extras.social_views);
+  const socialTotal = socialViewsTotal(social);
+  const countries = countryVisitorTotals(topCountries);
+  const peakHint = extras.busiest_day && extras.peak_hour
+    ? ` Most people looked on ${extras.busiest_day.day}s around ${extras.peak_hour.label} — share your best listings on WhatsApp just before then.`
+    : '';
 
-  if (!m.views && !totalEnquiries) {
+  if (!m.views && !totalEnquiries && !socialTotal) {
     insights.push('No one opened your listings this week.');
     nextSteps.push(activeListings
       ? 'Refresh your photos, titles and prices, then share your listings on WhatsApp and social media.'
@@ -430,23 +529,38 @@ function buildInsights({ metrics = {}, previous = {}, topListings = [], topCount
     insights.push(`${m.visitors.toLocaleString('en-GB')} different people looked at your listings — ${visitorChange >= 0 ? 'up' : 'down'} ${Math.abs(visitorChange)}% on last week.`);
   }
 
+  if (socialTotal) {
+    insights.push(`Social posts you tracked had ${socialTotal.toLocaleString('en-GB')} views (${formatSocialViewsLine(social)}).`);
+  }
+
   const enquiryChange = percentChange(totalEnquiries, prevEnquiries);
   if (totalEnquiries) {
     const rate = m.visitors ? Math.round((totalEnquiries / m.visitors) * 1000) / 10 : 0;
     insights.push(`${totalEnquiries} enquir${totalEnquiries === 1 ? 'y' : 'ies'}${enquiryChange !== null ? ` (${enquiryChange >= 0 ? '+' : ''}${enquiryChange}%)` : ''}${rate ? ` — ${rate}% of visitors got in touch` : ''}.`);
-  } else if (m.visitors >= 20) {
-    insights.push(`${m.visitors} people viewed your listings but none got in touch.`);
-    nextSteps.push('Check your prices and add clear photos and a short video — views without enquiries usually mean the listing is missing detail.');
+  } else if (m.visitors >= 20 || (m.views >= 20 && !totalEnquiries)) {
+    insights.push(`${m.visitors || m.views} people viewed your listings on makaug but none got in touch.`);
+    nextSteps.push(`Check your prices and add clear photos and a short video — views without enquiries usually mean the listing is missing detail.${peakHint}`);
   }
 
-  const totalCountryVisitors = topCountries.reduce((sum, c) => sum + toInt(c.visitors), 0);
-  if (totalCountryVisitors) {
-    const abroad = topCountries.filter((c) => c.code && c.code !== 'UG').reduce((sum, c) => sum + toInt(c.visitors), 0);
-    const share = Math.round((abroad / totalCountryVisitors) * 100);
-    if (share >= 10) {
-      const names = topCountries.filter((c) => c.code !== 'UG').slice(0, 3).map((c) => c.name).join(', ');
-      insights.push(`${share}% of your visitors are outside Uganda (${names}).`);
-      nextSteps.push('Add a video walk-through so buyers abroad can view without travelling.');
+  if (countries.total) {
+    if (countries.datacentreShare >= 40 && totalEnquiries === 0) {
+      const names = countries.datacentreNames.join(', ');
+      insights.push(`${countries.datacentreShare}% of recorded visitors came from ${names || 'countries that often include automated traffic'}. Treat that share with care and focus on the ${countries.uganda ? `${countries.ugandaShare}% in Uganda` : 'buyers you can reach in Uganda'}.`);
+      nextSteps.push('Share your strongest listings in Uganda WhatsApp groups and on your status, and reply to anyone who gets in touch within the hour.');
+    } else if (countries.abroadReal || (countries.total - countries.uganda - countries.datacentreVisitors) > 0 || (countries.uganda && countries.ugandaShare < 90)) {
+      const abroad = countries.total - countries.uganda;
+      const share = Math.round((abroad / countries.total) * 100);
+      if (share >= 10 && countries.abroadReal) {
+        const names = topCountries.filter((c) => {
+          const code = String(c.code || '').toUpperCase();
+          return code && code !== 'UG' && !LIKELY_DATACENTRE_COUNTRY_CODES.has(code);
+        }).slice(0, 3).map((c) => c.name).join(', ');
+        insights.push(`${share}% of your visitors are outside Uganda (${names}).`);
+        nextSteps.push('Add a video walk-through so buyers abroad can view without travelling.');
+      } else if (share >= 10 && !countries.abroadReal && countries.datacentreShare >= 10) {
+        const names = countries.datacentreNames.join(', ');
+        insights.push(`A large share of recorded visitors came from ${names || 'outside Uganda'}. Some of that can be automated traffic, so do not treat every view as a buyer.`);
+      }
     }
   }
 
@@ -469,8 +583,20 @@ function buildInsights({ metrics = {}, previous = {}, topListings = [], topCount
   const noEnquiry = topListings.find((l) => l.views >= 20 && !l.enquiries);
   if (noEnquiry && noEnquiry !== fewPhotos) nextSteps.push(`"${noEnquiry.title}" got ${noEnquiry.views} views and no enquiries — review the price and description.`);
 
+  if (extras.rank && extras.rank.position === 1 && totalEnquiries === 0 && m.views) {
+    nextSteps.push('You had the most listing views on makaug this week, but no enquiries yet — tighten the price, photos and title on your top listing so visitors have a reason to message.');
+  }
+
+  if (socialTotal && totalEnquiries === 0) {
+    nextSteps.push('Your social posts are being seen. Put the makaug listing link and your WhatsApp number on the post so viewers can enquire in one tap.');
+  }
+
+  if (peakHint && totalEnquiries && !nextSteps.some((s) => /just before then/.test(s))) {
+    nextSteps.push(`Post or share again just before ${extras.peak_hour.label} on ${extras.busiest_day.day}s — that is when people are already looking.`);
+  }
+
   if (!nextSteps.length) nextSteps.push('Reply to every enquiry within the hour — fast replies win most deals.');
-  return { insights: insights.slice(0, 6), nextSteps: nextSteps.slice(0, 5) };
+  return { insights: insights.slice(0, 7), nextSteps: nextSteps.slice(0, 6) };
 }
 
 // Every agent who gets a report gets a makaug agent ID. Older and imported
@@ -504,11 +630,9 @@ async function computeAgentWeeklyReport({ agentId, weekStart } = {}) {
     countryTrackingSince()
   ]);
   const extras = await computeExtras(agent.id, ownedIds, week.startsAt, week.endsBefore, { ...metrics, active_listings: activeListings });
-  const { insights, nextSteps } = buildInsights({ metrics, previous, topListings, topCountries, activeListings });
-  if (extras.rank) insights.push(`You ranked #${extras.rank.position} of ${extras.rank.total} agents on makaug by listing views.`);
-  if (extras.busiest_day && extras.peak_hour) insights.push(`Busiest day was ${extras.busiest_day.day}; most views came ${extras.peak_hour.label} (Kampala time).`);
-  const topSource = (extras.traffic_sources || [])[0];
-  if (topSource) insights.push(`Most visitors found your listings via ${topSource.source === 'direct' ? 'direct visits' : topSource.source}.`);
+  const built = buildInsights({ metrics, previous, topListings, topCountries, activeListings, extras });
+  const insights = attachExtrasInsights(built.insights, extras);
+  const nextSteps = built.nextSteps;
   return {
     extras,
     agent,
@@ -548,6 +672,7 @@ function formatReportRow(row, agent = null) {
     next_steps: row.next_steps || [],
     country_tracking_since: row.country_tracking_since || null,
     extras: row.extras || {},
+    social_views: cleanSocialViews((row.extras || {}).social_views),
     status: row.status,
     edited_by: row.edited_by || null,
     sent_at: row.sent_at || null,
@@ -592,6 +717,21 @@ async function generateReport({ agentId, weekStart, actor = 'admin', refreshNumb
   const existing = await getReportForAgentWeek(computed.agent.id, computed.week_start);
   if (existing && existing.status !== 'draft' && !refreshNumbers) return existing;
   const keepText = existing && existing.edited_by && existing.edited_by !== 'auto';
+  const extras = mergeReportExtras(computed.extras, existing?.extras || {});
+  let insights = computed.insights;
+  let nextSteps = computed.next_steps;
+  if (!keepText) {
+    const built = buildInsights({
+      metrics: computed.metrics,
+      previous: computed.previous_metrics,
+      topListings: computed.top_listings,
+      topCountries: computed.top_countries,
+      activeListings: computed.metrics.active_listings,
+      extras
+    });
+    insights = attachExtrasInsights(built.insights, extras);
+    nextSteps = built.nextSteps;
+  }
   const result = await db.query(
     `INSERT INTO agent_weekly_reports (
        agent_id, week_start, week_end, metrics, previous_metrics, top_listings, top_countries,
@@ -612,9 +752,9 @@ async function generateReport({ agentId, weekStart, actor = 'admin', refreshNumb
       computed.agent.id, computed.week_start, computed.week_end,
       JSON.stringify(computed.metrics), JSON.stringify(computed.previous_metrics),
       JSON.stringify(computed.top_listings), JSON.stringify(computed.top_countries),
-      JSON.stringify(computed.insights), JSON.stringify(computed.next_steps),
+      JSON.stringify(insights), JSON.stringify(nextSteps),
       computed.country_tracking_since, keepText ? existing.edited_by : 'auto', Boolean(keepText),
-      JSON.stringify(computed.extras || {})
+      JSON.stringify(extras || {})
     ]
   );
   return getReportById(result.rows[0].id);
@@ -634,17 +774,20 @@ async function updateReport(id, changes = {}, actor = 'admin') {
     top_countries: changes.top_countries ? cleanCountries(changes.top_countries) : current.top_countries,
     insights: changes.insights ? cleanTextList(changes.insights) : current.insights,
     next_steps: changes.next_steps ? cleanTextList(changes.next_steps) : current.next_steps,
-    status: REPORT_STATUSES.includes(changes.status) ? changes.status : current.status
+    status: REPORT_STATUSES.includes(changes.status) ? changes.status : current.status,
+    extras: changes.social_views
+      ? { ...(current.extras || {}), social_views: cleanSocialViews(changes.social_views) }
+      : (current.extras || {})
   };
   await db.query(
     `UPDATE agent_weekly_reports SET
        metrics = $2, previous_metrics = $3, top_listings = $4, top_countries = $5,
-       insights = $6, next_steps = $7, status = $8, edited_by = $9, updated_at = NOW()
+       insights = $6, next_steps = $7, status = $8, edited_by = $9, extras = $10, updated_at = NOW()
      WHERE id = $1`,
     [
       id, JSON.stringify(next.metrics), JSON.stringify(next.previous_metrics), JSON.stringify(next.top_listings),
       JSON.stringify(next.top_countries), JSON.stringify(next.insights), JSON.stringify(next.next_steps),
-      next.status, String(actor || 'admin').slice(0, 120)
+      next.status, String(actor || 'admin').slice(0, 120), JSON.stringify(next.extras || {})
     ]
   );
   return getReportById(id);
@@ -681,6 +824,10 @@ function buildWhatsAppReportMessage(report) {
   if (m.visitors) lines.push(`• Visitors who got in touch: *${Math.round((enquiries / toInt(m.visitors)) * 1000) / 10}%*`);
   if (x.views_per_listing) lines.push(`• Views per listing: *${x.views_per_listing}*`);
   if (x.rank && x.rank.position) lines.push(`• Your rank on makaug: *#${n(x.rank.position)} of ${n(x.rank.total)} agents* by views`);
+  const social = cleanSocialViews(x.social_views || r.social_views);
+  if (socialViewsTotal(social)) {
+    lines.push(`• Social media views (entered by makaug): *${formatSocialViewsLine(social)}*`);
+  }
 
   const countries = Array.isArray(r.top_countries) && r.top_countries.length
     ? r.top_countries
@@ -759,13 +906,15 @@ function buildWhatsAppCardCaption(report) {
   if (x.busiest_day) highlights.push(`Busiest day ${x.busiest_day.day}`);
   if (x.peak_hour) highlights.push(`Peak ${x.peak_hour.label}`);
   if (highlights.length) lines.push(highlights.join(' · '));
+  const social = cleanSocialViews((r.extras || {}).social_views || r.social_views);
+  if (socialViewsTotal(social)) lines.push(`Social media views: ${formatSocialViewsLine(social)}`);
   const listings = (Array.isArray(r.top_listings) ? r.top_listings : []).filter((l) => l.url).slice(0, 3);
   if (listings.length) {
     lines.push('');
     lines.push('*Your best-performing properties*');
     listings.forEach((l, i) => lines.push(`${i + 1}. ${l.title}\n${l.url}`));
   }
-  const steps = (Array.isArray(r.next_steps) ? r.next_steps : []).slice(0, 2);
+  const steps = (Array.isArray(r.next_steps) ? r.next_steps : []).slice(0, 3);
   if (steps.length) {
     lines.push('');
     lines.push('*This week, try:*');
@@ -822,16 +971,24 @@ module.exports = {
   METRIC_LABELS,
   REPORT_STATUSES,
   brokerReportUrl,
+  SOCIAL_VIEW_CHANNELS,
+  LIKELY_DATACENTRE_COUNTRY_CODES,
+  attachExtrasInsights,
   buildInsights,
   buildWhatsAppCardCaption,
   buildWhatsAppReportMessage,
   cleanCountries,
   cleanListings,
+  cleanSocialViews,
   cleanTextList,
   computeAgentWeeklyReport,
   computePeriodMetrics,
   computeExtras,
+  formatSocialViewsLine,
   hourLabel,
+  mergeReportExtras,
+  prepareBulkReportSends,
+  socialViewsTotal,
   ensureAgentNumber,
   findAgent,
   formatWeekRange,

@@ -15431,6 +15431,7 @@ router.patch('/agent-reports/:id', async (req, res, next) => {
       top_countries: Array.isArray(body.top_countries) ? body.top_countries : undefined,
       insights: Array.isArray(body.insights) ? body.insights : undefined,
       next_steps: Array.isArray(body.next_steps) ? body.next_steps : undefined,
+      social_views: body.social_views && typeof body.social_views === 'object' ? body.social_views : undefined,
       status: cleanText(body.status || '') || undefined
     }, adminActorId(req));
     return res.json({ ok: true, data: agentReportPayload(report) });
@@ -16005,6 +16006,84 @@ router.post('/agent-welcome/:agentId/send', async (req, res, next) => {
     return res.json({ ok: true, data });
   } catch (error) {
     if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  }
+});
+
+router.post('/agent-reports/bulk-send', async (req, res, next) => {
+  try {
+    if (req.body?.confirm !== true) {
+      return res.status(400).json({ ok: false, error: 'Confirm the send before reports go out' });
+    }
+    const ids = Array.isArray(req.body?.report_ids)
+      ? [...new Set(req.body.report_ids.map((id) => cleanText(id)).filter(Boolean))]
+      : [];
+    if (!ids.length) return res.status(400).json({ ok: false, error: 'Pick at least one report' });
+    if (ids.length > 50) return res.status(400).json({ ok: false, error: 'Send at most 50 reports at a time' });
+    const actor = adminActorId(req);
+    const results = [];
+    for (const id of ids) {
+      const report = await agentWeeklyReports.getReportById(id);
+      const prepared = agentWeeklyReports.prepareBulkReportSends([report])[0];
+      if (!prepared?.ok) {
+        results.push({
+          id,
+          ok: false,
+          error: prepared?.error || 'Report not found',
+          agent_name: report?.agent?.full_name || '',
+          agent_number: report?.agent?.makaug_agent_number || ''
+        });
+        continue;
+      }
+      try {
+        const payload = agentReportPayload(report);
+        const delivery = await deliverAgentReportWhatsapp({
+          to: prepared.to,
+          text: payload.whatsapp_text,
+          caption: payload.whatsapp_caption,
+          cardUrl: payload.card_url,
+          videoUrl: '',
+          actor,
+          reportId: report.id,
+          preview: false
+        });
+        if (!delivery.sent && !delivery.queued) {
+          results.push({
+            id,
+            ok: false,
+            error: 'WhatsApp delivery is not available right now',
+            agent_name: report.agent?.full_name || '',
+            agent_number: report.agent?.makaug_agent_number || ''
+          });
+          continue;
+        }
+        await agentWeeklyReports.recordReportSent(report.id, { to: prepared.to, preview: false });
+        results.push({
+          id,
+          ok: true,
+          agent_name: report.agent?.full_name || '',
+          agent_number: report.agent?.makaug_agent_number || '',
+          format: 'card'
+        });
+      } catch (error) {
+        results.push({
+          id,
+          ok: false,
+          error: error.message || 'Could not send this report',
+          agent_name: report.agent?.full_name || '',
+          agent_number: report.agent?.makaug_agent_number || ''
+        });
+      }
+    }
+    return res.json({
+      ok: true,
+      data: {
+        results,
+        sent: results.filter((row) => row.ok).length,
+        failed: results.filter((row) => !row.ok).length
+      }
+    });
+  } catch (error) {
     return next(error);
   }
 });
