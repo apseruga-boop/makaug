@@ -68,6 +68,8 @@ const POLITE = '(?:SO MUCH|VERY MUCH|A LOT|LOTS|MUCH|SANA|NNYO|KO|BRO|BOSS|SIR|M
 const THANKS_FOR = '(?: FOR (?:THE |THIS |THAT |YOUR )?(?:INFO|INFORMATION|UPDATE|MESSAGE|LINK|VIDEO|FILM|BRIEF|NEWS|FEEDBACK|REMINDER|HELP|SUPPORT))?';
 const THANKS = new RegExp(`^(?:(?:OK|OKAY|YES|SURE|WOW|GREAT|NICE|COOL|GOOD|ALRIGHT|NOTED) )?(?:THANKS?|THANK YOU|THANK U|THANKYOU|THANX|THNX|THX|TNX|TANX|TANKS|ASANTE|WEBALE|APWOYO|MERCI)${THANKS_FOR}(?: ${POLITE})*$`);
 const ACK = /^(?:OK|OKAY|OK OK|OKAY OKAY|K|KK|NOTED|WELL NOTED|ALRIGHT|ALL RIGHT|SURE|FINE|GOT IT|RECEIVED|WELL RECEIVED|COOL|GOOD|GREAT|NICE|AMEN|YES|YEAH|YEP)(?: (?:SIR|MADAM|BOSS|BRO|DEAR|TEAM|THEN))?$/;
+// "Okay. That's interesting" (Benard, 12 Nov, after our numbers) got the mortgage notice.
+const REACTION = /^(?:(?:OK|OKAY|WOW|OH|AH) )?(?:(?:THAT S|THATS|THAT IS|IT S|ITS|VERY|SO|REALLY) )?(?:INTERESTING|GOOD TO KNOW|NICE TO KNOW|GOOD|GREAT|NICE|COOL|FINE|AWESOME|WONDERFUL|EXCELLENT|AMAZING|IMPRESSIVE)$/;
 const EMOJI_ONLY = /^[\s\u{1F44D}\u{1F64F}\u{1F64C}\u{1F44C}\u{1F4AF}\u{2705}\u{1F60A}\u{2764}\u{FE0F}\u{2665}\u{1F91D}\u{1F44F}\u{1F642}\u{263A}\u{1F4AA}]+$/u;
 
 const PROOF = /\b(?:(?:DOES|DO|DID|IS|ARE|WILL|CAN|HAS|HAVE)\b.{0,30}\b(?:CLIENTS?|CUSTOMERS?|BUYERS?|TENANTS?|LEADS?|ENQUIRY|ENQUIRIES|INQUIRY|INQUIRIES|TRAFFIC|VISITORS?)\b|(?:IS|DOES)\b.{0,20}\b(?:IT|THIS|THE APP|THE SITE|THE WEBSITE|MAKAUG|YOUR APP|YOUR SITE)\b.{0,15}\b(?:WORK|WORKING|WORKS|REAL|LEGIT|GENUINE|EFFECTIVE)\b|IF IT S WORKING|IF IT IS WORKING|IF IT WORKS)\b/;
@@ -79,8 +81,13 @@ const SOLD = /\b(?:SOLD|SOLD OFF|SOLD OUT|ALREADY TAKEN|BEEN TAKEN|IS TAKEN|NO L
 // "This is in Mukono not nkaaseke": a wrong detail on a listing that just went up.
 const DETAIL = '(?:LOCATION|DISTRICT|AREA|PLACE|PRICE|TITLE|BEDROOMS?|DECIMALS?|ACRES?|SIZE|PHOTOS?|PICTURES?|DETAILS?|DESCRIPTION|NAME|AMOUNT|FIGURE)';
 const CORRECTION = new RegExp([
+  // 12 Nov, 20:25: "Its actually 6 acres with a huge warehouse … In mukono"
+  // became a second listing instead of a fix to the first.
+  '^(?:(?:IT S|ITS|IT IS|THIS IS|THAT IS|THATS|THIS ONE IS|THE (?:PROPERTY|LAND|HOUSE|PLOT|PLACE) IS)\\s+)?ACTUALLY\\b',
   '\\b(?:IT S|IT IS|ITS|THIS IS|THAT IS|THATS|THIS ONE IS|IT IS LOCATED|LOCATED|SITUATED)\\s+(?:IN|AT)\\s+[A-Z0-9]+.{0,30}\\bNOT\\b',
   '\\bNOT\\s+(?:IN|AT)\\s+[A-Z]+',
+  // "Area is Mukono not nkaaseke" (the same evening).
+  '\\b(?:IS|IN|AT)\\s+[A-Z]+\\s+NOT\\s+(?:IN\\s+|AT\\s+)?[A-Z]+\\b',
   `\\b(?:WRONG|INCORRECT|MISTAKE|NOT CORRECT|NOT RIGHT)\\b.{0,30}\\b${DETAIL}\\b`,
   `\\b${DETAIL}\\b.{0,30}\\b(?:WRONG|INCORRECT|MISTAKE|NOT CORRECT|NOT RIGHT|SHOULD BE)\\b`,
   `\\b(?:THE |MY )?${DETAIL}\\s+IS\\s+(?:IN|AT|ACTUALLY)\\b`,
@@ -106,7 +113,7 @@ function replyKind(text = '') {
   const t = normalise(raw);
   if (!t) return '';
   if (t.length <= 80 && THANKS.test(t)) return 'thanks';
-  if (t.length <= 40 && ACK.test(t)) return 'ack';
+  if (t.length <= 40 && (ACK.test(t) || REACTION.test(t))) return 'ack';
   if (t.length > 400) return '';
   if (DELETE_ME.test(t)) return 'delete';
   if (LINK_BROKEN.test(t)) return 'link_broken';
@@ -201,6 +208,11 @@ function proofReply({ first = '', stats = {}, network = {}, own = null, helpName
 
 function correctionReply({ first = '', link = '' } = {}) {
   return `Thanks${hi(first)} — I've sent that to our team to fix on your listing${link ? `:\n${link}` : '.'}\n\nThey'll let you know when it's done.`;
+}
+
+/** A second fix right after the first: added to it, not the same answer again. */
+function correctionFollowUpReply({ first = '' } = {}) {
+  return `Got it${hi(first)} — I've added that to the same fix for the team.`;
 }
 
 function soldReply({ first = '', title = '' } = {}) {
@@ -311,6 +323,7 @@ module.exports = {
   thanksMidFlowReply,
   proofReply,
   correctionReply,
+  correctionFollowUpReply,
   soldReply,
   linkBrokenReply,
   socialReply,
