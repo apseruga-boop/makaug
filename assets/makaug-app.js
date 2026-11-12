@@ -23389,7 +23389,10 @@ function setStaffToolsTab(tab = "accounts") {
 
 function deskPageIsStaff() {
   const staffPage = document.getElementById("page-staff-dashboard");
-  return !!(staffPage && !staffPage.classList.contains("hidden"));
+  // Desk pages use .page / .page.active, not Tailwind `hidden`. The staff page
+  // stays in the King desk DOM, so a hidden-class check always looks like staff
+  // and the Agents tab writes into the invisible staff copy.
+  return !!(staffPage && staffPage.classList.contains("active"));
 }
 
 function adminDeskEl(kingId, staffId) {
