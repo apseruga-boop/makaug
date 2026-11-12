@@ -507,13 +507,16 @@ function exactAliasCandidates(value = '', suppliedDistrict = '', options = {}) {
   const raw = String(value || '').trim();
   const needle = normalizeLocationKey(raw);
   const districtHint = normalizeDistrict(suppliedDistrict);
-  if (!needle || isExcludedLocationOnly(raw)) return [];
+  if (!needle) return [];
   if (options.noiseStripped && normalizeDistrict(raw)) return [];
   const matches = aliasRows
     .filter((row) => row.aliasKey === needle)
     .filter((row) => !districtHint || row.entry.district === districtHint)
     .filter((row) => !(options.noiseStripped && row.entry.level === 'district'))
     .map((row) => row.entry);
+  // A registered exact alias is a place, even if the phrase contains a road
+  // word ("Entebbe Road Akright City"). Bare road labels still stay excluded.
+  if (!matches.length && isExcludedLocationOnly(raw)) return [];
   const unique = new Map(matches.map((entry) => [entry.key, entry]));
   return Array.from(unique.values()).sort((a, b) => (
     (LOCATION_LEVEL_PRIORITY[b.level] || 0) - (LOCATION_LEVEL_PRIORITY[a.level] || 0)
@@ -551,6 +554,16 @@ function selectProminentCandidate(candidates = [], aliasKey = '', counts = new M
 function resolveCanonicalUgandaLocation(value = '', suppliedDistrict = '', options = {}) {
   const districtHint = districtHintFromQuery(value, suppliedDistrict);
   const attempts = locationQueryAttempts(value);
+  // "Entebbe Road Akright City" is a registered place alias, but the query
+  // normalizer drops uncomma'd phrases that contain a road word. If the whole
+  // string is an exact alias, still try it. Bare "Entebbe Road" is not an alias.
+  const rawValue = String(value || '').trim();
+  const rawKey = normalizeLocationKey(rawValue);
+  if (rawValue && rawKey && !attempts.some((attempt) => attempt.normalized === rawKey)) {
+    if (exactAliasCandidates(rawValue, districtHint).length) {
+      attempts.unshift({ value: rawValue, normalized: rawKey, noise_stripped: false });
+    }
+  }
   const firstSegment = String(value || '').split(',')[0].trim();
   if (firstSegment && String(value || '').includes(',')) {
     const firstSegmentKey = normalizeLocationKey(firstSegment);

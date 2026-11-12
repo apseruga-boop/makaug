@@ -79,7 +79,8 @@ const UGANDA_AREA_CENTROIDS = Object.freeze([
   { district: 'Mukono', name: 'Nasuuti', lat: 0.3742, lng: 32.7576 }, // node/4150930694
   { district: 'Mukono', name: 'Nsanja', lat: 0.1682, lng: 32.7894 }, // node/9360635071
   { district: 'Mukono', name: 'Nyenje', lat: 0.4, lng: 32.7333 }, // node/2229122960
-  { district: 'Wakiso', name: 'Akright City', lat: 0.3303, lng: 32.677 }, // way/303073186 Akright Estate, Kirinnya, 10 Nov 2026
+  { district: 'Wakiso', name: 'Akright City', lat: 0.179, lng: 32.541 }, // Bwebajja / Entebbe Road Akright City, 12 Nov 2026
+  { district: 'Wakiso', name: 'Kirinnya Akright Estate', lat: 0.3303, lng: 32.677 }, // way/303073186 Akright Estate, Kirinnya
   { district: 'Wakiso', name: 'Bukalango', lat: 0.4247, lng: 32.414 }, // node/4895269249
   { district: 'Wakiso', name: 'Bulenga', lat: 0.3216, lng: 32.5031 }, // node/2229101503
   { district: 'Wakiso', name: 'Bunamwaya', lat: 0.2651, lng: 32.546 }, // node/3911468159

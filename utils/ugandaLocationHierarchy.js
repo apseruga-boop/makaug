@@ -198,7 +198,24 @@ function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
     const parentTown = clean(canonical.town) || (['city', 'town'].includes(canonical.level) ? canonical.name : '');
     const keepExplicitChild = neighborhoodIsChildOfTown(district, city || parentTown, neighborhood, canonical)
       || neighborhoodIsChildOfTown(district, parentTown, neighborhood, canonical);
-    if (!keepExplicitChild) neighborhood = canonical.name;
+    // Staff-typed neighbourhoods must not be silently rewritten to the parent
+    // area or division (Makindye Lusaka used to become Makindye). Keep the
+    // typed text; the check below rejects an unknown place clearly. An empty
+    // neighbourhood, or an alias of the area itself, still takes the canonical name.
+    const typedNeighborhood = clean(fields.neighborhood);
+    const typedNode = typedNeighborhood ? canonicalizeUgandaLocation(typedNeighborhood, district) : null;
+    const typedIsSamePlace = Boolean(typedNode && typedNode.key === canonical.key);
+    const typedLooksLikeParent = typedNeighborhood
+      && (typedNeighborhood.toLowerCase() === (canonical.name || '').toLowerCase()
+        || typedNeighborhood.toLowerCase() === (parentTown || '').toLowerCase()
+        || typedNeighborhood.toLowerCase() === (district || '').toLowerCase());
+    if (!keepExplicitChild) {
+      if (typedNeighborhood && !typedIsSamePlace && !typedLooksLikeParent) {
+        neighborhood = typedNeighborhood;
+      } else {
+        neighborhood = canonical.name;
+      }
+    }
     if (!(chosenCityIsKnown || staffCityOnBoundary || explicitUnknownTown)) {
       city = clean(canonical.town) || city || (canonical.level === 'district' ? `${canonical.name} Town` : '');
     }
@@ -219,7 +236,13 @@ function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
     const neighborhoodMatchesCity = cityNode
       ? (cityNode.neighborhoods || []).some((n) => n.name === neighborhood)
       : false;
-    if (!neighborhoodMatchesCity && !(explicitCanonicalHierarchy && neighborhood === explicitCanonical.name) && !staffTownForCanonical && !staffCityOnBoundary && !explicitUnknownTown) {
+    // A Kampala boundary town (Makindye itself, or Kisaasi in Kawempe/Nakawa)
+    // may keep a known neighbourhood that also belongs to a sister town. An
+    // unknown typed neighbourhood is still rejected; it must not be saved as
+    // if it were the parent area.
+    const neighborhoodKnownInDistrict = tree.some((item) => (item.neighborhoods || []).some((n) => n.name === neighborhood));
+    const neighborhoodMatchesBoundary = staffCityOnBoundary && neighborhoodKnownInDistrict;
+    if (!neighborhoodMatchesCity && !(explicitCanonicalHierarchy && neighborhood === explicitCanonical.name) && !staffTownForCanonical && !neighborhoodMatchesBoundary && !explicitUnknownTown) {
       errors.push('neighbourhood must belong to the selected district and town/city');
     }
   }

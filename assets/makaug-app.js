@@ -21177,13 +21177,22 @@ function staffShowPreviewSaveError(error = {}) {
     else modal.appendChild(errorEl);
   }
   const noteSaved = error?.response?.note_saved === true || error?.note_saved === true;
+  const fieldsSaved = error?.response?.fields_saved === true || error?.fields_saved === true;
   const detail = error?.message || "Preview save failed.";
-  errorEl.textContent = noteSaved
-    ? `Your other changes were not saved. ${detail} The internal note was saved.`
-    : detail;
+  if (noteSaved && fieldsSaved) {
+    errorEl.textContent = `The area was not saved. ${detail} Title, description, price and the internal note were saved.`;
+  } else if (noteSaved) {
+    errorEl.textContent = `Your other changes were not saved. ${detail} The internal note was saved.`;
+  } else if (fieldsSaved) {
+    errorEl.textContent = `The area was not saved. ${detail} Title, description and price were saved.`;
+  } else {
+    errorEl.textContent = detail;
+  }
   // Note saved: say so where the moderator is looking (the header save line).
   const saveState = modal.querySelector("[data-staff-preview-save-state]");
-  if (saveState && noteSaved) saveState.textContent = "Note saved. Other changes were not saved.";
+  if (saveState && noteSaved && fieldsSaved) saveState.textContent = "Title, description, price and note were saved. The area was not saved.";
+  else if (saveState && noteSaved) saveState.textContent = "Note saved. Other changes were not saved.";
+  else if (saveState && fieldsSaved) saveState.textContent = "Title, description and price were saved. The area was not saved.";
   errorEl.hidden = false;
   errorEl.style.display = "block";
   errorEl.style.marginTop = "8px";
@@ -32926,7 +32935,7 @@ async function adminReviewOnAreaInput() {
   if (areaEl) areaEl.dataset.auto = "0";
   const district = document.getElementById("admin-review-district-edit")?.value || "";
   const resolution = await resolveUgandaLocationFromSharedRegistry(areaEl?.value || "", district);
-  if (resolution.status === "matched") applyAdminReviewCanonicalLocation(resolution.location);
+  if (resolution.status === "matched") applyAdminReviewCanonicalLocation(resolution.location, { preferCanonicalTown: true });
   else adminReviewCanonicalLocationResolution = null;
   if (resolution.candidates && resolution.candidates.length) adminReviewRenderCanonicalSuggestions(resolution.candidates);
   else adminReviewClearCanonicalSuggestions();
@@ -32980,7 +32989,31 @@ function clearAdminReviewCanonicalLocation() {
   adminSetReviewEditValue("admin-review-area-edit", "");
 }
 
-function applyAdminReviewCanonicalLocation(location = {}) {
+function adminReviewShouldReplaceStalePin(currentLat, currentLng, locationLat, locationLng, maxKm = 2) {
+  if (!adminReviewHasUsableCoordinates(currentLat, currentLng)) return false;
+  const nextLat = Number(locationLat);
+  const nextLng = Number(locationLng);
+  if (!Number.isFinite(nextLat) || !Number.isFinite(nextLng)) return true;
+  const current = adminReviewNormalizeCoordinateInputs(currentLat, currentLng);
+  if (!current.exact) return false;
+  return haversineKm(Number(current.latitude), Number(current.longitude), nextLat, nextLng) > maxKm;
+}
+
+function adminReviewDiscardStalePinForCanonicalLocation(location = {}, forceWhenUnknown = false) {
+  const latEl = document.getElementById("admin-review-latitude-edit");
+  const lngEl = document.getElementById("admin-review-longitude-edit");
+  const nextLat = location.latitude ?? location.lat;
+  const nextLng = location.longitude ?? location.lng;
+  const canCompare = Number.isFinite(Number(nextLat)) && Number.isFinite(Number(nextLng));
+  if (!adminReviewShouldReplaceStalePin(latEl?.value, lngEl?.value, nextLat, nextLng)) {
+    if (!(forceWhenUnknown && !canCompare && adminReviewHasUsableCoordinates(latEl?.value, lngEl?.value))) return false;
+  }
+  adminSetReviewEditValue("admin-review-latitude-edit", "");
+  adminSetReviewEditValue("admin-review-longitude-edit", "");
+  return true;
+}
+
+function applyAdminReviewCanonicalLocation(location = {}, options = {}) {
   if (!location?.canonical_location_id || location.match !== "exact_alias" || Number(location.confidence) !== 1) return false;
   const level = String(location.level || "").toLowerCase();
   const canonicalDistrict = location.province || location.district || "";
@@ -32990,12 +33023,18 @@ function applyAdminReviewCanonicalLocation(location = {}) {
   adminReviewCanonicalLocationResolution = location;
   const canonicalTown = location.city || canonicalTownForLocation(location);
   const currentCity = document.getElementById("admin-review-city-edit")?.value || "";
-  const town = adminReviewTownAfterCanonicalResolve(
-    currentCity,
-    canonicalTown,
-    getDistrictLocationTree(canonicalDistrict),
-    location.name
-  );
+  // When staff pick a new area (suggestion or area box), use that area's town.
+  // A leftover Entebbe must not stay after choosing Akright City / Bwebajja.
+  // Neighbourhood changes still keep a town staff already chose in this district (C11).
+  const preferCanonicalTown = options.preferCanonicalTown === true;
+  const town = preferCanonicalTown && String(canonicalTown || "").trim()
+    ? String(canonicalTown).trim()
+    : adminReviewTownAfterCanonicalResolve(
+      currentCity,
+      canonicalTown,
+      getDistrictLocationTree(canonicalDistrict),
+      location.name
+    );
   adminSetReviewEditValue("admin-review-region-edit", location.region || regionForDistrict(canonicalDistrict));
   adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(location.region, canonicalDistrict), canonicalDistrict);
   adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(canonicalDistrict, town), town);
@@ -33019,6 +33058,7 @@ function applyAdminReviewCanonicalLocation(location = {}) {
     }).catch(() => {});
   }
   adminReviewClearStaleUnrecognisedLocation();
+  adminReviewDiscardStalePinForCanonicalLocation(location, preferCanonicalTown);
   return true;
 }
 
@@ -33213,7 +33253,7 @@ function adminReviewChooseCanonicalSuggestion(index = 0) {
     ...candidate,
     match: "exact_alias",
     confidence: 1
-  });
+  }, { preferCanonicalTown: true });
   if (!applied) return false;
   adminReviewClearCanonicalSuggestions();
   adminReviewSetAddressSearchStatus(`Canonical location selected: ${candidate.name}, ${candidate.district}. Check the full cascade and pin before approval.`, "green");

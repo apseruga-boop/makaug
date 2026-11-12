@@ -92,8 +92,41 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     source: 'makaug_verified_location_override'
   },
   {
+    // 12 Nov 2026: Entebbe Road Akright City is at Bwebajja, not the Kirinnya
+    // Akright Estate (way/303073186, 0.3303, 32.677). Approximate pin at the
+    // Bwebajja catalogue point. Bare "Akright" stays on this node. The
+    // Kirinnya estate is a separate place below.
     name: 'Akright City', district: 'Wakiso', town: 'Bwebajja', level: 'area',
-    aliases: ['Akright', 'Arkright', 'Akright City', 'Arkright City', 'Akright Estate', 'Arkright Estate'],
+    aliases: [
+      'Akright', 'Arkright', 'Akright City', 'Arkright City', 'Akright Estate',
+      'Arkright Estate', 'Akright-Bwebajja', 'Akright Bwebajja',
+      'Entebbe Road Akright City', 'Entebbe Rd Akright City'
+    ],
+    lat: 0.179, lng: 32.541,
+    source: 'makaug_verified_location_override'
+  },
+  {
+    name: 'Kirinnya Akright Estate', district: 'Wakiso', town: 'Kira', level: 'neighborhood',
+    aliases: ['Kirinnya Akright Estate', 'Kirinnya Akright', 'Akright Estate Kirinnya'],
+    lat: 0.3303, lng: 32.677,
+    source: 'makaug_verified_location_override'
+  },
+  {
+    // Kikwatamigo is on the Kyentale–Buhanika–Butebere–Kikwatamigo Road in
+    // Hoima City. It is not in OSM/Nominatim. Approximate pin slightly east of
+    // the Kyentale catalogue point (1.441, 31.337) toward Butebere North
+    // (OSM node 9753989780, 1.435, 31.421).
+    name: 'Kikwatamigo', district: 'Hoima', town: 'Hoima Town', level: 'neighborhood',
+    aliases: ['Kikwatamigo', 'Kikwatamigo Hoima', 'Hoima Kikwatamigo'],
+    lat: 1.439, lng: 31.352,
+    source: 'makaug_verified_location_override'
+  },
+  {
+    // Makindye Lusaka, Kampala. Approximate pin 0.2876, 32.5870 (staff report
+    // 12 Nov 2026). Distinct from the Lusaka that is in Zambia.
+    name: 'Lusaka', district: 'Kampala', town: 'Makindye', level: 'neighborhood',
+    aliases: ['Lusaka', 'Makindye Lusaka', 'Lusaka Makindye'],
+    lat: 0.2876, lng: 32.587,
     source: 'makaug_verified_location_override'
   },
   {

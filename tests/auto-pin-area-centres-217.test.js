@@ -27,7 +27,7 @@ const rollback = fs.readFileSync(ROLLBACK, 'utf8');
 const server = fs.readFileSync(SERVER, 'utf8');
 
 const NEW_CENTRES = [
-  { district: 'Wakiso', name: 'Akright City', lat: 0.3303, lng: 32.677 },
+  { district: 'Wakiso', name: 'Akright City', lat: 0.179, lng: 32.541 },
   { district: 'Luwero', name: 'Bombo', lat: 0.577, lng: 32.537 },
   { district: 'Kampala', name: 'Bukasa', lat: 0.2891, lng: 32.6269 },
   { district: 'Luwero', name: 'Busiika', lat: 0.596, lng: 32.6565 },
@@ -65,14 +65,22 @@ test('migration 217 pins 24 approved listings at verified area centres and stays
   assert.equal(BATCH_SIZE, 20);
   assert.equal(BATCH_ID, 'auto_pin_20261110');
 
+  // 12 Nov 2026: Akright City was remapped from the Kirinnya estate centroid
+  // to Bwebajja. The 217 rows still record the pin that was applied then.
+  const catalogueCorrectedAfter217 = new Set(['wakiso:akright city']);
   for (const row of AUTO_PIN_217_ROWS) {
     assert.equal(isOnUgandaLand(row.lat, row.lng), true, row.ref);
     const entry = canonicalLocationByKey(row.to_key);
     assert.ok(entry, row.to_key);
+    if (catalogueCorrectedAfter217.has(row.to_key)) continue;
     const point = canonicalLocationPinPoint(entry);
     assert.equal(point.lat, row.lat, row.ref);
     assert.equal(point.lng, row.lng, row.ref);
   }
+  const akrightCityPin = canonicalLocationPinPoint(canonicalLocationByKey('wakiso:akright city'));
+  assert.equal(akrightCityPin.lat, 0.179);
+  assert.equal(akrightCityPin.lng, 32.541);
+  assert.equal(AUTO_PIN_217_ROWS.filter((row) => row.to_key === 'wakiso:akright city').every((row) => row.lat === 0.3303 && row.lng === 32.677), true);
 
   const titlePins = AUTO_PIN_217_ROWS.filter((row) => row.set_area);
   assert.deepEqual(titlePins.map((row) => row.ref).sort(), ['MK-20260922-6F5C3B', 'MK-20261004-4D2362']);
