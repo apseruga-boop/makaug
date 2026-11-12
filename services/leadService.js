@@ -38,6 +38,7 @@ const LEAD_STATUSES = Object.freeze(['open', 'handed_over', 'contacted', 'qualif
 const OPEN_LEAD_STATUSES = Object.freeze(['open', 'handed_over', 'contacted', 'qualified']);
 const CLOSED_LEAD_STATUSES = Object.freeze(['won', 'lost', 'spam', 'closed']);
 const OPEN_LEAD_STATUS_SQL = `(${OPEN_LEAD_STATUSES.map((s) => `'${s}'`).join(',')})`;
+const CLOSED_LEAD_STATUS_SQL = `(${CLOSED_LEAD_STATUSES.map((s) => `'${s}'`).join(',')})`;
 const LEAD_STATUS_ALIASES = Object.freeze({
   new: 'open',
   pending: 'open',
@@ -58,6 +59,90 @@ function normalizeLeadStatus(value, fallback = 'open') {
   if (LEAD_STATUSES.includes(raw)) return raw;
   if (LEAD_STATUS_ALIASES[raw]) return LEAD_STATUS_ALIASES[raw];
   return null;
+}
+
+const LEAD_SOURCE_LABELS = Object.freeze({
+  list_property_whatsapp_ai: 'Listed on WhatsApp',
+  list_property_online: 'Listed on the website',
+  listing_submission: 'Submitted a listing',
+  whatsapp_no_match: 'WhatsApp search, no match',
+  whatsapp_missed_call: 'Missed WhatsApp call',
+  listing_detail_whatsapp: 'WhatsApp from a listing',
+  listing_card_whatsapp: 'WhatsApp from a listing',
+  whatsapp: 'WhatsApp',
+  web: 'Website',
+  website_mortgage_finder: 'Mortgage finder',
+  mortgage_bank_callback: 'Asked a mortgage bank',
+  property_need: 'Told us what they need',
+  property_need_request: 'Told us what they need',
+  property_need_unavailable: 'Need we could not fill',
+  advertiser: 'Advertiser enquiry',
+  marketplace_service_request: 'Marketplace request',
+  off_plan_enquiry: 'Off-plan enquiry',
+  short_term_enquiry: 'Short-stay enquiry',
+  viewing: 'Viewing request',
+  callback: 'Callback request',
+  enquiry: 'Listing enquiry'
+});
+
+function leadSourceLabel(source) {
+  const key = text(source).toLowerCase();
+  if (!key) return 'Unknown source';
+  return LEAD_SOURCE_LABELS[key] || key.replace(/_/g, ' ');
+}
+
+/**
+ * SQL filters for the staff CRM lead list.
+ * Default (no status): every non-deleted, non-test lead.
+ * status=open_all: still being worked. status=all: all except deleted.
+ * status=closed_all: done / not useful. status=deleted: soft-deleted only.
+ */
+function buildLeadListFilters(query = {}) {
+  const filters = [];
+  const values = [];
+  const addFilter = (sql, value) => {
+    values.push(value);
+    filters.push(sql.replace('?', `$${values.length}`));
+  };
+  const includeTests = ['1', 'true', 'yes'].includes(String(query.include_tests || '').toLowerCase());
+  if (!includeTests) filters.push('is_test = FALSE');
+  const status = String(query.status || '').trim().toLowerCase();
+  const includeDeleted = status === 'deleted' || ['1', 'true', 'yes'].includes(String(query.include_deleted || '').toLowerCase());
+  if (status === 'deleted') filters.push('deleted_at IS NOT NULL');
+  else if (!includeDeleted) filters.push('deleted_at IS NULL');
+  if (status === 'open_all') filters.push(`lead_status IN ${OPEN_LEAD_STATUS_SQL}`);
+  else if (status === 'closed_all') filters.push(`lead_status IN ${CLOSED_LEAD_STATUS_SQL}`);
+  else if (status && status !== 'deleted' && status !== 'all') addFilter('lead_status = ?', status);
+  if (query.handoff) addFilter('handoff_status = ?', String(query.handoff).trim());
+  if (query.agent_id) addFilter('agent_id = ?', String(query.agent_id).trim());
+  if (query.source) addFilter('source = ?', String(query.source).trim());
+  if (query.type) addFilter('lead_type = ?', String(query.type).trim());
+  if (query.priority) addFilter('priority = ?', String(query.priority).trim());
+  if (query.category) addFilter('category ILIKE ?', `%${String(query.category).trim()}%`);
+  if (query.location) addFilter('location ILIKE ?', `%${String(query.location).trim()}%`);
+  if (query.bundle_tag) addFilter(`COALESCE(metadata->>'bundle_tag', '') = ?`, String(query.bundle_tag).trim());
+  if (query.date_from) addFilter('created_at >= ?::timestamptz', String(query.date_from).trim());
+  if (query.date_to) addFilter(`created_at < (?::date + INTERVAL '1 day')`, String(query.date_to).trim());
+  if (query.search) {
+    values.push(`%${String(query.search).trim()}%`);
+    filters.push(`(message ILIKE $${values.length} OR location ILIKE $${values.length} OR contact_name ILIKE $${values.length} OR contact_phone ILIKE $${values.length} OR contact_email ILIKE $${values.length} OR listing_title ILIKE $${values.length} OR listing_reference ILIKE $${values.length} OR agent_name ILIKE $${values.length})`);
+  }
+  return {
+    values,
+    where: filters.length ? `WHERE ${filters.join(' AND ')}` : ''
+  };
+}
+
+function leadMatchesListFilter(lead, query = {}) {
+  const status = String(query.status || '').trim().toLowerCase();
+  const includeTests = ['1', 'true', 'yes'].includes(String(query.include_tests || '').toLowerCase());
+  if (!includeTests && lead.is_test) return false;
+  if (status === 'deleted') return Boolean(lead.deleted_at);
+  if (lead.deleted_at) return false;
+  if (status === 'open_all') return OPEN_LEAD_STATUSES.includes(String(lead.lead_status || ''));
+  if (status === 'closed_all') return CLOSED_LEAD_STATUSES.includes(String(lead.lead_status || ''));
+  if (status && status !== 'all') return String(lead.lead_status || '') === status;
+  return true;
 }
 
 // Last nine digits identify a Ugandan (or most East African) mobile regardless
@@ -239,6 +324,7 @@ async function findRecentDuplicateLead(db, dedupeKey) {
   const result = await db.query(
     `SELECT * FROM leads
       WHERE dedupe_key = $1
+        AND deleted_at IS NULL
         AND created_at >= NOW() - ($2 || ' hours')::interval
       ORDER BY created_at DESC
       LIMIT 1`,
@@ -491,18 +577,136 @@ async function recordLeadHandoff(db, leadId, { status, detail = {} } = {}) {
   }
 }
 
+
+async function deleteLead(db, leadId, { actorUserId = null, note = '' } = {}) {
+  if (!db || !leadId) return null;
+  const result = await db.query(
+    `UPDATE leads
+        SET deleted_at = NOW(),
+            deleted_by_user_id = $2,
+            updated_at = NOW()
+      WHERE id = $1
+        AND deleted_at IS NULL
+      RETURNING *`,
+    [leadId, actorUserId || null]
+  );
+  const row = result.rows[0] || null;
+  if (!row) return null;
+  await addLeadActivity(db, {
+    leadId,
+    actorUserId,
+    actorType: actorUserId ? 'admin' : 'system',
+    activityType: 'deleted',
+    message: text(note, 'Lead deleted in CRM'),
+    oldStatus: row.lead_status,
+    newStatus: row.lead_status,
+    metadata: { deleted: true }
+  });
+  return row;
+}
+
+async function restoreLead(db, leadId, { actorUserId = null, note = '' } = {}) {
+  if (!db || !leadId) return null;
+  const result = await db.query(
+    `UPDATE leads
+        SET deleted_at = NULL,
+            deleted_by_user_id = NULL,
+            updated_at = NOW()
+      WHERE id = $1
+        AND deleted_at IS NOT NULL
+      RETURNING *`,
+    [leadId]
+  );
+  const row = result.rows[0] || null;
+  if (!row) return null;
+  await addLeadActivity(db, {
+    leadId,
+    actorUserId,
+    actorType: actorUserId ? 'admin' : 'system',
+    activityType: 'restored',
+    message: text(note, 'Lead restored in CRM'),
+    oldStatus: row.lead_status,
+    newStatus: row.lead_status,
+    metadata: { restored: true }
+  });
+  return row;
+}
+
+/**
+ * When an owner actually submits a listing, close any open "started listing"
+ * leads for the same phone or email so they do not sit in the open list.
+ * Never throws: a CRM tidy-up must not break the listing form.
+ */
+async function closeOpenListingIntentLeads(db, { phone, email, listingId, inquiryReference } = {}) {
+  if (!db) return 0;
+  const key = phoneKey(phone);
+  const emailKey = text(email).toLowerCase() || null;
+  if (!key && !emailKey) return 0;
+  try {
+    const result = await db.query(
+      `UPDATE leads l
+          SET lead_status = 'won',
+              closed_at = COALESCE(closed_at, NOW()),
+              outcome = 'listing_submitted',
+              updated_at = NOW(),
+              metadata = COALESCE(l.metadata, '{}'::jsonb) || $3::jsonb
+        WHERE l.deleted_at IS NULL
+          AND l.lead_status IN ${OPEN_LEAD_STATUS_SQL}
+          AND l.source IN ('list_property_whatsapp_ai', 'list_property_online')
+          AND (
+            ($1::text IS NOT NULL AND EXISTS (
+              SELECT 1 FROM contacts c WHERE c.id = l.contact_id AND c.phone_key = $1
+            ))
+            OR ($2::text IS NOT NULL AND EXISTS (
+              SELECT 1 FROM contacts c WHERE c.id = l.contact_id AND LOWER(c.email) = $2
+            ))
+          )
+        RETURNING l.id, l.lead_status`,
+      [key, emailKey, JSON.stringify({
+        closed_by: 'listing_submitted',
+        listing_id: listingId || null,
+        inquiry_reference: inquiryReference || null
+      })]
+    );
+    for (const row of result.rows) {
+      await addLeadActivity(db, {
+        leadId: row.id,
+        actorType: 'system',
+        activityType: 'status_change',
+        oldStatus: 'open',
+        newStatus: 'won',
+        message: inquiryReference
+          ? `Listing submitted (${inquiryReference}); listing-started lead marked done.`
+          : 'Listing submitted; listing-started lead marked done.'
+      });
+    }
+    return result.rows.length;
+  } catch (error) {
+    logger.error('Closing listing-intent leads failed', { error: error.message });
+    return 0;
+  }
+}
+
 module.exports = {
   CLOSED_LEAD_STATUSES,
+  CLOSED_LEAD_STATUS_SQL,
+  LEAD_SOURCE_LABELS,
   LEAD_STATUSES,
   OPEN_LEAD_STATUSES,
   OPEN_LEAD_STATUS_SQL,
   addLeadActivity,
   buildLeadDedupeKey,
+  buildLeadListFilters,
+  closeOpenListingIntentLeads,
   createLead,
+  deleteLead,
   isTestLeadInput,
+  leadMatchesListFilter,
+  leadSourceLabel,
   normalizeLeadStatus,
   phoneKey,
   recordLeadHandoff,
+  restoreLead,
   scoreLead,
   upsertContact
 };

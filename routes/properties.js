@@ -59,7 +59,7 @@ const { matchListingToSavedSearches } = require('../services/alertSchedulerServi
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { logEmailEvent } = require('../services/emailLogService');
 const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
-const { createLead } = require('../services/leadService');
+const { createLead, closeOpenListingIntentLeads } = require('../services/leadService');
 const { ensurePostVerificationRecords } = require('../services/authFlowService');
 const { prepareMediaUrlForStorage } = require('../services/cloudMediaStorageService');
 const { effectivePriceUgxSql } = require('../services/fxRateService');
@@ -4916,6 +4916,15 @@ router.post('/', async (req, res, next) => {
         broker_agent_id: brokerCanSkipOwnerIdentity ? brokerAgent.id : null
       }
     });
+
+    try {
+      await closeOpenListingIntentLeads(db, {
+        phone: listerPhone || null,
+        email: listerEmailNormalized || null,
+        listingId: propertyId,
+        inquiryReference
+      });
+    } catch (_error) {}
 
     let supportEmailNotification = { sent: false, mocked: true };
     try {

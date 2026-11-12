@@ -132,7 +132,7 @@ const billingOps = require('../services/billingOpsService');
 const payLinks = require('../services/payLinkService');
 const aiCeo = require('../services/aiCeoControlService');
 const revolutMerchant = require('../services/revolutMerchantService');
-const { addLeadActivity, createLead, CLOSED_LEAD_STATUSES, LEAD_STATUSES, OPEN_LEAD_STATUS_SQL, normalizeLeadStatus } = require('../services/leadService');
+const { addLeadActivity, buildLeadListFilters, createLead, deleteLead, restoreLead, CLOSED_LEAD_STATUSES, LEAD_STATUSES, OPEN_LEAD_STATUS_SQL, normalizeLeadStatus } = require('../services/leadService');
 const { getAlertSummary, matchListingToSavedSearches } = require('../services/alertSchedulerService');
 const { MONETIZATION_SPINE_MARKER, markInvoicePaidManually, paymentProviderConfigured } = require('../services/paymentProviderService');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
@@ -3770,7 +3770,7 @@ router.get('/command-centre', async (_req, res, next) => {
       adminCommandCentreMetric('hidden_listings', () => safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'")),
       adminCommandCentreMetric('broker_pending', () => safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'pending' OR COALESCE(registration_status, 'not_registered') <> 'registered'")),
       adminCommandCentreMetric('broker_approved', () => safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'approved' AND COALESCE(registration_status, 'not_registered') = 'registered'")),
-      adminCommandCentreMetric('open_leads', () => safeCount(`${adminLeadUnionSql()} SELECT COUNT(*)::int AS total FROM all_leads WHERE is_test = FALSE AND lead_status IN ${OPEN_LEAD_STATUS_SQL}`)),
+      adminCommandCentreMetric('open_leads', () => safeCount(`${adminLeadUnionSql()} SELECT COUNT(*)::int AS total FROM all_leads WHERE is_test = FALSE AND deleted_at IS NULL AND lead_status IN ${OPEN_LEAD_STATUS_SQL}`)),
       adminCommandCentreMetric('hot_leads', () => safeCount(`${adminLeadUnionSql()} SELECT COUNT(*)::int AS total FROM all_leads WHERE priority IN ('high','urgent') OR lead_score >= 50`)),
       adminCommandCentreMetric('overdue_tasks', () => safeCount("SELECT COUNT(*)::int AS total FROM lead_tasks WHERE status = 'open' AND due_at < NOW()")),
       adminCommandCentreMetric('whatsapp_needs_human', () => safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_conversation_state WHERE status IN ('needs_human','escalated')")),
@@ -12683,12 +12683,14 @@ router.get('/crm/summary', async (_req, res, next) => {
            COUNT(*) FILTER (WHERE priority IN ('high','urgent'))::int AS hot_leads,
            COUNT(*) FILTER (WHERE next_follow_up_at < NOW() AND lead_status IN ${OPEN_LEAD_STATUS_SQL})::int AS overdue_followups,
            COALESCE(SUM(budget), 0)::bigint AS budget_pipeline
-         FROM all_leads`
+         FROM all_leads
+         WHERE deleted_at IS NULL`
       ),
       db.query(
         `${adminLeadUnionSql()}
          SELECT source, COUNT(*)::int AS total
          FROM all_leads
+         WHERE deleted_at IS NULL
          GROUP BY source
          ORDER BY total DESC
          LIMIT 12`
@@ -12697,6 +12699,7 @@ router.get('/crm/summary', async (_req, res, next) => {
         `${adminLeadUnionSql()}
          SELECT lead_type, COUNT(*)::int AS total
          FROM all_leads
+         WHERE deleted_at IS NULL
          GROUP BY lead_type
          ORDER BY total DESC
          LIMIT 12`
@@ -13309,35 +13312,7 @@ router.get('/whatsapp-message-logs', async (req, res, next) => {
 });
 
 function buildAdminLeadFilters(query = {}) {
-  const filters = [];
-  const values = [];
-  const addFilter = (sql, value) => {
-    values.push(value);
-    filters.push(sql.replace('?', `$${values.length}`));
-  };
-  const includeTests = ['1', 'true', 'yes'].includes(String(query.include_tests || '').toLowerCase());
-  if (!includeTests) filters.push('is_test = FALSE');
-  const status = String(query.status || '').trim().toLowerCase();
-  if (status === 'open_all') filters.push(`lead_status IN ${OPEN_LEAD_STATUS_SQL}`);
-  else if (status) addFilter('lead_status = ?', status);
-  if (query.handoff) addFilter('handoff_status = ?', String(query.handoff).trim());
-  if (query.agent_id) addFilter('agent_id = ?', String(query.agent_id).trim());
-  if (query.source) addFilter('source = ?', String(query.source).trim());
-  if (query.type) addFilter('lead_type = ?', String(query.type).trim());
-  if (query.priority) addFilter('priority = ?', String(query.priority).trim());
-  if (query.category) addFilter('category ILIKE ?', `%${String(query.category).trim()}%`);
-  if (query.location) addFilter('location ILIKE ?', `%${String(query.location).trim()}%`);
-  if (query.bundle_tag) addFilter(`COALESCE(metadata->>'bundle_tag', '') = ?`, String(query.bundle_tag).trim());
-  if (query.date_from) addFilter('created_at >= ?::timestamptz', String(query.date_from).trim());
-  if (query.date_to) addFilter(`created_at < (?::date + INTERVAL '1 day')`, String(query.date_to).trim());
-  if (query.search) {
-    values.push(`%${String(query.search).trim()}%`);
-    filters.push(`(message ILIKE $${values.length} OR location ILIKE $${values.length} OR contact_name ILIKE $${values.length} OR contact_phone ILIKE $${values.length} OR contact_email ILIKE $${values.length} OR listing_title ILIKE $${values.length} OR listing_reference ILIKE $${values.length} OR agent_name ILIKE $${values.length})`);
-  }
-  return {
-    values,
-    where: filters.length ? `WHERE ${filters.join(' AND ')}` : ''
-  };
+  return buildLeadListFilters(query);
 }
 
 function adminLeadUnionSql() {
@@ -13381,7 +13356,9 @@ function adminLeadUnionSql() {
         l.handoff_status,
         l.handoff_at,
         l.repeat_count,
-        l.is_test
+        l.is_test,
+        l.deleted_at,
+        l.deleted_by_user_id::text AS deleted_by_user_id
       FROM leads l
       LEFT JOIN contacts c ON c.id = l.contact_id
       LEFT JOIN properties p ON p.id = l.listing_id
@@ -13434,7 +13411,9 @@ function adminLeadUnionSql() {
         'makaug_team'::text AS handoff_status,
         NULL::timestamptz AS handoff_at,
         0 AS repeat_count,
-        (COALESCE(me.payload->>'launch_proof', '') ~* '^(true|1|yes)$') AS is_test
+        (COALESCE(me.payload->>'launch_proof', '') ~* '^(true|1|yes)$') AS is_test,
+        NULL::timestamptz AS deleted_at,
+        NULL::text AS deleted_by_user_id
       FROM mortgage_enquiries me
       WHERE NOT EXISTS (
         SELECT 1
@@ -14178,6 +14157,41 @@ router.patch('/leads/:id', async (req, res, next) => {
     });
     await writeAudit('crm_lead_updated', { lead_id: leadId }, adminActorId(req));
     return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete('/leads/:id', async (req, res, next) => {
+  try {
+    const leadId = String(req.params.id || '');
+    if (leadId.startsWith('mortgage-enquiry:')) {
+      return res.status(400).json({ ok: false, error: 'Close this mortgage enquiry first so it becomes a full CRM lead, then delete it.' });
+    }
+    if (!/^[0-9a-f-]{36}$/i.test(leadId)) return res.status(404).json({ ok: false, error: 'Lead not found' });
+    const deleted = await deleteLead(db, leadId, {
+      actorUserId: req.adminAuth?.userId || null,
+      note: cleanText(req.body?.note) || 'Lead deleted in CRM'
+    });
+    if (!deleted) return res.status(404).json({ ok: false, error: 'Lead not found or already deleted' });
+    await writeAudit('crm_lead_deleted', { lead_id: leadId }, adminActorId(req));
+    return res.json({ ok: true, data: { id: deleted.id, deleted_at: deleted.deleted_at } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/leads/:id/restore', async (req, res, next) => {
+  try {
+    const leadId = String(req.params.id || '');
+    if (!/^[0-9a-f-]{36}$/i.test(leadId)) return res.status(404).json({ ok: false, error: 'Lead not found' });
+    const restored = await restoreLead(db, leadId, {
+      actorUserId: req.adminAuth?.userId || null,
+      note: cleanText(req.body?.note) || 'Lead restored in CRM'
+    });
+    if (!restored) return res.status(404).json({ ok: false, error: 'Lead not found or not deleted' });
+    await writeAudit('crm_lead_restored', { lead_id: leadId }, adminActorId(req));
+    return res.json({ ok: true, data: restored });
   } catch (error) {
     return next(error);
   }

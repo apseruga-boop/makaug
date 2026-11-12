@@ -9608,7 +9608,7 @@
               <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
                 <div>
                   <h4 class="text-lg font-bold text-gray-800">CRM Leads</h4>
-                  <p class="text-xs text-gray-500 mt-1">Latest leads from WhatsApp, saved searches, viewings, callbacks, advertising, support, and no-results flows.</p>
+                  <p class="text-xs text-gray-500 mt-1">Open leads from listings, WhatsApp, viewings, callbacks and forms. Mark one done or delete it when you are finished — it leaves this list, and you can still find it with the filters.</p>
                 </div>
                 <button type="button" onclick="exportAdminCrmLeadsCsv()" class="border border-green-300 bg-white text-green-800 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-black">Export CSV</button>
               </div>
@@ -9620,16 +9620,18 @@
                 <input name="bundle_tag" class="border border-gray-200 rounded-lg px-2.5 py-2 text-xs" placeholder="Bundle tag">
                 <input name="search" class="border border-gray-200 rounded-lg px-2.5 py-2 text-xs" placeholder="Name, phone, listing, agent">
                 <select name="status" class="border border-gray-200 rounded-lg px-2.5 py-2 text-xs" aria-label="Lead status">
-                  <option value="">Any status</option>
-                  <option value="open_all">All open</option>
+                  <option value="open_all" selected>Open</option>
+                  <option value="all">All except deleted</option>
                   <option value="open">Open (not handed over)</option>
                   <option value="handed_over">Handed over</option>
                   <option value="contacted">Contacted</option>
                   <option value="qualified">Qualified</option>
-                  <option value="won">Won</option>
-                  <option value="lost">Lost</option>
-                  <option value="spam">Spam</option>
+                  <option value="won">Closed — done (won)</option>
+                  <option value="lost">Closed — lost</option>
+                  <option value="spam">Not useful</option>
                   <option value="closed">Closed</option>
+                  <option value="closed_all">All closed</option>
+                  <option value="deleted">Deleted</option>
                 </select>
                 <select name="handoff" class="border border-gray-200 rounded-lg px-2.5 py-2 text-xs" aria-label="Handoff">
                   <option value="">Any handoff</option>
@@ -9638,11 +9640,12 @@
                   <option value="sent">Sent to lister</option>
                   <option value="queued">Queued to lister</option>
                   <option value="contact_shown">Contact shown</option>
+                  <option value="referred_to_agent">Sent to a makaug agent</option>
                   <option value="makaug_team">For makaug team</option>
                 </select>
                 <button class="bg-green-700 hover:bg-green-600 text-white rounded-lg px-3 py-2 text-xs font-black">Apply filters</button>
               </form>
-              <div id="admin-crm-filter-status" class="mb-3 text-xs text-gray-500">Showing the latest leads.</div>
+              <div id="admin-crm-filter-status" class="mb-3 text-xs text-gray-500">Showing the latest open leads.</div>
               <div id="admin-crm-leads-table" class="space-y-3"></div>
               <div class="mt-5 border-t border-gray-200 pt-4">
                 <h4 class="text-base font-bold text-gray-800">Follow-up tasks</h4>
