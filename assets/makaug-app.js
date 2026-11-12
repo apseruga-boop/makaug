@@ -23433,7 +23433,7 @@ async function loadStaffLiveFeatured() {
 function staffOutreachState(scope) {
   window.__makaugOutreach = window.__makaugOutreach || {};
   if (!window.__makaugOutreach[scope]) {
-    window.__makaugOutreach[scope] = { loadedAt: 0, loading: false, filter: "", data: null, error: "" };
+    window.__makaugOutreach[scope] = { loadedAt: 0, loading: false, filter: "", sender: "all", data: null, error: "" };
   }
   return window.__makaugOutreach[scope];
 }
@@ -23473,23 +23473,37 @@ async function staffOutreachLoad(scope) {
   }
 }
 
+function staffOutreachMatches(row, filter, sender) {
+  if (filter === "do_not_contact" && row.do_not_contact !== true) return false;
+  if (filter === "no_reply" && !(row.status === "pitched" && !row.do_not_contact)) return false;
+  if (filter === "yes" && !["interested", "signed_up", "approved"].includes(row.status)) return false;
+  if (filter === "no" && row.status !== "declined") return false;
+  if (sender && sender !== "all") {
+    const key = row.sender_key || (String(row.pitched_by_name || "").toLowerCase().startsWith("arthur") ? "arthur" : String(row.pitched_by_name || "").toLowerCase().startsWith("ronald") ? "ronald" : "other");
+    if (key !== sender) return false;
+  }
+  return true;
+}
+
+function staffOutreachRowChrome(row) {
+  if (row.do_not_contact) return { border: "border-red-200 bg-red-50", badge: "bg-red-700 text-white", label: "Do not contact again" };
+  if (row.status === "declined") return { border: "border-slate-300 bg-slate-50", badge: "bg-slate-700 text-white", label: row.follow_up || "No — they said no" };
+  if (["signed_up", "approved"].includes(row.status) || row.registered_at) return { border: "border-teal-200 bg-teal-50", badge: "bg-teal-700 text-white", label: row.follow_up || "Yes — they signed up" };
+  if (row.status === "interested") return { border: "border-emerald-200 bg-emerald-50", badge: "bg-emerald-700 text-white", label: row.follow_up || "Yes — they want to join" };
+  return { border: "border-amber-200 bg-amber-50", badge: "bg-amber-700 text-white", label: row.follow_up || "No reply yet" };
+}
+
 function staffOutreachRender(scope) {
   const root = staffOutreachRoot(scope);
   const state = staffOutreachState(scope);
   if (!root) return;
   const rows = Array.isArray(state.data) ? state.data : [];
   const filter = state.filter || "";
-  const visible = rows.filter((row) => {
-    if (!filter) return true;
-    if (filter === "do_not_contact") return row.do_not_contact === true;
-    if (filter === "no_reply") return row.status === "pitched" && !row.do_not_contact;
-    if (filter === "yes") return ["interested", "signed_up", "approved"].includes(row.status);
-    if (filter === "no") return row.status === "declined";
-    return true;
-  });
-  const chip = (key, label) => {
-    const on = filter === key;
-    return `<button type="button" onclick="staffOutreachFilter('${scope}', '${key}')" class="rounded-full px-3 py-1 text-xs font-bold ${on ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700"}">${adminEscape(label)}</button>`;
+  const sender = state.sender || "all";
+  const visible = rows.filter((row) => staffOutreachMatches(row, filter, sender));
+  const chip = (key, label, current, fn) => {
+    const on = current === key;
+    return `<button type="button" onclick="${fn}('${scope}', '${key}')" class="rounded-full px-3 py-1 text-xs font-bold ${on ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700"}">${adminEscape(label)}</button>`;
   };
   const dayText = (days) => days == null ? "—" : Number(days) === 0 ? "Today" : Number(days) === 1 ? "1 day ago" : `${days} days ago`;
   const whenText = (value) => {
@@ -23498,47 +23512,88 @@ function staffOutreachRender(scope) {
     if (Number.isNaN(d.getTime())) return "—";
     return d.toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric" });
   };
+  const followBtn = (id, status, label, active, style) => {
+    const on = active ? "ring-2 ring-offset-1 ring-gray-900 " : "";
+    return `<button type="button" class="${on}${style} rounded-lg px-3 py-1.5 text-xs font-bold" onclick="staffOutreachFollowUp('${scope}', '${id}', '${status}')">${label}</button>`;
+  };
   root.dataset.ready = "1";
   root.innerHTML = `
     <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
       <div class="min-w-0">
         <h3 class="text-xl font-black text-gray-900">Outreach</h3>
         <p class="text-xs text-gray-500 mt-1">Every person Arthur or Ronald sends the joining video to, from Agent 007 option 3. Tracks who sent it, when, the follow-up, and whether we can contact them again. The same video is never sent twice.</p>
+        <p class="text-xs text-gray-600 mt-2 leading-relaxed"><strong>Yes</strong> — they want to join. Call them, then register them with Agent 007 option 1 (or add them as an agent), and mark Called or Registered when that is done. <strong>No</strong> — they declined. The loop is closed and the same film will not be sent again; you can still mark Do not contact again for a hard stop. <strong>No reply</strong> — still waiting. After a day, call them and log a recontact (this does not resend the film). <strong>Do not contact again</strong> — hard stop. No further outreach, and recontact is not offered.</p>
         <p class="text-xs text-gray-600 mt-1">${adminEscape(state.note || "Tracking starts from the week of 10–16 Nov 2026 (London).")}</p>
       </div>
       <button type="button" onclick="staffOutreachLoad('${scope}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh</button>
     </div>
-    <div class="flex flex-wrap gap-2 mb-3">${chip("", "All")} ${chip("no_reply", "No reply")} ${chip("yes", "Yes")} ${chip("no", "No")} ${chip("do_not_contact", "Do not contact")}</div>
+    <div class="flex flex-wrap gap-2 mb-2">${chip("", "All", filter, "staffOutreachFilter")} ${chip("no_reply", "No reply", filter, "staffOutreachFilter")} ${chip("yes", "Yes", filter, "staffOutreachFilter")} ${chip("no", "No", filter, "staffOutreachFilter")} ${chip("do_not_contact", "Do not contact", filter, "staffOutreachFilter")}</div>
+    <div class="flex flex-wrap gap-2 mb-3" data-outreach-sender-filters>
+      <span class="text-xs font-semibold text-gray-500 self-center">Sent by</span>
+      ${chip("all", "All senders", sender, "staffOutreachSenderFilter")}
+      ${chip("arthur", "Sent by Arthur", sender, "staffOutreachSenderFilter")}
+      ${chip("ronald", "Sent by Ronald", sender, "staffOutreachSenderFilter")}
+      ${chip("other", "Sent by someone else", sender, "staffOutreachSenderFilter")}
+    </div>
     <div class="rounded-xl border border-gray-200 p-3 mb-4 bg-gray-50">
       <h4 class="font-black text-gray-900 text-sm">Log a send already made</h4>
       <p class="text-xs text-gray-500 mt-1">Use this for videos sent this week that are not in the list yet. This does not send a WhatsApp. If they already had this video, you will see who sent it and the follow-up, and be asked to call them instead.</p>
       <p class="hidden mt-2 text-sm text-red-800" data-outreach-log-error></p>
-      <form class="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2" onsubmit="staffOutreachLog(event, '${scope}')">
-        <label class="text-xs font-semibold">Name<input name="full_name" required class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="Name"></label>
-        <label class="text-xs font-semibold">Phone<input name="phone" required class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="07… or 256…" autocomplete="off"></label>
-        <label class="text-xs font-semibold">Who sent it<select name="pitched_by_name" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"><option value="Arthur">Arthur</option><option value="Ronald">Ronald</option><option value="">Someone else</option></select></label>
-        <label class="text-xs font-semibold">Sent on<input name="pitched_at" type="datetime-local" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"></label>
-        <label class="text-xs font-semibold md:col-span-2">Note (optional)<input name="note" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="Which video, or where you sent it from"></label>
-        <div class="flex items-end"><button type="submit" class="rounded-lg bg-gray-900 text-white px-4 py-2 text-xs font-bold">Log send</button></div>
+      <form class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3" onsubmit="staffOutreachLog(event, '${scope}')">
+        <label class="text-xs font-semibold block">Name<input name="full_name" required class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="Name"></label>
+        <label class="text-xs font-semibold block">Phone<input name="phone" required class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="07… or 256…" autocomplete="off"></label>
+        <label class="text-xs font-semibold block">Who sent it<select name="pitched_by_name" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"><option value="Arthur">Arthur</option><option value="Ronald">Ronald</option><option value="">Someone else</option></select></label>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="text-xs font-semibold block">Sent on (date)<input name="pitched_on" type="date" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"></label>
+          <label class="text-xs font-semibold block">Time (optional)<input name="pitched_time" type="time" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"></label>
+        </div>
+        <label class="text-xs font-semibold block md:col-span-2">Which video, or where you sent it from <span class="font-normal text-gray-500">(optional)</span><input name="note" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="Joining film, from Agent 007"></label>
+        <div class="md:col-span-2"><button type="submit" class="rounded-lg bg-gray-900 text-white px-4 py-2 text-xs font-bold">Log send</button></div>
       </form>
     </div>
     <div class="space-y-2" data-outreach-list>
       ${visible.length ? visible.map((row) => {
         const id = adminAttr(row.id);
-        return `<article class="rounded-xl border ${row.do_not_contact ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"} p-3">
+        const chrome = staffOutreachRowChrome(row);
+        const yesOn = ["interested", "signed_up", "approved"].includes(row.status) && !row.do_not_contact;
+        const noOn = row.status === "declined" && !row.do_not_contact;
+        const replyOn = row.status === "pitched" && !row.do_not_contact;
+        const sentAgo = row.pitched_days_ago != null ? row.pitched_days_ago : row.days_ago;
+        const touchAgo = row.days_ago;
+        const whenBit = `${adminEscape(row.phone_masked || "•••")} · Sent ${adminEscape(whenText(row.pitched_at))} by ${adminEscape(row.pitched_by_name || "Staff")}${row.logged_manually ? " · logged by hand" : ""}`;
+        const recontactBit = row.recontacted_at
+          ? `<p class="text-xs text-gray-600 mt-1">Last recontact ${adminEscape(whenText(row.recontacted_at))}${row.recontacted_by ? ` by ${adminEscape(row.recontacted_by)}` : ""} · ${adminEscape(dayText(touchAgo))}</p>`
+          : "";
+        const doneBits = [
+          row.called_at ? `Called ${whenText(row.called_at)}${row.called_by ? ` by ${row.called_by}` : ""}` : "",
+          row.registered_at ? `Registered ${whenText(row.registered_at)}${row.registered_by ? ` by ${row.registered_by}` : ""}` : ""
+        ].filter(Boolean);
+        const nextActions = [];
+        if (row.can_mark_called) nextActions.push(`<button type="button" class="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-xs font-bold" onclick="staffOutreachMarkDone('${scope}', '${id}', 'called')">Called</button>`);
+        else if (row.called_at && row.can_mark_registered) nextActions.push(`<span class="rounded-lg bg-emerald-100 text-emerald-900 px-3 py-1.5 text-xs font-bold">Called</span>`);
+        if (row.can_mark_registered) nextActions.push(`<button type="button" class="rounded-lg bg-teal-700 text-white px-3 py-1.5 text-xs font-bold" onclick="staffOutreachMarkDone('${scope}', '${id}', 'registered')">Registered</button>`);
+        else if (row.registered_at) nextActions.push(`<span class="rounded-lg bg-teal-100 text-teal-900 px-3 py-1.5 text-xs font-bold">Registered</span>`);
+        if (row.can_recontact) nextActions.push(`<button type="button" class="rounded-lg bg-amber-700 text-white px-3 py-1.5 text-xs font-bold" onclick="staffOutreachRecontact('${scope}', '${id}')">Recontact</button>`);
+        return `<article class="rounded-xl border ${chrome.border} p-3" data-outreach-row data-loop-state="${adminAttr(row.loop_state || "")}" data-sender="${adminAttr(row.sender_key || "")}">
           <div class="flex items-start justify-between gap-3 flex-wrap">
-            <div class="min-w-0">
-              <p class="font-black text-gray-900">${adminEscape(row.full_name || "Unnamed")}</p>
-              <p class="text-xs text-gray-600 mt-1">${adminEscape(row.phone_masked || "•••")} · Sent ${adminEscape(whenText(row.pitched_at))} by ${adminEscape(row.pitched_by_name || "Staff")}${row.logged_manually ? " · logged by hand" : ""}</p>
-              <p class="text-xs text-gray-600 mt-1">${adminEscape(row.video_label || "Joining film")} · Follow-up: <strong>${adminEscape(row.follow_up)}</strong> · ${adminEscape(dayText(row.days_ago))}</p>
-              <p class="text-xs text-gray-700 mt-1">${adminEscape(row.next_step || "")}</p>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <p class="font-black text-gray-900">${adminEscape(row.full_name || "Unnamed")}</p>
+                <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${chrome.badge}">${adminEscape(chrome.label)}</span>
+              </div>
+              <p class="text-xs text-gray-600 mt-1">${whenBit}</p>
+              <p class="text-xs text-gray-600 mt-1">${adminEscape(row.video_label || "Joining film")} · ${adminEscape(dayText(sentAgo))}</p>
+              ${recontactBit}
+              ${doneBits.length ? `<p class="text-xs text-gray-700 mt-1">${adminEscape(doneBits.join(" · "))}</p>` : ""}
+              <p class="text-sm text-gray-900 mt-2 font-semibold leading-snug">${adminEscape(row.next_step || "")}</p>
               ${row.activity?.last_reply_at ? `<p class="text-xs text-gray-500 mt-1">Last WhatsApp reply: ${adminEscape(whenText(row.activity.last_reply_at))}</p>` : ""}
               ${row.activity?.signed_up ? `<p class="text-xs text-emerald-800 mt-1">They have signed up${row.agent_status ? ` (${adminEscape(row.agent_status)})` : ""}.</p>` : ""}
+              ${nextActions.length ? `<div class="flex flex-wrap gap-2 mt-3">${nextActions.join("")}</div>` : ""}
             </div>
             <div class="flex flex-wrap gap-2">
-              <button type="button" class="rounded-lg border border-emerald-200 text-emerald-800 px-3 py-1.5 text-xs font-bold" onclick="staffOutreachFollowUp('${scope}', '${id}', 'yes')">Yes</button>
-              <button type="button" class="rounded-lg border border-red-200 text-red-800 px-3 py-1.5 text-xs font-bold" onclick="staffOutreachFollowUp('${scope}', '${id}', 'no')">No</button>
-              <button type="button" class="rounded-lg border border-gray-300 text-gray-700 px-3 py-1.5 text-xs font-bold" onclick="staffOutreachFollowUp('${scope}', '${id}', 'no_reply')">No reply</button>
+              ${followBtn(id, "yes", "Yes", yesOn, "border border-emerald-200 text-emerald-800")}
+              ${followBtn(id, "no", "No", noOn, "border border-red-200 text-red-800")}
+              ${followBtn(id, "no_reply", "No reply", replyOn, "border border-gray-300 text-gray-700")}
               ${row.do_not_contact
                 ? `<button type="button" class="rounded-lg border border-gray-300 text-gray-700 px-3 py-1.5 text-xs font-bold" onclick="staffOutreachDoNotContact('${scope}', '${id}', false)">Allow contact</button>`
                 : `<button type="button" class="rounded-lg bg-red-700 text-white px-3 py-1.5 text-xs font-bold" onclick="staffOutreachDoNotContact('${scope}', '${id}', true)">Do not contact again</button>`}
@@ -23554,6 +23609,20 @@ function staffOutreachFilter(scope, filter) {
   staffOutreachRender(scope);
 }
 
+function staffOutreachSenderFilter(scope, sender) {
+  staffOutreachState(scope).sender = sender || "all";
+  staffOutreachRender(scope);
+}
+
+function staffOutreachPitchedAtFromForm(data) {
+  const on = String(data.get("pitched_on") || "").trim();
+  const time = String(data.get("pitched_time") || "").trim();
+  if (!on) return null;
+  const iso = time ? `${on}T${time}` : `${on}T12:00`;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 async function staffOutreachLog(event, scope) {
   event?.preventDefault?.();
   const form = event.currentTarget;
@@ -23561,13 +23630,12 @@ async function staffOutreachLog(event, scope) {
   const err = root?.querySelector("[data-outreach-log-error]");
   if (err) { err.classList.add("hidden"); err.textContent = ""; }
   const data = new FormData(form);
-  const pitchedAt = String(data.get("pitched_at") || "").trim();
   const body = {
     full_name: String(data.get("full_name") || "").trim(),
     phone: String(data.get("phone") || "").trim(),
     pitched_by_name: String(data.get("pitched_by_name") || "").trim(),
     note: String(data.get("note") || "").trim(),
-    pitched_at: pitchedAt ? new Date(pitchedAt).toISOString() : null
+    pitched_at: staffOutreachPitchedAtFromForm(data)
   };
   try {
     await apiRequest("/api/admin/outreach-tracker/log", { method: "POST", headers: adminAuthHeaders(), body });
@@ -23610,6 +23678,33 @@ async function staffOutreachDoNotContact(scope, id, value) {
     await staffOutreachLoad(scope);
   } catch (error) {
     alert(error?.message || "Could not update contact status.");
+  }
+}
+
+async function staffOutreachMarkDone(scope, id, action) {
+  try {
+    await apiRequest(`/api/admin/outreach-tracker/${encodeURIComponent(id)}/next-step`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { action }
+    });
+    await staffOutreachLoad(scope);
+  } catch (error) {
+    alert(error?.message || "Could not mark that step done.");
+  }
+}
+
+async function staffOutreachRecontact(scope, id) {
+  if (!window.confirm("Log that you will follow up again (usually a call)? This does not resend the joining film.")) return;
+  try {
+    await apiRequest(`/api/admin/outreach-tracker/${encodeURIComponent(id)}/recontact`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { note: "Call them" }
+    });
+    await staffOutreachLoad(scope);
+  } catch (error) {
+    alert(error?.message || "Could not log the recontact.");
   }
 }
 

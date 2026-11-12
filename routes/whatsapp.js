@@ -10215,7 +10215,7 @@ async function handleEmployeeWhatsappIntake({
         fullName: contact.fullName,
         phone: dialable,
         pitchedBy: phone,
-        pitchedByName: normalizeInput(data.employee_intake_last_subject_name || ''),
+        pitchedByName: staffNameForNumber(phone),
         metadata: { sent_via: 'agent_007_option_3' },
         allowDuplicate: true
       });
@@ -17870,6 +17870,9 @@ const AGENT_FILM_INTERESTED_DAYS = 14;
 const AGENT_FILM_FIRST_REPLY_DAYS = 7;
 
 function staffNameForNumber(value = '') {
+  const { knownOutreachSenderName } = require('../services/outreachSenderName');
+  const known = knownOutreachSenderName(value);
+  if (known) return known;
   const tail = String(value || '').replace(/\D/g, '').slice(-9);
   if (!tail) return '';
   if (tail === agentHelpContact().digits.slice(-9)) return agentHelpContact().name;

@@ -9,12 +9,23 @@
  * what happened, and may we contact them again".
  *
  * A second send of the same film to the same number is blocked. Staff can
- * log a send they already made by hand, mark the follow-up, or mark
+ * log a send they already made by hand, mark the follow-up, log a recontact
+ * (without resending the film), mark the next step done, or mark
  * "do not contact again". Found-online listers are never messaged.
  */
 
 const db = require('../config/database');
 const { isFoundOnlineListerPhone } = require('./foundOnlineListerPhone');
+const {
+  prospectPhoneKey,
+  maskPhoneLast3,
+  canonicalSenderName,
+  senderBucket,
+  knownOutreachSenders,
+  knownOutreachSenderName,
+  resolveOutreachSenderName,
+  nameForStorage
+} = require('./outreachSenderName');
 
 const PROSPECT_STATUSES = Object.freeze([
   'pitched', 'interested', 'signed_up', 'approved', 'declined', 'archived'
@@ -33,22 +44,6 @@ function digitsOnly(value) {
   return String(value || '').replace(/\D/g, '');
 }
 
-/** Last nine digits — the key every other phone match in this codebase uses. */
-function prospectPhoneKey(value) {
-  return digitsOnly(value).slice(-9);
-}
-
-/** Public reports and the desk show only the last three digits. */
-function maskPhoneLast3(value) {
-  const digits = digitsOnly(value);
-  if (!digits) return '';
-  return `•••${digits.slice(-3)}`;
-}
-
-/**
- * Ugandan numbers arrive as 0751…, 256751… and +256751… all in the same week.
- * Store something dialable so the pay link and the welcome pack can reuse it.
- */
 function normalizeProspectPhone(value) {
   const digits = digitsOnly(value);
   if (!digits) return '';
@@ -74,8 +69,18 @@ function daysSince(value, now = new Date()) {
   return Math.max(0, Math.floor((now.getTime() - at.getTime()) / 86400000));
 }
 
-function senderLabel(row = {}) {
-  return String(row.pitched_by_name || '').trim() || maskPhoneLast3(row.pitched_by) || 'Staff';
+function lastTouchAt(row = {}) {
+  const recontacted = row.recontacted_at ? new Date(row.recontacted_at) : null;
+  const pitched = row.pitched_at ? new Date(row.pitched_at) : null;
+  const reOk = recontacted && !Number.isNaN(recontacted.getTime());
+  const pOk = pitched && !Number.isNaN(pitched.getTime());
+  if (reOk && pOk) return recontacted > pitched ? row.recontacted_at : row.pitched_at;
+  if (reOk) return row.recontacted_at;
+  return row.pitched_at || null;
+}
+
+function senderLabel(row = {}, known) {
+  return resolveOutreachSenderName(row, known);
 }
 
 function videoLabel(row = {}) {
@@ -84,13 +89,41 @@ function videoLabel(row = {}) {
   return kind;
 }
 
+function canRecontact(row = {}) {
+  return row.do_not_contact !== true && String(row.status || '') === 'pitched';
+}
+
+function canMarkCalled(row = {}) {
+  return row.do_not_contact !== true
+    && String(row.status || '') === 'interested'
+    && !row.called_at;
+}
+
+function canMarkRegistered(row = {}) {
+  if (row.do_not_contact === true || row.registered_at) return false;
+  const status = String(row.status || '');
+  return status === 'interested' || status === 'signed_up';
+}
+
+function loopState(row = {}) {
+  if (row.do_not_contact) return 'closed_dnc';
+  const status = String(row.status || '');
+  if (status === 'declined') return 'closed_no';
+  if (status === 'approved') return 'done';
+  if (status === 'signed_up' || row.registered_at || row.agent_id) return 'register_done';
+  if (status === 'interested' && row.called_at) return 'called';
+  if (status === 'interested') return 'yes';
+  if (status === 'pitched') return 'no_reply';
+  return 'open';
+}
+
 function formatAlreadyContactedMessage(row = {}) {
   const name = String(row.full_name || 'This person').trim() || 'This person';
   const when = row.pitched_at ? new Date(row.pitched_at) : null;
   const whenText = when && !Number.isNaN(when.getTime())
     ? when.toLocaleString('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short', year: 'numeric' })
     : 'an earlier date';
-  const days = daysSince(row.pitched_at);
+  const days = daysSince(lastTouchAt(row));
   const daysText = days == null ? '' : days === 0 ? 'today' : days === 1 ? '1 day ago' : `${days} days ago`;
   const follow = followUpLabel(row);
   if (row.do_not_contact) {
@@ -98,11 +131,55 @@ function formatAlreadyContactedMessage(row = {}) {
   }
   return `${name} has already been sent this video on ${whenText} by ${senderLabel(row)}. `
     + `Follow-up: ${follow}${daysText ? ` (${daysText})` : ''}. `
-    + 'Do not send the same video again. Call them instead, or update the follow-up in Outreach.';
+    + 'Do not send the same video again. Call them instead, or log a recontact in Outreach.';
 }
 
-function publicProspect(row = {}, activity = {}) {
-  const days = row.days_since_pitch != null ? Number(row.days_since_pitch) : daysSince(row.pitched_at);
+/**
+ * The next thing a human has to do, in words. This is what makes the list a
+ * worklist rather than a log.
+ */
+function prospectNextStep(row = {}) {
+  if (row.do_not_contact) {
+    return 'Closed — do not contact this person again. The same joining film stays blocked, and recontact is not offered.';
+  }
+  const days = Number(row.days_since_last_touch ?? row.days_since_pitch ?? daysSince(lastTouchAt(row)) ?? 0);
+  const dayBit = days === 0 ? 'today' : days === 1 ? '1 day ago' : `${days} days ago`;
+  switch (row.status) {
+    case 'pitched':
+      if (row.recontacted_at) {
+        const who = String(row.recontacted_by || '').trim();
+        return `Recontact logged${who ? ` by ${who}` : ''} — call them (${dayBit}). Do not send the same joining film again.`;
+      }
+      return days >= 1
+        ? `No reply yet (${dayBit}). Call them, or log a recontact when you do. Do not send the same joining film again.`
+        : 'Waiting for them to come back. If they do not reply, call them — do not send the same joining film again.';
+    case 'interested':
+      if (row.registered_at || row.agent_id) {
+        return 'They have been registered. Approve them in the Agents tab if they are still pending.';
+      }
+      if (row.called_at) {
+        return 'Called — now register them with Agent 007 option 1, or add them as an agent in the Agents tab. Mark Registered when that is done.';
+      }
+      return 'They want to join. Call them, then register them with Agent 007 option 1 (or add them as an agent). Mark Called or Registered when you have done it.';
+    case 'signed_up':
+      return 'They have signed up. Approve them in the Agents tab.';
+    case 'approved':
+      return row.paid_until ? 'Done — they are an approved agent and paid up.' : 'Done — they are an approved agent. Chase the monthly payment if needed.';
+    case 'declined':
+      return 'Closed — they said no. Do not send the same joining film again. Mark “Do not contact again” if you also want a hard stop.';
+    default:
+      return '';
+  }
+}
+
+function publicProspect(row = {}, activity = {}, known) {
+  const pitchedDays = row.days_since_pitch != null ? Number(row.days_since_pitch) : daysSince(row.pitched_at);
+  const lastTouch = lastTouchAt(row);
+  const days = lastTouch && lastTouch !== row.pitched_at
+    ? daysSince(lastTouch)
+    : pitchedDays;
+  const senderName = senderLabel(row, known);
+  const withDays = { ...row, days_since_pitch: pitchedDays, days_since_last_touch: days };
   return {
     id: row.id,
     full_name: row.full_name,
@@ -114,19 +191,52 @@ function publicProspect(row = {}, activity = {}) {
     follow_up_note: row.follow_up_note || row.notes || '',
     pitched_at: row.pitched_at,
     days_ago: days,
-    pitched_by_name: senderLabel(row),
+    pitched_days_ago: pitchedDays,
+    pitched_by_name: senderName,
+    sender_key: senderBucket(senderName),
     logged_manually: row.logged_manually === true,
     do_not_contact: row.do_not_contact === true,
     can_reach_out_again: row.do_not_contact !== true && !['declined', 'approved'].includes(String(row.status || '')),
+    can_recontact: canRecontact(row),
+    can_mark_called: canMarkCalled(row),
+    can_mark_registered: canMarkRegistered(row),
+    called_at: row.called_at || null,
+    called_by: row.called_by || null,
+    registered_at: row.registered_at || null,
+    registered_by: row.registered_by || null,
+    recontacted_at: row.recontacted_at || null,
+    recontacted_by: row.recontacted_by || null,
+    recontact_count: Number(row.recontact_count || 0),
+    recontact_note: row.recontact_note || '',
+    loop_state: loopState(row),
     agent_id: row.agent_id || null,
     agent_status: row.agent_status || null,
-    next_step: prospectNextStep({ ...row, days_since_pitch: days }),
+    next_step: prospectNextStep(withDays),
     activity: {
       last_reply_at: activity.last_reply_at || row.replied_at || null,
       last_activity_at: activity.last_activity_at || null,
       signed_up: Boolean(row.agent_id || ['signed_up', 'approved'].includes(row.status))
     }
   };
+}
+
+function matchesOutreachFollowUp(row, filter) {
+  if (!filter) return true;
+  if (filter === 'do_not_contact') return row.do_not_contact === true;
+  if (filter === 'no_reply') return row.status === 'pitched' && !row.do_not_contact;
+  if (filter === 'yes') return ['interested', 'signed_up', 'approved'].includes(row.status);
+  if (filter === 'no') return row.status === 'declined';
+  return true;
+}
+
+function matchesOutreachSender(row, sender) {
+  if (!sender || sender === 'all') return true;
+  const key = row.sender_key || senderBucket(row.pitched_by_name);
+  return key === sender;
+}
+
+function filterOutreachRows(rows = [], { status = '', sender = '' } = {}) {
+  return (rows || []).filter((row) => matchesOutreachFollowUp(row, status) && matchesOutreachSender(row, sender));
 }
 
 /**
@@ -202,6 +312,11 @@ async function recordProspectPitch({
       throw error;
     }
   }
+  const storedName = nameForStorage({
+    pitchedBy,
+    pitchedByName,
+    prospectName: fullName
+  });
   const result = await db.query(
     `INSERT INTO agent_prospects (
         full_name, phone, phone_key, video_kind, pitched_by, pitched_by_name,
@@ -210,6 +325,7 @@ async function recordProspectPitch({
      VALUES ($1, $2, $3, $4, NULLIF($5, ''), NULLIF($6, ''), COALESCE($7::timestamptz, NOW()), $8, $9::jsonb)
      ON CONFLICT (phone_key) DO UPDATE
         SET full_name = COALESCE(NULLIF(EXCLUDED.full_name, ''), agent_prospects.full_name),
+            pitched_by_name = COALESCE(NULLIF(agent_prospects.pitched_by_name, ''), EXCLUDED.pitched_by_name),
             last_nudged_at = NOW(),
             updated_at = NOW(),
             metadata = agent_prospects.metadata || EXCLUDED.metadata
@@ -220,7 +336,7 @@ async function recordProspectPitch({
       phoneKey,
       String(videoKind || 'agent'),
       digitsOnly(pitchedBy),
-      String(pitchedByName || '').trim(),
+      storedName,
       pitchedAt || null,
       loggedManually === true,
       JSON.stringify(metadata && typeof metadata === 'object' ? metadata : {})
@@ -280,6 +396,7 @@ async function reconcileProspectsWithAgents() {
         SET status = CASE WHEN a.status = 'approved' THEN 'approved' ELSE 'signed_up' END,
             agent_id = a.id,
             signed_up_at = COALESCE(p.signed_up_at, a.created_at, NOW()),
+            registered_at = COALESCE(p.registered_at, p.signed_up_at, a.created_at, NOW()),
             updated_at = NOW()
        FROM agents AS a
       WHERE p.status IN ('pitched', 'interested', 'signed_up')
@@ -335,9 +452,21 @@ async function listProspects({ status = '', pitchedBy = '', limit = 200 } = {}) 
             a.status AS agent_status,
             a.paid_until,
             a.welcome_sent_at,
+            staff_account.sender_account_name,
             EXTRACT(DAY FROM NOW() - p.pitched_at)::int AS days_since_pitch
        FROM agent_prospects p
        LEFT JOIN agents a ON a.id = p.agent_id
+       LEFT JOIN LATERAL (
+         SELECT NULLIF(TRIM(CONCAT_WS(' ', NULLIF(u.first_name, ''), NULLIF(u.last_name, ''))), '') AS sender_account_name
+           FROM users u
+          WHERE u.role IN ('moderator', 'admin', 'super_admin')
+            AND COALESCE(u.status, 'active') IS DISTINCT FROM 'deleted'
+            AND RIGHT(REGEXP_REPLACE(COALESCE(u.phone, ''), '[^0-9]', '', 'g'), 9)
+              = RIGHT(REGEXP_REPLACE(COALESCE(p.pitched_by, ''), '[^0-9]', '', 'g'), 9)
+            AND RIGHT(REGEXP_REPLACE(COALESCE(p.pitched_by, ''), '[^0-9]', '', 'g'), 9) <> ''
+          ORDER BY CASE u.role WHEN 'super_admin' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END
+          LIMIT 1
+       ) staff_account ON TRUE
       ${filters.length ? `WHERE ${filters.join(' AND ')}` : ''}
       ORDER BY p.pitched_at DESC
       LIMIT $${values.length}`,
@@ -346,35 +475,13 @@ async function listProspects({ status = '', pitchedBy = '', limit = 200 } = {}) 
   return result.rows;
 }
 
-async function listOutreach({ status = '', pitchedBy = '', limit = 200 } = {}) {
-  const rows = await listProspects({ status, pitchedBy, limit });
+async function listOutreach({ status = '', pitchedBy = '', sender = '', limit = 200 } = {}) {
+  const rows = await listProspects({ status: PROSPECT_STATUSES.includes(status) ? status : '', pitchedBy, limit });
   const activity = await activityForPhoneKeys(rows.map((row) => row.phone_key));
-  return rows.map((row) => publicProspect(row, activity.get(row.phone_key) || {}));
-}
-
-/**
- * The next thing a human has to do, in words. This is what makes the list a
- * worklist rather than a log.
- */
-function prospectNextStep(row = {}) {
-  if (row.do_not_contact) return 'Nothing — do not contact again';
-  const days = Number(row.days_since_pitch || 0);
-  switch (row.status) {
-    case 'pitched':
-      return days >= 1
-        ? `Call them — pitched ${days} day${days === 1 ? '' : 's'} ago, no reply yet`
-        : 'Waiting for them to come back';
-    case 'interested':
-      return 'Register them with *Agent 007* → option 1';
-    case 'signed_up':
-      return 'Approve them in the Agents tab';
-    case 'approved':
-      return row.paid_until ? 'Done — paid up' : 'Chase the monthly payment';
-    case 'declined':
-      return 'Nothing — they said no';
-    default:
-      return '';
-  }
+  const known = knownOutreachSenders();
+  const mapped = rows.map((row) => publicProspect(row, activity.get(row.phone_key) || {}, known));
+  const followUp = ['yes', 'no', 'no_reply', 'do_not_contact'].includes(String(status || '')) ? status : '';
+  return filterOutreachRows(mapped, { status: followUp, sender: String(sender || '').trim().toLowerCase() });
 }
 
 async function findProspectByPhone(phone) {
@@ -458,15 +565,123 @@ async function setDoNotContact(id, { value = true, actor = '' } = {}) {
   return result.rows[0];
 }
 
+/**
+ * Close the Yes loop: staff called the person, or registered them.
+ * Does not send any message.
+ */
+async function markNextStep(id, { action = '', actor = '' } = {}) {
+  const step = String(action || '').trim().toLowerCase();
+  if (step !== 'called' && step !== 'registered') {
+    const error = new Error('Mark the next step as called or registered');
+    error.status = 400;
+    throw error;
+  }
+  const existing = await findProspectById(id);
+  if (!existing) {
+    const error = new Error('Outreach record not found');
+    error.status = 404;
+    throw error;
+  }
+  if (existing.do_not_contact) {
+    const error = new Error('This person is marked “do not contact again”. The next step is closed.');
+    error.status = 409;
+    error.code = 'do_not_contact';
+    throw error;
+  }
+  if (step === 'called') {
+    if (String(existing.status || '') !== 'interested') {
+      const error = new Error('Mark Yes first — Called is for someone who wants to join.');
+      error.status = 409;
+      error.code = 'not_yes';
+      throw error;
+    }
+    const result = await db.query(
+      `UPDATE agent_prospects
+          SET called_at = COALESCE(called_at, NOW()),
+              called_by = COALESCE(NULLIF(called_by, ''), NULLIF($2, '')),
+              follow_up_at = NOW(),
+              follow_up_by = NULLIF($2, ''),
+              updated_at = NOW()
+        WHERE id = $1
+        RETURNING *`,
+      [id, String(actor || '').trim().slice(0, 160)]
+    );
+    return result.rows[0];
+  }
+  if (!['interested', 'signed_up'].includes(String(existing.status || ''))) {
+    const error = new Error('Mark Yes first — Registered is for someone who wants to join.');
+    error.status = 409;
+    error.code = 'not_yes';
+    throw error;
+  }
+  const result = await db.query(
+    `UPDATE agent_prospects
+        SET registered_at = COALESCE(registered_at, NOW()),
+            registered_by = COALESCE(NULLIF(registered_by, ''), NULLIF($2, '')),
+            status = CASE WHEN status = 'approved' THEN status ELSE 'signed_up' END,
+            signed_up_at = COALESCE(signed_up_at, NOW()),
+            follow_up_at = NOW(),
+            follow_up_by = NULLIF($2, ''),
+            updated_at = NOW()
+      WHERE id = $1
+      RETURNING *`,
+    [id, String(actor || '').trim().slice(0, 160)]
+  );
+  return result.rows[0];
+}
+
+/**
+ * Log that staff will follow up again (typically a call). Does not send the
+ * joining film, and is refused when the person is marked do-not-contact or
+ * when follow-up is no longer “no reply”.
+ */
+async function recontactProspect(id, { note = '', actor = '' } = {}) {
+  const existing = await findProspectById(id);
+  if (!existing) {
+    const error = new Error('Outreach record not found');
+    error.status = 404;
+    throw error;
+  }
+  if (existing.do_not_contact) {
+    const error = new Error('This person is marked “do not contact again”. Recontact is not offered.');
+    error.status = 409;
+    error.code = 'do_not_contact';
+    throw error;
+  }
+  if (String(existing.status || '') !== 'pitched') {
+    const error = new Error('Recontact is for people who have not replied yet. If they said yes, mark Called or Registered instead.');
+    error.status = 409;
+    error.code = 'not_no_reply';
+    throw error;
+  }
+  const result = await db.query(
+    `UPDATE agent_prospects
+        SET recontacted_at = NOW(),
+            recontacted_by = NULLIF($2, ''),
+            recontact_note = COALESCE(NULLIF($3, ''), recontact_note),
+            recontact_count = COALESCE(recontact_count, 0) + 1,
+            follow_up_at = NOW(),
+            follow_up_by = NULLIF($2, ''),
+            updated_at = NOW()
+      WHERE id = $1
+      RETURNING *`,
+    [id, String(actor || '').trim().slice(0, 160), String(note || '').trim().slice(0, 500)]
+  );
+  return result.rows[0];
+}
+
 module.exports = {
   PROSPECT_STATUSES,
   FOLLOW_UP_LABELS,
+  FOLLOW_UP_TO_STATUS,
   prospectPhoneKey,
   normalizeProspectPhone,
   isUsableProspectPhone,
   maskPhoneLast3,
   followUpLabel,
   daysSince,
+  lastTouchAt,
+  senderLabel,
   formatAlreadyContactedMessage,
   publicProspect,
   evaluateOutreachSend,
@@ -475,10 +690,25 @@ module.exports = {
   reconcileProspectsWithAgents,
   listProspects,
   listOutreach,
+  filterOutreachRows,
+  matchesOutreachFollowUp,
+  matchesOutreachSender,
   prospectNextStep,
+  canRecontact,
+  canMarkCalled,
+  canMarkRegistered,
+  loopState,
   findProspectByPhone,
   findProspectById,
   setProspectStatus,
   setFollowUp,
-  setDoNotContact
+  setDoNotContact,
+  markNextStep,
+  recontactProspect,
+  knownOutreachSenderName,
+  knownOutreachSenders,
+  resolveOutreachSenderName,
+  nameForStorage,
+  senderBucket,
+  canonicalSenderName
 };

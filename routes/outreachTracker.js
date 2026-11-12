@@ -16,6 +16,7 @@ function registerOutreachTrackerRoutes(router, { writeAudit, actorLabel } = {}) 
       const rows = await prospects.listOutreach({
         status: String(req.query.status || '').trim(),
         pitchedBy: String(req.query.pitched_by || '').trim(),
+        sender: String(req.query.sender || '').trim(),
         limit: Number(req.query.limit || 200)
       });
       return res.json({
@@ -98,6 +99,45 @@ function registerOutreachTrackerRoutes(router, { writeAudit, actorLabel } = {}) 
       return res.json({ ok: true, data: prospects.publicProspect(row) });
     } catch (error) {
       if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+      return next(error);
+    }
+  });
+  router.post('/outreach-tracker/:id/next-step', async (req, res, next) => {
+    try {
+      const row = await prospects.markNextStep(req.params.id, {
+        action: req.body?.action || req.body?.step || '',
+        actor: actorOf(req)
+      });
+      if (typeof writeAudit === 'function') {
+        await writeAudit('outreach_next_step_marked', {
+          prospect_id: row.id,
+          action: req.body?.action || req.body?.step || '',
+          status: row.status,
+          by: actorOf(req)
+        }, req.adminAuth?.userId || req.staffAuth?.userId || actorOf(req));
+      }
+      return res.json({ ok: true, data: prospects.publicProspect(row) });
+    } catch (error) {
+      if (error.status) return res.status(error.status).json({ ok: false, error: error.message, code: error.code || null });
+      return next(error);
+    }
+  });
+
+  router.post('/outreach-tracker/:id/recontact', async (req, res, next) => {
+    try {
+      const row = await prospects.recontactProspect(req.params.id, {
+        note: req.body?.note || '',
+        actor: actorOf(req)
+      });
+      if (typeof writeAudit === 'function') {
+        await writeAudit('outreach_recontact_logged', {
+          prospect_id: row.id,
+          by: actorOf(req)
+        }, req.adminAuth?.userId || req.staffAuth?.userId || actorOf(req));
+      }
+      return res.json({ ok: true, data: prospects.publicProspect(row) });
+    } catch (error) {
+      if (error.status) return res.status(error.status).json({ ok: false, error: error.message, code: error.code || null });
       return next(error);
     }
   });
