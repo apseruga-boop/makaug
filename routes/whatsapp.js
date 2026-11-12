@@ -17,6 +17,7 @@ const db = require('../config/database');
 const { handleHostStayReply } = require('../services/shortTermBookingService');
 const shortStayWhatsapp = require('../services/whatsappShortStayService');
 const agentFilm = require('../services/agentFilmReplyService');
+const replyPlaybook = require('../services/whatsappReplyPlaybook');
 const { handleAgentBookingReply } = require('../services/agentBookingService');
 const logger = require('../config/logger');
 const { normalizeUgPhoneForWhatsApp } = require('../services/whatsappNotificationService');
@@ -10173,11 +10174,14 @@ async function handleEmployeeWhatsappIntake({
       return { handled: true, nextStep: currentStep, message: employeePitchContactPrompt() };
     }
     const prospects = require('../services/agentProspectService');
+    // 12 Nov 2026: "Lukandwa property | 07044120230" — eleven digits — was
+    // answered "✅ Video sent", and nothing reached anybody.
     if (!prospects.isUsableProspectPhone(contact.phone)) {
+      const problem = prospects.prospectPhoneProblem(contact.phone) || 'That number does not look complete.';
       return {
         handled: true,
         nextStep: currentStep,
-        message: `That number does not look complete: *${contact.phone}*\n\nSend it with the full nine digits, for example 0772123456.`
+        message: `I did not send it: *${contact.phone}*\n\n${problem}\n\nCheck the number and send the name and number again, for example: Kato Brian | 0772123456`
       };
     }
     const dialable = prospects.normalizeProspectPhone(contact.phone);
@@ -10363,11 +10367,14 @@ async function handleEmployeeWhatsappIntake({
       return { handled: true, nextStep: currentStep, message: employeePayLinkProspectPrompt(agentMonthlyFeeLabel()) };
     }
     const prospects = require('../services/agentProspectService');
+    // 12 Nov 2026: "Lukandwa property | 07044120230" — eleven digits — was
+    // answered "✅ Video sent", and nothing reached anybody.
     if (!prospects.isUsableProspectPhone(contact.phone)) {
+      const problem = prospects.prospectPhoneProblem(contact.phone) || 'That number does not look complete.';
       return {
         handled: true,
         nextStep: currentStep,
-        message: `That number does not look complete: *${contact.phone}*\n\nSend it with the full nine digits, for example 0772123456.`
+        message: `I did not send it: *${contact.phone}*\n\n${problem}\n\nCheck the number and send the name and number again, for example: Kato Brian | 0772123456`
       };
     }
     const dialable = prospects.normalizeProspectPhone(contact.phone);
@@ -17837,7 +17844,8 @@ async function agentJoinRequestReply({ phone, text = '', name = '', film = null 
     }
   });
 
-  const first = normalizeInput(name).split(/\s+/)[0] || '';
+  // "Great to hear from you, Real!" — the name Ronald typed was the business.
+  const first = agentFilm.personalFirstName(name);
   if (existing && existing.status === 'pending') {
     return `${whatsappBrandHeader('Agent sign-up')}\nThanks${first ? ` ${first}` : ''} — your agent application is already with our team. *${contact.name}* will call you to finish setting you up.\n\nNeed us sooner? Call or WhatsApp ${contact.name} on ${contact.pretty}.`;
   }
@@ -17977,6 +17985,12 @@ async function handleAgentFilmReply({ phone, body = '', step = '', lang = 'en', 
     return { message: agentFilm.joinOrFindPrompt(), nextStep: AGENT_JOIN_OR_FIND_STEP };
   }
   if (!film) return null;
+  // Already an agent: past the film, whatever the prospect list still says
+  // (it catches up when it is next read). Nsubuga said "Ok" at 13:45 on 12 Nov
+  // and was approved by 15:11; his next "Ok" is not a request to join.
+  const asAgent = await agentForReply(phone);
+  const agentStatus = replyRole(asAgent) === 'agent' ? String(asAgent.status || '') : '';
+  if (agentStatus === 'approved') return null;
   if (answer === 'interested' && film.ageDays <= AGENT_FILM_INTERESTED_DAYS) {
     await markAgentProspectReply(phone, 'interested', said);
     return { message: await agentJoinRequestReply({ phone, text: said, name, film }), nextStep: 'main_menu' };
@@ -17985,26 +17999,320 @@ async function handleAgentFilmReply({ phone, body = '', step = '', lang = 'en', 
     await markAgentProspectReply(phone, 'declined', said);
     // STOP is still an opt-out: the rest of the bot records it.
     if (/^(STOP|UNSUBSCRIBE)\b/i.test(said)) return null;
-    return { message: `No problem${name ? ` ${normalizeInput(name).split(/\s+/)[0]}` : ''}, thank you for letting us know. If you change your mind, reply *AGENT* any time.`, nextStep: 'main_menu' };
+    const noName = agentFilm.personalFirstName(name);
+    return { message: `No problem${noName ? ` ${noName}` : ''}, thank you for letting us know. If you change your mind, reply *AGENT* any time.`, nextStep: 'main_menu' };
   }
-  if (answer === 'other' && film.status === 'pitched' && film.ageDays <= AGENT_FILM_FIRST_REPLY_DAYS) {
-    // Their first reply: Arthur and Ronald hear, and the bot answers as usual.
+  if (answer !== 'other') return null;
+  // A registered agent, or a payment: the payment and agent flows answer those.
+  if (agentStatus || /\b(?:PAID|DEPOSITED|TRANSFERRED|TRANSACTION|TXN|RECEIPT|TRANS ID)\b/i.test(said)) return null;
+
+  // Anything else from somebody who has the film. 12 Nov 2026: "Who is that
+  // one", "Thanks", "Hope no money z required" and — after AGENT — "1 and 5",
+  // "List a property" and "I mostly market land, houses and cars" were all
+  // answered with a menu or the private lister's flow. They are a possible
+  // agent: answer them as one, and tell Ronald what they said.
+  const pitched = film.status === 'pitched';
+  const interested = film.status === 'interested' && film.ageDays <= AGENT_FILM_INTERESTED_DAYS;
+  if (!pitched && !interested) return null;
+  const digits = String(phone || '').replace(/\D/g, '');
+  const helpName = agentHelpContact().name;
+  const fee = await agentMonthlyFeeUgx();
+  const kind = agentFilm.prospectFollowUpKind(body);
+  let alerted = false;
+  if (pitched && film.ageDays <= AGENT_FILM_FIRST_REPLY_DAYS && !(await agentFilmAlertedRecently(digits))) {
+    // Their first reply: Arthur and Ronald hear, with what they said.
+    alerted = true;
     await markAgentProspectReply(phone, 'pitched', said);
+    // Recorded now, so the next message a moment later is not a "first reply" too.
+    const claimedAt = new Date();
+    await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', 'agent_film_reply_notified', $1::jsonb)`, [JSON.stringify({ phone: digits, text: said })]).catch(() => {});
     deferWhatsappWork('Agent film first reply notice', async () => {
+      // Sorah wrote "Hello", then "Agent" the same minute, and Arthur and Ronald
+      // got two alerts. Wait a moment: if they say AGENT, that alert is the one.
+      await agentFilmAlertPause();
+      const joined = await db.query(
+        `SELECT 1 FROM audit_logs WHERE action = 'agent_join_requested' AND details->>'phone' = $1 AND created_at >= $2 LIMIT 1`,
+        [digits, claimedAt]).catch(() => ({ rows: [] }));
+      if (joined.rows.length) return;
       const desk = require('../services/leadDeskService');
-      const digits = String(phone || '').replace(/\D/g, '');
-      const recent = await db.query(
-        `SELECT 1 FROM audit_logs WHERE action IN ('agent_join_requested', 'agent_film_reply_notified') AND details->>'phone' = $1 AND created_at > NOW() - INTERVAL '12 hours' LIMIT 1`,
-        [digits]).catch(() => ({ rows: [] }));
-      if (recent.rows.length) return;
-      await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', 'agent_film_reply_notified', $1::jsonb)`, [JSON.stringify({ phone: digits, text: said })]).catch(() => {});
-      let fee = 50000;
-      try { fee = Number((await require('../services/billingOpsService').getSettings(db)).agent_fee?.monthly_ugx || 50000); } catch (_ignored) { /* default */ }
-      const notice = agentFilm.agentInterestNotice({ digits, name, said, film, fee, helpName: agentHelpContact().name, replyOnly: true });
+      const notice = agentFilm.agentInterestNotice({ digits, name, said, film, fee, helpName, replyOnly: true });
       if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, notice, 'agent_film_reply', { extraRecipients: agentFilm.agentJoinAlertRecipients() });
     });
+  } else {
+    await markAgentProspectReply(phone, interested ? 'interested' : 'pitched', said);
+    // Told already: a price worry, or what they deal in, still changes the call.
+    const noteWindow = interested ? AGENT_FILM_INTERESTED_DAYS : AGENT_FILM_FIRST_REPLY_DAYS;
+    const same = agentFilm.prospectNoteWorthy(kind) && film.ageDays <= noteWindow
+      ? await db.query(
+        `SELECT 1 FROM audit_logs WHERE action = 'agent_prospect_note' AND details->>'phone' = $1 AND details->>'text' = $2 AND created_at > NOW() - INTERVAL '12 hours' LIMIT 1`,
+        [digits, said]).catch(() => ({ rows: [] }))
+      : null;
+    if (same && !same.rows.length) {
+      await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', 'agent_prospect_note', $1::jsonb)`, [JSON.stringify({ phone: digits, text: said, kind })]).catch(() => {});
+      deferWhatsappWork('Agent prospect note', async () => {
+        // The same pause as the first alert, so the two arrive in order.
+        await agentFilmAlertPause();
+        const desk = require('../services/leadDeskService');
+        const note = agentFilm.prospectNote({ digits, name, said, kind, interested, fee, helpName });
+        if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, note, 'agent_prospect_note', { extraRecipients: agentFilm.agentJoinAlertRecipients() });
+      });
+    }
   }
-  return null;
+  const message = agentFilm.prospectFollowUpReply({ kind, interested, first: agentFilm.personalFirstName(name), helpName, fee, text: body });
+  if (!message) return null;
+  // Never the same words twice in a row ("1 and 5", then "List a property").
+  const [lastSent] = await recentOutboundTo(phone, { days: 1, limit: 1 });
+  const last = normalizeInput(lastSent?.text || '');
+  if (last && last === normalizeInput(message)) {
+    const shorter = interested ? `${helpName} has your details and will call you shortly. 🙌` : '';
+    if (!shorter || last === normalizeInput(shorter)) return { message: '', nextStep: 'main_menu', silent: true };
+    return { message: shorter, nextStep: 'main_menu' };
+  }
+  return { message, nextStep: 'main_menu' };
+}
+
+function agentFilmReplyAlertDelayMs(env = process.env) {
+  const raw = env.AGENT_FILM_REPLY_ALERT_DELAY_MS;
+  const n = Number(raw);
+  return raw !== undefined && raw !== '' && Number.isFinite(n) && n >= 0 ? Math.min(n, 10 * 60 * 1000) : 90 * 1000;
+}
+
+function agentFilmAlertPause() {
+  const wait = agentFilmReplyAlertDelayMs();
+  if (!(wait > 0)) return Promise.resolve();
+  return new Promise((resolve) => { const timer = setTimeout(resolve, wait); timer.unref?.(); });
+}
+
+/** Whether Arthur and Ronald were told about this prospect in the last 12 hours. */
+async function agentFilmAlertedRecently(digits) {
+  const recent = await db.query(
+    `SELECT 1 FROM audit_logs WHERE action IN ('agent_join_requested', 'agent_film_reply_notified') AND details->>'phone' = $1 AND created_at > NOW() - INTERVAL '12 hours' LIMIT 1`,
+    [String(digits || '')]).catch(() => ({ rows: [] }));
+  return recent.rows.length > 0;
+}
+
+/** The agent fee, as the join reply quotes it. */
+async function agentMonthlyFeeUgx() {
+  try {
+    return Number((await require('../services/billingOpsService').getSettings(db)).agent_fee?.monthly_ugx || 50000);
+  } catch (_ignored) {
+    return 50000;
+  }
+}
+
+// --- Replies to what we sent ---------------------------------------------------
+// The words, and the replies from 9 to 12 Nov 2026 they come from, are in
+// services/whatsappReplyPlaybook.js. Here: who wrote, and what we last sent them.
+
+/** Our messages to this number in the last week, newest first. */
+async function recentOutboundTo(phone, { days = 7, limit = 15 } = {}) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 9) return [];
+  const result = await db.query(
+    `SELECT COALESCE(payload->>'reply', payload->>'text', '') AS text, created_at
+       FROM whatsapp_messages
+      WHERE user_phone = ANY($1::text[])
+        AND direction = 'outbound'
+        AND created_at > NOW() - ($2::int * INTERVAL '1 day')
+      ORDER BY created_at DESC
+      LIMIT $3`,
+    [[digits, `+${digits}`], days, limit]
+  ).catch(() => ({ rows: [] }));
+  return result.rows;
+}
+
+/** The agent behind this number: current, pending, or one we said goodbye to. */
+async function agentForReply(phone) {
+  const tail = String(phone || '').replace(/\D/g, '').slice(-9);
+  if (tail.length !== 9) return null;
+  const result = await db.query(
+    `SELECT id, full_name, greeting_name, status, removed_at, removal_snapshot
+       FROM agents
+      WHERE RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = $1
+         OR RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1
+      ORDER BY (removed_at IS NULL) DESC, created_at DESC
+      LIMIT 1`,
+    [tail]
+  ).catch(() => ({ rows: [] }));
+  return result.rows[0] || null;
+}
+
+const FORMER_AGENT_REPLY_DAYS = 60;
+
+function replyRole(agent = null) {
+  if (!agent) return 'other';
+  if (!agent.removed_at && ['approved', 'pending'].includes(String(agent.status || ''))) return 'agent';
+  const snap = agent.removal_snapshot && typeof agent.removal_snapshot === 'object' ? agent.removal_snapshot : {};
+  if (agent.removed_at && snap.reason_code === 'cancelled'
+    && Date.now() - new Date(agent.removed_at).getTime() <= FORMER_AGENT_REPLY_DAYS * 86400000) return 'former_agent';
+  return 'other';
+}
+
+async function listingForReply(id) {
+  if (!id) return null;
+  const result = await db.query(
+    'SELECT id, title, area, district, price, status, agent_id FROM properties WHERE id = $1 LIMIT 1',
+    [id]
+  ).catch(() => ({ rows: [] }));
+  return result.rows[0] || null;
+}
+
+/** Tells Arthur and Ronald (and the team list), once per message in 12 hours. */
+function alertTeamOnce({ action, digits, said, body, type }) {
+  deferWhatsappWork(`Reply playbook: ${action}`, async () => {
+    const same = await db.query(
+      `SELECT 1 FROM audit_logs WHERE action = $1 AND details->>'phone' = $2 AND details->>'text' = $3 AND created_at > NOW() - INTERVAL '12 hours' LIMIT 1`,
+      [action, digits, said]).catch(() => ({ rows: [] }));
+    if (same.rows.length) return;
+    await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', $1, $2::jsonb)`, [action, JSON.stringify({ phone: digits, text: said })]).catch(() => {});
+    const desk = require('../services/leadDeskService');
+    if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, type, { extraRecipients: agentFilm.agentJoinAlertRecipients() });
+  });
+}
+
+/** "Delete": the 30 days we promised are for them, so they can have them back. */
+async function bringFormerAgentDeletionForward({ agent, phone, said }) {
+  await db.query(
+    `UPDATE agents
+        SET removal_snapshot = COALESCE(removal_snapshot, '{}'::jsonb)
+              || jsonb_build_object('personal_delete_after', NOW()::text, 'personal_delete_requested_at', NOW()::text, 'personal_delete_requested', $2::text),
+            updated_at = NOW()
+      WHERE id = $1 AND removed_at IS NOT NULL`,
+    [agent.id, normalizeInput(said).slice(0, 300)]
+  ).catch((error) => logger.warn('Former agent deletion not brought forward:', error.message || String(error)));
+  await markProspectDoNotContact(phone);
+}
+
+async function markProspectDoNotContact(phone) {
+  const prospects = require('../services/agentProspectService');
+  const prospect = await prospects.findProspectByPhone(phone).catch(() => null);
+  if (prospect?.id && typeof prospects.setDoNotContact === 'function') {
+    await prospects.setDoNotContact(prospect.id, { value: true, actor: 'whatsapp' }).catch(() => null);
+  }
+}
+
+/**
+ * A reply to something we sent. Returns { message, nextStep } to answer it,
+ * { message: '', nextStep, silent: true } to leave it unanswered (an auto-reply,
+ * a bare "noted"), or null to let the rest of the bot answer as before.
+ */
+async function handleReplyPlaybook({ phone, body = '', step = '', conversationControl = null, contactName = '', hasMedia = false, session = {} } = {}) {
+  if (hasMedia) return null;
+  const control = conversationControl || {};
+  if (['off', 'copilot'].includes(String(control.ai_mode || '').toLowerCase())
+    || ['needs_human', 'escalated'].includes(String(control.status || '').toLowerCase())) return null;
+  const said = normalizeInput(body);
+  const kind = replyPlaybook.replyKind(said);
+  if (!kind) return null;
+  if (isStaffIntakeNumber({ phone, session }) || staffNameForNumber(phone)) return null;
+
+  const currentStep = String(step || '');
+  if (!AGENT_FILM_RESTING_STEPS.has(currentStep)) {
+    // Mid-flow only a plain "thanks" is ours: answered, and the flow carries on.
+    // ("Thanks" in the middle of listing got "I want to keep this quick".)
+    if (kind !== 'thanks' || /^employee_/.test(currentStep) || currentStep === AGENT_JOIN_OR_FIND_STEP
+      || shortStayWhatsapp.isShortStayStep(currentStep)) return null;
+    return { message: replyPlaybook.thanksMidFlowReply({ first: agentFilm.personalFirstName(contactName) }), nextStep: currentStep };
+  }
+
+  const sent = await recentOutboundTo(phone);
+  if (!sent.length) return null; // We have not written to them: not a reply to us.
+  const lastSent = String(sent[0].text || '');
+  const agent = await agentForReply(phone);
+  const role = replyRole(agent);
+  const first = role === 'other' ? agentFilm.personalFirstName(contactName) : agentGreetingName(agent, '');
+  const digits = String(phone || '').replace(/\D/g, '');
+  const name = normalizeInput(agent?.full_name || contactName || '');
+  const helpName = agentHelpContact().name;
+  const silent = { message: '', nextStep: currentStep, silent: true };
+  const ageDays = (row) => (Date.now() - new Date(row.created_at).getTime()) / 86400000;
+  const lastLive = sent.find((row) => /Your property is live/i.test(row.text || '') && replyPlaybook.propertyIdIn(row.text));
+
+  let message = '';
+  switch (kind) {
+    case 'thanks':
+      message = replyPlaybook.thanksReply({ first, role, lastSent });
+      break;
+    case 'ack':
+      // "Ok" or "Noted" after a notice needs nothing back. After a question or
+      // a numbered choice it is an answer, and the flow that asked reads it.
+      if (replyPlaybook.asksSomething(lastSent)) return null;
+      return silent;
+    case 'proof': {
+      if (role !== 'agent') return null;
+      const welcome = require('../services/agentWelcomeService');
+      const [stats, own] = await Promise.all([
+        welcome.computePlatformStats().catch(() => ({})),
+        require('../services/agentGoodbyeService').lifetimeStats(agent.id).catch(() => null)
+      ]);
+      message = replyPlaybook.proofReply({ first, stats, network: welcome.networkAudience(), own, helpName });
+      alertTeamOnce({ action: 'agent_proof_question', digits, said, type: 'agent_proof_question', body: replyPlaybook.proofAlert({ name, digits, said, agent, own, helpName }) });
+      break;
+    }
+    case 'correction':
+    case 'sold': {
+      // "Sold" / "taken" has its own flow (startSoldAnnouncement): it finds the
+      // listing, asks which one, and marks it sold. This only takes what it misses.
+      if (isSoldAnnouncement(said)) return null;
+      if (role !== 'agent' || !lastLive) return null;
+      const id = replyPlaybook.propertyIdIn(lastLive.text);
+      const listing = await listingForReply(id);
+      const link = replyPlaybook.makaugLinkIn(lastLive.text);
+      if (kind === 'correction') {
+        message = replyPlaybook.correctionReply({ first, link });
+        alertTeamOnce({ action: 'agent_listing_correction', digits, said, type: 'agent_listing_correction', body: replyPlaybook.correctionAlert({ name, digits, said, listing, link }) });
+      } else {
+        message = replyPlaybook.soldReply({ first, title: listing?.title || '' });
+        alertTeamOnce({ action: 'agent_listing_unavailable', digits, said, type: 'agent_listing_unavailable', body: replyPlaybook.soldAlert({ name, digits, said, listing, link }) });
+      }
+      break;
+    }
+    case 'delete': {
+      if (role === 'former_agent') {
+        await bringFormerAgentDeletionForward({ agent, phone, said });
+        message = replyPlaybook.formerAgentDeleteReply({ first });
+        alertTeamOnce({ action: 'former_agent_delete_request', digits, said, type: 'former_agent_delete_request', body: replyPlaybook.formerAgentDeleteAlert({ name, digits, said, removedAt: agent.removed_at }) });
+        break;
+      }
+      // An agent's "delete it", the day a property went up, is about that property.
+      if (isSoldAnnouncement(said) || role !== 'agent' || !lastLive || ageDays(lastLive) > 7) return null;
+      const listing = await listingForReply(replyPlaybook.propertyIdIn(lastLive.text));
+      const link = replyPlaybook.makaugLinkIn(lastLive.text);
+      message = replyPlaybook.soldReply({ first, title: listing?.title || '' });
+      alertTeamOnce({ action: 'agent_listing_unavailable', digits, said, type: 'agent_listing_unavailable', body: replyPlaybook.soldAlert({ name, digits, said, listing, link }) });
+      break;
+    }
+    case 'opt_out':
+      if (role !== 'former_agent') return null;
+      // STOP stays with the opt-out handler, which records it everywhere.
+      if (/^(STOP|UNSUBSCRIBE)\b/i.test(said)) return null;
+      await markProspectDoNotContact(phone);
+      message = replyPlaybook.formerAgentOptOutReply({ first });
+      break;
+    case 'link_broken': {
+      const withLink = sent.find((row) => ageDays(row) <= 3 && replyPlaybook.makaugLinkIn(row.text));
+      if (!withLink) return null;
+      const link = replyPlaybook.makaugLinkIn(withLink.text);
+      message = replyPlaybook.linkBrokenReply({ first, link });
+      // A payment link that will not open: they can still pay with the merchant code.
+      if (/\/pay\//i.test(link)) {
+        try { message = `${message}\n\nOr pay without the link:\n${require('../services/billingOpsService').momoHowToPay({})}`; } catch (_ignored) { /* the link alone */ }
+      }
+      alertTeamOnce({ action: 'whatsapp_link_not_opening', digits, said, type: 'whatsapp_link_not_opening', body: replyPlaybook.linkBrokenAlert({ name, digits, said, link }) });
+      break;
+    }
+    case 'social':
+      if (role !== 'agent') return null;
+      message = replyPlaybook.socialReply({ first });
+      break;
+    default:
+      return null;
+  }
+  if (!message) return null;
+  // Never the same answer twice in a row ("Kindly subscribe to my YouTube
+  // channel" twice got the same menu twice).
+  if (normalizeInput(message) === normalizeInput(lastSent)) return silent;
+  return { message, nextStep: currentStep };
 }
 
 // Short explainer film, sent once (per 30 days) when someone wants to list a
@@ -20749,6 +21057,18 @@ async function processInboundRuntimeUnlocked({
     if (sessionForMessage.session_data) sessionForMessage.session_data.short_stay = null;
   }
 
+  // A WhatsApp Business auto-reply to what we just sent is a machine. 10 Nov
+  // 2026: "Welcome! This is Kampala&Beyond Property Agency:" arrived the same
+  // minute as Benard's "your property is live", and got a search of Kampala.
+  if (!effectiveMediaUrl && !inboundPhotoCandidates.length && replyPlaybook.looksLikeAutoReply(effectiveBody)
+    && !isStaffIntakeNumber({ phone, session: sessionForMessage })) {
+    const [lastSent] = await recentOutboundTo(phone, { days: 1, limit: 1 });
+    if (lastSent && (Date.now() - new Date(lastSent.created_at).getTime()) / 1000 <= replyPlaybook.AUTO_REPLY_WINDOW_SECONDS) {
+      logger.info(`WhatsApp auto-reply from …${String(phone).slice(-3)} left unanswered`);
+      return { message: '', nextStep: sessionStep };
+    }
+  }
+
   // A reply to the agent film ("Reply AGENT here if you would like to join"):
   // someone who wants to join, not someone looking for an agent. Arthur and
   // Ronald are told, and the prospect is told Ronald will call.
@@ -20781,6 +21101,7 @@ async function processInboundRuntimeUnlocked({
     }));
     return { message: filmReply.message, nextStep: filmReply.nextStep || 'main_menu' };
   }
+  if (filmReply?.silent) return { message: '', nextStep: filmReply.nextStep || sessionStep };
   if (filmReply?.resetStep) {
     await updateSession(phone, { current_step: filmReply.resetStep });
     sessionStep = filmReply.resetStep;
@@ -20799,6 +21120,39 @@ async function processInboundRuntimeUnlocked({
   if (paymentReply) return { message: paymentReply, nextStep: sessionStep };
   const pausedReply = await billingPausedAgentReply({ phone, body: effectiveBody }).catch(() => null);
   if (pausedReply) return { message: pausedReply, nextStep: sessionStep };
+
+  // A reply to something we sent: "Thanks", "This is in Mukono not Nakaseke",
+  // "does the app really have clients?", "its not opening", "Delete". Answered
+  // as a person would, with the team told when there is something to do.
+  const playbookReply = await handleReplyPlaybook({
+    phone,
+    body: effectiveBody,
+    step: sessionStep,
+    conversationControl,
+    contactName,
+    hasMedia: Boolean(inboundPhotoCandidates.length || (effectiveMediaUrl && !isAudioNote)),
+    session: sessionForMessage
+  }).catch((error) => {
+    logger.warn('Reply playbook check failed:', error.message || String(error));
+    return null;
+  });
+  if (playbookReply) {
+    if (playbookReply.message) {
+      deferWhatsappWork('WhatsApp reply playbook intent log', () => logIntent({
+        userPhone: phone,
+        waMessageId: inboundMessageId,
+        detectedIntent: 'reply_to_our_message',
+        confidence: 1,
+        language: sessionLang,
+        currentStep: sessionStep,
+        rawText: effectiveBody,
+        transcript: null,
+        entities: { kind: replyPlaybook.replyKind(effectiveBody), next_step: playbookReply.nextStep || sessionStep },
+        modelUsed: 'whatsapp_reply_playbook'
+      }));
+    }
+    return { message: playbookReply.message || '', nextStep: playbookReply.nextStep || sessionStep };
+  }
 
   const employeeIntake = await handleEmployeeWhatsappIntake({
     phone,

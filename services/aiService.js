@@ -463,7 +463,9 @@ function heuristicIntent(text) {
   if (/(find|search|looking|rent|buy|sale|house|apartment|property|student|accommodation|hostel|area|nyumba|shamba|kiwanja|ardhi|plot|ttaka|enju|\bot\b|\bot me\b)/.test(t)) {
     return { intent: 'property_search', confidence: 0.62, entities: {} };
   }
-  if (/(mortgage|loan|deposit|repayment|interest|home loan)/.test(t)) {
+  // "interest" alone matched "interested": "Delete am not interested", from an
+  // agent we had just said goodbye to, got the mortgage notice (10 Nov 2026).
+  if (/\b(mortgages?|home loans?|loans?|deposits?|repayments?|interest rates?)\b/.test(t)) {
     return { intent: 'mortgage_help', confidence: 0.66, entities: {} };
   }
   if (/(report|fraud|scam|suspicious|fake)/.test(t)) {
