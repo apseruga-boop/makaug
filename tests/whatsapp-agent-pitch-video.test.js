@@ -168,3 +168,49 @@ test('an interrupted pitch comes back to the same question', () => {
     'otherwise it restarts at the menu and the name is retyped'
   );
 });
+
+
+test('a second send of the same film is blocked and nothing is queued', async () => {
+  const originalQuery = db.query;
+  const originalGetClient = db.getClient;
+  const sent = [];
+  db.query = async (sql, params = []) => {
+    if (/FROM agent_prospects/i.test(sql) && /phone_key/i.test(sql)) {
+      return { rows: [{
+        id: 'prospect-1',
+        full_name: 'Kato Brian',
+        phone: '256772123456',
+        phone_key: '772123456',
+        status: 'pitched',
+        video_kind: 'agent',
+        pitched_at: '2026-11-10T08:00:00.000Z',
+        pitched_by_name: 'Arthur',
+        do_not_contact: false
+      }] };
+    }
+    if (/INSERT INTO outbound_message_queue/i.test(sql)) {
+      sent.push(params);
+      return { rows: [{ id: 'queued-1' }] };
+    }
+    if (/UPDATE whatsapp_sessions|INSERT INTO whatsapp_sessions/i.test(sql)) return { rows: [] };
+    if (/FROM agents/i.test(sql)) return { rows: [] };
+    if (/FROM properties/i.test(sql) || /FROM short_term_listings/i.test(sql)) return { rows: [] };
+    return { rows: [] };
+  };
+  db.getClient = async () => ({ query: db.query, release() {} });
+  try {
+    const done = await route.handleEmployeeWhatsappIntake({
+      phone: RONALD,
+      body: 'Kato Brian | 0772123456',
+      session: { current_step: 'employee_pitch_contact', session_data: { whatsapp_employee_intake: true, employee_role: 'pitch' } }
+    });
+    assert.equal(sent.length, 0, 'the film must not go out a second time');
+    assert.equal(done.outreachBlocked, 'already_sent');
+    assert.match(done.message, /I did not send the video/);
+    assert.match(done.message, /Arthur/);
+    assert.match(done.message, /Call them instead|already been sent/i);
+  } finally {
+    db.query = originalQuery;
+    db.getClient = originalGetClient;
+  }
+});

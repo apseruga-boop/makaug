@@ -248,7 +248,7 @@ test('wiring: private storage, staff gate, list chip and filter, NIN rule unchan
   const routes = read('routes', 'adminAgentIdFiles.js');
   assert.doesNotMatch(routes, /storeDataUrl|uploadBufferToS3|S3_PUBLIC_BASE_URL/, 'ID files never go to the media bucket');
   const admin = read('routes', 'admin.js');
-  assert.ok(admin.indexOf('router.use(requireAdminApiKey)') < admin.indexOf('registerAgentManagerRoutes(router'), 'the admin gate runs before the agent manager (and its ID file routes)');
+  assert.ok(admin.indexOf('return requireAdminApiKey(req, res, next)') < admin.indexOf('registerAgentManagerRoutes(router'), 'the admin gate runs before the agent manager (and its ID file routes)');
   const manager = read('routes', 'adminAgentManager.js');
   assert.match(manager, /registerAgentIdFileRoutes\(router/);
   assert.match(manager, /'id_doc_missing'/);

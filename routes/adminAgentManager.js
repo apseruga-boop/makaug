@@ -254,19 +254,24 @@ function registerAgentManagerRoutes(router, deps) {
   const { db, writeAudit, adminActorId, cleanText, isValidEmail, normalizePhone, actorLabel, onListingsChanged, loadRequestUser } = deps;
   const actorOf = async (req) => {
     // Bind the signed-in person even when the request was authorised by the API key.
-    if (!req.adminAuth?.userId && typeof loadRequestUser === 'function') {
+    if (!req.adminAuth?.userId && !req.staffAuth?.userId && typeof loadRequestUser === 'function') {
       try {
         const user = await loadRequestUser(req);
-        if (user?.id && ['admin', 'super_admin'].includes(String(user.role || '').toLowerCase())) {
-          req.adminAuth = { ...(req.adminAuth || {}), type: req.adminAuth?.type || 'bearer', userId: user.id, role: user.role };
+        if (user?.id && ['moderator', 'admin', 'super_admin'].includes(String(user.role || '').toLowerCase())) {
+          if (['admin', 'super_admin'].includes(String(user.role || '').toLowerCase())) {
+            req.adminAuth = { ...(req.adminAuth || {}), type: req.adminAuth?.type || 'bearer', userId: user.id, role: user.role };
+          } else {
+            req.staffAuth = { ...(req.staffAuth || {}), userId: user.id, role: user.role };
+          }
           req.userAuth = req.userAuth || user;
         }
       } catch (_) { /* key-only access still stands */ }
     }
     const id = adminActorId(req);
     let label = '';
-    if (req.adminAuth?.userId) {
-      const user = (await db.query('SELECT first_name, last_name, email, phone FROM users WHERE id = $1', [req.adminAuth.userId]).catch(() => ({ rows: [] }))).rows[0];
+    const userId = req.adminAuth?.userId || req.staffAuth?.userId || req.userAuth?.id;
+    if (userId) {
+      const user = (await db.query('SELECT first_name, last_name, email, phone FROM users WHERE id = $1', [userId]).catch(() => ({ rows: [] }))).rows[0];
       if (user) label = actorLabel(user);
     }
     return { id, label: label || (req.adminAuth?.type === 'api_key' ? 'admin key' : 'staff') };

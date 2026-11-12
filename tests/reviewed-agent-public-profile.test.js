@@ -26,7 +26,7 @@ test('the protected admin approval requires three explicit checks and does not u
   const admin = read('routes/admin.js');
   const start = admin.indexOf("router.post('/agents/:id/public-profile-approval'");
   const end = admin.indexOf('\nrouter.', start + 10);
-  assert.ok(start > admin.indexOf('router.use(requireAdminApiKey)'));
+  assert.ok(start > admin.indexOf('return requireAdminApiKey(req, res, next)'));
   assert.ok(end > start);
   const route = admin.slice(start, end);
 

@@ -15,7 +15,10 @@ for (const expected of [
   assert(adminRoutes.includes(expected), `Outreach route missing: ${expected}`);
 }
 
-assert(adminRoutes.includes('router.use(requireAdminApiKey)'), 'Outreach routes must inherit admin protection');
+assert(adminRoutes.includes('requireAdminApiKey'), 'Outreach routes must inherit admin protection');
+assert(adminRoutes.includes('isStaffSharedKingTool'), 'Staff may only use the named shared King tools');
+assert(!adminRoutes.includes("if (isStaffSharedKingTool('/outreach/email/send'"), 'must not hard-open email outreach');
+
 assert(adminRoutes.includes('reviewed=true is required before sending'), 'Outreach sends must require explicit human review');
 assert(adminRoutes.includes('outboundEmailDisclosureOk'), 'Email outreach must enforce makaug.com and unsubscribe disclosure');
 assert(adminRoutes.includes('outboundWhatsappDisclosureOk'), 'WhatsApp outreach must enforce makaug.com and STOP opt-out disclosure');

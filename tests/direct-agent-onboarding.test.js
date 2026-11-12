@@ -8,7 +8,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
 test('direct-agent onboarding remains protected and records explicit authority checks', () => {
   const source = read('routes/admin.js');
-  const middlewareIndex = source.indexOf('router.use(requireAdminApiKey)');
+  const middlewareIndex = source.indexOf('return requireAdminApiKey(req, res, next)');
   const routeIndex = source.indexOf("router.post('/agents/direct-onboarding'");
 
   assert.ok(middlewareIndex >= 0 && routeIndex > middlewareIndex);
