@@ -18008,7 +18008,11 @@ async function staffPeopleExportCsv(scope) {
 const ADMIN_AGENT_MANAGER_STATE = { rows: [], counts: {}, show: "active", search: "", missingOnly: false, only: "", sort: "joined", loading: false, loadedAt: 0, openId: null, detail: null, detailRequest: 0 };
 
 function adminAgentManagerRoot() {
-  return document.getElementById("admin-agent-manager");
+  if (typeof deskPageIsStaff === "function" && deskPageIsStaff()) {
+    const staff = document.querySelector("#page-staff-dashboard [data-agent-manager-root]");
+    if (staff) return staff;
+  }
+  return document.getElementById("admin-agent-manager") || document.querySelector("[data-agent-manager-root]");
 }
 
 function adminAgentManagerChip(text, cls) {
@@ -18238,7 +18242,7 @@ async function adminAgentManagerLoad(options = {}) {
   const s = ADMIN_AGENT_MANAGER_STATE;
   const list = root.querySelector("[data-agent-manager-list]");
   if (!authState?.token) {
-    list.innerHTML = `<p class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">Sign in with your King account to manage agents.</p>`;
+    list.innerHTML = `<p class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">Sign in to manage agents.</p>`;
     return;
   }
   s.loading = true;
@@ -18623,12 +18627,20 @@ function adminAgentManagerUpdateMessageLink() {
 
 const ADMIN_PUBLIC_MANAGER_STATE = { page: 1, search: "", request: 0, detailRequest: 0, openId: null, loaded: false };
 
+function adminPublicManagerRoot() {
+  if (typeof deskPageIsStaff === "function" && deskPageIsStaff()) {
+    const staff = document.querySelector("#page-staff-dashboard [data-public-manager-root]");
+    if (staff) return staff;
+  }
+  return document.getElementById("admin-public-manager");
+}
+
 function adminPublicManagerEnsureLoaded() {
   if (!ADMIN_PUBLIC_MANAGER_STATE.loaded) adminPublicManagerLoad();
 }
 
 async function adminPublicManagerLoad(page = 1) {
-  const root = document.getElementById("admin-public-manager");
+  const root = adminPublicManagerRoot();
   if (!root) return;
   const state = ADMIN_PUBLIC_MANAGER_STATE;
   state.page = Math.max(1, Number(page || 1));
@@ -18693,7 +18705,7 @@ async function adminPublicManagerFindCandidate(event) {
 }
 
 async function adminPublicManagerOpen(id, paymentsPage = 1) {
-  const box = document.querySelector("[data-public-manager-detail]");
+  const box = adminPublicManagerRoot()?.querySelector("[data-public-manager-detail]");
   if (!box) return;
   const state = ADMIN_PUBLIC_MANAGER_STATE;
   const request = ++state.detailRequest;
@@ -18712,7 +18724,7 @@ async function adminPublicManagerOpen(id, paymentsPage = 1) {
 function adminPublicManagerClose() {
   ADMIN_PUBLIC_MANAGER_STATE.detailRequest += 1;
   ADMIN_PUBLIC_MANAGER_STATE.openId = null;
-  const box = document.querySelector("[data-public-manager-detail]");
+  const box = adminPublicManagerRoot()?.querySelector("[data-public-manager-detail]");
   if (box) box.innerHTML = "";
 }
 
@@ -22417,6 +22429,7 @@ function adminCommandSelectorForTab(tab = "review") {
     review: "#admin-review-queue-control",
     live: "#admin-live-followup-control",
     accounts: "#admin-accounts-control",
+    outreach: "#admin-outreach-control",
     agents: "#admin-agents-control",
     public: "#admin-public-control",
     "field-agents": "#admin-field-agent-control",
@@ -22564,7 +22577,8 @@ function adminRunCommandSearch() {
     { terms: ["ad", "advert", "revenue", "payment", "invoice", "boost", "campaign", "monetization", "entitlement", "product"], tab: "revenue", selector: "#admin-revenue-control", label: "Revenue" },
     { terms: ["agent", "broker", "nin", "remove agent", "delete agent"], tab: "agents", selector: "#admin-agents-control", label: "Agents" },
     { terms: ["field", "payout", "pin", "territory"], tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
-    { terms: ["agent account", "account", "password", "user", "student"], tab: "accounts", selector: "#admin-accounts-control", label: "Accounts & Outreach" },
+    { terms: ["agent account", "account", "password", "user", "student", "people"], tab: "accounts", selector: "#admin-accounts-control", label: "Accounts" },
+    { terms: ["outreach", "pitch", "joining film", "prospect", "agent 007"], tab: "outreach", selector: "#admin-outreach-control", label: "Outreach" },
     { terms: ["listing", "property", "delete", "hide", "approve", "pending", "live"], tab: "listings", selector: "#admin-listings-control", label: "All Listings" },
     { terms: ["review", "queue", "moderate"], tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" }
   ];
@@ -22802,7 +22816,8 @@ async function askAiCeoCommand() {
 function adminAuthHeaders() {
   const headers = {};
   if (adminApiKey) headers["x-api-key"] = adminApiKey;
-  if (authState?.token && derivePortalMode(authState.user, authState.user?.portal_mode) === "admin") {
+  const mode = derivePortalMode(authState?.user, authState?.user?.portal_mode);
+  if (authState?.token && ["moderator", "admin", "super_admin"].includes(mode)) {
     headers.Authorization = `Bearer ${authState.token}`;
   }
   return headers;
@@ -22814,6 +22829,23 @@ function hasAdminIdentity() {
 
 function canUseLiveAdminApi() {
   return !!(adminApiKey || hasAdminIdentity());
+}
+
+function canUseSharedKingToolsApi() {
+  const mode = derivePortalMode(authState?.user, authState?.user?.portal_mode);
+  return !!(authState?.token && ["moderator", "admin", "super_admin"].includes(mode)) || canUseLiveAdminApi();
+}
+
+async function refreshSharedKingToolsUi() {
+  if (typeof deskPageIsStaff === "function" && deskPageIsStaff()) {
+    const tab = document.querySelector("#staff-king-tools [data-staff-tools-tab].bg-gray-900")?.getAttribute("data-staff-tools-tab");
+    if (tab === "live") return loadStaffLiveFeatured();
+    if (tab === "agents") return adminAgentManagerLoad({ force: true });
+    if (tab === "public") return adminPublicManagerLoad();
+    if (tab === "outreach") return staffOutreachLoad("staff");
+    return Promise.resolve();
+  }
+  return renderAdminDashboard();
 }
 
 function canUseStaffSourceIntakeApi() {
@@ -23333,8 +23365,257 @@ function adminVerificationBadge(status) {
   return { cls: "bg-gray-100 text-gray-700", label: "Review needed" };
 }
 
+function setStaffToolsTab(tab = "accounts") {
+  const allowed = ["accounts", "outreach", "agents", "public", "live"];
+  const next = allowed.includes(String(tab)) ? String(tab) : "accounts";
+  const root = document.getElementById("staff-king-tools");
+  if (!root) return;
+  root.querySelectorAll("[data-staff-tools-panel]").forEach((panel) => {
+    panel.classList.toggle("hidden", panel.getAttribute("data-staff-tools-panel") !== next);
+  });
+  root.querySelectorAll("[data-staff-tools-tab]").forEach((button) => {
+    const active = button.getAttribute("data-staff-tools-tab") === next;
+    button.classList.toggle("bg-gray-900", active);
+    button.classList.toggle("text-white", active);
+    button.classList.toggle("bg-gray-100", !active);
+    button.classList.toggle("text-gray-700", !active);
+  });
+  if (next === "accounts") staffPeopleEnsureLoaded("staff");
+  if (next === "outreach") staffOutreachEnsureLoaded("staff");
+  if (next === "agents") adminAgentManagerEnsureLoaded();
+  if (next === "public") adminPublicManagerEnsureLoaded();
+  if (next === "live") loadStaffLiveFeatured().catch((error) => console.warn(error?.message || error));
+}
+
+function deskPageIsStaff() {
+  const staffPage = document.getElementById("page-staff-dashboard");
+  return !!(staffPage && !staffPage.classList.contains("hidden"));
+}
+
+function adminDeskEl(kingId, staffId) {
+  if (staffId && deskPageIsStaff()) {
+    const el = document.getElementById(staffId);
+    if (el) return el;
+  }
+  return document.getElementById(kingId);
+}
+
+async function loadStaffLiveFeatured() {
+  const table = document.getElementById("staff-live-listings-table");
+  if (!table) return;
+  if (!authState?.token) {
+    table.innerHTML = `<p class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">Sign in as staff to manage live and featured listings.</p>`;
+    return;
+  }
+  table.innerHTML = `<p class="text-sm text-gray-500">Loading live listings…</p>`;
+  const headers = adminAuthHeaders();
+  try {
+    const [liveRows, agentsRes] = await Promise.all([
+      fetchAdminPaginatedRows("/api/admin/properties/live", headers, { limit: 50, maxPages: 1 }),
+      apiRequest("/api/admin/agents?limit=100", { headers })
+    ]);
+    const liveListings = (Array.isArray(liveRows) ? liveRows : []).map((row) => normalizeRemoteAdminListing({ ...row, admin_live_endpoint: true }));
+    adminLiveListings = liveListings;
+    if (liveRows?.adminMeta?.public_parity || liveRows?.adminSummary?.public_inventory) {
+      adminPublicInventoryParity = liveRows.adminMeta?.public_parity || liveRows.adminSummary?.public_inventory;
+    }
+    if (Array.isArray(agentsRes?.data)) adminRemoteAgents = agentsRes.data.map(mapRemoteAgentForUi);
+    renderAdminLiveParitySummary(adminPublicInventoryParity, adminLiveListings);
+    renderAdminLiveListingsRows(adminLiveListings);
+    renderAdminFeaturedRows(adminLiveListings);
+    renderAdminFeaturedAgentsRows(adminRemoteAgents);
+    await renderAdminFeaturedRotationStatus().catch(() => {});
+  } catch (error) {
+    table.innerHTML = `<p class="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">${adminEscape(error?.message || "Could not load live listings.")}</p>`;
+  }
+}
+
+function staffOutreachState(scope) {
+  window.__makaugOutreach = window.__makaugOutreach || {};
+  if (!window.__makaugOutreach[scope]) {
+    window.__makaugOutreach[scope] = { loadedAt: 0, loading: false, filter: "", data: null, error: "" };
+  }
+  return window.__makaugOutreach[scope];
+}
+
+function staffOutreachRoot(scope) {
+  return document.querySelector(`[data-outreach-root="${scope}"]`);
+}
+
+function staffOutreachEnsureLoaded(scope) {
+  const state = staffOutreachState(scope);
+  if (state.loading) return;
+  if (state.loadedAt && Date.now() - state.loadedAt < 30 * 1000) {
+    if (staffOutreachRoot(scope) && !staffOutreachRoot(scope).dataset.ready) staffOutreachRender(scope);
+    return;
+  }
+  staffOutreachLoad(scope);
+}
+
+async function staffOutreachLoad(scope) {
+  const root = staffOutreachRoot(scope);
+  const state = staffOutreachState(scope);
+  if (!root) return;
+  state.loading = true;
+  if (!root.dataset.ready) root.innerHTML = `<p class="text-sm text-gray-500">Loading outreach…</p>`;
+  try {
+    const res = await apiRequest("/api/admin/outreach-tracker?limit=200", { headers: adminAuthHeaders() });
+    state.data = Array.isArray(res?.data) ? res.data : [];
+    state.note = res?.week_note || "";
+    state.error = "";
+    state.loadedAt = Date.now();
+    staffOutreachRender(scope);
+  } catch (error) {
+    state.error = error?.message || "Could not load outreach.";
+    root.innerHTML = `<p class="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">${adminEscape(state.error)}</p>`;
+  } finally {
+    state.loading = false;
+  }
+}
+
+function staffOutreachRender(scope) {
+  const root = staffOutreachRoot(scope);
+  const state = staffOutreachState(scope);
+  if (!root) return;
+  const rows = Array.isArray(state.data) ? state.data : [];
+  const filter = state.filter || "";
+  const visible = rows.filter((row) => {
+    if (!filter) return true;
+    if (filter === "do_not_contact") return row.do_not_contact === true;
+    if (filter === "no_reply") return row.status === "pitched" && !row.do_not_contact;
+    if (filter === "yes") return ["interested", "signed_up", "approved"].includes(row.status);
+    if (filter === "no") return row.status === "declined";
+    return true;
+  });
+  const chip = (key, label) => {
+    const on = filter === key;
+    return `<button type="button" onclick="staffOutreachFilter('${scope}', '${key}')" class="rounded-full px-3 py-1 text-xs font-bold ${on ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700"}">${adminEscape(label)}</button>`;
+  };
+  const dayText = (days) => days == null ? "—" : Number(days) === 0 ? "Today" : Number(days) === 1 ? "1 day ago" : `${days} days ago`;
+  const whenText = (value) => {
+    if (!value) return "—";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric" });
+  };
+  root.dataset.ready = "1";
+  root.innerHTML = `
+    <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
+      <div class="min-w-0">
+        <h3 class="text-xl font-black text-gray-900">Outreach</h3>
+        <p class="text-xs text-gray-500 mt-1">Every person Arthur or Ronald sends the joining video to, from Agent 007 option 3. Tracks who sent it, when, the follow-up, and whether we can contact them again. The same video is never sent twice.</p>
+        <p class="text-xs text-gray-600 mt-1">${adminEscape(state.note || "Tracking starts from the week of 10–16 Nov 2026 (London).")}</p>
+      </div>
+      <button type="button" onclick="staffOutreachLoad('${scope}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh</button>
+    </div>
+    <div class="flex flex-wrap gap-2 mb-3">${chip("", "All")} ${chip("no_reply", "No reply")} ${chip("yes", "Yes")} ${chip("no", "No")} ${chip("do_not_contact", "Do not contact")}</div>
+    <div class="rounded-xl border border-gray-200 p-3 mb-4 bg-gray-50">
+      <h4 class="font-black text-gray-900 text-sm">Log a send already made</h4>
+      <p class="text-xs text-gray-500 mt-1">Use this for videos sent this week that are not in the list yet. This does not send a WhatsApp. If they already had this video, you will see who sent it and the follow-up, and be asked to call them instead.</p>
+      <p class="hidden mt-2 text-sm text-red-800" data-outreach-log-error></p>
+      <form class="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2" onsubmit="staffOutreachLog(event, '${scope}')">
+        <label class="text-xs font-semibold">Name<input name="full_name" required class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="Name"></label>
+        <label class="text-xs font-semibold">Phone<input name="phone" required class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="07… or 256…" autocomplete="off"></label>
+        <label class="text-xs font-semibold">Who sent it<select name="pitched_by_name" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"><option value="Arthur">Arthur</option><option value="Ronald">Ronald</option><option value="">Someone else</option></select></label>
+        <label class="text-xs font-semibold">Sent on<input name="pitched_at" type="datetime-local" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"></label>
+        <label class="text-xs font-semibold md:col-span-2">Note (optional)<input name="note" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="Which video, or where you sent it from"></label>
+        <div class="flex items-end"><button type="submit" class="rounded-lg bg-gray-900 text-white px-4 py-2 text-xs font-bold">Log send</button></div>
+      </form>
+    </div>
+    <div class="space-y-2" data-outreach-list>
+      ${visible.length ? visible.map((row) => {
+        const id = adminAttr(row.id);
+        return `<article class="rounded-xl border ${row.do_not_contact ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"} p-3">
+          <div class="flex items-start justify-between gap-3 flex-wrap">
+            <div class="min-w-0">
+              <p class="font-black text-gray-900">${adminEscape(row.full_name || "Unnamed")}</p>
+              <p class="text-xs text-gray-600 mt-1">${adminEscape(row.phone_masked || "•••")} · Sent ${adminEscape(whenText(row.pitched_at))} by ${adminEscape(row.pitched_by_name || "Staff")}${row.logged_manually ? " · logged by hand" : ""}</p>
+              <p class="text-xs text-gray-600 mt-1">${adminEscape(row.video_label || "Joining film")} · Follow-up: <strong>${adminEscape(row.follow_up)}</strong> · ${adminEscape(dayText(row.days_ago))}</p>
+              <p class="text-xs text-gray-700 mt-1">${adminEscape(row.next_step || "")}</p>
+              ${row.activity?.last_reply_at ? `<p class="text-xs text-gray-500 mt-1">Last WhatsApp reply: ${adminEscape(whenText(row.activity.last_reply_at))}</p>` : ""}
+              ${row.activity?.signed_up ? `<p class="text-xs text-emerald-800 mt-1">They have signed up${row.agent_status ? ` (${adminEscape(row.agent_status)})` : ""}.</p>` : ""}
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" class="rounded-lg border border-emerald-200 text-emerald-800 px-3 py-1.5 text-xs font-bold" onclick="staffOutreachFollowUp('${scope}', '${id}', 'yes')">Yes</button>
+              <button type="button" class="rounded-lg border border-red-200 text-red-800 px-3 py-1.5 text-xs font-bold" onclick="staffOutreachFollowUp('${scope}', '${id}', 'no')">No</button>
+              <button type="button" class="rounded-lg border border-gray-300 text-gray-700 px-3 py-1.5 text-xs font-bold" onclick="staffOutreachFollowUp('${scope}', '${id}', 'no_reply')">No reply</button>
+              ${row.do_not_contact
+                ? `<button type="button" class="rounded-lg border border-gray-300 text-gray-700 px-3 py-1.5 text-xs font-bold" onclick="staffOutreachDoNotContact('${scope}', '${id}', false)">Allow contact</button>`
+                : `<button type="button" class="rounded-lg bg-red-700 text-white px-3 py-1.5 text-xs font-bold" onclick="staffOutreachDoNotContact('${scope}', '${id}', true)">Do not contact again</button>`}
+            </div>
+          </div>
+        </article>`;
+      }).join("") : `<p class="rounded-xl border border-dashed border-gray-300 p-4 text-sm text-gray-500">No outreach recorded yet for this filter. Log this week's already-sent videos above, or send the next one from Agent 007 option 3 and it will appear here.</p>`}
+    </div>`;
+}
+
+function staffOutreachFilter(scope, filter) {
+  staffOutreachState(scope).filter = filter || "";
+  staffOutreachRender(scope);
+}
+
+async function staffOutreachLog(event, scope) {
+  event?.preventDefault?.();
+  const form = event.currentTarget;
+  const root = staffOutreachRoot(scope);
+  const err = root?.querySelector("[data-outreach-log-error]");
+  if (err) { err.classList.add("hidden"); err.textContent = ""; }
+  const data = new FormData(form);
+  const pitchedAt = String(data.get("pitched_at") || "").trim();
+  const body = {
+    full_name: String(data.get("full_name") || "").trim(),
+    phone: String(data.get("phone") || "").trim(),
+    pitched_by_name: String(data.get("pitched_by_name") || "").trim(),
+    note: String(data.get("note") || "").trim(),
+    pitched_at: pitchedAt ? new Date(pitchedAt).toISOString() : null
+  };
+  try {
+    await apiRequest("/api/admin/outreach-tracker/log", { method: "POST", headers: adminAuthHeaders(), body });
+    form.reset();
+    await staffOutreachLoad(scope);
+  } catch (error) {
+    const existing = error?.response?.existing;
+    const message = existing
+      ? (existing.full_name ? `${existing.full_name} has already been reached out to. ${error.message || ""}` : (error.message || "Already contacted."))
+      : (error?.message || "Could not log that send.");
+    if (err) {
+      err.textContent = message;
+      err.classList.remove("hidden");
+    } else {
+      alert(message);
+    }
+  }
+}
+
+async function staffOutreachFollowUp(scope, id, status) {
+  try {
+    await apiRequest(`/api/admin/outreach-tracker/${encodeURIComponent(id)}/follow-up`, {
+      method: "PATCH",
+      headers: adminAuthHeaders(),
+      body: { status }
+    });
+    await staffOutreachLoad(scope);
+  } catch (error) {
+    alert(error?.message || "Could not update the follow-up.");
+  }
+}
+
+async function staffOutreachDoNotContact(scope, id, value) {
+  try {
+    await apiRequest(`/api/admin/outreach-tracker/${encodeURIComponent(id)}/do-not-contact`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { value }
+    });
+    await staffOutreachLoad(scope);
+  } catch (error) {
+    alert(error?.message || "Could not update contact status.");
+  }
+}
+
+
 function setAdminWorkflowTab(tab = "review") {
-  const allowed = ["review", "youtube-sweep", "revenue", "live", "accounts", "agents", "public", "field-agents", "staff", "whatsapp", "agent-reports", "notifications", "listings"];
+  const allowed = ["review", "youtube-sweep", "revenue", "live", "accounts", "outreach", "agents", "public", "field-agents", "staff", "whatsapp", "agent-reports", "notifications", "listings"];
   const previousTab = activeAdminWorkflowTab;
   // Tabs removed in the Oct 2026 King slim-down open where their content now lives.
   const moved = { "student-sweep": "review", actioned: "listings", ads: "revenue" };
@@ -23355,6 +23636,7 @@ function setAdminWorkflowTab(tab = "review") {
   if (activeAdminWorkflowTab === "agent-reports" && previousTab !== "agent-reports") initAdminAgentReportsTab();
   if (activeAdminWorkflowTab === "revenue" && previousTab !== "revenue") loadAdminRevenue();
   if (activeAdminWorkflowTab === "accounts") staffPeopleEnsureLoaded("admin");
+  if (activeAdminWorkflowTab === "outreach") staffOutreachEnsureLoaded("admin");
   if (activeAdminWorkflowTab === "agents") adminAgentManagerEnsureLoaded();
   if (activeAdminWorkflowTab === "public") adminPublicManagerEnsureLoaded();
 }
@@ -25758,13 +26040,16 @@ function renderAdminLiveParitySummary(snapshot = {}, listings = []) {
       </div>
       <div class="mt-2 text-[11px] text-gray-600 break-words">Public: ${adminEscape(parity.public_api_endpoint || "/api/properties?status=approved&public_only=1")} • Featured: ${adminEscape(parity.featured_api_endpoint || "/api/properties?status=approved&featured=true&public_only=1&sort=featured")}</div>
     </div>`;
-  ["admin-live-parity-summary", "admin-featured-parity-summary"].forEach((id) => {
-    const el = document.getElementById(id);
+  [
+    ["admin-live-parity-summary", "staff-live-parity-summary"],
+    ["admin-featured-parity-summary", "staff-featured-parity-summary"]
+  ].forEach(([kingId, staffId]) => {
+    const el = adminDeskEl(kingId, staffId);
     if (el) el.innerHTML = html;
   });}
 
 function renderAdminFeaturedRows(listings) {
-  const wrap = document.getElementById("admin-featured-listings-table");
+  const wrap = adminDeskEl("admin-featured-listings-table", "staff-featured-listings-table");
   if (!wrap) return;
   const live = [...adminLiveEndpointRows(listings)]
     .sort((a, b) => {
@@ -25848,7 +26133,7 @@ async function adminSearchLiveListings(query = "") {
 }
 
 function renderAdminLiveListingsRows(listings) {
-  const wrap = document.getElementById("admin-live-listings-table");
+  const wrap = adminDeskEl("admin-live-listings-table", "staff-live-listings-table");
   if (!wrap) return;
   ensureAdminLiveSearchControls(wrap);
   const view = adminLiveEndpointRows(listings).slice(0, 50);
@@ -30266,7 +30551,7 @@ function renderAdminBrokerRows(agents) {
 }
 
 function renderAdminFeaturedAgentsRows(agents) {
-  const wrap = document.getElementById("admin-featured-agents-table");
+  const wrap = adminDeskEl("admin-featured-agents-table", "staff-featured-agents-table");
   if (!wrap) return;
   const rows = adminApplyLaunchCleanFilter(agents)
     .filter((agent) => String(agent?.status || "approved").toLowerCase() !== "rejected")
@@ -36104,7 +36389,7 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
 async function adminSetListingFeatured(propertyId, featured) {
   const id = String(propertyId || "");
   if (!id) return;
-  if (!canUseLiveAdminApi()) {
+  if (!canUseSharedKingToolsApi()) {
     const local = PROPERTIES.find((p) => String(p.id) === id || String(p.backend_id || "") === id);
     if (local) {
       local.featured = !!featured;
@@ -36168,7 +36453,7 @@ async function adminSetListingFeatured(propertyId, featured) {
     if (!publicFeaturedRefreshed) await refreshPublicListingsFromApi({ silent: true });
     renderAll();
     resetMaps();
-    await renderAdminDashboard();
+    await refreshSharedKingToolsUi();
     toast(featured ? "Listing added to Featured Properties." : "Listing removed from Featured Properties.");
   } catch (e) {
     toast(`Featured update failed: ${e.message || "error"}`);
@@ -36176,10 +36461,10 @@ async function adminSetListingFeatured(propertyId, featured) {
 }
 
 async function renderAdminFeaturedRotationStatus() {
-  const wrap = document.getElementById("admin-featured-rotation-status");
+  const wrap = adminDeskEl("admin-featured-rotation-status", "staff-featured-rotation-status");
   if (!wrap) return;
-  if (!canUseLiveAdminApi()) {
-    wrap.innerHTML = `<div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">Sign in as King/admin to view the daily rotation status.</div>`;
+  if (!canUseSharedKingToolsApi()) {
+    wrap.innerHTML = `<div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">Sign in as staff or King to view the daily rotation status.</div>`;
     return;
   }
   wrap.innerHTML = `<div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">Loading daily rotation status…</div>`;
@@ -36208,8 +36493,8 @@ async function renderAdminFeaturedRotationStatus() {
 }
 
 async function adminRunFeaturedRotation() {
-  if (!canUseLiveAdminApi()) {
-    toast("Sign in as King/admin to run the featured rotation.");
+  if (!canUseSharedKingToolsApi()) {
+    toast("Sign in as staff or King to run the featured rotation.");
     return;
   }
   const proceed = window.confirm("Replace the public featured pool with the two newest clean listings from each category?");
@@ -36223,7 +36508,7 @@ async function adminRunFeaturedRotation() {
     const result = response?.data || {};
     await refreshPublicListingsFromApi({ silent: true });
     renderAll();
-    await renderAdminDashboard({ source: "featured_rotation" });
+    await refreshSharedKingToolsUi();
     toast(`Featured pool rotated: ${Number(result.selected_count || 0)} listings selected.`);
   } catch (error) {
     const missing = Array.isArray(error?.response?.data?.missing)
@@ -36235,8 +36520,8 @@ async function adminRunFeaturedRotation() {
 }
 
 async function adminSetAgentStatus(agentId, status, payment = null, feeOverride = null, extraBody = null) {
-  if (!canUseLiveAdminApi()) {
-    toast("Sign in as admin or set ADMIN_API_KEY first to moderate broker status.");
+  if (!canUseSharedKingToolsApi()) {
+    toast("Sign in as staff or King to moderate broker status.");
     return false;
   }
   try {
@@ -36270,8 +36555,8 @@ async function adminSetAgentStatus(agentId, status, payment = null, feeOverride 
     if (status === "approved") {
       toast(`Approved.${overrideNote}${!override && response?.data?.fee_link?.sent ? " Payment link sent." : ""}${paid ? ` Payment recorded — paid until ${paid.period_end}.` : ""}${welcome?.error ? ` Welcome pack NOT sent: ${welcome.error}` : (welcome?.skipped ? " Welcome pack was already sent before." : " Welcome pack and how-to-post film sent on WhatsApp.")}`);
     }
-    await refreshBrokersFromApi({ silent: true });
-    await renderAdminDashboard();
+    await refreshBrokersFromApi({ silent: true }).catch(() => {});
+    await refreshSharedKingToolsUi();
     const provisioning = response?.data?.account_provisioning;
     const emailStatus = provisioning?.email_status ? ` Email: ${provisioning.email_status}.` : "";
     const accessNote = provisioning?.temporary_password_issued ? " Temporary password issued." : "";
@@ -37284,8 +37569,8 @@ async function adminApproveAgentPublicProfile(agentId) {
 }
 
 async function adminSetAgentFeatured(agentId, featured) {
-  if (!canUseLiveAdminApi()) {
-    toast("Sign in as admin or set ADMIN_API_KEY first.");
+  if (!canUseSharedKingToolsApi()) {
+    toast("Sign in as staff or King first.");
     return;
   }
   try {
@@ -37294,8 +37579,8 @@ async function adminSetAgentFeatured(agentId, featured) {
       headers: adminAuthHeaders(),
       body: { featured: !!featured }
     });
-    await refreshBrokersFromApi({ silent: true });
-    await renderAdminDashboard();
+    await refreshBrokersFromApi({ silent: true }).catch(() => {});
+    await refreshSharedKingToolsUi();
     toast(featured ? "Agent added to homepage feature slots." : "Agent removed from homepage features.");
   } catch (e) {
     toast(`Agent featured update failed: ${e.message || "error"}`);
@@ -57885,6 +58170,7 @@ const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
   "/admin/field-agent-training": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-training-control", label: "Field Agent Training" },
   "/admin/field-agent-notices": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-notice-control", label: "Field Agent Notice Board" },
   "/admin/accounts": { page: "admin-dashboard", tab: "accounts", selector: "#admin-accounts-control", label: "Accounts" },
+  "/admin/outreach": { page: "admin-dashboard", tab: "outreach", selector: "#admin-outreach-control", label: "Outreach" },
   "/admin/users": { page: "admin-dashboard", tab: "accounts", selector: "#admin-accounts-control", label: "Users" },
   "/admin/contracts": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
   "/admin/fraud": { page: "staff-dashboard", staffDesk: "reports", label: "Reports & claims (staff desk)" },

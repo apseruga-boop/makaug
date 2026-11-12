@@ -5,7 +5,9 @@ const crypto = require('crypto');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
-const { requireAdminApiKey, loadActiveUserFromToken } = require('../middleware/auth');
+const { requireAdminApiKey, requireStaffOrAdminAccess, loadActiveUserFromToken } = require('../middleware/auth');
+const { isStaffSharedKingTool } = require('../utils/staffSharedKingTools');
+const { registerOutreachTrackerRoutes } = require('./outreachTracker');
 const { grantVerifiedTickIfComplete } = require('../services/agentVerifiedTickService');
 const { registerAgentManagerRoutes, HAS_ID_DOCUMENT_SQL: AGENT_HAS_ID_DOCUMENT_SQL } = require('./adminAgentManager');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
@@ -271,7 +273,16 @@ const agentGoodbye = require('../services/agentGoodbyeService');
 const { DUPLICATE_CANDIDATES_SQL, classifyDuplicates, duplicateCandidateParams } = require('../utils/duplicateEvidence');
 const router = express.Router();
 
-router.use(requireAdminApiKey);
+// Staff may use a named set of King tools (Accounts people list is already
+// on /api/staff; Outreach, Agents, Public, and Live & Featured are shared
+// here). Lead-outreach email/WhatsApp sends, billing, and other King-only
+// routes stay behind requireAdminApiKey.
+router.use((req, res, next) => {
+  if (isStaffSharedKingTool(req.path, req.method)) {
+    return requireStaffOrAdminAccess(req, res, next);
+  }
+  return requireAdminApiKey(req, res, next);
+});
 
 router.get('/social-source-blocks/dream-home-real-estate', async (_req, res, next) => {
   try {
@@ -992,7 +1003,13 @@ async function writeAudit(action, details = {}, actorId = 'admin_api_key') {
 }
 
 function adminActorId(req) {
-  return req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
+  return req.adminAuth?.userId || req.staffAuth?.userId || req.userAuth?.id || req.adminAuth?.type || 'admin_api_key';
+}
+
+function adminActorName(req) {
+  const user = req.userAuth || {};
+  const name = [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
+  return name || user.email || (req.staffAuth ? 'staff' : '') || String(adminActorId(req));
 }
 
 function parseBooleanLike(value, fallback = false) {
@@ -8990,6 +9007,11 @@ registerAgentManagerRoutes(router, {
   loadRequestUser: loadActiveUserFromToken
 });
 
+registerOutreachTrackerRoutes(router, {
+  writeAudit,
+  actorLabel: (user) => moderationActorLabel(user)
+});
+
 router.post('/agents/invite', async (req, res, next) => {
   try {
     const body = req.body || {};
@@ -11190,10 +11212,14 @@ router.patch('/agents/:id/status', async (req, res, next) => {
       }
     }
 
+    const approvalActorId = req.adminAuth?.userId || req.staffAuth?.userId || req.userAuth?.id || null;
+    const approvalActorName = adminActorName(req);
     const updated = await db.query(
       `UPDATE agents
        SET status = $2,
            approved_at = CASE WHEN $2 = 'approved' THEN COALESCE(approved_at, NOW()) ELSE approved_at END,
+           approved_by = CASE WHEN $2 = 'approved' THEN COALESCE(approved_by, $3::uuid) ELSE approved_by END,
+           approved_by_name = CASE WHEN $2 = 'approved' THEN COALESCE(approved_by_name, NULLIF($4, '')) ELSE approved_by_name END,
            paid_awaiting_approval_at = CASE WHEN $2 = 'approved' THEN NULL ELSE paid_awaiting_approval_at END,
            updated_at = NOW()
        WHERE id = $1
@@ -11231,8 +11257,10 @@ router.patch('/agents/:id/status', async (req, res, next) => {
          monthly_fee_ugx,
          pay_link_on_approval,
          registered_by_phone,
+         approved_by,
+         approved_by_name,
          updated_at`,
-      [req.params.id, status]
+      [req.params.id, status, approvalActorId, approvalActorName]
     );
 
     if (!updated.rows.length) {
@@ -11241,8 +11269,10 @@ router.patch('/agents/:id/status', async (req, res, next) => {
 
     await writeAudit('admin_agent_status_updated', {
       agent_id: req.params.id,
-      status
-    });
+      status,
+      approved_by: approvalActorId,
+      approved_by_name: approvalActorName
+    }, adminActorId(req));
     if (status === 'approved') {
       await grantVerifiedTickIfComplete(db, req.params.id, { source: 'approval', actorId: adminActorId(req), writeAudit });
     }
@@ -11436,7 +11466,8 @@ router.patch('/properties/:id/featured', async (req, res, next) => {
 
     await writeAudit('admin_property_featured_updated', {
       property_id: req.params.id,
-      featured
+      featured,
+      by: adminActorName(req)
     }, adminActorId(req));
 
     return res.json({ ok: true, data: updated.rows[0] });

@@ -282,6 +282,17 @@ async function requireListingModerationAccess(req, res, next) {
   }
 }
 
+async function requireStaffOrAdminAccess(req, res, next) {
+  try {
+    if (await hasStaffOrAdminAccess(req)) return next();
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  } catch (error) {
+    if (isAuthBackendUnavailable(error)) return sendAuthUnavailable(res);
+    if (!isAuthenticationError(error)) return next(error);
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+}
+
 module.exports = {
   isTransientDbError,
   hasAdminAccess,
@@ -292,5 +303,6 @@ module.exports = {
   requireAuthenticatedUser,
   requireListingModerationAccess,
   requireStaffAccess,
+  requireStaffOrAdminAccess,
   requireSuperAdminKey
 };

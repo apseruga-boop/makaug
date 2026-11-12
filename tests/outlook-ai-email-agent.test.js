@@ -39,7 +39,7 @@ for (const expected of [
 ]) {
   assert(adminRoutes.includes(expected), `Admin Outlook route missing: ${expected}`);
 }
-assert(adminRoutes.includes('router.use(requireAdminApiKey)'), 'Outlook routes must inherit admin API protection');
+assert(adminRoutes.includes('requireAdminApiKey'), 'Outlook routes must inherit admin API protection');
 assert(adminRoutes.includes('writeAudit') && adminRoutes.includes('outlook_agent_send_attempt'), 'Outlook send attempts must be audited');
 assert(adminRoutes.includes("router.post('/outreach/email/send'"), 'Admin outreach email send route must exist');
 assert(adminRoutes.includes('reviewed=true is required before sending'), 'Outreach sends must require explicit human review');

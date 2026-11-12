@@ -10190,6 +10190,16 @@ async function handleEmployeeWhatsappIntake({
         message: `${existingAgent.full_name} is already a makaug agent, so I did not send the joining video.\n\nReply *Agent 007* if you want to post properties for them.`
       };
     }
+    const sendDecision = await prospects.evaluateOutreachSend({ phone: dialable, videoKind: 'agent' });
+    if (!sendDecision.ok) {
+      await replaceEmployeeSession(phone, 'main_menu', {});
+      return {
+        handled: true,
+        nextStep: 'main_menu',
+        outreachBlocked: sendDecision.code,
+        message: `I did not send the video.\n\n${sendDecision.message}`
+      };
+    }
     try {
       await sendAgentPitchVideo({ phone: dialable, name: contact.fullName, sentBy: phone });
     } catch (error) {
@@ -10200,16 +10210,15 @@ async function handleEmployeeWhatsappIntake({
         message: 'I could not send the video just then and nothing went out. Check the number and send the name and phone again.'
       };
     }
-    let repeat = false;
     try {
-      const recorded = await prospects.recordProspectPitch({
+      await prospects.recordProspectPitch({
         fullName: contact.fullName,
         phone: dialable,
         pitchedBy: phone,
         pitchedByName: normalizeInput(data.employee_intake_last_subject_name || ''),
-        metadata: { sent_via: 'agent_007_option_3' }
+        metadata: { sent_via: 'agent_007_option_3' },
+        allowDuplicate: true
       });
-      repeat = recorded.repeat;
     } catch (error) {
       // The film is already gone; losing the bookkeeping must not look like a
       // failed send.
@@ -10225,10 +10234,9 @@ async function handleEmployeeWhatsappIntake({
       prospectPitched: true,
       message: `✅ *Video sent to ${contact.fullName}* — ${dialable}\n\n`
         + `They have the joining film: what we do, who sees their listings, how listing works and the plan (${agentMonthlyFeeLabel()} a month).\n\n`
-        + (repeat ? '(They had been sent it before — it has gone again.)\n\n' : '')
         + 'They have been asked to reply *AGENT* if they want to join.\n\n'
         + 'When they say yes, reply *Agent 007* and choose *1* to register them.\n\n'
-        + 'I am keeping them on the prospects list until they sign up.'
+        + 'I am keeping them on the Outreach list until they sign up.'
     };
   }
 
@@ -10367,6 +10375,24 @@ async function handleEmployeeWhatsappIntake({
     // profile, so the payment settles their subscription rather than floating
     // free of it.
     const existingAgent = await findApprovedAgentByPhone(dialable).catch(() => null);
+    let includeVideo = !existingAgent;
+    let videoAlreadySent = null;
+    if (includeVideo) {
+      const sendDecision = await prospects.evaluateOutreachSend({ phone: dialable, videoKind: 'agent' });
+      if (!sendDecision.ok && (sendDecision.code === 'found_online' || sendDecision.code === 'do_not_contact')) {
+        await replaceEmployeeSession(phone, 'main_menu', {});
+        return {
+          handled: true,
+          nextStep: 'main_menu',
+          outreachBlocked: sendDecision.code,
+          message: `I did not send it.\n\n${sendDecision.message}`
+        };
+      }
+      if (!sendDecision.ok) {
+        includeVideo = false;
+        videoAlreadySent = sendDecision.message;
+      }
+    }
     let sent;
     try {
       sent = await sendStaffPayLink({
@@ -10374,7 +10400,7 @@ async function handleEmployeeWhatsappIntake({
         phone: dialable,
         agentId: existingAgent?.id || null,
         allowExempt: existingAgent?.fee_exempt === true,
-        includeVideo: !existingAgent,
+        includeVideo,
         requestedBy: phone
       });
     } catch (error) {
@@ -10385,7 +10411,7 @@ async function handleEmployeeWhatsappIntake({
         message: `I could not send it just then and nothing went out: ${error.message || 'unknown error'}\n\nCheck the number and send the name and phone again.`
       };
     }
-    if (!existingAgent) {
+    if (!existingAgent && includeVideo) {
       // The film went out, so this is a pitch like any other — recorded on the
       // same prospects list, with the link's code on it so the follow-up knows
       // what they were asked to pay.
@@ -10393,7 +10419,8 @@ async function handleEmployeeWhatsappIntake({
         fullName: contact.fullName,
         phone: dialable,
         pitchedBy: phone,
-        metadata: { sent_via: 'agent_007_option_4', pay_link_code: sent.code }
+        metadata: { sent_via: 'agent_007_option_4', pay_link_code: sent.code },
+        allowDuplicate: true
       }).catch((error) => logger.warn('Agent prospect not recorded:', error.message || String(error)));
     }
     await replaceEmployeeSession(phone, 'main_menu', {
@@ -10411,7 +10438,9 @@ async function handleEmployeeWhatsappIntake({
         + `${sent.url}\n\n`
         + (existingAgent
           ? `${existingAgent.full_name} is already registered, so the link is against their account and no video was sent.\n\n`
-          : 'The joining video went with it, so they know who is asking.\n\n')
+          : (includeVideo
+            ? 'The joining video went with it, so they know who is asking.\n\n'
+            : `${videoAlreadySent || 'The joining video had already been sent, so I did not send it again.'}\n\n`))
         + (existingAgent
           ? ''
           : 'When they pay, register them with *Agent 007* → option *1* so the money lands against a profile.\n\n')

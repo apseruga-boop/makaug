@@ -34,9 +34,13 @@ test('agent manager UI exposes the controls staff were missing', () => {
 });
 
 test('agent manager routes sit behind the admin key guard', () => {
-  const guard = adminRoutes.indexOf('router.use(requireAdminApiKey)');
+  const guard = Math.max(
+    adminRoutes.indexOf('return requireAdminApiKey(req, res, next)'),
+    adminRoutes.indexOf('requireStaffOrAdminAccess')
+  );
   const mount = adminRoutes.indexOf('registerAgentManagerRoutes(router');
-  assert.ok(guard > -1 && mount > guard, 'routes are registered after requireAdminApiKey');
+  assert.ok(guard > -1 && mount > guard, 'routes are registered after the admin/staff auth guard');
+  assert.match(adminRoutes, /isStaffSharedKingTool\(req\.path, req\.method\)/);
   const router = express.Router();
   manager.registerAgentManagerRoutes(router, { db: { query: async () => ({ rows: [] }) }, writeAudit: async () => {}, adminActorId: () => null, cleanText: (v) => String(v || '').trim(), isValidEmail: () => true, normalizePhone: (v) => v, actorLabel: () => 'x', onListingsChanged: () => {} });
   const routes = router.stack.filter((l) => l.route).map((l) => `${Object.keys(l.route.methods)[0].toUpperCase()} ${l.route.path}`);

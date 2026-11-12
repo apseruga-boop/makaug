@@ -226,7 +226,8 @@ test('package script exposes the safe inventory intake command', () => {
 });
 
 test('admin-only endpoint rejects retired generic sourced candidates', () => {
-  assert(adminRoute.includes("router.use(requireAdminApiKey)"), 'admin routes must be protected before seed endpoint');
+  assert(adminRoute.includes("requireAdminApiKey"), 'admin routes must be protected before seed endpoint');
+  assert(adminRoute.indexOf("return requireAdminApiKey(req, res, next)") < adminRoute.indexOf("router.post('/sourced-inventory-candidates/seed'"), 'auth guard runs before seed endpoint');
   assert(adminRoute.includes("router.post('/sourced-inventory-candidates/seed'"), 'admin seed endpoint should exist');
   assert(adminRoute.includes('admin_generic_candidate_seed_rejected'), 'admin endpoint should audit rejected generic seed attempts');
   assert(adminRoute.includes('Generic placeholder candidates are retired'), 'admin endpoint should block generic placeholder candidates');
