@@ -5,7 +5,7 @@ const {
   pendingAgentOverrideRequest,
   PENDING_AGENT_OVERRIDE_ACTION
 } = require('../utils/listingApprovalAgentGuard');
-const { moderationActorLabel, moderationNotesForApproval } = require('../utils/moderationNotes');
+const { moderationActorLabel, moderationNotesForApproval, moderationNotesForRejection } = require('../utils/moderationNotes');
 const { autoPinForApproval, correctedPinForNewListing } = require('../services/listingCoordinateRepairService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 const {
@@ -6048,7 +6048,11 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       ? moderationNotesForApproval(current.moderation_notes, reviewNotes, {
         author: moderationActorLabel(req.userAuth || req.adminAuth || {})
       })
-      : reviewNotes;
+      : nextStatus === 'rejected'
+        ? moderationNotesForRejection(current.moderation_notes, reviewNotes, {
+          author: moderationActorLabel(req.userAuth || req.adminAuth || {})
+        })
+        : reviewNotes;
 
     let listing;
     try {

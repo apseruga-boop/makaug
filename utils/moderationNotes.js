@@ -77,7 +77,38 @@ function moderationNotesForApproval(existing, incoming, { author = 'staff', at =
   return appendModerationNote(prev, addition, { author, at }) || null;
 }
 
+const SYSTEM_REJECTION_PREVIEW_NOTES = [
+  'Rejected from staff preview',
+];
+
+function isSystemRejectionPreviewNote(value) {
+  const text = cleanNote(value);
+  if (!text) return false;
+  return SYSTEM_REJECTION_PREVIEW_NOTES.some((item) => text.toLowerCase() === item.toLowerCase());
+}
+
+function stripSystemRejectionPreviewNotes(value) {
+  const raw = String(value == null ? '' : value).trim();
+  if (!raw) return '';
+  const kept = raw.split(/\n+/).map((line) => cleanNote(line)).filter((line) => line && !isSystemRejectionPreviewNote(line));
+  return kept.join('\n');
+}
+
+// Reject from staff preview used to SET moderation_notes to "Rejected from
+// staff preview" whenever the notes box was empty, wiping a moderator's
+// evidence note (0DD234, 13 Nov 2026). Keep the stored note. A real typed
+// note is appended. The visible rejection reason stays on moderation_reason.
+// The preview boilerplate belongs on the moderation event, not as a
+// replacement listing note.
+function moderationNotesForRejection(existing, incoming, { author = 'staff', at = new Date() } = {}) {
+  const prev = String(existing == null ? '' : existing).trim();
+  const addition = stripSystemRejectionPreviewNotes(incoming);
+  if (!addition) return prev || null;
+  return appendModerationNote(prev, addition, { author, at }) || null;
+}
+
 const APPROVAL_NOTE_BOILERPLATE = 'Staff preview completed before approval';
+const REJECTION_NOTE_BOILERPLATE = 'Rejected from staff preview';
 const DEFAULT_IMPORTER_STAFF_REVIEW_NOTE = 'Confirm the exact property pin and local amenities with the listing agent before approval.';
 
 const SYSTEM_NOTE_LINES = new Set([
@@ -166,12 +197,16 @@ function planApprovalBoilerplateNoteRestore(currentNotes, priorNotesNewestFirst 
 
 module.exports = {
   APPROVAL_NOTE_BOILERPLATE,
+  REJECTION_NOTE_BOILERPLATE,
   appendModerationNote,
   kampalaNoteStamp,
   moderationActorLabel,
   isSystemApprovalPreviewNote,
   stripSystemApprovalPreviewNotes,
   moderationNotesForApproval,
+  isSystemRejectionPreviewNote,
+  stripSystemRejectionPreviewNotes,
+  moderationNotesForRejection,
   isImportTemplateModerationNote,
   isRecoverableStaffModerationNote,
   stripLeadingSystemNoteLines,
