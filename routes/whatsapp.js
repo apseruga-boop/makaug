@@ -168,7 +168,8 @@ const {
 const {
   buildListingEnquiryReply,
   listingEnquiryNotFoundReply,
-  parseListingEnquiry
+  parseListingEnquiry,
+  isListingEnquiryReply
 } = require('../services/whatsappListingEnquiryService');
 const {
   createOwnerEditToken,
@@ -3053,6 +3054,19 @@ async function handleWhatsappListingRemovalCommand({ phone, text = '' }) {
  * number. Neither claims the property is still available — only the person
  * holding it knows that.
  */
+// A follow-up about the listing we just sent: availability, a viewing, who to
+// contact, where it is. Only "this"/"it"/"the house" questions, so a new search
+// ("any 2 bedroom available in Kira?") is still a new search.
+const LISTING_FOLLOW_UP = /\b(?:(?:is|it'?s|its) (?:it|this|that|the (?:house|home|apartment|flat|place|property|unit|room|land|plot)) (?:still )?(?:available|vacant|free|taken|occupied|on)|(?:it|this|that) (?:is |s )?still available|still available|arrange (?:for )?(?:a )?view(?:ing)?|book (?:a )?view(?:ing)?|schedule (?:a )?view(?:ing)?|(?:can|could|may) (?:i|we) (?:view|see|visit|check) (?:it|this|that|the (?:house|home|apartment|flat|place|property|unit|room))|how (?:can|do) (?:i|we) (?:get|see|view|visit|reach|contact) (?:it|this|that|the|them|him|her)|contact (?:the )?(?:owner|agent|landlord|lister|seller)|(?:owner|agent|landlord|seller|lister)'?s? (?:number|contact|phone)|where (?:exactly )?is (?:it|this|that))\b/i;
+const LISTING_FOLLOW_UP_HOURS = 6;
+
+function recentListingEnquiryPropertyId(sessionData = {}) {
+  const id = String(sessionData?.listing_enquiry_property_id || '').trim();
+  const at = Date.parse(sessionData?.listing_enquiry_at || '');
+  if (!id || !Number.isFinite(at)) return '';
+  return Date.now() - at <= LISTING_FOLLOW_UP_HOURS * 3600 * 1000 ? id : '';
+}
+
 async function buildWhatsappListingEnquiryResponse(enquiry = {}, { phone = '', lang = 'en' } = {}) {
   const propertyId = normalizeInput(enquiry.propertyId);
   const reference = normalizeInput(enquiry.reference);
@@ -15184,7 +15198,9 @@ async function queueWhatsappWebBridgeAutoReply({
   let mediaType = 'text';
   const propertyIds = propertyIdsFromWhatsappReply(text, HOME_URL);
   const propertyId = propertyIds.length === 1 ? propertyIds[0] : '';
-  if (propertyId) {
+  // A listing enquiry answer (who holds it, the safety steps) stays as written:
+  // turned into the card, all of that was dropped (13 Nov 2026, 11:15).
+  if (propertyId && !isListingEnquiryReply(text)) {
     const result = await db.query(
       `SELECT p.id, p.title, p.listing_type, p.transaction_type, p.district, p.area,
               p.price, p.price_period, p.extra_fields, img.url AS primary_image_url
@@ -19107,6 +19123,23 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         listing_enquiry_reference: listingEnquiry.reference || null,
         listing_enquiry_at: new Date().toISOString()
       });
+      return respond(enquiryReply, 'main_menu');
+    }
+  }
+
+  // "Is this available and how can we arrange for viewing ❔" (13 Nov 2026,
+  // 11:17), two minutes after we sent the listing from its page, got the menu.
+  // A question about "this" property, soon after, is about that one.
+  const followUpPropertyId = listingEnquiry ? '' : recentListingEnquiryPropertyId(sessionData);
+  if (followUpPropertyId && LISTING_FOLLOW_UP.test(cleanBody)) {
+    const enquiryReply = await buildWhatsappListingEnquiryResponse({
+      propertyId: followUpPropertyId,
+      reference: sessionData.listing_enquiry_reference || '',
+      viewingPhrase: true,
+      asksAvailability: true
+    }, { phone, lang });
+    if (enquiryReply) {
+      await patchSessionData(phone, { idle_resume_prompt: null, listing_enquiry_at: new Date().toISOString() });
       return respond(enquiryReply, 'main_menu');
     }
   }
