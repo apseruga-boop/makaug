@@ -119,16 +119,38 @@ function getReplyDedupeWindowSeconds() {
  * the guards still do their job:
  * - the same inbound message handled twice;
  * - a burst, where the same answer went out moments ago (one is enough).
+ *
+ * The same morning, 06:49 to 06:54: Arthur sent the video to five prospects
+ * in five minutes (Agent 007, 3, name and number, each time). The first two
+ * repeats went out with the two opening lines. The fourth went out plain,
+ * because the plain menu was more than two minutes old. The fifth had no
+ * unused wording left, went out plain 63 seconds after the plain menu, and
+ * the bridge dropped it. So the wording never runs out now: after the two
+ * lines the repeats are numbered.
  */
 const REPEAT_LEADS = Object.freeze({
   en: Object.freeze(['🔁 Here it is again:', '🔁 Once more:']),
   lg: Object.freeze(['🔁 Nate:', '🔁 Omulundi omulala:']),
   sw: Object.freeze(['🔁 Hii hapa tena:', '🔁 Kwa mara nyingine:'])
 });
-const ALL_REPEAT_LEADS = Object.freeze([...new Set(Object.values(REPEAT_LEADS).flat())]);
+const NUMBERED_REPEAT_LEAD = Object.freeze({
+  en: (n) => `🔁 Again (${n}):`,
+  lg: (n) => `🔁 Nate (${n}):`,
+  sw: (n) => `🔁 Tena (${n}):`
+});
+// Enough for one a minute inside any window the bridge can be set to (30 minutes).
+const MAX_NUMBERED_REPEATS = 60;
 
 function repeatLeadsFor(language = 'en') {
   return REPEAT_LEADS[String(language || '').trim().toLowerCase()] || REPEAT_LEADS.en;
+}
+
+/** Every opening line a repeat can have, in the order they are tried: never runs out. */
+function* repeatLeadSequence(language = 'en') {
+  const lang = REPEAT_LEADS[String(language || '').trim().toLowerCase()] ? String(language).trim().toLowerCase() : 'en';
+  const named = REPEAT_LEADS[lang];
+  yield* named;
+  for (let n = named.length + 1; n <= named.length + MAX_NUMBERED_REPEATS; n += 1) yield NUMBERED_REPEAT_LEAD[lang](n);
 }
 
 /** How far back the bridge might still hold the words: its two minutes, with room to spare. */
@@ -146,10 +168,9 @@ function bridgeBodyFingerprint(text, mediaUrl = '') {
   return `${String(text || '').replace(/\s+/g, ' ').trim()}|${String(mediaUrl || '').trim()}`;
 }
 
+/** Every repeat line is one line that starts 🔁 and ends with a colon, then a blank line. */
 function withoutRepeatLead(text) {
-  const body = String(text || '');
-  const lead = ALL_REPEAT_LEADS.find((candidate) => body.startsWith(`${candidate}\n\n`));
-  return lead ? body.slice(lead.length + 2) : body;
+  return String(text || '').replace(/^🔁[^\n]{0,60}:\n\n/u, '');
 }
 
 /**
@@ -186,12 +207,13 @@ async function repeatSafeReplyText({ recipient, text, mediaUrl = '', inboundMess
   const newest = Math.max(...same.map((row) => new Date(row.created_at).getTime()));
   if (now.getTime() - newest < getRepeatBurstSeconds() * 1000) return body;
   const taken = new Set(rows.map((row) => bridgeBodyFingerprint(row.text, row.media_url)));
+  // The plain words are best when they are not in the window any more.
+  if (!taken.has(wanted)) return body;
   const lang = typeof language === 'function' ? await Promise.resolve(language()).catch(() => 'en') : language;
-  for (const lead of repeatLeadsFor(lang)) {
+  for (const lead of repeatLeadSequence(lang)) {
     const candidate = `${lead}\n\n${body}`;
     if (!taken.has(bridgeBodyFingerprint(candidate, mediaUrl))) return candidate;
   }
-  // Asked a third time inside the window: the bridge may hold this one back.
   return body;
 }
 

@@ -55,9 +55,19 @@ test('the next repeat opens with a line he has not had yet', async () => {
   });
 });
 
-test('both lines used inside the window: the reply goes as it is', async () => {
+test('both lines used inside the window: the repeats are numbered, so the wording never runs out', async () => {
   const rows = [row(`🔁 Once more:\n\n${MENU}`, 30, 'in-3'), row(`🔁 Here it is again:\n\n${MENU}`, 80, 'in-2'), row(MENU, 150, 'in-1')];
   await withRecent(rows, async () => {
+    assert.strictEqual(await ask(MENU), `🔁 Again (3):\n\n${MENU}`);
+  });
+  await withRecent([row(`🔁 Again (3):\n\n${MENU}`, 25, 'in-4'), ...rows], async () => {
+    assert.strictEqual(await ask(MENU), `🔁 Again (4):\n\n${MENU}`);
+  });
+});
+
+test('the plain words come back once they are out of the window', async () => {
+  // Only repeats inside the window; the plain menu went more than five minutes ago.
+  await withRecent([row(`🔁 Once more:\n\n${MENU}`, 40, 'in-3'), row(`🔁 Here it is again:\n\n${MENU}`, 100, 'in-2')], async () => {
     assert.strictEqual(await ask(MENU), MENU);
   });
 });
@@ -159,6 +169,33 @@ test('Arthur\'s morning, replayed: every message he sent gets an answer he can s
   const old = turns.map((turn) => before({ recipient: ARTHUR, text: turn.reply }, turn.at));
   assert.deepStrictEqual(old, ['delivered', 'delivered', 'delivered', 'dropped', 'delivered', 'delivered'],
     'with only the menu fixed for COMPLETE, the menu 72 seconds later is still dropped');
+});
+
+test('Arthur\'s 06:49 to 06:54: five videos, every answer reaches him', async () => {
+  // Agent 007, 3, name and number, five times. Under #760 the fifth menu had no
+  // unused wording left, went out plain 63 seconds after the plain menu, and
+  // the bridge dropped it.
+  const PROMPT = '🎬 *Send the makaug agent video*\n\nWho should it go to?';
+  const send = wahaBridge();
+  const queue = [];
+  const turns = [
+    [0, MENU], [8, PROMPT], [41, '✅ *Video sent to Ssema*'],
+    [74, MENU], [83, PROMPT], [136, '✅ *Video sent to Abbaschools*'],
+    [149, MENU], [158, PROMPT], [194, '✅ *Video sent to Geoff properties*'],
+    [213, MENU], [218, PROMPT], [246, '✅ *Video sent to Bob Shan*'],
+    [277, MENU]
+  ];
+  const outcomes = [];
+  for (const [at, reply] of turns) {
+    const now = new Date(NOW.getTime() + at * 1000);
+    const rows = queue.map((q) => ({ text: q.text, media_url: '', inbound_message_id: q.inbound, created_at: new Date(NOW.getTime() + q.at * 1000).toISOString() }));
+    const text = await withRecent(rows, () => bridge.repeatSafeReplyText({ recipient: ARTHUR, text: reply, inboundMessageId: `in-${at}`, now }));
+    const outcome = send({ recipient: ARTHUR, text }, at);
+    outcomes.push(`${at}s ${outcome} ${text.split('\n')[0]}`);
+    if (outcome === 'delivered') queue.unshift({ text, inbound: `in-${at}`, at });
+  }
+  assert.ok(outcomes.every((o) => / delivered /.test(o)), outcomes.join('\n'));
+  assert.match(outcomes[12], /🔁 Again \(4\):/);
 });
 
 test('the reply queued for a new message carries the repeat line', async () => {
