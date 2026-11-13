@@ -4929,25 +4929,55 @@ async function replaceEmployeeSession(phone, currentStep, sessionData = {}) {
   );
 }
 
+/**
+ * What the employee typed, as a name to look up. 13 Nov 2026: "Benard gaita"
+ * with "007" on the next line found nobody, and the next step offered to add
+ * him as a new agent. The code word and a stray "007" are not part of a name.
+ */
+function employeeAgentLookupText(value = '') {
+  return normalizeInput(String(value || '')
+    .replace(/\bagent\s*0*07\b/gi, ' ')
+    .replace(/(^|[\s,|/])0*07(?=$|[\s,|/])/g, ' '))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** A Ugandan mobile number in the text, as its last nine digits. */
+function ugandanMobileKey(value = '') {
+  const compact = String(value || '').replace(/(\d)[\s.-]+(?=\d)/g, '$1');
+  const match = compact.match(/(?:\+?256|0)?(7\d{8})(?!\d)/);
+  return match ? match[1] : '';
+}
+
 async function findEmployeeApprovedAgents(query = '') {
-  const clean = normalizeInput(query);
-  if (!clean) return [];
+  const clean = employeeAgentLookupText(query);
+  const phoneKey = ugandanMobileKey(query);
+  if (!clean && !phoneKey) return [];
+  // Every word of the name, in any order: "gaita benard" is Benard Gaita.
+  const words = clean.toLowerCase().split(' ').filter((word) => word.length >= 2 && !/^\d+$/.test(word)).map((word) => `%${word}%`);
   const result = await db.query(
     `SELECT id, full_name, company_name, phone, whatsapp, email, fee_exempt, paid_until, pay_link_sent_at
        FROM agents
       WHERE status = 'approved'
         AND (
-          LOWER(full_name) = LOWER($1)
-          OR LOWER(COALESCE(company_name, '')) = LOWER($1)
-          OR LOWER(full_name) LIKE LOWER($2)
-          OR LOWER(COALESCE(company_name, '')) LIKE LOWER($2)
-          OR LOWER(COALESCE(makaug_agent_number, '')) = LOWER($1)
+          ($1 <> '' AND (
+            LOWER(full_name) = LOWER($1)
+            OR LOWER(COALESCE(company_name, '')) = LOWER($1)
+            OR LOWER(full_name) LIKE LOWER($2)
+            OR LOWER(COALESCE(company_name, '')) LIKE LOWER($2)
+            OR LOWER(COALESCE(makaug_agent_number, '')) = LOWER($1)
+          ))
+          OR ($3 <> '' AND (
+            RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $3
+            OR RIGHT(regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g'), 9) = $3
+          ))
+          OR (cardinality($4::text[]) >= 2 AND LOWER(full_name) LIKE ALL ($4::text[]))
         )
       ORDER BY
         CASE WHEN LOWER(full_name) = LOWER($1) THEN 0 ELSE 1 END,
         updated_at DESC
       LIMIT 5`,
-    [clean, `%${clean}%`]
+    [clean, `%${clean}%`, phoneKey, words]
   );
   return result.rows;
 }
@@ -8143,6 +8173,11 @@ function isOwnAgentSelfIntake(session = {}, phone = '') {
 
 const AGENT_COURTESY = /^(ok(ay)?|thanks?|thank you|asante|webale|noted|alright|sure|fine|got it|cool|yes|yeah|yep|please|okay please|ok please|good|great|nice|👍|🙏|💪|✅)[\s.!👍🙏😊]*$/i;
 const AGENT_HOW_TO_POST = /\b(how (do|can) i (post|list|upload|add)|how to (post|list|upload|add)|where (do|can) i (post|list)|how does (this|it) work|what (do|should) i (do|send))\b/i;
+// "I WANT TO POST HOUSES" (Ronald, 13 Nov 2026, 08:35) got the customer
+// listing questions, five of them, before the staff menu showed. Saying you
+// want to post is the request itself: staff get Agent 007, an agent gets told
+// to send the property.
+const WANTS_TO_POST = /\b(?:want|wanna|need|would like|like|going) to (?:post|list|upload|add|put up)\b|^\s*(?:post|list|upload)(?:ing)?\s+(?:my |some |new |these |the |a )?(?:houses?|homes?|propert(?:y|ies)|plots?|land|rentals?|apartments?|units?)\b/i;
 const AGENT_IS_IT_DONE = /\b(status|is it (done|live|up|posted|approved)|did (it|that) (save|go|work)|has it (saved|gone|posted)|any update|is it (in|there)|did you get (it|them))\b/i;
 
 /**
@@ -8252,7 +8287,7 @@ function agentConversationalAside({ data = {}, cleanBody = '' } = {}) {
     return agentMenuReply({ agent: data.agent || {}, greet: true, savedCount: saved });
   }
 
-  if (AGENT_HOW_TO_POST.test(text)) {
+  if (AGENT_HOW_TO_POST.test(text) || WANTS_TO_POST.test(text)) {
     return [
       `Easiest thing in the world${first ? `, ${first}` : ''} — just send me the property, the same way you would forward it to a buyer.`,
       '',
@@ -9472,7 +9507,9 @@ function staffIntakeGreetingReply({ phone = '', session = {}, cleanBody = '' } =
     // through the staff flow rather than merely having a session open.
     || data.employee_role
   );
-  if (!hasIntakeHistory && !isAiCeoOwnerPhone(phone)) return '';
+  // Since 13 Nov 2026 only Arthur's and Ronald's numbers can use Agent 007, so
+  // only they get the staff menu.
+  if (!isAiCeoOwnerPhone(phone) && (!hasIntakeHistory || !employeeIntakePhoneAllowed(phone))) return '';
 
   const lastSubject = normalizeInput(data.employee_intake_last_subject_name || '');
   const lastCount = Number(data.employee_intake_last_properties_set_up || 0);
@@ -9937,7 +9974,7 @@ async function handleEmployeeWhatsappIntake({
 } = {}) {
   let currentStep = session.current_step || 'greeting';
   const cleanBody = normalizeInput(body);
-  const triggered = isEmployeeIntakeTrigger(cleanBody);
+  let triggered = isEmployeeIntakeTrigger(cleanBody);
   let active = isEmployeeIntakeStep(currentStep);
   // Set when this message is the one that opened an agent's own posting
   // session, so the first reply can greet them rather than starting mid-flow.
@@ -9966,6 +10003,15 @@ async function handleEmployeeWhatsappIntake({
     await replaceEmployeeSession(phone, interruptedStep, recoveredData);
     currentStep = interruptedStep;
     active = true;
+  }
+  // Staff saying they want to post ("I WANT TO POST HOUSES") get Agent 007
+  // there and then, not the customer listing questions. An approved agent on
+  // the same words is told to send the property (the aside further down).
+  if (!triggered && !active && WANTS_TO_POST.test(cleanBody) && !isStaffCustomerMode(session)
+    && isStaffIntakeNumber({ phone, session })
+    && employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) })
+    && !(await findApprovedAgentByPhone(phone).catch(() => null))) {
+    triggered = true;
   }
   if (triggered && isStaffCustomerMode(session)) {
     // Starting a batch is the other way out of customer mode.
@@ -10027,7 +10073,7 @@ async function handleEmployeeWhatsappIntake({
     // listing a house OR a plot; he was asking a question.
     const askedText = normalizeInput(cleanBody);
     const agentVoiceOnly = !askedText && !mediaUrl && /audio|ogg|opus|voice/.test(String(runtime.mediaType || ''));
-    if (!active && (agentVoiceOnly || AGENT_HELP.test(askedText) || AGENT_IS_IT_DONE.test(askedText) || AGENT_HOW_TO_POST.test(askedText) || AGENT_GREETING.test(askedText) || isAgentProfilePhotoRequest(askedText) || AGENT_SHARE_REQUEST.test(askedText) || AGENT_TERMS_AGREE.isAgreeReply(askedText))) {
+    if (!active && (agentVoiceOnly || AGENT_HELP.test(askedText) || AGENT_IS_IT_DONE.test(askedText) || AGENT_HOW_TO_POST.test(askedText) || WANTS_TO_POST.test(askedText) || AGENT_GREETING.test(askedText) || isAgentProfilePhotoRequest(askedText) || AGENT_SHARE_REQUEST.test(askedText) || AGENT_TERMS_AGREE.isAgreeReply(askedText))) {
       const askingAgent = await findApprovedAgentByPhone(phone);
       if (askingAgent) {
         if (AGENT_TERMS_AGREE.isAgreeReply(askedText)) {
@@ -10061,7 +10107,7 @@ async function handleEmployeeWhatsappIntake({
         // minute ago, and it is not "how do I post a property".
         const payLinkAnswer = await agentPayLinkAside({ agent: askingAgent, cleanBody: askedText });
         if (payLinkAnswer) return { handled: true, nextStep: currentStep, message: payLinkAnswer };
-        if (AGENT_HOW_TO_POST.test(askedText)) {
+        if (AGENT_HOW_TO_POST.test(askedText) || WANTS_TO_POST.test(askedText)) {
           return {
             handled: true,
             nextStep: currentStep,
@@ -10106,10 +10152,18 @@ async function handleEmployeeWhatsappIntake({
     || employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) });
   if (!allowed) {
     logger.warn('Restricted WhatsApp employee intake trigger rejected', { phone_suffix: employeeIntakePhoneSuffix(phone) });
+    // Not one of ours (Agent 007 is Arthur's and Ronald's since 13 Nov 2026).
+    // Close anything it left open, so the next message is read as an ordinary
+    // one, and say where to go instead.
+    if (active) await replaceEmployeeSession(phone, 'main_menu', {});
+    const agentHere = await findApprovedAgentByPhone(phone).catch(() => null);
+    const agentFirst = agentHere ? agentGreetingName(agentHere, '') : '';
     return {
       handled: true,
-      nextStep: currentStep,
-      message: 'This staff intake code is restricted. Ask a makaug administrator to add your WhatsApp number.'
+      nextStep: 'main_menu',
+      message: agentHere
+        ? `Agent 007 is for the makaug team only${agentFirst ? `, ${agentFirst}` : ''}, and you don't need it. Just send your property here: the photos or a short video, and a caption with what it is, the area and the price. I'll post it under your profile.`
+        : 'Agent 007 is for the makaug team only.\n\nTo list a property, reply *MENU* and choose 1. To join makaug as an agent, reply *MENU* and choose 5.'
     };
   }
 
@@ -10585,7 +10639,29 @@ async function handleEmployeeWhatsappIntake({
   if (currentStep === 'employee_new_agent_details') {
     const details = parseNewAgentDetails(cleanBody);
     if (!details) {
-      return { handled: true, nextStep: currentStep, message: 'Please use: Full name | phone number | primary district. Company is optional; add it between the phone number and district if available.' };
+      return { handled: true, nextStep: currentStep, message: 'Please send the name, phone number and district, with | between them, like this:\n\nKato Brian | 0772123456 | Wakiso\n\nCompany is optional; add it between the phone number and the district.' };
+    }
+    // 13 Nov 2026: Benard Gaita's details came in to "add a new agent", but he
+    // was approved two days before. His own profile is the right one.
+    const existingAgent = await findApprovedAgentByPhone(details.phone).catch(() => null);
+    if (existingAgent) {
+      data.agent = {
+        id: existingAgent.id,
+        full_name: existingAgent.full_name,
+        company_name: existingAgent.company_name,
+        phone: existingAgent.phone,
+        whatsapp: existingAgent.whatsapp,
+        email: existingAgent.email,
+        status: 'approved'
+      };
+      data.agent_already_registered = true;
+      delete data.new_agent_details;
+      await replaceEmployeeSession(phone, 'employee_intake_confirm', data);
+      return {
+        handled: true,
+        nextStep: 'employee_intake_confirm',
+        message: `✅ ${existingAgent.full_name} is already an approved agent on makaug${existingAgent.makaug_agent_number ? ` (${existingAgent.makaug_agent_number})` : ''}, so I'll use that profile. No new one is needed.\n\n${employeeIntakeConfirmMessage(data)}`
+      };
     }
     data.new_agent_details = details;
     return advanceEmployeeIntakeAfterDetails(phone, data);
@@ -17906,8 +17982,12 @@ async function agentJoinRequestReply({ phone, text = '', name = '', film = null 
 
   // "Great to hear from you, Real!" — the name Ronald typed was the business.
   const first = agentFilm.personalFirstName(name);
+  // "Is the free time up after 1 days listing" (13 Nov 2026, 04:33) was never
+  // answered. There are no free days since 10 Nov 2026: say so.
+  const askedFree = /\bfree\b[^.?!\n]{0,25}\b(?:time|trial|days?|period|month|week|listing)\b|\btrial\b/i.test(String(text || ''));
+  const noFreeDays = `There are no free days: the plan is UGX ${fee.toLocaleString('en-US')} a month from the day you are approved.`;
   if (existing && existing.status === 'pending') {
-    return `${whatsappBrandHeader('Agent sign-up')}\nThanks${first ? ` ${first}` : ''} — your agent application is already with our team. *${contact.name}* will call you to finish setting you up.\n\nNeed us sooner? Call or WhatsApp ${contact.name} on ${contact.pretty}.`;
+    return `${whatsappBrandHeader('Agent sign-up')}\nThanks${first ? ` ${first}` : ''} — your agent application is already with our team. *${contact.name}* will call you to finish setting you up.${askedFree ? `\n\n${noFreeDays}` : ''}\n\nNeed us sooner? Call or WhatsApp ${contact.name} on ${contact.pretty}.`;
   }
   return [
     `${whatsappBrandHeader('Join makaug as an agent')}`,
@@ -17917,6 +17997,7 @@ async function agentJoinRequestReply({ phone, text = '', name = '', film = null 
     '• Post properties just by sending photos here on WhatsApp',
     '• Get your own agent page and buyer/tenant enquiries sent straight to you',
     `• All for UGX ${fee.toLocaleString('en-US')} a month, short stays included. No commission.`,
+    ...(askedFree ? ['', noFreeDays] : []),
     '',
     `Once you're approved, I'll send you a short guide showing exactly how to post.`,
     `📞 Want to talk now? Call or WhatsApp ${contact.name} on ${contact.pretty}.`
@@ -18293,6 +18374,13 @@ async function handleReplyPlaybook({ phone, body = '', step = '', conversationCo
     case 'thanks':
       message = replyPlaybook.thanksReply({ first, role, lastSent });
       break;
+    case 'praise':
+      // "That's good boss" to the Morning Brief: thank them. To anything else
+      // it is an "ok", and is treated like one below.
+      message = replyPlaybook.praiseReply({ first, role, lastSent });
+      if (message) break;
+      if (replyPlaybook.asksSomething(lastSent)) return null;
+      return silent;
     case 'ack':
       // "Ok" or "Noted" after a notice needs nothing back. After a question or
       // a numbered choice it is an answer, and the flow that asked reads it.
@@ -18694,6 +18782,19 @@ function offPlanWhereAnswer(text = '') {
   if (/^1\b|\b(uganda|kampala|wakiso|entebbe|mukono|home|local|in uganda)\b/.test(clean)) return 'uganda';
   if (/^2\b|\b(abroad|overseas|outside|international|dubai|uae|emirates|kenya|nairobi|diaspora)\b/.test(clean)) return 'abroad';
   return '';
+}
+
+/**
+ * A menu route's reply. "Join as an agent" goes through agentJoinRequestReply,
+ * which tells Arthur and Ronald and gives the fee. 13 Nov 2026, 04:33: a broker
+ * asked "Is the free time up after 1 days listing", was told Ronald would reach
+ * out, and nobody was told.
+ */
+async function routeReply(lang, route, { phone = '', text = '' } = {}) {
+  if (route === 'agent_registration' && !IS_SOUTH_AFRICA && phone) {
+    return { message: await agentJoinRequestReply({ phone, text }), nextStep: 'main_menu' };
+  }
+  return menuRouteReply(lang, route);
 }
 
 function menuRouteReply(lang, route) {
@@ -19360,7 +19461,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       if (!isGreetingText(cleanBody)) {
         await updateSession(phone, { current_step: 'main_menu' });
         if (globalRoute) {
-          const next = menuRouteReply(lang, globalRoute);
+          const next = await routeReply(lang, globalRoute, { phone, text: cleanBody });
           return respond(`Got it. I will treat this as a new request.\n\n${next.message}`, next.nextStep);
         }
         return respond(`Got it. I will treat this as a new request.\n\n${friendlyGreetingReply(lang, sessionData)}`, 'main_menu');
@@ -19647,7 +19748,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (pendingIntent && pendingIntent.route) {
       if (isAffirmativeReply(cleanBody)) {
         await patchSessionData(phone, { pending_intent_confirmation: null });
-        const next = menuRouteReply(lang, pendingIntent.route);
+        const next = await routeReply(lang, pendingIntent.route, { phone, text: cleanBody });
         return respond(next.message, next.nextStep);
       }
 
@@ -19813,7 +19914,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     }
 
     if (inferredRoute) {
-      const next = menuRouteReply(lang, inferredRoute);
+      const next = await routeReply(lang, inferredRoute, { phone, text: cleanBody });
       return respond(next.message, next.nextStep);
     }
 

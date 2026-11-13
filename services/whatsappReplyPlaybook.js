@@ -71,6 +71,11 @@ const ACK = /^(?:OK|OKAY|OK OK|OKAY OKAY|K|KK|NOTED|WELL NOTED|ALRIGHT|ALL RIGHT
 // "Okay. That's interesting" (Benard, 12 Nov, after our numbers) got the mortgage notice.
 const REACTION = /^(?:(?:OK|OKAY|WOW|OH|AH) )?(?:(?:THAT S|THATS|THAT IS|IT S|ITS|VERY|SO|REALLY) )?(?:INTERESTING|GOOD TO KNOW|NICE TO KNOW|GOOD|GREAT|NICE|COOL|FINE|AWESOME|WONDERFUL|EXCELLENT|AMAZING|IMPRESSIVE)$/;
 const EMOJI_ONLY = /^[\s\u{1F44D}\u{1F64F}\u{1F64C}\u{1F44C}\u{1F4AF}\u{2705}\u{1F60A}\u{2764}\u{FE0F}\u{2665}\u{1F91D}\u{1F44F}\u{1F642}\u{263A}\u{1F4AA}]+$/u;
+// "That's good boss" (Emirates property services, 13 Nov 2026, after the
+// Morning Brief) got "I can help with that. Tell me what you need". Praise is
+// not a request. After the brief it gets a thank-you; after anything else it
+// is treated like "ok".
+const PRAISE = new RegExp(`^(?:(?:OK|OKAY|WOW|OH|AH|YES) )?(?:(?:THAT S|THATS|THAT IS|IT S|ITS|THIS IS|THIS S|VERY|SO|REALLY|SUCH A) )*(?:GOOD|GREAT|NICE|COOL|AWESOME|WONDERFUL|EXCELLENT|AMAZING|HELPFUL|USEFUL|EDUCATIVE|INFORMATIVE|INSIGHTFUL|LOVELY|BRILLIANT|FANTASTIC|SUPER|PERFECT|GOOD STUFF|GOOD JOB|GOOD ONE|NICE ONE|WELL DONE|GOOD WORK|GREAT WORK|GREAT JOB|KEEP IT UP)(?: (?:INFO|INFORMATION|NEWS|BRIEF|UPDATE|UPDATES|STUFF|WORK|JOB|ONE|VIDEO|MESSAGE))?(?: ${POLITE})*$`);
 
 const PROOF = /\b(?:(?:DOES|DO|DID|IS|ARE|WILL|CAN|HAS|HAVE)\b.{0,30}\b(?:CLIENTS?|CUSTOMERS?|BUYERS?|TENANTS?|LEADS?|ENQUIRY|ENQUIRIES|INQUIRY|INQUIRIES|TRAFFIC|VISITORS?)\b|(?:IS|DOES)\b.{0,20}\b(?:IT|THIS|THE APP|THE SITE|THE WEBSITE|MAKAUG|YOUR APP|YOUR SITE)\b.{0,15}\b(?:WORK|WORKING|WORKS|REAL|LEGIT|GENUINE|EFFECTIVE)\b|IF IT S WORKING|IF IT IS WORKING|IF IT WORKS)\b/;
 
@@ -113,6 +118,7 @@ function replyKind(text = '') {
   const t = normalise(raw);
   if (!t) return '';
   if (t.length <= 80 && THANKS.test(t)) return 'thanks';
+  if (t.length <= 60 && PRAISE.test(t)) return 'praise';
   if (t.length <= 40 && (ACK.test(t) || REACTION.test(t))) return 'ack';
   if (t.length > 400) return '';
   if (DELETE_ME.test(t)) return 'delete';
@@ -174,6 +180,14 @@ function thanksReply({ first = '', role = '', lastSent = '' } = {}) {
     return `You're welcome${hi(first)}. You're always welcome back — just message us here.`;
   }
   return `You're welcome${hi(first)}! 🙌`;
+}
+
+/** Praise of what we sent. The Morning Brief gets a thank-you; anything else needs nothing back. */
+function praiseReply({ first = '', role = '', lastSent = '' } = {}) {
+  if (role === 'agent' && /Morning Brief|Afternoon Brief/i.test(lastSent)) {
+    return `Glad it helps${hi(first)}! 🙌 The Morning Brief comes every day at 7am.`;
+  }
+  return '';
 }
 
 /** "Thanks" in the middle of a flow: answer it, and leave them where they were. */
@@ -320,6 +334,7 @@ module.exports = {
   propertyIdIn,
   linkLabel,
   thanksReply,
+  praiseReply,
   thanksMidFlowReply,
   proofReply,
   correctionReply,
