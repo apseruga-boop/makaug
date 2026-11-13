@@ -97,6 +97,104 @@ function getReplyDedupeWindowSeconds() {
   );
 }
 
+/**
+ * The same words to the same person, on purpose.
+ *
+ * The WAHA bridge never sends anyone the same words twice within two minutes
+ * (rule 4, DUPLICATE_BODY_WINDOW_MS, in services/waha-bridge/server.js on the
+ * waha-bridge branch). It drops the second copy and tells us it was sent. That
+ * guard is for one reply queued twice. It cannot tell when the person has
+ * asked again, and then they hear nothing.
+ *
+ * 13 Nov 2026, 05:16 to 05:19 UK time. Arthur opened Agent 007, chose 3 and
+ * sent the agent video to Sulait. Then he sent "Agent 007", "Complete" and
+ * "Agent 007". Each was answered with the menu he had been sent a minute
+ * before. The bridge dropped the first two as repeats, and this queue's own
+ * 15-second guard folded the third into the second. Nothing reached him, so
+ * the bot looked dead.
+ *
+ * So when somebody's new message is answered with words they were sent in the
+ * last few minutes, the answer opens by saying it is a repeat. That makes it a
+ * different message, and the bridge sends it. Two cases are left alone, so
+ * the guards still do their job:
+ * - the same inbound message handled twice;
+ * - a burst, where the same answer went out moments ago (one is enough).
+ */
+const REPEAT_LEADS = Object.freeze({
+  en: Object.freeze(['🔁 Here it is again:', '🔁 Once more:']),
+  lg: Object.freeze(['🔁 Nate:', '🔁 Omulundi omulala:']),
+  sw: Object.freeze(['🔁 Hii hapa tena:', '🔁 Kwa mara nyingine:'])
+});
+const ALL_REPEAT_LEADS = Object.freeze([...new Set(Object.values(REPEAT_LEADS).flat())]);
+
+function repeatLeadsFor(language = 'en') {
+  return REPEAT_LEADS[String(language || '').trim().toLowerCase()] || REPEAT_LEADS.en;
+}
+
+/** How far back the bridge might still hold the words: its two minutes, with room to spare. */
+function getRepeatWindowSeconds() {
+  return Math.min(1800, Math.max(60, Number(process.env.WHATSAPP_WEB_BRIDGE_REPEAT_WINDOW_SECONDS || 300)));
+}
+
+/** The same answer this recently is a burst: the first copy is the answer. */
+function getRepeatBurstSeconds() {
+  return Math.min(120, Math.max(5, Number(process.env.WHATSAPP_WEB_BRIDGE_REPEAT_BURST_SECONDS || 20)));
+}
+
+/** What the bridge compares: the words with the spacing squeezed, and the media. */
+function bridgeBodyFingerprint(text, mediaUrl = '') {
+  return `${String(text || '').replace(/\s+/g, ' ').trim()}|${String(mediaUrl || '').trim()}`;
+}
+
+function withoutRepeatLead(text) {
+  const body = String(text || '');
+  const lead = ALL_REPEAT_LEADS.find((candidate) => body.startsWith(`${candidate}\n\n`));
+  return lead ? body.slice(lead.length + 2) : body;
+}
+
+/**
+ * The reply as it should be queued: unchanged, or opened with a repeat line
+ * the person has not been sent in the window. `language` may be a function,
+ * so the session is only read when a repeat is found.
+ */
+async function repeatSafeReplyText({ recipient, text, mediaUrl = '', inboundMessageId = null, language = 'en', now = new Date() } = {}) {
+  const body = String(text || '').trim();
+  const userPhone = normalizeBridgeRecipient(recipient);
+  if (!body || !userPhone) return body;
+  const rows = (await db.query(
+    `SELECT payload->>'text' AS text,
+            COALESCE(payload->>'media_url', '') AS media_url,
+            COALESCE(metadata->>'inbound_message_id', '') AS inbound_message_id,
+            created_at
+       FROM outbound_message_queue
+      WHERE user_phone = $1
+        AND channel = 'whatsapp'
+        AND status IN ('pending', 'retry', 'sent')
+        AND COALESCE(metadata->>'duplicate_suppressed', 'false') <> 'true'
+        -- The index bound (user_phone, created_at); a reply queued yesterday
+        -- for this morning still counts from when it went.
+        AND created_at >= $2::timestamptz - INTERVAL '2 days'
+        AND COALESCE(sent_at, created_at) >= $2::timestamptz - ($3 || ' seconds')::interval
+      ORDER BY created_at DESC
+      LIMIT 50`,
+    [userPhone, now.toISOString(), String(getRepeatWindowSeconds())]
+  )).rows || [];
+  const wanted = bridgeBodyFingerprint(body, mediaUrl);
+  const same = rows.filter((row) => bridgeBodyFingerprint(withoutRepeatLead(row.text), row.media_url) === wanted);
+  if (!same.length) return body;
+  if (inboundMessageId && same.some((row) => row.inbound_message_id === String(inboundMessageId))) return body;
+  const newest = Math.max(...same.map((row) => new Date(row.created_at).getTime()));
+  if (now.getTime() - newest < getRepeatBurstSeconds() * 1000) return body;
+  const taken = new Set(rows.map((row) => bridgeBodyFingerprint(row.text, row.media_url)));
+  const lang = typeof language === 'function' ? await Promise.resolve(language()).catch(() => 'en') : language;
+  for (const lead of repeatLeadsFor(lang)) {
+    const candidate = `${lead}\n\n${body}`;
+    if (!taken.has(bridgeBodyFingerprint(candidate, mediaUrl))) return candidate;
+  }
+  // Asked a third time inside the window: the bridge may hold this one back.
+  return body;
+}
+
 function getBridgeClaimWindowSeconds() {
   return Math.min(
     180,
@@ -511,6 +609,9 @@ module.exports = {
   markWhatsappWebBridgeMessageSent,
   normalizeBridgeRecipient,
   queueWhatsappWebBridgeMessage,
+  repeatSafeReplyText,
+  repeatLeadsFor,
+  REPEAT_LEADS,
   claimWhatsappWebBridgeMessages,
   upsertWhatsappWebBridgeClient,
   whatsappChatKind

@@ -10141,6 +10141,18 @@ async function handleEmployeeWhatsappIntake({
   }
 
   if (currentStep === 'employee_intake_role') {
+    // COMPLETE at the first question, with nothing loaded: there is nothing to
+    // complete, so Agent 007 closes instead of asking the question again.
+    // 13 Nov 2026: Arthur typed it after sending the agent video to Sulait.
+    if (isEmployeeIntakeComplete(cleanBody) && !(Array.isArray(data.property_ids) && data.property_ids.length)) {
+      employeeBatchSummaryLastSent.delete(String(phone || ''));
+      await replaceEmployeeSession(phone, 'main_menu', {});
+      return {
+        handled: true,
+        nextStep: 'main_menu',
+        message: 'Nothing was loaded, so there is nothing to complete. Agent 007 is closed.\n\nStart again any time with *Agent 007*.'
+      };
+    }
     const role = parseEmployeeRole(cleanBody);
     if (!role) return { handled: true, nextStep: currentStep, message: employeeRolePrompt(agentMonthlyFeeLabel()) };
     data.employee_role = role;
@@ -15091,6 +15103,21 @@ async function queueWhatsappWebBridgeAutoReply({
       mediaType = mediaUrl ? 'image' : 'text';
     }
   }
+
+  // Words this person was sent a minute ago would be dropped by the bridge as
+  // a repeat, and they would hear nothing. When they have asked again, the
+  // answer says it is a repeat instead (13 Nov 2026, Agent 007).
+  text = await whatsappWebBridgeService.repeatSafeReplyText({
+    recipient: phone,
+    text,
+    mediaUrl,
+    inboundMessageId,
+    language: () => db.query('SELECT language FROM whatsapp_sessions WHERE phone = $1 LIMIT 1', [phone])
+      .then((result) => result.rows[0]?.language || 'en')
+  }).catch((error) => {
+    logger.warn('Repeat check failed; the reply is queued as it was:', error.message || String(error));
+    return text;
+  });
 
   return queueWhatsappWebBridgeMessage({
     recipient: phone,
@@ -23178,5 +23205,6 @@ module.exports.__test = {
   inferWhatsappCallInquiry,
   handleWhatsappCallEvent,
   handleEmployeeWhatsappIntake,
-  prepareEmployeeOrderedBatchReplay
+  prepareEmployeeOrderedBatchReplay,
+  queueWhatsappWebBridgeAutoReply
 };
