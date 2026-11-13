@@ -20,6 +20,7 @@
 const crypto = require('crypto');
 const logger = require('../config/logger');
 const { bookingSay, replyWindow, siteLang } = require('./bookingMessageText');
+const { listingCarriesBedrooms } = require('./publicListingCopy');
 
 const INTENTS = Object.freeze(['viewing', 'callback', 'question', 'offer']);
 const STATUSES = Object.freeze(['pending', 'confirmed', 'reschedule', 'declined', 'no_response', 'escalated', 'completed']);
@@ -381,7 +382,7 @@ function propertyLabel(listing = {}) {
   const beds = Number(listing.bedrooms);
   const kind = text(listing.property_type || listing.listing_type || 'property').toLowerCase();
   const place = text(listing.area || listing.district);
-  const head = Number.isFinite(beds) && beds > 0 ? `${beds}-bed ${kind}` : text(listing.title, kind);
+  const head = Number.isFinite(beds) && beds > 0 && listingCarriesBedrooms(listing) ? `${beds}-bed ${kind}` : text(listing.title, kind);
   return place && !head.toLowerCase().includes(place.toLowerCase()) ? `${head}, ${place}` : head;
 }
 

@@ -285,7 +285,7 @@ function buildThirdPartyPublicTitle(property = {}, extra = {}) {
   const area = publicAreaLabelFor(property, extra);
   const type = thirdPartyTypeLabel(property);
   const beds = Number(property.bedrooms);
-  const roomLabel = Number.isFinite(beds) && beds > 0 && type !== 'land' ? `${beds}-bed ` : '';
+  const roomLabel = Number.isFinite(beds) && beds > 0 && type !== 'land' && listingCarriesBedrooms(property) ? `${beds}-bed ` : '';
   const propertyType = stripTransactionFromPublicPropertyType(humanPropertyTypeLabel(property.property_type || ''))
     || (type === 'commercial property' || type === 'student accommodation' ? '' : inferredResidentialType(property));
   if (type === 'land') {
@@ -442,6 +442,24 @@ function cutTitleAtWord(value = '', max = TITLE_MAX_CHARS) {
   return text;
 }
 
+// Bedrooms belong in a title only for places people live in. Land, plots,
+// offices, shops and warehouses never get "6-bed" (Benard Gaita's 6-acre
+// warehouse in MK-20261111-9D6051 showed "6-bed commercial land", 13 Nov 2026).
+// A stray bedroom count on such a row is a data problem to review, not a title.
+const NON_RESIDENTIAL_TYPE_KEYS = new Set(['commercial_land', 'office', 'shop_retail', 'warehouse_industrial', 'land', 'plot', 'plots']);
+const NON_RESIDENTIAL_TYPE_WORDS = /\b(?:land|plots?|warehouses?|industrial|offices?|shops?|retail|godowns?|factory|factories|storage)\b/;
+const BEDROOM_TYPE_WORDS = /\b(?:house|home|apartments?|flats?|bungalow|villa|mansion|maisonette|duplex|townhouse|hostel|hotel|guest|lodge|residential building|complex|mixed)\b/;
+function listingCarriesBedrooms(row = {}) {
+  const listingType = String(row.listing_type || row.category || row.type || '').toLowerCase().trim();
+  if (listingType === 'land') return false;
+  const rawType = String(row.property_type || row.subtype || '').toLowerCase().trim();
+  const typeKey = rawType.replace(/[\s/.-]+/g, '_');
+  if (NON_RESIDENTIAL_TYPE_KEYS.has(typeKey)) return false;
+  const words = rawType.replace(/_/g, ' ');
+  if (NON_RESIDENTIAL_TYPE_WORDS.test(words) && !BEDROOM_TYPE_WORDS.test(words)) return false;
+  return true;
+}
+
 function factualListingTitle(row = {}) {
   const listingType = String(row.listing_type || row.category || '').toLowerCase();
   const typeKey = String(row.property_type || '').toLowerCase();
@@ -454,7 +472,7 @@ function factualListingTitle(row = {}) {
     || (listingType !== 'commercial' && listingType !== 'student' && listingType !== 'students' ? inferredResidentialType(row) : '')
     || (listingType === 'commercial' ? 'Commercial property' : (listingType === 'student' || listingType === 'students') ? 'Student room' : 'Property'));
   const beds = Number(row.bedrooms);
-  const bedPrefix = !isLand && Number.isFinite(beds) && beds > 0 ? `${beds}-bed ` : '';
+  const bedPrefix = !isLand && listingCarriesBedrooms(row) && Number.isFinite(beds) && beds > 0 ? `${beds}-bed ` : '';
   const area = String(row.area || row.district || '').trim() || ACTIVE_COUNTRY_NAME;
   const type = bedPrefix ? typeLabel.toLowerCase() : typeLabel;
   const title = `${bedPrefix}${type} for ${forRent ? 'rent' : 'sale'} in ${area}`;
@@ -499,6 +517,12 @@ function cleanListingTitle(row = {}, options = {}) {
   const allowTemplate = options.templateFallback !== false;
   const original = String(row.title || '').replace(/\s+/g, ' ').trim();
   const fallback = () => (allowTemplate ? factualListingTitle(row) : stripTitleNoise(original));
+  // A title typed by staff or the King (Manage → Edit, Preview & edit) is the
+  // public title, unless it contradicts the listing's facts.
+  if (allowTemplate && copyReviewState(row, row.extra_fields).staffTitle) {
+    const typed = collapseDuplicatePublicTransaction(sanitizeStaffCopy(original));
+    if (typed && !publicListingTitleContradictsFacts(row, typed)) return typed;
+  }
   if (publicListingTitleContradictsFacts(row, original)) return fallback();
   // Stored enums in titles ("shop_retail in Kampala") read as labels.
   const humanised = original.replace(/\b[a-z]+(?:_[a-z]+)+\b/gi, (word) => humanPropertyTypeLabel(word.toLowerCase()));
@@ -710,6 +734,7 @@ module.exports = {
   publicContactLabelFor,
   cleanListingTitle,
   factualListingTitle,
+  listingCarriesBedrooms,
   TITLE_MAX_CHARS,
   LISTING_COPY_EXTRA_KEYS,
   listingCopyExtraSql,

@@ -8,7 +8,7 @@ const path = require('node:path');
 const net = require('node:net');
 const { execFileSync } = require('node:child_process');
 const { Client } = require('pg');
-const { cleanListingTitle } = require('../services/publicListingCopy');
+const { cleanListingTitle, listingCarriesBedrooms } = require('../services/publicListingCopy');
 
 const MIGRATION = path.join(__dirname, '../db/migrations/172_correct_listings_skipped_by_170.sql');
 const PREVIOUS = path.join(__dirname, '../db/migrations/170_correct_remaining_mislabelled_listings.sql');
@@ -115,7 +115,13 @@ test('listing correction 172 is the 18 rows migration 170 skipped', () => {
       price_period: spec.expect.price_period,
       area: stored.area
     });
-    assert.equal(shown.toLowerCase(), spec.expect.title.toLowerCase(), spec.id);
+    // 13 Nov 2026: land, offices, shops and warehouses never carry "N-bed" in
+    // a title (MK-20261111-9D6051 showed "6-bed commercial land"). Rows
+    // still typed commercial_land have no bed count in the title now.
+    const expectedTitle = !listingCarriesBedrooms({ listing_type: spec.expect.listing_type, property_type: stored.property_type })
+      ? spec.expect.title.replace(/^\d+-bed\s+/i, '')
+      : spec.expect.title;
+    assert.equal(shown.toLowerCase(), expectedTitle.toLowerCase(), spec.id);
     assert.notEqual(stored.title.toLowerCase().replace(/\s+/g, ' ').trim(), spec.expect.title.toLowerCase(), spec.id);
   }
   const ntinda = specs.find((spec) => spec.id === NTINDA);

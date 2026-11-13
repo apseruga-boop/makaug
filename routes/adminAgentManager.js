@@ -543,6 +543,8 @@ function registerAgentManagerRoutes(router, deps) {
 
       const listings = (await db.query(
         `SELECT p.id, p.title, p.listing_type, p.status, p.availability_status, p.district, p.area, p.price,
+                p.description, p.property_type, p.transaction_type, p.bedrooms, p.bathrooms,
+                p.land_size_value, p.land_size_unit, p.extra_fields->>'city' AS city,
                 p.price_period, p.created_at, p.approved_at, p.updated_at, p.sold_at, p.expires_at, p.inquiry_reference,
                 p.extra_fields->>'agent_manager_previous_status' AS previous_status,
                 p.extra_fields->>'agent_manager_last_action' AS last_staff_action,
@@ -931,6 +933,64 @@ function registerAgentManagerRoutes(router, deps) {
       return next(error);
     } finally {
       client.release();
+    }
+  });
+
+  // King → Agents → Manage → Edit (Arthur, 13 Nov 2026: "when I click manage
+  // I want to be able to edit the listing, e.g. change the title"). It goes
+  // through the same save as staff Preview & edit (routes/staff.js
+  // updateStaffEditableListing): a live listing stays live, a typed title or
+  // description becomes the public one, and the moderation event keeps the
+  // before/after values. The admin audit log records who changed what.
+  const LISTING_EDIT_FIELDS = ['title', 'description', 'price', 'price_period', 'listing_type', 'property_type',
+    'transaction_type', 'area', 'district', 'city', 'bedrooms', 'bathrooms', 'land_size_value', 'land_size_unit'];
+  router.patch('/agent-manager/listings/:propertyId', async (req, res, next) => {
+    try {
+      if (!UUID_RE.test(String(req.params.propertyId))) return badId(res, 'listing');
+      const body = coerceBody(req.body) || {};
+      const row = (await db.query(
+        `SELECT id, agent_id, status, listing_type, property_type, moderation_stage FROM properties WHERE id = $1`,
+        [req.params.propertyId]
+      )).rows[0];
+      if (!row) return res.status(404).json({ ok: false, error: 'Listing not found' });
+      if (row.status === 'deleted') return res.status(409).json({ ok: false, error: 'This listing was deleted and cannot be changed here' });
+      const listingPatch = {};
+      LISTING_EDIT_FIELDS.forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(body, key)) listingPatch[key] = body[key];
+      });
+      if (!Object.keys(listingPatch).length) return res.status(400).json({ ok: false, error: 'Nothing to change' });
+      if (Object.prototype.hasOwnProperty.call(listingPatch, 'title') && !cleanText(listingPatch.title)) {
+        return res.status(400).json({ ok: false, error: 'The title cannot be empty' });
+      }
+      const { listingCarriesBedrooms } = require('../services/publicListingCopy');
+      const nextType = {
+        listing_type: listingPatch.listing_type || row.listing_type,
+        property_type: Object.prototype.hasOwnProperty.call(listingPatch, 'property_type') ? listingPatch.property_type : row.property_type
+      };
+      if (Number(listingPatch.bedrooms) > 0 && !listingCarriesBedrooms(nextType)) {
+        return res.status(400).json({ ok: false, code: 'bedrooms_on_non_residential', error: 'Land, plots, offices, shops and warehouses have no bedrooms. Clear Bedrooms, or change the type.' });
+      }
+      const actor = await actorOf(req);
+      if (!req.userAuth?.id && !req.staffAuth?.userId && req.adminAuth?.userId) req.userAuth = { id: req.adminAuth.userId };
+      const { updateStaffEditableListing } = require('./staff');
+      const saved = await updateStaffEditableListing(req, row.id, listingPatch, {
+        checklist: {},
+        stage: row.moderation_stage || 'in_review'
+      });
+      const changed = saved.changed_fields || [];
+      if (changed.length) {
+        await writeAudit('admin_agent_listing_edited', {
+          agent_id: row.agent_id, property_id: row.id, by: actor.label, changed_fields: changed, status_kept: row.status
+        }, actor.id);
+        try { require('./properties').clearPublicPropertiesCache('agent_manager_listing_edited'); } catch (_) { /* best effort */ }
+        onListingsChanged('agent_manager_listing_edited');
+      }
+      return res.json({ ok: true, data: { id: row.id, status: row.status, changed_fields: changed } });
+    } catch (error) {
+      if (error.status) {
+        return res.status(error.status).json({ ok: false, error: error.message, details: error.details || undefined, saved_fields: error.saved_fields || undefined });
+      }
+      return next(error);
     }
   });
 
