@@ -225,18 +225,27 @@ function looksLikePropertyCaption(value = '') {
   return false;
 }
 
+// Arthur, 13 Nov 2026: Agent 007 is for Arthur and Ronald. It was open to any
+// number that typed the code (WHATSAPP_EMPLOYEE_INTAKE_NUMBERS was never set),
+// and that morning a number that is not staff opened it and started adding an
+// agent. The environment list, when it is set, replaces these two.
+const DEFAULT_EMPLOYEE_INTAKE_NUMBERS = Object.freeze(['447757773202', '256709402189']);
+
 function employeeIntakePhoneAllowed(phone, {
   ownerAuthorized = false,
   allowlist = process.env.WHATSAPP_EMPLOYEE_INTAKE_NUMBERS || ''
 } = {}) {
   if (ownerAuthorized) return true;
   const normalizedPhone = digits(phone);
-  const allowed = String(allowlist || '')
+  if (normalizedPhone.length < 9) return false;
+  const configured = String(allowlist || '')
     .split(/[,;\r\n]+/)
     .map(digits)
     .filter((candidate) => candidate.length >= 8);
-  if (!allowed.length) return true;
-  return allowed.some((candidate) => normalizedPhone === candidate || normalizedPhone.endsWith(candidate));
+  const allowed = configured.length ? configured : DEFAULT_EMPLOYEE_INTAKE_NUMBERS;
+  return allowed.some((candidate) => normalizedPhone === candidate
+    || normalizedPhone.endsWith(candidate)
+    || normalizedPhone.slice(-9) === candidate.slice(-9));
 }
 
 function choice(value, options = {}) {
@@ -462,26 +471,55 @@ function trimFieldEdges(value = '') {
   return cleanText(value).replace(/^[\s/\\|,;:·•\-–—]+/, '').replace(/[\s/\\|,;:·•\-–—]+$/, '');
 }
 
+// "|" is what we ask for. People also write "/" ("Benard Gaita/+256…/Kampala and
+// Beyond property agency/Wakiso district", 13 Nov 2026) or one item per line.
 function splitDetails(value = '') {
   const raw = String(value || '').trim();
   const parts = raw.includes('|')
     ? raw.split('|')
-    : raw.split(/\r?\n/);
+    : (raw.includes('/') ? raw.split('/') : raw.split(/\r?\n/));
   return parts.map(trimFieldEdges).filter(Boolean);
+}
+
+/** "Wakiso district" is Wakiso. */
+function cleanDistrict(value = '') {
+  return trimFieldEdges(String(value || '').replace(/\s+district\s*$/i, ''));
+}
+
+/**
+ * The details however they were written: the phone number found wherever it
+ * is, the name before it, the district last and anything between them the
+ * company. "Benard Gaita +256… / Wakiso" (13 Nov 2026) was refused twice.
+ */
+function parseNewAgentDetailsLoose(value = '') {
+  const compact = String(value || '').trim().replace(/(\d)[\s.-]+(?=\d)/g, '$1');
+  const match = compact.match(/(?:\+?256|0)?7\d{8}(?!\d)/);
+  if (!match) return null;
+  const fullName = trimFieldEdges(compact.slice(0, match.index).replace(/[|/,;\r\n]+/g, ' ').replace(/\s+/g, ' '));
+  const rest = compact.slice(match.index + match[0].length).split(/[|/,;\r\n]+/).map(trimFieldEdges).filter(Boolean);
+  if (!fullName || !/\p{L}/u.test(fullName) || !rest.length) return null;
+  const district = cleanDistrict(rest[rest.length - 1]);
+  if (!district || !/\p{L}/u.test(district)) return null;
+  return {
+    fullName,
+    phone: match[0],
+    company: rest.length > 1 ? trimFieldEdges(rest.slice(0, -1).join(', ')) : 'Independent agent',
+    district
+  };
 }
 
 function parseNewAgentDetails(value = '') {
   const parts = splitDetails(value);
-  if (parts.length < 3 || parts.length > 4) return null;
+  if (parts.length < 3 || parts.length > 4) return parseNewAgentDetailsLoose(value);
   const [fullName = '', phone = ''] = parts;
   const company = parts.length === 4 ? parts[2] : 'Independent agent';
   const district = parts.length === 4 ? parts[3] : parts[2];
-  if (!fullName || digits(phone).length < 8 || !district) return null;
+  if (!fullName || digits(phone).length < 8 || !district) return parseNewAgentDetailsLoose(value);
   return {
     fullName: trimFieldEdges(fullName),
     phone: trimFieldEdges(phone),
     company: trimFieldEdges(company) || 'Independent agent',
-    district: trimFieldEdges(district)
+    district: cleanDistrict(district)
   };
 }
 

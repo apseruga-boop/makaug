@@ -16,10 +16,10 @@
  * the agents table, and the people who run intake are not agents. There was no
  * branch for them at all, so they fell through to the consumer script.
  *
- * The signal has to come from the session's own history. The staff allowlist
- * cannot be used: employeeIntakePhoneAllowed returns true for EVERY number when
- * WHATSAPP_EMPLOYEE_INTAKE_NUMBERS is unset, so keying off it would hand the
- * staff menu to every customer who said hello.
+ * The signal has to come from the session's own history. Until 13 Nov 2026 the
+ * staff allowlist could not be used on its own: employeeIntakePhoneAllowed
+ * returned true for EVERY number when WHATSAPP_EMPLOYEE_INTAKE_NUMBERS was unset.
+ * Since then unset means Arthur and Ronald, and both checks apply.
  */
 
 const test = require('node:test');
@@ -75,18 +75,15 @@ test('a customer saying hello is still a customer', () => {
   }
 });
 
-test('the staff allowlist is exactly the wrong signal to use', () => {
-  // Unset, it waves everybody through — which is why the check above reads the
-  // session instead.
-  assert.strictEqual(
-    employeeIntakePhoneAllowed(STRANGER, { allowlist: '' }),
-    true,
-    'if this ever gated the greeting, every customer would get the staff menu'
-  );
+test('the staff allowlist alone is not the signal: the session history still has to show it', () => {
+  // Until 13 Nov 2026 an unset list waved everybody through. Since then
+  // (Arthur: "lock to you and Ronald") unset means Arthur and Ronald only.
+  assert.strictEqual(employeeIntakePhoneAllowed(STRANGER, { allowlist: '' }), false);
+  assert.strictEqual(employeeIntakePhoneAllowed(ARTHUR, { allowlist: '' }), true);
   assert.strictEqual(
     staffIntakeGreetingReply({ phone: STRANGER, session: { session_data: {} }, cleanBody: 'Hello' }),
     '',
-    'and it does not gate the greeting'
+    'a stranger saying hello is a customer'
   );
 });
 
@@ -120,12 +117,19 @@ test('an owner phone is only an owner phone when one is configured', () => {
 test('an open session alone is not enough — they must have used the flow', () => {
   // A session exists the moment somebody types "Agent 007". Having answered who
   // the batch is for is what marks them out.
+  const RONALD = '+256709402189';
   assert.strictEqual(
-    staffIntakeGreetingReply({ phone: STRANGER, session: { session_data: { whatsapp_employee_intake: true } }, cleanBody: 'Hello' }),
+    staffIntakeGreetingReply({ phone: RONALD, session: { session_data: { whatsapp_employee_intake: true } }, cleanBody: 'Hello' }),
     ''
   );
   assert.ok(
-    staffIntakeGreetingReply({ phone: STRANGER, session: { session_data: { employee_role: 'agent' } }, cleanBody: 'Hello' })
+    staffIntakeGreetingReply({ phone: RONALD, session: { session_data: { employee_role: 'agent' } }, cleanBody: 'Hello' })
+  );
+  // 13 Nov 2026: a number that is not staff got into Agent 007 and so had the
+  // history. With Agent 007 locked to Arthur and Ronald, it gets no staff menu.
+  assert.strictEqual(
+    staffIntakeGreetingReply({ phone: STRANGER, session: { session_data: { employee_role: 'agent' } }, cleanBody: 'Hello' }),
+    ''
   );
 });
 
