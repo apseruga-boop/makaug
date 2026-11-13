@@ -6986,6 +6986,22 @@ async function prepareEmployeeOrderedBatchReplay({
   };
 }
 
+const PITCH_FOLLOW_UP_MINUTES = 15;
+
+/** Within fifteen minutes of a video going out through Agent 007, the next one can follow on. */
+function pitchFollowUpOpen(session = {}, now = Date.now()) {
+  const at = Date.parse(session?.session_data?.employee_intake_last_pitch_at || '');
+  return Number.isFinite(at) && now - at >= 0 && now - at < PITCH_FOLLOW_UP_MINUTES * 60 * 1000;
+}
+
+/** "Name | phone" and nothing else: one line, one bar, a name, then a number. */
+function isBarePitchContact(text = '') {
+  const raw = String(text || '').trim();
+  if (!raw.includes('|') || /\r?\n/.test(raw)) return false;
+  const parts = raw.split('|').map((part) => part.trim()).filter(Boolean);
+  return parts.length === 2 && /\p{L}/u.test(parts[0]) && /^[+\d][\d\s().-]{7,20}$/.test(parts[1]) && Boolean(parsePitchContact(raw));
+}
+
 function recoverInterruptedEmployeeIntakeStep(session = {}) {
   const currentStep = normalizeInput(session.current_step).toLowerCase();
   const data = session.session_data && typeof session.session_data === 'object'
@@ -9955,6 +9971,17 @@ async function handleEmployeeWhatsappIntake({
     // Starting a batch is the other way out of customer mode.
     await patchSessionData(phone, { staff_customer_mode: null, staff_customer_mode_left_at: new Date().toISOString() });
   }
+  // Straight after a video goes out, the next "Name | phone" is the next
+  // prospect: no Agent 007 and no 3 in between. 13 Nov 2026, 06:49 to 06:54:
+  // Arthur sent the video to five people, three messages each. Only the bare
+  // "Name | phone" shape, only within fifteen minutes of the last video, only
+  // from a number allowed to use Agent 007, and never in customer mode.
+  if (!triggered && !active && !isStaffCustomerMode(session)
+    && pitchFollowUpOpen(session) && isBarePitchContact(cleanBody)
+    && employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) })) {
+    currentStep = 'employee_pitch_contact';
+    active = true;
+  }
   if (!triggered && !active) {
     // Staff switching hats: STAFF / CUSTOMER. In customer mode nothing below
     // applies; the message belongs to the customer script.
@@ -10257,7 +10284,8 @@ async function handleEmployeeWhatsappIntake({
         + `They have the joining film: what we do, who sees their listings, how listing works and the plan (${agentMonthlyFeeLabel()} a month).\n\n`
         + 'They have been asked to reply *AGENT* if they want to join.\n\n'
         + 'When they say yes, reply *Agent 007* and choose *1* to register them.\n\n'
-        + 'I am keeping them on the Outreach list until they sign up.'
+        + 'I am keeping them on the Outreach list until they sign up.\n\n'
+        + `➡️ *Next one?* Send their *Name | phone number* in the next ${PITCH_FOLLOW_UP_MINUTES} minutes and the video goes straight out. No need for Agent 007 and 3.`
     };
   }
 
