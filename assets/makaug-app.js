@@ -18438,13 +18438,87 @@ function adminAgentManagerListingActions(l, agentId) {
   const parts = [];
   if (["hidden", "sold", "archived"].includes(l.status)) parts.push(btn("put_back", "Put back", "bg-green-700 text-white"));
   if (!["hidden", "archived"].includes(l.status)) parts.push(btn("take_down", "Take down", "border border-yellow-300 text-yellow-800 bg-yellow-50"));
+  parts.push(`<button type="button" data-listing-action="edit" class="rounded-lg px-2 py-1 text-[11px] font-bold border border-green-300 text-green-800 bg-green-50" onclick="adminAgentManagerToggleListingEdit('${id}')">Edit</button>`);
   if (l.status !== "sold") {
     const rent = /rent|short/.test(String(l.listing_type || ""));
     parts.push(rent ? btn("mark_let", "Mark let", "border border-blue-200 text-blue-800 bg-blue-50") : btn("mark_sold", "Mark sold", "border border-blue-200 text-blue-800 bg-blue-50"));
   }
   const others = (ADMIN_AGENT_MANAGER_STATE.rows || []).filter((a) => a.id !== agentId && !a.removed_at);
   parts.push(`<span class="inline-flex items-center gap-1"><select data-move-target="${id}" class="rounded-lg border border-gray-200 px-1 py-1 text-[11px] max-w-[130px]"><option value="">Move to…</option>${others.map((a) => `<option value="${adminAttr(a.id)}">${adminEscape(a.full_name)}${a.phone ? ` ·${adminEscape(String(a.phone).slice(-3))}` : ""}</option>`).join("")}</select><button type="button" class="rounded-lg border border-gray-300 px-2 py-1 text-[11px] font-bold" onclick="adminAgentManagerMoveListing('${id}')">Move</button></span>`);
-  return `<div class="flex flex-wrap gap-1">${parts.join("")}</div>`;
+  return `<div class="flex flex-wrap gap-1">${parts.join("")}</div>${adminAgentManagerListingEditForm(l)}`;
+}
+
+// King → Agents → Manage → Edit: change a listing's title, description, price,
+// type, place and rooms. Only changed fields are sent; the server saves them
+// the way staff Preview & edit does and keeps a live listing live.
+const ADMIN_AGENT_MANAGER_LISTING_TYPES = [["sale", "For sale"], ["rent", "For rent"], ["land", "Land"], ["commercial", "Commercial"], ["student", "Student"]];
+const ADMIN_AGENT_MANAGER_PRICE_PERIODS = [["once", "Total price"], ["month", "Per month"], ["year", "Per year"], ["week", "Per week"], ["night", "Per night"], ["acre", "Per acre"], ["decimal", "Per decimal"], ["plot", "Per plot"]];
+const ADMIN_AGENT_MANAGER_PROPERTY_TYPES = ["house", "apartment", "bungalow", "villa", "townhouse", "Residential Plot", "commercial_land", "office", "shop_retail", "warehouse_industrial", "hospitality", "other"];
+
+function adminAgentManagerListingEditForm(l = {}) {
+  const id = adminAttr(l.id);
+  const value = (v) => (v === null || v === undefined ? "" : String(v));
+  const field = (name, label, v, attrs = "") => `<label class="block text-[11px] font-bold text-gray-700">${label}<input name="${name}" value="${adminAttr(value(v))}" data-original="${adminAttr(value(v))}" class="mt-0.5 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm font-normal" ${attrs}></label>`;
+  const select = (name, label, v, options) => `<label class="block text-[11px] font-bold text-gray-700">${label}<select name="${name}" data-original="${adminAttr(value(v))}" class="mt-0.5 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm font-normal">${options.some(([key]) => key === value(v)) ? "" : `<option value="${adminAttr(value(v))}" selected>${adminEscape(value(v) || "—")}</option>`}${options.map(([key, text]) => `<option value="${adminAttr(key)}"${key === value(v) ? " selected" : ""}>${adminEscape(text)}</option>`).join("")}</select></label>`;
+  return `<form class="hidden mt-2 rounded-xl border border-green-200 bg-green-50/40 p-3 space-y-2" data-listing-edit="${id}" onsubmit="adminAgentManagerSaveListing(event, '${id}')">
+    ${field("title", "Title", l.title, "maxlength=\"160\" required")}
+    <label class="block text-[11px] font-bold text-gray-700">Description<textarea name="description" rows="4" data-original="${adminAttr(value(l.description))}" class="mt-0.5 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm font-normal">${adminEscape(value(l.description))}</textarea></label>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      ${field("price", "Price (UGX)", l.price, "inputmode=\"numeric\"")}
+      ${select("price_period", "Price is", l.price_period || "once", ADMIN_AGENT_MANAGER_PRICE_PERIODS)}
+      ${select("listing_type", "Listing type", l.listing_type, ADMIN_AGENT_MANAGER_LISTING_TYPES)}
+      ${field("property_type", "Property type", l.property_type, `list="admin-agent-manager-property-types"`)}
+      ${field("area", "Area / village", l.area)}
+      ${field("city", "Town", l.city)}
+      ${field("district", "District", l.district)}
+      ${field("bedrooms", "Bedrooms", l.bedrooms, "inputmode=\"numeric\" placeholder=\"none\"")}
+      ${field("bathrooms", "Bathrooms", l.bathrooms, "inputmode=\"numeric\" placeholder=\"none\"")}
+    </div>
+    <datalist id="admin-agent-manager-property-types">${ADMIN_AGENT_MANAGER_PROPERTY_TYPES.map((t) => `<option value="${adminAttr(t)}"></option>`).join("")}</datalist>
+    <p class="text-[11px] text-gray-600">A live listing stays live. Land, plots, offices, shops and warehouses have no bedrooms. Every change is logged with who made it.</p>
+    <p class="text-xs text-red-700 hidden" data-listing-edit-error></p>
+    <div class="flex gap-2">
+      <button type="submit" class="rounded-lg bg-green-700 px-3 py-1.5 text-xs font-bold text-white">Save changes</button>
+      <button type="button" class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-bold" onclick="adminAgentManagerToggleListingEdit('${id}', false)">Cancel</button>
+    </div>
+  </form>`;
+}
+
+function adminAgentManagerToggleListingEdit(propertyId, open) {
+  const form = document.querySelector(`[data-listing-edit="${CSS.escape(propertyId)}"]`);
+  if (!form) return;
+  const show = open === undefined ? form.classList.contains("hidden") : open;
+  form.classList.toggle("hidden", !show);
+  if (show) form.querySelector("[name=title]")?.focus();
+}
+
+async function adminAgentManagerSaveListing(event, propertyId) {
+  event?.preventDefault?.();
+  const form = event?.currentTarget || document.querySelector(`[data-listing-edit="${CSS.escape(propertyId)}"]`);
+  if (!form) return;
+  const errorEl = form.querySelector("[data-listing-edit-error]");
+  const body = {};
+  form.querySelectorAll("[name][data-original]").forEach((input) => {
+    const next = String(input.value || "").trim();
+    if (next !== String(input.dataset.original || "").trim()) body[input.name] = next === "" ? null : next;
+  });
+  if (!Object.keys(body).length) { toast("Nothing changed."); return; }
+  if (Object.prototype.hasOwnProperty.call(body, "title") && !body.title) {
+    errorEl.textContent = "The title cannot be empty.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+  const submit = form.querySelector("[type=submit]");
+  if (submit) submit.disabled = true;
+  try {
+    await apiRequest(`/api/admin/agent-manager/listings/${encodeURIComponent(propertyId)}`, { method: "PATCH", headers: adminAuthHeaders(), body });
+    await adminAgentManagerRefreshOpen("Listing updated.");
+  } catch (error) {
+    errorEl.textContent = `Not saved: ${error?.message || "error"}`;
+    errorEl.classList.remove("hidden");
+  } finally {
+    if (submit) submit.disabled = false;
+  }
 }
 
 function adminManagerMoney(value) {
@@ -52814,7 +52888,7 @@ function socialImportSpecsHtml(p = {}) {
     addSpec("ti-file-check fas fa-file-signature", p.title_type || p.extra_fields?.title_type || publicLandTitleBadgeLabel(getLandTitleAvailabilityValue(p)));
   } else {
     if (p.subtype || p.property_type) addSpec("ti-building fas fa-building", p.subtype || p.property_type);
-    if (p.beds) addSpec("ti-bed fas fa-bed", `${p.beds} ${countLabel(p.beds, "bed", "beds")}`);
+    if (p.beds && listingShowsBedrooms(p)) addSpec("ti-bed fas fa-bed", `${p.beds} ${countLabel(p.beds, "bed", "beds")}`);
     if (p.baths) addSpec("ti-bath fas fa-bath", `${p.baths} ${countLabel(p.baths, "bath", "baths")}`);
     addSpec("ti-ruler-2 fas fa-ruler-combined", p.size || p.extra_fields?.size_raw || p.extra_fields?.floor_area_label);
   }
@@ -53728,7 +53802,7 @@ function getCanonicalEnglishPropertyTitle(property = {}) {
     : /house|home|bungalow|villa|mansion|maisonette|duplex|townhouse/.test(rawKind) ? "house"
       : /hostel/.test(rawKind) ? "hostel"
         : "property";
-  const bedPrefix = Number.isFinite(beds) && beds > 0 ? `${beds}-bed ` : "";
+  const bedPrefix = Number.isFinite(beds) && beds > 0 && listingShowsBedrooms(property) ? `${beds}-bed ` : "";
   if (normalizedType === "land") {
     return /rent|lease|month/.test(transaction) ? `Land for rent in ${location}` : `Land for sale in ${location}`;
   }
@@ -53737,6 +53811,20 @@ function getCanonicalEnglishPropertyTitle(property = {}) {
   if (normalizedType === "rent") return `${bedPrefix}${kindNoun} for rent in ${location}`;
   if (normalizedType === "sale") return `${bedPrefix}${kindNoun} for sale in ${location}`;
   return `${bedPrefix}${kindNoun} in ${location}`;
+}
+
+// Same rule as services/publicListingCopy.js listingCarriesBedrooms: land,
+// plots, offices, shops and warehouses never show "6-bed" in a title or a
+// "6 beds" chip on a card (MK-20261111-9D6051, 13 Nov 2026).
+function listingShowsBedrooms(property = {}) {
+  const listingType = String(property?.type || property?.listing_type || property?.category || "").toLowerCase().trim();
+  if (listingType === "land") return false;
+  const rawType = String(property?.subtype || property?.property_type || "").toLowerCase().trim();
+  const typeKey = rawType.replace(/[\s/.-]+/g, "_");
+  if (["commercial_land", "office", "shop_retail", "warehouse_industrial", "land", "plot", "plots"].includes(typeKey)) return false;
+  const words = rawType.replace(/_/g, " ");
+  return !(/\b(?:land|plots?|warehouses?|industrial|offices?|shops?|retail|godowns?|factory|factories|storage)\b/.test(words)
+    && !/\b(?:house|home|apartments?|flats?|bungalow|villa|mansion|maisonette|duplex|townhouse|hostel|hotel|guest|lodge|residential building|complex|mixed)\b/.test(words));
 }
 
 function listingIsLandOrPlotForTitle(property = {}) {
@@ -53772,7 +53860,7 @@ function generatedTypeHeadingForTitle(property = {}) {
   const location = getPropertyLocationDisplay(property) || [property?.area, property?.district].filter(Boolean).join(", ");
   const noun = publicTypeNounForTitle(property) || (listingType === "land" ? "Land" : "Property");
   const beds = Number(property?.beds ?? property?.bedrooms);
-  const bedPrefix = !listingIsLandOrPlotForTitle(property) && Number.isFinite(beds) && beds > 0 ? `${beds}bdrm ` : "";
+  const bedPrefix = !listingIsLandOrPlotForTitle(property) && listingShowsBedrooms(property) && Number.isFinite(beds) && beds > 0 ? `${beds}bdrm ` : "";
   const intent = listingType === "rent" ? " for Rent" : (listingType === "sale" || listingType === "land" ? " for Sale" : "");
   return `${bedPrefix}${noun}${intent}${location ? ` in ${location}` : ""}`.trim();
 }
@@ -53793,7 +53881,7 @@ function getLocalizedPropertyTitle(property = {}) {
   const normalizedType = normalizeType(property?.type || property?.listing_type || property?.category || "");
   const location = getPropertyLocationDisplay(property) || [property?.area, property?.district].filter(Boolean).join(", ") || translateListingLabel("Uganda");
   const beds = Number(property?.beds ?? property?.bedrooms);
-  const bedPrefix = Number.isFinite(beds) && beds > 0 && normalizedType !== "land" ? `${beds}-${translateListingLabel("bed")} ` : "";
+  const bedPrefix = Number.isFinite(beds) && beds > 0 && normalizedType !== "land" && listingShowsBedrooms(property) ? `${beds}-${translateListingLabel("bed")} ` : "";
   const propertyType = stripTransactionFromPropertyType(
     property?.subtype || property?.property_type || (normalizedType === "land" ? "Land" : "Property")
   ) || (normalizedType === "land" ? "Land" : "Property");
@@ -54626,7 +54714,7 @@ function studentCardFooterText(p = {}) {
         ${widenedLocationHtml}
         ${nearDistance ? `<p class="text-xs font-semibold ${theme.accentText} mt-1"><i class="fas fa-location-arrow mr-1"></i>${nearDistance}</p>` : ""}
         <div class="mt-2 text-sm text-gray-500 flex gap-3 flex-wrap">
-          ${p.beds ? `<span><i class="fas fa-bed ${theme.iconText}"></i> ${p.beds} ${countLabel(p.beds, "bed", "beds")}</span>` : ""}
+          ${p.beds && listingShowsBedrooms(p) ? `<span><i class="fas fa-bed ${theme.iconText}"></i> ${p.beds} ${countLabel(p.beds, "bed", "beds")}</span>` : ""}
           ${p.baths ? `<span><i class="fas fa-bath ${theme.iconText}"></i> ${p.baths} ${countLabel(p.baths, "bath", "baths")}</span>` : ""}
           ${p.size ? `<span><i class="fas fa-vector-square ${theme.iconText}"></i> ${p.size}</span>` : ""}
         </div>

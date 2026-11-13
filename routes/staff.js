@@ -6392,4 +6392,6 @@ router.get('/video-caption-conflicts', async (req, res, next) => {
 });
 
 module.exports = router;
+// King → Agents → Manage → Edit reuses the staff live-edit save (routes/adminAgentManager.js).
+module.exports.updateStaffEditableListing = updateStaffEditableListing;
 module.exports._test = { staffBulkDuplicateMatch, buildApprovedDuplicateIndex, staffPossibleDuplicateOf, normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin, updateStaffEditableListing, persistStaffReviewSafeFields, loadStaffPropertyPreview, liveEditSnapshot, staffLocationWarnings, staffLocationSoftWarnings, staffWeakEvidenceDistricts, staffFastSourceSummary, stripRoadNamePhrases };

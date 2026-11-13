@@ -1,5 +1,6 @@
 const { toPrivateIdentityRef } = require('../services/agentIdentityStorageService');
 const express = require('express');
+const { cleanListingTitle, buildThirdPartyPublicTitle, isFoundOnlinePublicRow } = require('../services/publicListingCopy');
 const jwt = require('jsonwebtoken');
 
 const db = require('../config/database');
@@ -1319,11 +1320,26 @@ router.post('/:id/bookings', agentProfileEnquiryLimiter, leadHoneypot, async (re
   }
 });
 
+// The agent page shows the same title as the property page. It used to send
+// the stored title ("Commercial property in Transformer") while the property
+// page built its own ("6-bed commercial land for sale in Transformer"), so the
+// listing open on screen did not look like any card on the agent's page.
+function agentProfileListingTitle(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  try {
+    const title = isFoundOnlinePublicRow(row, extra) ? buildThirdPartyPublicTitle(row, extra) : cleanListingTitle(row);
+    return title || row.title;
+  } catch (_) {
+    return row.title;
+  }
+}
+
 function mapAgentProfileListings(rows) {
   return (Array.isArray(rows) ? rows : []).map((row) => {
     const view = availabilityView(row);
     return {
       ...publicAgentListingPayload(row),
+      title: agentProfileListingTitle(row),
       availability_label: view.label,
       availability_tone: view.tone
     };
