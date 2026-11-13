@@ -2980,6 +2980,17 @@ function scheduleStartupDataRepairs() {
     } catch (error) {
       logger.warn('Moderation notes restore 220 skipped:', error.message || String(error));
     }
+    // Benard Gaita's Mukono listing and its duplicate (Arthur, 13 Nov
+    // 2026). Migration 224 only creates the backup table.
+    try {
+      const { runBenardMukonoFix224 } = require('./scripts/run-benard-mukono-fix-224');
+      const benardFix = await runBenardMukonoFix224(db, { logger });
+      if (benardFix && !benardFix.skipped && (benardFix.updated || benardFix.stopped_early)) {
+        logger.info('Benard Mukono fix 224 finished a pass', benardFix);
+      }
+    } catch (error) {
+      logger.warn('Benard Mukono fix 224 skipped:', error.message || String(error));
+    }
   }, staggeredBootDelay('startup_data_repairs'));
   timer.unref?.();
 }

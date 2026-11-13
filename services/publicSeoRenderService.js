@@ -36,7 +36,8 @@ const {
   listingCopyExtraSql,
   publicListingTransaction,
   publicListingPricePeriod,
-  publicListingTitleContradictsFacts
+  publicListingTitleContradictsFacts,
+  listingCarriesBedrooms
 } = require('./publicListingCopy');
 const { publicOrganizationNode } = require('./publicOrganizationSchema');
 const { shareImagePath, shareCardAlt, propertyShareRevision } = require('./shareCardService');
@@ -752,7 +753,8 @@ function publicTitleContradictsListingType(listing = {}) {
 function generatedTypeHeading(listing = {}) {
   const transaction = publicListingTransaction(listing);
   const type = publicTypeNoun(listing);
-  const bedrooms = !listingIsLandOrPlot(listing) && Number(listing.bedrooms || 0) > 0
+  // Land, plots, offices, shops and warehouses never get "6bdrm" (MK-20261111-9D6051).
+  const bedrooms = !listingIsLandOrPlot(listing) && listingCarriesBedrooms(listing) && Number(listing.bedrooms || 0) > 0
     ? `${Number(listing.bedrooms)}bdrm `
     : '';
   const intent = transaction === 'rent' ? ' for Rent' : transaction === 'sale' ? ' for Sale' : '';
