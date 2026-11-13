@@ -257,7 +257,18 @@ function listingEnquiryNotFoundReply(reference = '') {
   ].filter(Boolean).join('\n');
 }
 
+/**
+ * Whether a reply is a listing enquiry answer: who holds the listing and the
+ * safety steps. 13 Nov 2026: one went out as a bare property card, because a
+ * reply with one property link is turned into the card, and the card dropped
+ * all of it.
+ */
+function isListingEnquiryReply(text = '') {
+  return String(text || '').includes(listingSafetySteps()[0]);
+}
+
 module.exports = {
+  isListingEnquiryReply,
   buildListingEnquiryReply,
   listingEnquiryNotFoundReply,
   listingEnquiryOpeningMessage,

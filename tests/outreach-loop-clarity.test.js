@@ -135,7 +135,7 @@ test('Recontact records a follow-up without resending the joining film, and upda
     if (/recontacted_at = NOW\(\)/.test(sql)) {
       current = {
         ...current,
-        recontacted_at: '2026-11-12T09:00:00.000Z',
+        recontacted_at: new Date().toISOString(), // today, whatever day the suite runs
         recontacted_by: params[1],
         recontact_note: params[2] || 'Call them',
         recontact_count: 1
