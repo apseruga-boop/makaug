@@ -145,3 +145,11 @@ test('Manage rows have an Edit form that sends only changed fields', () => {
     assert.match(app, new RegExp(`name="\\$\\{name\\}"|"${name}"`), name);
   }
 });
+
+test('the server-rendered page title has no bed count for land or warehouses either', () => {
+  const seo = require('../services/publicSeoRenderService');
+  const title = seo.propertySeoTitle({ ...TRANSFORMER, price: 2300000000 });
+  assert.doesNotMatch(title, /\d+\s*(?:bdrm|-bed)/i, title);
+  const house = seo.propertySeoTitle({ title: 'x', listing_type: 'sale', property_type: 'house', bedrooms: 4, area: 'Kira', district: 'Wakiso', transaction_type: 'sale', price: 400000000 });
+  assert.match(house, /^4bdrm /, house);
+});
