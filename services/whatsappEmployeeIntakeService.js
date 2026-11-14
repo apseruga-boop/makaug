@@ -1,4 +1,5 @@
 const controlRoom = require('./agent007ControlRoom');
+const filmLanguages = require('./filmLanguageService');
 
 const EMPLOYEE_INTAKE_TRIGGER = 'Agent 007';
 
@@ -308,10 +309,20 @@ function employeePayLinkProspectPrompt(feeLabel = 'UGX 50,000') {
 function parsePitchContact(value = '') {
   const parts = splitDetails(value).map(trimFieldEdges).filter(Boolean);
   if (parts.length < 2) return null;
-  const [fullName, phone] = parts;
+  const fullName = parts[0];
+  let phone = parts[1];
+  // The film in Luganda or Swahili (14 Nov 2026): "Kato Brian | 0772123456 | Luganda",
+  // or the language straight after the number. English is what goes when nothing is said.
+  let lang = filmLanguages.filmLanguage(filmLanguages.languageWord(parts[2] || ''));
+  const tail = String(phone || '').match(/^(.*\d)\s+([A-Za-z]+)\.?$/);
+  if (tail && filmLanguages.languageWord(tail[2])) {
+    phone = tail[1];
+    if (!parts[2]) lang = filmLanguages.filmLanguage(filmLanguages.languageWord(tail[2]));
+  }
   const digits = String(phone || '').replace(/\D/g, '');
   if (!fullName || digits.length < 8) return null;
-  return { fullName, phone };
+  // No language named: the same two fields as ever, and the English film.
+  return lang ? { fullName, phone, lang } : { fullName, phone };
 }
 
 /**

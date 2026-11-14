@@ -12,7 +12,8 @@ own replies, because people who are asked to pay want to see the thing working.
 | How to post (agents) | `makaug-agent-how-to-post-v3.mp4` | An approved agent | Agent 007 → 5 → 1 |
 | How to list (owners) | `makaug-owner-how-to-list-v4.mp4` | An owner | Agent 007 → 5 → 2, and by itself when an owner replies LIST to the owner film |
 
-The paths and captions are in `EXPLAINER_VIDEOS` in `routes/whatsapp.js`.
+The paths and captions are in `EXPLAINER_VIDEOS` in `routes/whatsapp.js`. Each has a Luganda
+(`-lg.mp4`) and a Swahili (`-sw.mp4`) twin beside it; see below.
 
 ## Rendering
 
@@ -37,9 +38,44 @@ numpy).
 browser, which is the quickest way to look at a change. `engine.js` holds the
 timeline and the builders (`chat`, `page`, `convo`, `head`); `film.css` is the
 look; each file in `films/` is one film, scene by scene. Text is written in the
-film file. A Luganda or Swahili version is a copy of the film file with the
-on-screen lines translated; the assistant's replies would need capturing again
-in that language.
+film file.
+
+## Luganda and Swahili
+
+Each film has a Luganda and a Swahili twin, with `-lg` or `-sw` before `.mp4`:
+
+    node scripts/films/render.js owner-intro --lang lg     # makaug-owner-intro-v1-lg.mp4
+    node scripts/films/render.js owner-intro --lang sw --stills 12,40.5
+    node scripts/films/render.js owner-intro --texts       # the English lines, in order
+
+The words on screen are looked up in `lang/lg.js` and `lang/sw.js`: the English
+line on the left, what the film shows on the right. To change a line, change
+the right-hand side and render that film again. A line that is not in the file
+stays in English. Headlines that come out longer than the English are set
+smaller until they fit their two lines, and a block that grows pushes down the
+block under it (`fit()` in `engine.js`); look at stills of a changed scene
+before rendering.
+
+Three things are left in English on purpose:
+
+- **The chat.** It is what the assistant really sends, and the assistant
+  answers agents in English only. Its Luganda and Swahili for owners is partial
+  (`transcript.lg.js` and `transcript.sw.js` are what it said on 14 Nov 2026,
+  from `node scripts/films/capture.js lg`), so the films show the English chat
+  and say so to the staff member who sends one.
+- **The words people reply with** (LIST, AGENT, AGREE, SOLD, STATUS, SHARE,
+  HELP, REMOVE), because those are the words the assistant answers.
+- **Screenshots of makaug.com**, which are photographs of the English site.
+
+The translations were written on 14 Nov 2026 and need a read by a native
+speaker before the films are sent widely. `tests/film-languages.test.js` checks
+that every translated line keeps the markup, the reply words, the money and the
+codes of its English line.
+
+A staff member asks for a twin with one more word after the number, at Agent
+007 → 3, 4 or 5: `Sarah Nakato | 0772123456 | Luganda`. The message that goes
+with the film is then in that language too (`services/filmLanguageService.js`).
+Nothing added is English.
 
 ## What is real
 
@@ -94,4 +130,7 @@ in that language.
 ## Before a film goes out
 
 The films show a real agent's name, photo and page, a real company's listing,
-and a developer's project page. All are public on makaug.com. Ask them first.
+and a developer's project page. All are public on makaug.com. Kimuli Brian and
+John Yan of Vanta House are happy to be shown (Arthur, 14 Nov 2026). The 2-bed
+house in Seeta in the two owner films is a listing by another agency, which has
+not been asked; swap it for one of Brian's listings if that matters.

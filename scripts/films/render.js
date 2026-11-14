@@ -61,23 +61,31 @@ async function renderScene(page, scene, file) {
   if (!name) { console.error(`Which film? ${Object.keys(FILMS).join(' | ')}`); process.exit(1); }
   const film = FILMS[name];
   const flag = (f) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] : null; };
-  const build = path.join(__dirname, '.build', name);
+  // --lang lg | sw: the on-screen words from lang/<lang>.js; the file name ends -lg or -sw.
+  const lang = ['lg', 'sw'].includes(flag('--lang')) ? flag('--lang') : '';
+  const build = path.join(__dirname, '.build', lang ? `${name}-${lang}` : name);
   fs.mkdirSync(build, { recursive: true });
 
   const browser = await browserType().launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
   const page = await browser.newPage({ viewport: { width: 720, height: 1280 }, deviceScaleFactor: 1 });
   page.on('pageerror', (error) => { console.error('page error:', error.message); process.exitCode = 1; });
-  await page.goto(`file://${path.join(__dirname, 'film.html')}?film=${name}`);
+  await page.goto(`file://${path.join(__dirname, 'film.html')}?film=${name}${lang ? `&lang=${lang}` : ''}`);
   await page.evaluate(() => window.READY);
   const scenes = await page.evaluate(() => window.SCENES);
   const duration = await page.evaluate(() => window.DURATION);
 
+  if (args.includes('--texts')) {
+    // The English on-screen words, in order, for a translator.
+    console.log(JSON.stringify(await page.evaluate(() => window.TEXTS), null, 1));
+    await browser.close();
+    return;
+  }
   if (args.includes('--stills')) {
     const dir = flag('--to') || path.join(build, 'stills');
     fs.mkdirSync(dir, { recursive: true });
     for (const t of String(flag('--stills')).split(',').map(Number)) {
       await page.evaluate((x) => window.renderAt(x), t);
-      await page.screenshot({ path: path.join(dir, `${name}-${t.toFixed(2).padStart(6, '0')}.jpg`), type: 'jpeg', quality: 90 });
+      await page.screenshot({ path: path.join(dir, `${name}${lang ? `-${lang}` : ''}-${t.toFixed(2).padStart(6, '0')}.jpg`), type: 'jpeg', quality: 90 });
     }
     await browser.close();
     console.log(`stills in ${dir} (film is ${duration.toFixed(1)}s, ${scenes.length} scenes: ${scenes.map((s, i) => `${i + 1}@${s.start.toFixed(1)}`).join(' ')})`);
@@ -100,7 +108,7 @@ async function renderScene(page, scene, file) {
   run('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', picture.replace(/\.mp4$/, '.part.mp4')]);
   fs.renameSync(picture.replace(/\.mp4$/, '.part.mp4'), picture);
 
-  const out = flag('--out') || path.join(ROOT, 'assets', 'marketing', film.out);
+  const out = flag('--out') || path.join(ROOT, 'assets', 'marketing', lang ? film.out.replace(/\.mp4$/, `-${lang}.mp4`) : film.out);
   const part = out.replace(/\.mp4$/, '.part.mp4');
   if (!args.includes('--music')) {
     run('ffmpeg', ['-y', '-loglevel', 'error', '-i', picture, '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '32k', '-shortest', '-movflags', '+faststart', part]);

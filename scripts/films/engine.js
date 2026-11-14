@@ -155,6 +155,7 @@
     document.body.innerHTML = film.scenes.map((s, i) => `<section class="scene${s.dark ? ' dark' : ''}" data-i="${i}">${s.dark ? `<div class="bg${s.photo ? ' photo' : ''}">${s.photo ? `<img src="${s.photo}"${s.kb ? ` data-kb="${s.kb}"` : ''}>` : ''}</div>` : ''}<div class="sc">${s.html}</div></section>`).join('')
       + chromeHtml(false) + chromeHtml(true);
     [chromeDay, chromeNight] = document.querySelectorAll('.chrome');
+    translate();
     let at = 0;
     scenes = film.scenes.map((s, i) => {
       const el = document.querySelector(`.scene[data-i="${i}"]`);
@@ -183,6 +184,91 @@
     total = at;
     window.DURATION = total;
     window.SCENES = scenes.map((s) => ({ start: s.start, dur: s.dur }));
+  }
+
+  /**
+   * Another language. Every block of on-screen words (not the chat, which is
+   * the assistant's own) is looked up in window.L by its English, and replaced
+   * when the language file has it. window.TEXTS lists the English blocks in
+   * order, which is what render.js --texts writes out for a translator.
+   */
+  const translated = [];
+  function translate() {
+    const words = window.L || {};
+    const seen = new Set();
+    const blocks = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+    for (let el = walker.nextNode(); el; el = walker.nextNode()) {
+      if (el.closest('.b, .wa-head, .wa-input, .bar, .pagewrap, .brand, .typed, script')) continue;
+      if (el.closest('.phone') && !el.closest('.daychip')) continue;
+      if ([...blocks].some((b) => b.contains(el))) continue;
+      const hasText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+      if (!hasText) continue;
+      blocks.push(el);
+    }
+    window.TEXTS = [];
+    for (const el of blocks) {
+      const key = el.innerHTML.replace(/\s+/g, ' ').trim();
+      if (!seen.has(key)) { seen.add(key); window.TEXTS.push(key); }
+      if (!words[key]) continue;
+      translated.push({ el, en: el.innerHTML, to: words[key] });
+      el.innerHTML = words[key];
+    }
+  }
+
+  /**
+   * Once the font is in, the other language is made to sit where the English did.
+   * A headline that no longer fits its two lines is set smaller until it does, and
+   * a block that has grown pushes down whatever sat just under it, so nothing
+   * ends up on top of anything else. The English film is never touched by this.
+   */
+  function fit() {
+    if (!window.L) return;
+    const sceneEls = [...document.querySelectorAll('.scene')];
+    const stacks = sceneEls.map((sceneEl) => [...sceneEl.querySelectorAll(':scope > .sc > *')]
+      .filter((n) => getComputedStyle(n).position === 'absolute' && !n.classList.contains('proof') && !n.style.bottom));
+    const measure = () => stacks.map((items, s) => {
+      sceneEls[s].style.display = 'block';
+      const boxes = items.map((n) => ({ top: n.offsetTop, bottom: n.offsetTop + n.offsetHeight, left: n.offsetLeft, right: n.offsetLeft + n.offsetWidth }));
+      sceneEls[s].style.display = '';
+      return boxes;
+    });
+    // Where everything sat in English: the English words go back in for a moment.
+    const plain = translated.filter((t) => !t.el.querySelector('[data-in], [data-hl], [data-type], [data-keys], [data-kb], [data-dots], [data-count]'));
+    for (const t of plain) t.el.innerHTML = t.en;
+    const english = measure();
+    for (const t of plain) t.el.innerHTML = t.to;
+
+    for (const sceneEl of sceneEls) {
+      sceneEl.style.display = 'block';
+      for (const h of sceneEl.querySelectorAll('.head h2')) {
+        let size = 46;
+        while (h.scrollHeight > 108 && size > 30) { size -= 2; h.style.fontSize = `${size}px`; }
+      }
+      for (const h of sceneEl.querySelectorAll('.head .lead')) {
+        let size = 25;
+        const box = h.parentElement;
+        while (box.scrollHeight > 186 && size > 19) { size -= 1; h.style.fontSize = `${size}px`; }
+      }
+      sceneEl.style.display = '';
+    }
+
+    const now = measure();
+    stacks.forEach((items, s) => {
+      const order = items.map((n, i) => i).sort((a, b) => english[s][a].top - english[s][b].top);
+      const shift = items.map(() => 0);
+      for (const i of order) {
+        const under = english[s][i];
+        for (const j of order) {
+          const over = english[s][j];
+          if (j === i || items[j].classList.contains('head') || over.bottom > under.top) continue;
+          if (Math.min(over.right, under.right) - Math.max(over.left, under.left) <= 0) continue;
+          const need = now[s][j].bottom + shift[j] + Math.min(under.top - over.bottom, 12) - under.top;
+          if (need > shift[i]) shift[i] = need;
+        }
+        if (shift[i] > 0) items[i].style.top = `${under.top + shift[i]}px`;
+      }
+    });
   }
 
   function keyed(keys, t) {
@@ -279,6 +365,6 @@
     build();
     const wanted = Number(new URLSearchParams(location.search).get('t') || 0);
     window.renderAt(wanted);
-    window.READY = Promise.all([document.fonts.ready, ...[...document.images].map((img) => (img.complete ? img.decode().catch(() => null) : new Promise((resolve) => { img.onload = img.onerror = resolve; })))]).then(() => { window.renderAt(wanted); return true; });
+    window.READY = Promise.all([document.fonts.ready, ...[...document.images].map((img) => (img.complete ? img.decode().catch(() => null) : new Promise((resolve) => { img.onload = img.onerror = resolve; })))]).then(() => { fit(); window.renderAt(wanted); return true; });
   });
 }());
