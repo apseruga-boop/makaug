@@ -217,20 +217,22 @@ function hi(first = '') {
  * already said AGENT: they are waiting for Ronald's call, so nothing here
  * starts another flow. '' means the rest of the bot answers it.
  */
-function prospectFollowUpReply({ kind = '', interested = false, first = '', helpName = 'Ronald', fee = 50000, text = '' } = {}) {
+function prospectFollowUpReply({ kind = '', interested = false, first = '', helpName = 'Ronald', fee = 50000, text = '', passedOn = false, sentBy = '' } = {}) {
   const feeText = `UGX ${Number(fee || 50000).toLocaleString('en-US')} a month`;
   const join = `Reply *AGENT* if you'd like to join and ${helpName} will call you`;
+  // Who sent them the film: Arthur sends it too, and "Ronald sent you" was wrong then.
+  const sender = clean(sentBy, 40) || helpName;
   switch (kind) {
     case 'greeting':
       return interested
         ? `Hello${hi(first)}! 👋 ${helpName} will call you shortly to set you up as a makaug agent.`
-        : `Hello${hi(first)}! 👋 This is *makaug.com*. ${helpName} from our team sent you our short film about listing your properties with us as an agent.\n\n${join}, or ask me anything about it.`;
+        : `Hello${hi(first)}! 👋 This is *makaug.com*. ${sender} from our team sent you our short film about listing your properties with us as an agent.\n\n${join}, or ask me anything about it.`;
     case 'thanks':
       return interested
         ? `You're welcome${hi(first)}! 🙌 ${helpName} will call you shortly to set you up.`
         : `You're welcome${hi(first)}! 🙌 If you'd like to list your properties with makaug, reply *AGENT* and ${helpName} will call you to set you up.`;
     case 'who':
-      return `Hi${hi(first)}! 👋 This is *makaug.com*, Uganda's property website. ${helpName} from our team sent you that short film.\n\n`
+      return `Hi${hi(first)}! 👋 This is *makaug.com*, Uganda's property website. ${sender} from our team sent you that short film.\n\n`
         + 'Agents list their properties with us, and buyers and tenants in Uganda and abroad find them. '
         + (interested ? `${helpName} will call you shortly to set you up.` : `${join}, or ask me anything.`);
     case 'money':
@@ -240,7 +242,14 @@ function prospectFollowUpReply({ kind = '', interested = false, first = '', help
       if (!interested) return '';
       return `You're in the right place${hi(first)}. ${helpName} will call you to set up your agent page first. After that you post every property here — the photos, the area and the price — all on the one monthly plan.`;
     case 'note': {
-      if (!interested) return '';
+      if (!interested) {
+        // "Good evening brother It is a weekend Any program" (Abbaschools, 13
+        // Nov 2026, the evening after Arthur sent the film) got the property
+        // menu. Arthur and Ronald had been told what they said; they were told
+        // nothing. When we have passed it on, say so.
+        if (!passedOn) return '';
+        return `Thanks for your message${hi(first)}! 🙏 I've passed it to ${sender}, who will get back to you.\n\nIf you'd like to list your properties with makaug as an agent, reply *AGENT*.`;
+      }
       const t = accentless(text);
       const cars = CARS.test(t);
       const lines = [];

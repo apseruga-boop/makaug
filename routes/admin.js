@@ -15660,13 +15660,17 @@ router.get('/agent-broadcast/brief', async (req, res, next) => {
     const slot = cleanText(req.query?.slot) || 'morning';
     const { recipients, skipped } = await agentBrief.listRecipients(db, { excludeKeys: leadHandoff.makaugOwnNumbers() });
     const status = date ? await agentBrief.briefStatus(db, { date, slot }) : null;
+    // What was made and shipped for that date, so the 9:47pm check can finish
+    // a brief whose 4:47pm run stopped before the preview (14 Nov 2026).
+    const edition = date ? agentBrief.shippedEdition({ date, slot }) : null;
     const mask = (n) => `${String(n).slice(0, 5)}***${String(n).slice(-2)}`;
     return res.json({
       ok: true,
       data: {
         recipients: recipients.map((r) => ({ id: r.id, name: r.name, number_masked: mask(r.number) })),
         skipped: skipped.map((r) => ({ id: r.id, name: r.name, reason: r.reason })),
-        status
+        status,
+        edition
       }
     });
   } catch (error) {

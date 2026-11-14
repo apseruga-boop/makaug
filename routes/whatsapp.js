@@ -3511,9 +3511,27 @@ function ownerForwardListingType(caption = '', parsed = {}) {
   if (/\b(?:commercial|office|shop|retail|warehouse|industrial|showroom)\b/i.test(clean)) return 'commercial';
   if (/\b(?:hostel|student accommodation|campus room)\b/i.test(clean)) return 'student';
   if (/\b(?:for rent|to rent|monthly rent|per month|rent per month)\b/i.test(clean)) return 'rent';
-  if (/\b(?:for sale|selling|sale price|asking price)\b/i.test(clean)) return 'sale';
+  if (/\b(?:for sale|on sale|selling|sale price|asking price)\b/i.test(clean) || SOLD_AT_PRICE.test(clean)) return 'sale';
   return '';
 }
+
+// "Wamala, 3roomed house, sold at 28m" (Ronald, 13 Nov 2026) and Gilbert's
+// "... found in Kibwa, Nabweru, Nansana wakiso sold at 140M" the same evening:
+// agents here write the asking price as "sold at", the way others write
+// "going at". Intake asked for "sale/rent/land/commercial/student type" when
+// the caption had said it. Past tense ("has been sold at") is the news that a
+// property went, not its price; isSoldAnnouncement handles that one.
+const SOLD_AT_PRICE = /(?<!\b(?:been|was|were|got|already|just|finally|has|have|had|now)\s+)\bsold\s*(?:at|for|@)\s*(?:a\s+price\s+of\s+|only\s+)?(?:ugx|ushs?\.?|shs?\.?|usd|us\$|\$)?\s*\d/i;
+
+// Rooms or units let out one by one: "Six doubles", "Four single rooms",
+// "5 double units", "Rental on sale". What a plot is "best used for" is not.
+const RENTAL_ROOMS_WORDS = /\b(?:(?:double|single)\s+(?:rooms?|units?)|doubles|singles|rental\s+(?:rooms?|units?|houses?|blocks?)|rentals?|muzigo|mizigo|emizigo|self[-\s]*contained\s+(?:rooms?|units?)|(?:\d+|two|three|four|five|six|seven|eight|nine|ten)\s+(?:double\s+|single\s+|rental\s+)?units?)\b/i;
+const RENTAL_ROOMS_FOR_SALE = {
+  test(text = '') {
+    const withoutUse = String(text || '').replace(/\b(?:suitable|ideal|best|good|perfect|fit)\s+(?:use\s+)?(?:for|to\s+build)\b[^,.;\n]*/gi, ' ');
+    return RENTAL_ROOMS_WORDS.test(withoutUse);
+  }
+};
 
 function ownerForwardListingTitle({ listingType = '', area = '', bedrooms = null } = {}) {
   const place = normalizeInput(area) || 'Uganda';
@@ -5282,8 +5300,19 @@ async function repairEmployeePendingAgentPropertyLink({
   }
 }
 
+const BEDROOM_NUMBER_WORDS = Object.freeze({
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12
+});
+
 function parseEmployeeBedroomDraft(caption = '') {
-  const clean = normalizeInput(caption);
+  // "This house is a three bedroom house, it's plot size is 25x45 ft ... it is
+  // sold at 28M" (Gilbert, 13 Nov 2026) went live as a 28-bed house: "three"
+  // was a word, so the only number left to read was the price. A number
+  // written as a word is counted, and money is never a room count.
+  const clean = normalizeInput(caption).replace(
+    /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)[\s-]*(bed\s*rooms?|bedrooms?|beds?|br)\b/gi,
+    (_match, word, unit) => `${BEDROOM_NUMBER_WORDS[word.toLowerCase()]} ${unit}`
+  );
   const explicit = clean.match(/\b(\d{1,2})\s*(?:bedrooms?|beds?|br)\b/i)
     || clean.match(/\b(?:bedrooms?|beds?|br)\s*[:=-]?\s*(\d{1,2})\b/i);
   if (explicit?.[1]) return { bedrooms: Number(explicit[1]) };
@@ -5305,7 +5334,9 @@ function parseEmployeeBedroomDraft(caption = '') {
     .replace(/\b\d+(?:\.\d+)?\s*%/g, ' ')
     .replace(/\b\d+\.\d+\b/g, ' ')
     .replace(/\b\d{2,4}\s*(?:by|x|\*)\s*\d{2,4}\s*(?:ft|fts|feet|m)?\b/gi, ' ')
-    .replace(/\b\d+(?:\.\d+)?\s*(?:decimals?|acres?|hectares?|sqm|sq\s*m|square\s+met(?:er|re)s?)\b/gi, ' ')) || {};
+    .replace(/\b\d+(?:\.\d+)?\s*(?:decimals?|acres?|hectares?|sqm|sq\s*m|square\s+met(?:er|re)s?)\b/gi, ' ')
+    .replace(/(?:ugx|ushs?\.?|shs?\.?|usd|us\$|\$)\s*\d[\d,.]*\s*(?:m|mn|million|millions|bn|billion|billions|k|thousand)?\b/gi, ' ')
+    .replace(/\b\d[\d,.]*\s*(?:m|mn|million|millions|bn|billion|billions|k|thousand)\b/gi, ' ')) || {};
 }
 
 // Same floor parseListingPriceDraft applies: below this a "price" is a room count, a plot
@@ -5617,7 +5648,20 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   if (
     listingType === 'rent'
     && Number(price) >= 50000000
-    && /\b(?:selling|for sale|on sale|sale price|sell)\b/i.test(cleanCaption)
+    && (/\b(?:selling|for sale|on sale|sale price|sell)\b/i.test(cleanCaption) || SOLD_AT_PRICE.test(cleanCaption))
+  ) {
+    listingType = 'sale';
+  }
+  // "Four single rooms for sale, plot size 30x70ft ... collecting 600k per
+  // month and sold at 50M" (Gilbert, 13 Nov 2026) and "Rental on sale ... 8
+  // decimals ... 5 double units ... 250k per month" (SFK, the same day) were
+  // both filed as land: the plot size outvoted the rooms. Rooms or rental units
+  // being sold are a building that earns rent, which makaug lists as a sale.
+  if (
+    (listingType === 'land' || !listingType)
+    && RENTAL_ROOMS_FOR_SALE.test(cleanCaption)
+    && !/\b(?:for rent|to let|to rent)\b/i.test(cleanCaption)
+    && (/\b(?:selling|for sale|on sale|sale price|sell)\b/i.test(cleanCaption) || SOLD_AT_PRICE.test(cleanCaption))
   ) {
     listingType = 'sale';
   }
@@ -5933,7 +5977,13 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   if (statedDistrict?.match) {
     const named = normalizeInput(statedDistrict.match.district || statedDistrict.match.area || '');
     const inferred = normalizeInput(locationPatch.district || locationResolution?.match?.district || '');
-    if (named && named.toLowerCase() !== inferred.toLowerCase()) {
+    // "found in kazo, Nabweru, Nansana, wakiso" (Gilbert, 13 Nov 2026) went in
+    // as Kazo district: Kazo is a village beside Nabweru as well as a district
+    // in the west. The caption names Wakiso too, which is where Nabweru is, so
+    // the agent never contradicted the district we had found.
+    const inferredAlsoNamed = Boolean(inferred)
+      && new RegExp(`\\b${inferred.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(locationCaption);
+    if (named && named.toLowerCase() !== inferred.toLowerCase() && !inferredAlsoNamed) {
       locationPatch = {
         ...locationPatch,
         area: locationPatch.area || statedAreaBesideDistrict(locationCaption, statedDistrict.match) || undefined,
@@ -9650,12 +9700,36 @@ const SOLD_LINK_STEP = 'agent_sold_link';
 const SOLD_CANDIDATE_LIMIT = 600;
 const SOLD_IMAGE_HASH_LIMIT = 12;
 
+// The way a property is described, so "sold at 140M" beside it is a price.
+const PROPERTY_BEING_DESCRIBED = /\b(?:bed\s*rooms?|bedrooms?|rooms?|roomed|doubles?|singles?|units?|house|houses|home|bungalow|mansion|villa|apartments?|flats?|rentals?|shops?|plots?|land|acres?|decimals?|storey|building|quarters?|sitting|dining|dinning|toilets?|stores?|title)\b/i;
+
+/**
+ * "sold at <price>" inside a description is the asking price.
+ *
+ * 13 Nov 2026, 22:37-23:26. Gilbert, a day into being a makaug agent, sent
+ * seven properties, each a video with its caption: "Three bedrooms house plus
+ * two boys quarters found in Kibwa, Nabweru, Nansana wakiso sold at 140M".
+ * Five of the captions said "sold at" and not "for sale", and each was taken
+ * for news that one of his live listings had sold. He had one, the Wamala
+ * house, so he was shown it five times; the five were never saved. A message
+ * that starts with SOLD, or says a property has been / was / got sold, is
+ * still the news.
+ */
+function soldIsTheAskingPrice(clean = '') {
+  if (!SOLD_AT_PRICE.test(clean)) return false;
+  if (/^[^a-z0-9]*sold\b/i.test(clean)) return false;
+  const rest = clean.replace(new RegExp(SOLD_AT_PRICE.source, 'gi'), ' ');
+  if (SOLD_ANNOUNCEMENT_WORDS.test(rest)) return false;
+  return PROPERTY_BEING_DESCRIBED.test(rest);
+}
+
 function isSoldAnnouncement(text = '') {
   const clean = normalizeInput(text);
   if (!clean || clean.length > 400) return false;
   if (SOLD_ANNOUNCEMENT_BARE_WORDS.test(clean)) return true;
   if (!SOLD_ANNOUNCEMENT_WORDS.test(clean)) return false;
   if (NOT_A_SOLD_ANNOUNCEMENT.test(clean)) return false;
+  if (soldIsTheAskingPrice(clean)) return false;
   return true;
 }
 
@@ -15184,6 +15258,14 @@ async function billingPausedAgentReply({ phone, body = '' } = {}) {
   ].filter(Boolean).join('\n');
 }
 
+const WHATSAPP_PHOTO_CAPTION_LIMIT = 1000;
+
+/** A reply that asks the person to answer something: its words cannot be swapped for a card. */
+function replyAsksSomething(text = '') {
+  const words = String(text || '').replace(/https?:\/\/\S+/g, ' ');
+  return /\breply\b/i.test(words) || /\*\d{1,2}\*\s*=/.test(words) || /\?/.test(words);
+}
+
 async function queueWhatsappWebBridgeAutoReply({
   phone,
   message,
@@ -15218,8 +15300,18 @@ async function queueWhatsappWebBridgeAutoReply({
     );
     if (result.rows[0]) {
       const card = buildWhatsappPropertyCard(result.rows[0], { homeUrl: HOME_URL });
-      text = card.caption;
-      mediaUrl = card.imageUrl;
+      if (replyAsksSomething(text)) {
+        // A question keeps its words, with the listing's photo on it. "🏷️
+        // Which one has gone? Reply the number: 1. … *0* = None of these"
+        // carried one listing link, became that listing's card, and the
+        // question never arrived: Gilbert was shown his Wamala house five
+        // times on 13 Nov 2026 with nothing to say why. A long one stays text,
+        // because a photo's caption is cut at 1,024 characters.
+        if (text.length <= WHATSAPP_PHOTO_CAPTION_LIMIT) mediaUrl = card.imageUrl;
+      } else {
+        text = card.caption;
+        mediaUrl = card.imageUrl;
+      }
       mediaType = mediaUrl ? 'image' : 'text';
     }
   }
@@ -18176,6 +18268,8 @@ async function handleAgentFilmReply({ phone, body = '', step = '', lang = 'en', 
   const fee = await agentMonthlyFeeUgx();
   const kind = agentFilm.prospectFollowUpKind(body);
   let alerted = false;
+  // Arthur and Ronald have what they said: now, or the same words within 12 hours.
+  let noted = false;
   if (pitched && film.ageDays <= AGENT_FILM_FIRST_REPLY_DAYS && !(await agentFilmAlertedRecently(digits))) {
     // Their first reply: Arthur and Ronald hear, with what they said.
     alerted = true;
@@ -18204,6 +18298,7 @@ async function handleAgentFilmReply({ phone, body = '', step = '', lang = 'en', 
         `SELECT 1 FROM audit_logs WHERE action = 'agent_prospect_note' AND details->>'phone' = $1 AND details->>'text' = $2 AND created_at > NOW() - INTERVAL '12 hours' LIMIT 1`,
         [digits, said]).catch(() => ({ rows: [] }))
       : null;
+    noted = Boolean(same);
     if (same && !same.rows.length) {
       await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', 'agent_prospect_note', $1::jsonb)`, [JSON.stringify({ phone: digits, text: said, kind })]).catch(() => {});
       deferWhatsappWork('Agent prospect note', async () => {
@@ -18215,7 +18310,16 @@ async function handleAgentFilmReply({ phone, body = '', step = '', lang = 'en', 
       });
     }
   }
-  const message = agentFilm.prospectFollowUpReply({ kind, interested, first: agentFilm.personalFirstName(name), helpName, fee, text: body });
+  const message = agentFilm.prospectFollowUpReply({
+    kind,
+    interested,
+    first: agentFilm.personalFirstName(name),
+    helpName,
+    fee,
+    text: body,
+    passedOn: alerted || noted,
+    sentBy: film.by || ''
+  });
   if (!message) return null;
   // Never the same words twice in a row ("1 and 5", then "List a property").
   const [lastSent] = await recentOutboundTo(phone, { days: 1, limit: 1 });
@@ -23139,7 +23243,16 @@ async function groupForwardedAdverts(phone, { since = null, until = null } = {})
       continue;
     }
     if (isMedia) {
-      media.push({ message_id: row.wa_message_id, at: row.created_at, ms, url: mediaUrl, mimeType: mediaType || 'image/jpeg', caption: body });
+      const item = { message_id: row.wa_message_id, at: row.created_at, ms, url: mediaUrl, mimeType: mediaType || 'image/jpeg', caption: body };
+      // A video or photo with the advert written on it is an advert of its
+      // own, the way agents most often send one: Gilbert's four lost
+      // properties (13 Nov 2026) were each a video with its caption.
+      const facts = body ? employeePropertyFacts(body, {}) : null;
+      if (facts && (Boolean(facts.listingType && Number(facts.price) > 0) || isReviewableOwnerForwardCaption(body))) {
+        captions.push({ caption: body, caption_message_id: row.wa_message_id, caption_at: row.created_at, ms, facts, missing: employeePropertyMissing(facts), media: [item] });
+        continue;
+      }
+      media.push(item);
     }
   }
   const orphans = pairForwardedAlbums(captions, media);
@@ -23208,6 +23321,9 @@ module.exports.__test = {
   agentMenuReply,
   staffIntakeGreetingReply,
   isSoldAnnouncement,
+  soldIsTheAskingPrice,
+  replyAsksSomething,
+  ownerForwardListingType,
   soldTextScore,
   rankSoldCandidates,
   startSoldAnnouncement,
