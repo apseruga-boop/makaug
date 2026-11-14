@@ -859,7 +859,8 @@ function buildOwnerStatusMessage({ listing = {}, status, reason, listerFee = nul
           `${title} - ${location} - ${price}`,
           `View & share: ${publicUrl}`,
           ...privateListerFeeLines(listing, listerFee),
-          `To remove it, reply REMOVE ${reference} from the WhatsApp number used to submit it.`
+          `To remove it, reply REMOVE ${reference} from the WhatsApp number used to submit it.`,
+          'Sold or let it? Reply SOLD. To check on it, reply STATUS.'
         ].join('\n')
     };
   }
@@ -1051,6 +1052,13 @@ async function sendOwnerListingStatusNotifications({ listing = {}, status, reaso
     // The merchant-code card, right under the "your listing is live" message.
     if (listerFee?.pay_link && result.whatsapp.sent !== false) {
       const code = (String(listerFee.pay_link).match(/\/pay\/(MK[A-Z0-9]{4,12})\b/i) || [])[1] || '';
+      // The link went inside the "live" message: write that down, so a look-up
+      // says "sent, not opened yet" and not "made, not sent".
+      if (code) {
+        await require('./payLinkService').recordPayLinkSent(require('../config/database'), {
+          code, to: String(listing.lister_phone).replace(/\D/g, ''), status: 'queued'
+        }).catch(() => null);
+      }
       const { momoCardUrl } = require('./momoMerchantCardService');
       result.whatsapp.pay_card = await deliverListingWhatsapp({
         to: listing.lister_phone,
@@ -1062,7 +1070,45 @@ async function sendOwnerListingStatusNotifications({ listing = {}, status, reaso
     }
   }
 
+  // A private owner's listing is live: Arthur and Ronald hear that the link and
+  // the payment link have gone (14 Nov 2026), so nobody has to wonder.
+  if (String(status || '').toLowerCase() === 'approved' && !listing.agent_id && listing.lister_phone) {
+    await tellTeamOwnerListingLive({ listing, listerFee, result }).catch((error) => {
+      logger.warn('Team notice for a live private listing failed', { property_id: listing.id || null, message: error.message });
+    });
+  }
+
   return result;
+}
+
+/** "Live — private owner": who, what, and whether the payment link went with it. */
+async function tellTeamOwnerListingLive({ listing = {}, listerFee = null, result = {} } = {}) {
+  const db = require('../config/database');
+  const { ownerLiveNotice } = require('./ownerFilmReplyService');
+  const { agentJoinAlertRecipients } = require('./agentFilmReplyService');
+  const site = String(process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+  const body = ownerLiveNotice({
+    title: listing.title || '',
+    ownerName: listing.lister_name || '',
+    digits: listing.lister_phone || '',
+    url: `${site}/property/${listing.id}`,
+    fee: Number(listerFee?.monthly_ugx || 0) || undefined,
+    payLink: listerFee?.pay_link || '',
+    freeDays: Number(listerFee?.free_days || 0),
+    sent: result.whatsapp?.sent !== false
+  });
+  const desk = require('./leadDeskService');
+  if (typeof desk.sendToTeam === 'function') {
+    await desk.sendToTeam(db, body, 'owner_listing_live', { extraRecipients: agentJoinAlertRecipients() });
+  }
+  // The owner film → listed → live: the Outreach list shows it is done.
+  const key = String(listing.lister_phone || '').replace(/\D/g, '').slice(-9);
+  if (key.length === 9) {
+    await db.query(
+      `UPDATE agent_prospects SET status = 'approved', updated_at = NOW()
+        WHERE phone_key = $1 AND video_kind = 'owner' AND status IN ('pitched', 'interested', 'signed_up')`,
+      [key]).catch(() => null);
+  }
 }
 
 async function sendOwnerListingSubmissionNotifications({ listing = {}, token = '' }) {

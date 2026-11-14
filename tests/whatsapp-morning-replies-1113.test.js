@@ -128,7 +128,7 @@ test('"I WANT TO POST HOUSES" from Ronald opens Agent 007 straight away', async 
     const opened = await at(RONALD, 'main_menu', 'I WANT TO POST HOUSES', { employee_intake_last_completed_at: '2026-11-12T14:16:29Z', employee_intake_last_subject_name: 'Smartway homes' });
     assert.strictEqual(opened.handled, true);
     assert.strictEqual(opened.nextStep, 'employee_intake_role');
-    assert.match(opened.message, /employee intake/);
+    assert.match(opened.message, /\*Agent 007\* · makaug control room/);
     const customerMode = await at(RONALD, 'main_menu', 'I want to post houses', { employee_intake_last_completed_at: '2026-11-12T14:16:29Z', staff_customer_mode: true });
     assert.notStrictEqual(customerMode.nextStep, 'employee_intake_role', 'in customer mode it stays a customer message');
   });

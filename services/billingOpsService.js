@@ -1083,7 +1083,9 @@ function startBillingScheduler(db) {
       const trials = await runTrialDigest(db).catch((error) => ({ error: error.message }));
       const listers = await runListerViewsMessages(db);
       const listersDue = await runListerDueReminders(db);
-      logger.info('Billing reminders run', { agents, trials, listers, listersDue });
+      // A sold listing's 7 days with the SOLD badge are up: its lister is told.
+      const soldOff = await require('./ownerListingCommandService').runSoldOffNotices(db).catch((error) => ({ error: error.message }));
+      logger.info('Billing reminders run', { agents, trials, listers, listersDue, soldOff });
     } catch (error) {
       logger.warn('Billing reminders failed', { error: error.message });
     } finally {

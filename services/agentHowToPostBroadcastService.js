@@ -13,7 +13,8 @@
  */
 
 const BROADCAST_KEY = 'agent_how_to_post_v1';
-const VIDEO_PATH = '/assets/marketing/makaug-agent-how-to-post-v2.mp4';
+// v3 (14 Nov 2026): one real property from start to finish, with the bot's own replies.
+const VIDEO_PATH = '/assets/marketing/makaug-agent-how-to-post-v3.mp4';
 
 function siteUrl() {
   return String(process.env.PUBLIC_SITE_URL || process.env.SITE_URL || 'https://makaug.com').replace(/\/+$/, '');

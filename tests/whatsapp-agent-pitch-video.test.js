@@ -29,12 +29,12 @@ const RONALD = '+256709402189';
 
 test('the menu offers a third thing to do', () => {
   const prompt = intake.employeeRolePrompt();
-  assert.match(prompt, /3 — /, 'there must be a third option');
-  assert.match(prompt, /agent video/i);
-  assert.match(prompt, /what it costs/i, 'price is the first thing a prospect asks');
-  // The two that were already there must still read the same.
-  assert.match(prompt, /1 — An \*agent or broker\*/);
-  assert.match(prompt, /2 — A \*private owner\*/);
+  assert.match(prompt, /\*3\* · /, 'there must be a third option');
+  assert.match(prompt, /Agent intro film/i);
+  assert.match(prompt, /Why join, how posting works, UGX [\d,]+ a month/, 'price is the first thing a prospect asks');
+  // The two that were already there are still 1 and 2.
+  assert.match(prompt, /\*1\* · For an \*agent or broker\*/);
+  assert.match(prompt, /\*2\* · For a \*private owner\*/);
 });
 
 test('"3" is the video, and the other answers are unchanged', () => {
@@ -124,7 +124,7 @@ test('3, then a name and a number, and the film is gone', async () => {
 
     assert.strictEqual(sent.length, 1, 'exactly one message queued');
     const payload = sent.map((p) => JSON.stringify(p)).join(' ');
-    assert.match(payload, /makaug-join-as-agent-v4\.mp4/, 'the joining film, not the welcome pack');
+    assert.match(payload, /makaug-agent-intro-v5\.mp4/, 'the joining film, not the welcome pack');
     assert.match(payload, /media_type\\?":\\?"video/, 'queued as a video, which is what the bridge now attaches');
     assert.ok(!/UGX 50,000/.test(payload), 'the fee is in the terms they sign, not the pitch'); assert.match(payload, /9 languages/);
     assert.match(payload, /Hello Kato/, 'addressed to them by name');

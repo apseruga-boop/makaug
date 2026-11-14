@@ -18,6 +18,9 @@ const { handleHostStayReply } = require('../services/shortTermBookingService');
 const shortStayWhatsapp = require('../services/whatsappShortStayService');
 const agentFilm = require('../services/agentFilmReplyService');
 const replyPlaybook = require('../services/whatsappReplyPlaybook');
+const controlRoom = require('../services/agent007ControlRoom');
+const ownerFilm = require('../services/ownerFilmReplyService');
+const ownerListing = require('../services/ownerListingCommandService');
 const { handleAgentBookingReply } = require('../services/agentBookingService');
 const logger = require('../config/logger');
 const { normalizeUgPhoneForWhatsApp } = require('../services/whatsappNotificationService');
@@ -1571,7 +1574,7 @@ function friendlyGreetingReply(lang, sessionData = {}) {
 
 function whatsappContactConfirmationPrompt(lang, phone) {
   const code = resolveLangCode(lang);
-  const displayPhone = normalizeContactPhone(phone) || 'this WhatsApp number';
+  const displayPhone = controlRoom.prettyPhone(normalizeContactPhone(phone)) || normalizeContactPhone(phone) || 'this WhatsApp number';
   const messages = {
     en: `Should viewers contact you on *${displayPhone}*, the WhatsApp number you are using now? Reply *YES* or *NO*.`,
     lg: `Abalabi bakukubire ku *${displayPhone}*, ennamba ya WhatsApp gy'okozesa kati? Ddamu *YES* oba *NO*.`,
@@ -2690,8 +2693,51 @@ function fastListingProgressReply(lang, patch = {}, updatedDraft = {}, intro = '
   }
   return {
     nextStep,
-    message: `✅ ${savedLine}\n\nNext: ${stepPromptFor(lang, nextStep)}`
+    message: `✅ ${savedLine}\n\nNext: ${nextStep === 'price' ? listingPricePrompt(lang, updatedDraft) : stepPromptFor(lang, nextStep)}`
   };
+}
+
+/**
+ * The price question, worded for what is being listed. A landlord letting a
+ * house was asked for an "asking price ... 250m": for a rental it is the rent.
+ */
+function listingPricePrompt(lang, draft = {}) {
+  if (resolveLangCode(lang) === 'en' && !IS_SOUTH_AFRICA && String(draft.listing_type || '').toLowerCase() === 'rent') {
+    return '💰 What is the rent per month in Uganda Shillings? You can type 800000, 800k or 1.2m.';
+  }
+  return stepPromptFor(lang, 'price');
+}
+
+/**
+ * A private owner's property has reached staff review: tell Arthur and Ronald
+ * who it is and what it is, and move them on the Outreach list if the owner
+ * film is how they got here. An agent's property has its own notice.
+ */
+function notifyTeamOwnerListingSubmitted({ phone = '', propertyId = '', inquiryReference = '', draft = {}, photoCount = 0, contactPhone = '' } = {}) {
+  deferWhatsappWork('Owner listing submitted notice', async () => {
+    const row = (await db.query(
+      'SELECT agent_id, title, area, district, price, price_period, lister_name FROM properties WHERE id = $1',
+      [propertyId]).catch(() => ({ rows: [] }))).rows[0] || {};
+    if (row.agent_id) return;
+    const film = await ownerFilmSentTo(phone).catch(() => null);
+    if (film) await markOwnerProspectReply(phone, 'signed_up', '');
+    const price = Number(row.price || draft.price || 0);
+    const body = ownerFilm.ownerSubmittedNotice({
+      title: row.title || draft.title || '',
+      location: [row.area || draft.area, row.district || draft.district].filter(Boolean).join(', '),
+      price: price > 0 ? formatPrice(price, row.price_period || draft.price_period) : '',
+      photos: photoCount,
+      ownerName: row.lister_name || draft.contact_display_name || draft.lister_name || '',
+      digits: contactPhone || phone,
+      reference: inquiryReference,
+      film,
+      adminUrl: `${HOME_URL}/admin`
+    });
+    const desk = require('../services/leadDeskService');
+    if (typeof desk.sendToTeam === 'function') {
+      await desk.sendToTeam(db, body, 'owner_property_submitted', { extraRecipients: agentFilm.agentJoinAlertRecipients() });
+    }
+  });
 }
 
 async function sendListerTermsPrompt({ phone, draft = {} }) {
@@ -2930,6 +2976,10 @@ async function submitWhatsappListingDraft({ phone, lang, draft }) {
         ].join('\n')
       })
     ]);
+
+    // Arthur and Ronald hear on WhatsApp too (14 Nov 2026). Until then a
+    // private owner's property reached them as an email and nothing else.
+    notifyTeamOwnerListingSubmitted({ phone, propertyId, inquiryReference, draft: d, photoCount, contactPhone });
 
     captureLearningEvent({
       eventName: 'whatsapp_property_listing_submitted',
@@ -9699,6 +9749,53 @@ const SOLD_LINK_STEP = 'agent_sold_link';
 // most recently touched. Read them all (a few columns) and let the words pick.
 const SOLD_CANDIDATE_LIMIT = 600;
 const SOLD_IMAGE_HASH_LIMIT = 12;
+// The SOLD question stays open this long. After that a stray "1" marks nothing.
+const SOLD_QUESTION_OPEN_HOURS = 3;
+// Answers to "Reply 1 = Yes, mark it SOLD / 2 = No", read with the punctuation
+// off and in capitals. English, Luganda (yee, nedda, kituufu) and Swahili
+// (ndiyo, hapana, siyo). A number is only an answer on its own: "1 bedroom
+// house in Kira" is a property.
+const SOLD_ANSWER_YES = /^(?:YES|Y|YEAH|YEP|YA|YEE|NDIYO|NDIO|KITUUFU|CONFIRM|CONFIRMED|CORRECT|OK|OKAY|SURE|TRUE|RIGHT|EXACTLY|THAT ONE|THATS THE ONE|THAT IS THE ONE)\b/;
+const SOLD_ANSWER_NO = /^(?:NO(?! LONGER)|N|NOPE|NEDDA|HAPANA|SIYO|DIFFERENT|WRONG|NOT THAT ONE|NOT THIS ONE|NONE|NEITHER|NOT THESE)\b/;
+const SOLD_ANSWER_LEAVE = /^(?:CANCEL|STOP|NO THANKS|LEAVE IT|NEVER MIND|NEVERMIND)$/;
+
+/** The words of a reply, ready to be read as an answer to the SOLD question. */
+function soldAnswerText(text = '') {
+  return normalizeInput(text).toUpperCase().replace(/[’']/g, '').replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * 'yes' | 'no' | 'number' | 'leave' | 'sold_word' | '' for a reply to the SOLD
+ * question. A yes or a no may come with a few words ("Yes it is sold", "No,
+ * a different one"), but never with figures, and never as a long message.
+ */
+function soldAnswerKind(text = '') {
+  const upper = soldAnswerText(text);
+  if (!upper) return '';
+  if (/^\d{1,2}$/.test(upper)) return 'number';
+  if (SOLD_ANSWER_LEAVE.test(upper)) return 'leave';
+  const short = upper.split(' ').length <= 7 && !/\d/.test(upper);
+  if (short && SOLD_ANSWER_YES.test(upper)) return 'yes';
+  if (short && SOLD_ANSWER_NO.test(upper)) return 'no';
+  if (SOLD_ANNOUNCEMENT_BARE_WORDS.test(normalizeInput(text))) return 'sold_word';
+  return '';
+}
+
+/**
+ * The SOLD question has a step of its own, and it is saved here: the runtime
+ * saves no step for anything Agent 007's intake answers. Until 14 Nov 2026
+ * nothing saved it. On a replay of the real inbound route, an agent's "1"
+ * after "Reply 1 = Yes, mark it SOLD" was answered "What are you listing?"
+ * and the listing stayed up. When the question closes, an agent who was in
+ * the middle of posting goes back to their posting session.
+ */
+async function soldStepReply(phone, reply, pending = null) {
+  if (!reply || reply.handled !== true || !reply.nextStep) return reply;
+  const back = normalizeInput(pending?.return_step);
+  const step = reply.nextStep === 'main_menu' && back ? back : reply.nextStep;
+  await updateSession(phone, { current_step: step });
+  return step === reply.nextStep ? reply : { ...reply, nextStep: step };
+}
 
 // The way a property is described, so "sold at 140M" beside it is a price.
 const PROPERTY_BEING_DESCRIBED = /\b(?:bed\s*rooms?|bedrooms?|rooms?|roomed|doubles?|singles?|units?|house|houses|home|bungalow|mansion|villa|apartments?|flats?|rentals?|shops?|plots?|land|acres?|decimals?|storey|building|quarters?|sitting|dining|dinning|toilets?|stores?|title)\b/i;
@@ -9834,6 +9931,11 @@ async function rankSoldCandidates({ rows = [], text = '', mediaUrl = '', session
   return scored.sort((a, b) => b.score - a.score || new Date(b.row.updated_at || 0) - new Date(a.row.updated_at || 0));
 }
 
+/** SOLD, or LET for a rental: the word on the badge and in what we say. */
+function goneWord(row = {}) {
+  return ownerListing.soldWord(row);
+}
+
 function soldListingLine(row = {}) {
   const where = [normalizeInput(row.area), normalizeInput(row.district)].filter(Boolean).join(', ');
   return `*${normalizeInput(row.title) || 'Listing'}*${where ? ` — ${where}` : ''} · ${formatListingPrice(row)}\n🔗 ${HOME_URL}/property/${row.id}`;
@@ -9850,6 +9952,27 @@ function soldCandidateSummary(row = {}) {
     listing_type: normalizeInput(row.listing_type).slice(0, 20),
     inquiry_reference: normalizeInput(row.inquiry_reference).slice(0, 40)
   };
+}
+
+/**
+ * The listing a SOLD message names by its makaug link or reference, when it
+ * names one. "Send SOLD with the makaug link of the property" is what we tell
+ * people to do, and until 14 Nov 2026 the link was not read: the reply was a
+ * guess at three listings, and the one linked was often not among them.
+ * Returns { named: true, row } - row is null when it is not one of their live
+ * listings - or { named: false }.
+ */
+function soldListingNamedIn(text = '', rows = []) {
+  const clean = normalizeInput(text);
+  const idMatch = clean.match(/\/property\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})/i)
+    || clean.match(/\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i);
+  const refMatch = clean.match(/\b(MK-\d{8}-[A-Z0-9]{6})\b/i);
+  const wanted = (idMatch?.[1] || '').toLowerCase();
+  const wantedRef = (refMatch?.[1] || '').toUpperCase();
+  if (!wanted && !wantedRef) return { named: false };
+  const row = rows.find((item) => (wanted && String(item.id).toLowerCase() === wanted)
+    || (wantedRef && String(item.inquiry_reference || '').toUpperCase() === wantedRef)) || null;
+  return { named: true, row };
 }
 
 function soldAskLinkMessage() {
@@ -9869,18 +9992,46 @@ async function startSoldAnnouncement({ phone = '', session = {}, cleanBody = '',
   });
   const data = session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
   const first = agent ? agentGreetingName(agent, '') : '';
+  // Where the chat was: an agent in the middle of posting goes back there when
+  // the question is settled. A second SOLD message keeps the first one's place.
+  const cameFrom = normalizeInput(session.current_step);
+  const inSoldQuestion = cameFrom === SOLD_CONFIRM_STEP || cameFrom === SOLD_LINK_STEP;
+  const returnStep = inSoldQuestion
+    ? normalizeInput(data.agent_sold?.return_step)
+    : (isEmployeeIntakeStep(cameFrom) && data.whatsapp_agent_self_intake === true ? cameFrom : '');
   if (!rows.length) {
     if (!agent) return null;
-    return {
+    const nothing = {
       handled: true,
       nextStep: 'main_menu',
       message: `Congratulations${first ? `, ${first}` : ''}! I cannot see a live listing of yours on makaug to mark as sold, so nothing to change there. Send the makaug link if you think I have missed one.`
     };
+    if (!inSoldQuestion) return nothing;
+    await patchSessionData(phone, { agent_sold: null });
+    return soldStepReply(phone, nothing, { return_step: returnStep });
   }
-  const ranked = await rankSoldCandidates({ rows, text: cleanBody, mediaUrl, sessionData: data });
+  // A link or reference in the message names the listing; nothing to guess.
+  const namedListing = soldListingNamedIn(cleanBody, rows);
+  if (namedListing.named && !namedListing.row) {
+    require('../services/leadDeskService')
+      .sendToTeam(db, `🏷️ ${agent?.full_name || `+${String(phone).replace(/\D/g, '')}`} wants a listing marked SOLD but the link or reference is not one of their live listings: "${normalizeInput(cleanBody).slice(0, 160)}". Please check and mark it in the King.`, 'listing_sold_unmatched', { extraRecipients: agentFilm.agentJoinAlertRecipients() })
+      .catch(() => null);
+    const unmatched = {
+      handled: true,
+      nextStep: 'main_menu',
+      message: 'I could not find that one among your live listings, so I have not changed anything. The team has been told and will check it for you.'
+    };
+    if (!inSoldQuestion) return unmatched;
+    await patchSessionData(phone, { agent_sold: null });
+    return soldStepReply(phone, unmatched, { return_step: returnStep });
+  }
+  const ranked = namedListing.row
+    ? [{ row: namedListing.row, score: 99, textScore: 99, imageDistance: null }]
+    : await rankSoldCandidates({ rows, text: cleanBody, mediaUrl, sessionData: data });
   const best = ranked[0];
   const runnerUp = ranked[1];
-  const single = best && best.score >= 3 && (!runnerUp || best.score - runnerUp.score >= 2);
+  // One live listing: there is nothing to choose between ("Which one has gone? 1.").
+  const single = best && (rows.length === 1 || (best.score >= 3 && (!runnerUp || best.score - runnerUp.score >= 2)));
   const shortlist = single ? [best] : ranked.filter((item) => item.score >= 2).slice(0, 3);
   const picks = shortlist.length ? shortlist : ranked.slice(0, 3);
   const announcement = {
@@ -9888,24 +10039,25 @@ async function startSoldAnnouncement({ phone = '', session = {}, cleanBody = '',
     media_url: normalizeInput(mediaUrl).slice(0, 500),
     stamp_detected: stampDetected === true,
     asked_at: new Date().toISOString(),
+    return_step: returnStep,
     single: single && picks.length === 1,
     candidates: picks.map((item) => soldCandidateSummary(item.row)),
     scores: picks.map((item) => ({ id: String(item.row.id), score: item.score, image: item.imageDistance }))
   };
   await patchSessionData(phone, { agent_sold: announcement, pending_intent_confirmation: null, idle_resume_prompt: null });
   if (announcement.single) {
-    return {
+    return soldStepReply(phone, {
       handled: true,
       nextStep: SOLD_CONFIRM_STEP,
-      message: `🏷️ *Sold? Let me mark it.*\n\n${soldListingLine(best.row)}\n\nReply *1* = Yes, mark it SOLD\nReply *2* = No, it is a different property`
-    };
+      message: `🏷️ *${goneWord(best.row) === 'LET' ? 'Taken' : 'Sold'}? Let me mark it.*\n\n${soldListingLine(best.row)}\n\nReply *1* = Yes, mark it ${goneWord(best.row)}\nReply *2* = No, it is a different property`
+    });
   }
   const lines = picks.map((item, index) => `${index + 1}. ${soldListingLine(item.row)}`);
-  return {
+  return soldStepReply(phone, {
     handled: true,
     nextStep: SOLD_CONFIRM_STEP,
     message: `🏷️ *Which one has gone?* Reply the number:\n\n${lines.join('\n\n')}\n\n*0* = None of these`
-  };
+  });
 }
 
 async function markListingSoldFromWhatsapp({ listingId = '', phone = '', agent = null, announcement = {} } = {}) {
@@ -9914,7 +10066,7 @@ async function markListingSoldFromWhatsapp({ listingId = '', phone = '', agent =
         SET status = 'sold',
             sold_at = NOW(),
             moderation_stage = 'sold',
-            availability_status = 'sold',
+            availability_status = CASE WHEN LOWER(COALESCE(listing_type, '')) ~ 'rent|short|student' THEN 'let_agreed' ELSE 'sold' END,
             last_confirmed_at = NOW(),
             updated_at = NOW(),
             extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object(
@@ -9926,7 +10078,7 @@ async function markListingSoldFromWhatsapp({ listingId = '', phone = '', agent =
             )
       WHERE id = $1::uuid
         AND LOWER(COALESCE(status, '')) IN ('approved', 'live', 'published')
-      RETURNING id, title, area, district, price, price_period, price_on_application, extra_fields, status`,
+      RETURNING id, title, area, district, price, price_period, price_on_application, extra_fields, status, listing_type, availability_status`,
     [listingId, String(phone || ''), normalizeInput(announcement?.announcement || '').slice(0, 300)]
   );
   const row = updated.rows[0];
@@ -9950,46 +10102,49 @@ async function handleSoldConfirmReply({ phone = '', session = {}, cleanBody = ''
   const pending = data.agent_sold && typeof data.agent_sold === 'object' ? data.agent_sold : null;
   const candidates = Array.isArray(pending?.candidates) ? pending.candidates : [];
   const text = normalizeInput(cleanBody);
-  const upper = text.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim();
+  const upper = soldAnswerText(text);
+  const kind = soldAnswerKind(text);
   const leave = async (message) => {
     await patchSessionData(phone, { agent_sold: null });
-    return { handled: true, nextStep: 'main_menu', message };
+    return soldStepReply(phone, { handled: true, nextStep: 'main_menu', message }, pending);
   };
   if (!pending || !candidates.length) return leave('');
-  // Another SOLD announcement while one is open starts over with the new one.
-  if (text && isSoldAnnouncement(text) && !/^\s*\d\s*$/.test(text)) {
-    await patchSessionData(phone, { agent_sold: null });
-    return null;
-  }
-  if (/^(CANCEL|STOP|MENU|NO THANKS|LEAVE IT)$/.test(upper)) {
-    return leave('Okay, nothing changed. Send *SOLD* with the property link any time to mark one as sold.');
-  }
+  // The answer first: "Yes it is sold" says yes, it is not a second announcement.
   let chosen = null;
   let declined = false;
   if (pending.single) {
-    if (/^(1|YES|Y|YEAH|YEP|CONFIRM|CORRECT|OK|OKAY|SURE|TRUE|THAT ONE|YES SOLD)$/.test(upper)) chosen = candidates[0];
-    else if (/^(2|NO|N|NOPE|DIFFERENT|WRONG|NOT THAT ONE)$/.test(upper)) declined = true;
+    if (kind === 'yes' || upper === '1') chosen = candidates[0];
+    else if (kind === 'no' || upper === '2') declined = true;
   } else {
-    const number = /^\d{1,2}$/.test(upper) ? Number(upper) : NaN;
-    if (number === 0 || /^(NONE|NO|NEITHER|NOT THESE)$/.test(upper)) declined = true;
+    const number = kind === 'number' ? Number(upper) : NaN;
+    if (number === 0 || kind === 'no') declined = true;
     else if (Number.isFinite(number) && number >= 1 && number <= candidates.length) chosen = candidates[number - 1];
+  }
+  // Another SOLD announcement while one is open starts over with the new one.
+  // A bare "Sold" back is not one: the question is put again.
+  if (!chosen && !declined && kind !== 'sold_word' && text && isSoldAnnouncement(text) && !/^\s*\d\s*$/.test(text)) {
+    await patchSessionData(phone, { agent_sold: null });
+    return null;
+  }
+  if (!chosen && !declined && (kind === 'leave' || upper === 'MENU')) {
+    return leave('Okay, nothing changed. Send *SOLD* with the property link any time to mark one as sold.');
   }
   if (declined) {
     await patchSessionData(phone, { agent_sold: { ...pending, declined_at: new Date().toISOString() } });
-    return { handled: true, nextStep: SOLD_LINK_STEP, message: soldAskLinkMessage() };
+    return soldStepReply(phone, { handled: true, nextStep: SOLD_LINK_STEP, message: soldAskLinkMessage() });
   }
   if (!chosen) {
     if (pending.reprompted) {
       return leave('Okay, I will leave it. Send *SOLD* with the makaug link of the property any time and I will mark it.');
     }
     await patchSessionData(phone, { agent_sold: { ...pending, reprompted: true } });
-    return {
+    return soldStepReply(phone, {
       handled: true,
       nextStep: SOLD_CONFIRM_STEP,
       message: pending.single
-        ? `Reply *1* to mark *${candidates[0].title}* as SOLD, or *2* if it is a different property.`
+        ? `Reply *1* to mark *${candidates[0].title}* as ${goneWord(candidates[0])}, or *2* if it is a different property.`
         : `Reply the number of the property that has gone (1-${candidates.length}), or *0* if it is none of these.`
-    };
+    });
   }
   const agent = await findApprovedAgentByPhone(phone);
   const row = await markListingSoldFromWhatsapp({ listingId: chosen.id, phone, agent, announcement: pending }).catch((error) => {
@@ -9998,32 +10153,41 @@ async function handleSoldConfirmReply({ phone = '', session = {}, cleanBody = ''
   });
   await patchSessionData(phone, { agent_sold: null, last_sold_listing_id: chosen.id, last_sold_at: new Date().toISOString() });
   if (!row) {
-    return { handled: true, nextStep: 'main_menu', message: `I could not mark *${chosen.title}* as sold just now — it may already be off the site. The team has been told and will sort it.` };
+    require('../services/leadDeskService')
+      .sendToTeam(db, `🏷️ ${agent?.full_name || `+${String(phone).replace(/\D/g, '')}`} tried to mark *${normalizeInput(chosen.title)}* SOLD on WhatsApp and it did not go through. Please check it in the King.\n${HOME_URL}/property/${chosen.id}`, 'listing_sold_unmatched', { extraRecipients: agentFilm.agentJoinAlertRecipients() })
+      .catch(() => null);
+    return soldStepReply(phone, { handled: true, nextStep: 'main_menu', message: `I could not mark *${chosen.title}* as sold just now — it may already be off the site. The team has been told and will sort it.` }, pending);
   }
   const first = agent ? agentGreetingName(agent, '') : '';
   require('../services/leadDeskService')
-    .sendToTeam(db, `🏷️ *${agent?.full_name || `+${String(phone).replace(/\D/g, '')}`} marked a listing SOLD on WhatsApp*\n${normalizeInput(row.title)} — ${[row.area, row.district].filter(Boolean).join(', ')} · ${formatListingPrice(row)}\n${HOME_URL}/property/${row.id}\nIt shows as SOLD for 7 days, then comes off the site.`, 'listing_marked_sold')
+    .sendToTeam(db, `🏷️ *${agent?.full_name || `+${String(phone).replace(/\D/g, '')}`} marked a listing ${goneWord(row)} on WhatsApp*\n${normalizeInput(row.title)} — ${[row.area, row.district].filter(Boolean).join(', ')} · ${formatListingPrice(row)}\n${HOME_URL}/property/${row.id}\nIt shows as ${goneWord(row)} for 7 days, then comes off the site. The lister is told when it does.`, 'listing_marked_sold', { extraRecipients: agentFilm.agentJoinAlertRecipients() })
     .catch(() => null);
-  return {
+  return soldStepReply(phone, {
     handled: true,
     nextStep: 'main_menu',
-    message: `✅ *Marked as SOLD* — ${normalizeInput(row.title)}\n🔗 ${HOME_URL}/property/${row.id}\n\nIt stays on makaug with a SOLD badge for 7 days, then comes off the site by itself. Congratulations${first ? `, ${first}` : ''}! 🎉`
-  };
+    message: `✅ *Marked as ${goneWord(row)}* — ${normalizeInput(row.title)}\n🔗 ${HOME_URL}/property/${row.id}\n\nIt stays on makaug with a ${goneWord(row)} badge for 7 days, then comes off the site by itself. I will message you the day it does. Congratulations${first ? `, ${first}` : ''}! 🎉`
+  }, pending);
 }
 
 async function handleSoldLinkReply({ phone = '', session = {}, cleanBody = '' } = {}) {
   const text = normalizeInput(cleanBody);
   const upper = text.toUpperCase();
+  const open = session.session_data?.agent_sold && typeof session.session_data.agent_sold === 'object' ? session.session_data.agent_sold : null;
   const leave = async (message) => {
     await patchSessionData(phone, { agent_sold: null });
-    return { handled: true, nextStep: 'main_menu', message };
+    return soldStepReply(phone, { handled: true, nextStep: 'main_menu', message }, open);
   };
   if (!text) return leave('');
   if (/^(CANCEL|STOP|MENU|NO|LEAVE IT)\b/.test(upper)) return leave('Okay, nothing changed.');
   const idMatch = text.match(/\/property\/([0-9a-f-]{8,36})/i) || text.match(/\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i);
   const refMatch = text.match(/\b(MK-\d{8}-[A-Z0-9]{6})\b/i) || text.match(/\b([0-9A-F]{8})\b/i);
   if (!idMatch && !refMatch) {
-    return { handled: true, nextStep: SOLD_LINK_STEP, message: 'Send the makaug link of the property (it starts with makaug.com/property/…) or its reference, and I will mark it sold. Reply *CANCEL* to leave it.' };
+    // Asked once more, then left: it must not answer every later message with this.
+    if (open?.link_reprompted) {
+      return leave('Okay, I will leave it. Send *SOLD* with the makaug link of the property any time and I will mark it.');
+    }
+    await patchSessionData(phone, { agent_sold: { ...(open || {}), link_reprompted: true } });
+    return soldStepReply(phone, { handled: true, nextStep: SOLD_LINK_STEP, message: 'Send the makaug link of the property (it starts with makaug.com/property/…) or its reference, and I will mark it sold. Reply *CANCEL* to leave it.' });
   }
   const agent = await findApprovedAgentByPhone(phone);
   const rows = await soldCandidateListings({ phone, agent }).catch(() => []);
@@ -10032,17 +10196,70 @@ async function handleSoldLinkReply({ phone = '', session = {}, cleanBody = '' } 
   const row = rows.find((item) => (wanted && String(item.id).toLowerCase().startsWith(wanted)) || (wantedRef && (String(item.inquiry_reference || '').toUpperCase() === wantedRef || String(item.id).slice(0, 8).toUpperCase() === wantedRef)));
   if (!row) {
     require('../services/leadDeskService')
-      .sendToTeam(db, `🏷️ ${agent?.full_name || `+${String(phone).replace(/\D/g, '')}`} wants a listing marked SOLD but I could not match it: "${text.slice(0, 160)}". Please check and mark it in the King.`, 'listing_sold_unmatched')
+      .sendToTeam(db, `🏷️ ${agent?.full_name || `+${String(phone).replace(/\D/g, '')}`} wants a listing marked SOLD but I could not match it: "${text.slice(0, 160)}". Please check and mark it in the King.`, 'listing_sold_unmatched', { extraRecipients: agentFilm.agentJoinAlertRecipients() })
       .catch(() => null);
     return leave('I could not find that one among your live listings. The team has been told and will mark it for you — nothing more to do.');
   }
-  const announcement = { ...(session.session_data?.agent_sold || {}), single: true, candidates: [soldCandidateSummary(row)], asked_at: new Date().toISOString() };
+  const announcement = { ...(session.session_data?.agent_sold || {}), single: true, reprompted: false, link_reprompted: false, candidates: [soldCandidateSummary(row)], asked_at: new Date().toISOString() };
   await patchSessionData(phone, { agent_sold: announcement });
-  return {
+  return soldStepReply(phone, {
     handled: true,
     nextStep: SOLD_CONFIRM_STEP,
-    message: `🏷️ *Mark this one as sold?*\n\n${soldListingLine(row)}\n\nReply *1* = Yes, mark it SOLD\nReply *2* = No`
+    message: `🏷️ *Mark this one as ${goneWord(row).toLowerCase()}?*\n\n${soldListingLine(row)}\n\nReply *1* = Yes, mark it ${goneWord(row)}\nReply *2* = No`
+  });
+}
+
+/**
+ * An open SOLD question, read before anything else can take the answer for
+ * something of its own (a menu choice, LIST, a thank-you). Returns
+ * { reply } when the message was the answer, { closed: true, step } when it
+ * plainly was not (the question is closed, nothing is marked, and the message
+ * is then read the ordinary way), or {} when no question is open.
+ *
+ * Not the answer: a photo, video or voice note; a message that is neither a
+ * number, a yes, a no nor the listing's link. And a question older than
+ * SOLD_QUESTION_OPEN_HOURS is not answered by a late "1": the lister is told
+ * it timed out and nothing changes.
+ */
+async function settleOpenSoldQuestion({ phone = '', session = {}, body = '', mediaUrl = '', hasMedia = false, now = new Date() } = {}) {
+  const step = normalizeInput(session.current_step);
+  if (step !== SOLD_CONFIRM_STEP && step !== SOLD_LINK_STEP) return {};
+  const data = session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
+  const pending = data.agent_sold && typeof data.agent_sold === 'object' ? data.agent_sold : null;
+  const back = normalizeInput(pending?.return_step) || 'main_menu';
+  const text = normalizeInput(body);
+  const close = async () => {
+    await patchSessionData(phone, { agent_sold: null });
+    await updateSession(phone, { current_step: back });
+    return { closed: true, step: back };
   };
+  if (!pending || !Array.isArray(pending.candidates) || !pending.candidates.length) return close();
+  if (hasMedia) return close();
+  const kind = soldAnswerKind(text);
+  const hasLink = /\/property\/[0-9a-f-]{8,36}/i.test(text) || /\bMK-\d{8}-[A-Z0-9]{6}\b/i.test(text);
+  const asked = new Date(pending.declined_at || pending.asked_at || 0).getTime();
+  const expired = !Number.isFinite(asked) || asked <= 0 || now.getTime() - asked > SOLD_QUESTION_OPEN_HOURS * 3600 * 1000;
+  if (expired) {
+    await close();
+    if (!kind && !(step === SOLD_LINK_STEP && hasLink)) return { closed: true, step: back };
+    return {
+      reply: {
+        handled: true,
+        nextStep: back,
+        message: 'That SOLD question has timed out, so I have not changed anything. If the property has gone, send *SOLD* again and I will mark it.'
+      }
+    };
+  }
+  if (step === SOLD_CONFIRM_STEP) {
+    if (!kind) {
+      // A new SOLD message with more to say starts over with that one, below.
+      return close();
+    }
+    const reply = await handleSoldConfirmReply({ phone, session, cleanBody: text, mediaUrl });
+    return reply ? { reply } : close();
+  }
+  if (!hasLink && !kind && !/^(CANCEL|STOP|MENU|NO|LEAVE IT)\b/i.test(text)) return close();
+  return { reply: await handleSoldLinkReply({ phone, session, cleanBody: text }) };
 }
 
 /** Staff mid-batch for somebody else: a stray "sold" is not theirs to act on here. */
@@ -10050,6 +10267,404 @@ function soldAnnouncementAppliesTo(session = {}, active = false) {
   const data = session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
   if (!active) return true;
   return data.whatsapp_agent_self_intake === true;
+}
+
+// --- Agent 007: the control room (14 Nov 2026) --------------------------------
+// The menu's newer options: the owner intro film (4), the how-to videos (5), a
+// private owner's payment link (6 → 3), who still owes (7) and looking someone
+// up (8). The words are in services/agent007ControlRoom.js; this does the
+// sending and keeps the session.
+
+/** Reminders are not sent in the Kampala night. A payment link someone asked for still is. */
+function kampalaHourNow(now = new Date()) {
+  return new Date(now.getTime() + 3 * 3600 * 1000).getUTCHours();
+}
+
+function chaseQuietHoursMessage(now = new Date()) {
+  const hour = kampalaHourNow(now);
+  if (hour >= 7 && hour < 22) return '';
+  const clock = new Date(now.getTime() + 3 * 3600 * 1000).toISOString().slice(11, 16);
+  return `It is ${clock} in Kampala. Reminders go out between 7am and 10pm, so I have not sent it. Send it in the morning.`;
+}
+
+/** The rows of a who-owes list, small enough to keep in the session. */
+function slimOwesRow(row = {}) {
+  return {
+    kind: row.kind,
+    id: row.id,
+    name: row.name,
+    company: row.company || '',
+    title: row.title || '',
+    phone: row.phone || '',
+    state: row.state,
+    days_overdue: row.days_overdue,
+    paid_until: row.paid_until || null,
+    since: row.since || null,
+    amount_ugx: row.amount_ugx,
+    last_reminder_at: row.last_reminder_at || null,
+    final_reminder_at: row.final_reminder_at || null
+  };
+}
+
+async function openWhoOwes({ phone, data = {} } = {}) {
+  const report = await controlRoom.whoOwes(db);
+  if (!report.rows.length) {
+    await replaceEmployeeSession(phone, 'main_menu', {});
+    return { handled: true, nextStep: 'main_menu', message: controlRoom.owesListMessage(report) };
+  }
+  const next = {
+    ...data,
+    employee_role: 'owes',
+    owes_rows: controlRoom.owesShownRows(report.rows).map(slimOwesRow),
+    owes_report: { today: report.today, total_ugx: report.total_ugx, count: report.rows.length }
+  };
+  delete next.owes_selected;
+  await replaceEmployeeSession(phone, 'employee_owes_list', next);
+  return { handled: true, nextStep: 'employee_owes_list', owesCount: report.rows.length, message: controlRoom.owesListMessage(report) };
+}
+
+async function latestPayLinkForOwesRow(row = {}) {
+  const where = row.kind === 'agent' ? 'agent_id = $1::uuid' : 'property_id = $1::uuid';
+  const result = await db.query(
+    `SELECT code, status, amount_ugx, sent_at, opened_at, paid_at, claim_id FROM pay_links WHERE ${where} ORDER BY created_at DESC LIMIT 1`,
+    [row.id]
+  ).catch(() => ({ rows: [] }));
+  return result.rows[0] || null;
+}
+
+/** A private owner's payment link for one listing: made (or reused), sent with the MoMo card. */
+async function sendOwnerListingPayLink({ listing = {}, requestedBy = '' } = {}) {
+  const payLinks = require('../services/payLinkService');
+  const actor = `whatsapp_employee:${String(requestedBy || '').replace(/\D/g, '') || 'unknown'}`;
+  const to = String(listing.lister_phone || listing.phone || '').replace(/\D/g, '');
+  if (to.length < 9) {
+    const error = new Error('That listing has no WhatsApp number on it');
+    error.status = 400;
+    throw error;
+  }
+  const created = await payLinks.createPayLink(db, { purpose: 'listing_fee', property_id: listing.id }, actor);
+  const sent = await payLinks.sendPayLink(db, { code: created.link.code, to, actor })
+    .catch((error) => ({ status: 'failed', reason: error.message }));
+  return {
+    code: created.link.code,
+    url: created.url,
+    amount_ugx: Number(created.link.amount_ugx || 0),
+    status: sent.status || 'unknown',
+    reason: sent.reason || null,
+    recipient: to
+  };
+}
+
+/** May staff message this number at all? Found-online listers and do-not-contact numbers never. */
+async function staffMayMessage(dialable = '') {
+  const prospects = require('../services/agentProspectService');
+  if (await require('../services/foundOnlineListerPhone').isFoundOnlineListerPhone(db, dialable).catch(() => false)) {
+    return { ok: false, message: 'That number belongs to a found-online listing. We never message those people.' };
+  }
+  const existing = await prospects.findProspectByPhone(dialable).catch(() => null);
+  if (existing?.do_not_contact) {
+    return { ok: false, message: `${existing.full_name || 'This person'} is marked “do not contact again”. Do not send them another message.` };
+  }
+  return { ok: true, existing };
+}
+
+async function handleControlRoomStep({ phone, currentStep, cleanBody, data = {} } = {}) {
+  const prospects = require('../services/agentProspectService');
+  const stay = (message, step = currentStep, extra = {}) => ({ handled: true, nextStep: step, message, ...extra });
+  const close = async (message, sessionData = {}, extra = {}) => {
+    await replaceEmployeeSession(phone, 'main_menu', sessionData);
+    return { handled: true, nextStep: 'main_menu', message, ...extra };
+  };
+  const staffDigits = String(phone || '').replace(/\D/g, '');
+
+  // ── 4: the owner intro film ────────────────────────────────────────────────
+  if (currentStep === 'employee_owner_pitch_contact') {
+    // Until 14 Nov 2026 "4" was the payment link, answered with 1 or 2.
+    if (/^[12]$/.test(cleanBody)) return stay(controlRoom.movedPayLinkNotice());
+    if (controlRoom.parseControlRoomChoice(cleanBody) === 'pay_link') {
+      const next = { ...data, employee_role: 'pay_link' };
+      await replaceEmployeeSession(phone, 'employee_pay_link_who', next);
+      return stay(employeePayLinkWhoPrompt(agentMonthlyFeeLabel()), 'employee_pay_link_who');
+    }
+    const contact = parsePitchContact(cleanBody);
+    if (!contact) return stay(controlRoom.ownerFilmPrompt());
+    if (!prospects.isUsableProspectPhone(contact.phone)) {
+      const problem = prospects.prospectPhoneProblem(contact.phone) || 'That number does not look complete.';
+      return stay(`I did not send it: *${contact.phone}*\n\n${problem}\n\nCheck the number and send the name and number again, for example: Sarah Nakato | 0772123456`);
+    }
+    const dialable = prospects.normalizeProspectPhone(contact.phone);
+    const existingAgent = await findApprovedAgentByPhone(dialable).catch(() => null);
+    if (existingAgent) {
+      return close(`${existingAgent.full_name} is already a makaug agent, so I did not send the owner film. Their properties go under their agent profile.\n\nReply *Agent 007* and choose *1* to post for them.`);
+    }
+    const sendDecision = await prospects.evaluateOutreachSend({ phone: dialable, videoKind: 'owner' });
+    if (!sendDecision.ok) {
+      return close(`I did not send the film.\n\n${sendDecision.message}`, {}, { outreachBlocked: sendDecision.code });
+    }
+    try {
+      await sendOwnerPitchVideo({ phone: dialable, name: contact.fullName, sentBy: phone });
+    } catch (error) {
+      logger.error('Owner film send failed:', error);
+      return stay('I could not send the film just then and nothing went out. Check the number and send the name and phone again.');
+    }
+    await prospects.recordProspectPitch({
+      fullName: contact.fullName,
+      phone: dialable,
+      pitchedBy: phone,
+      pitchedByName: staffNameForNumber(phone),
+      videoKind: 'owner',
+      metadata: { sent_via: 'agent_007_owner_film' },
+      allowDuplicate: true
+    }).catch((error) => logger.warn('Owner prospect not recorded:', error.message || String(error)));
+    return close(controlRoom.filmSentMessage({ kind: 'owner', name: contact.fullName, phone: dialable, followUpMinutes: PITCH_FOLLOW_UP_MINUTES }), {
+      employee_intake_last_pitch_at: new Date().toISOString(),
+      employee_intake_last_pitch_name: contact.fullName,
+      employee_intake_last_pitch_kind: 'owner'
+    }, { prospectPitched: true, ownerFilmSent: true });
+  }
+
+  // ── 5: a how-to-post video ─────────────────────────────────────────────────
+  if (currentStep === 'employee_howto_who') {
+    const kind = controlRoom.parseHowToWho(cleanBody);
+    if (!kind) return stay(controlRoom.howToWhoPrompt());
+    const next = { ...data, howto_kind: kind };
+    await replaceEmployeeSession(phone, 'employee_howto_contact', next);
+    return stay(controlRoom.howToContactPrompt(kind), 'employee_howto_contact');
+  }
+  if (currentStep === 'employee_howto_contact') {
+    const kind = data.howto_kind === 'owner' ? 'owner' : 'agent';
+    const contact = parsePitchContact(cleanBody);
+    if (!contact) return stay(controlRoom.howToContactPrompt(kind));
+    if (!prospects.isUsableProspectPhone(contact.phone)) {
+      const problem = prospects.prospectPhoneProblem(contact.phone) || 'That number does not look complete.';
+      return stay(`I did not send it: *${contact.phone}*\n\n${problem}\n\nCheck the number and send the name and number again.`);
+    }
+    const dialable = prospects.normalizeProspectPhone(contact.phone);
+    const sent = await sendHowToFromStaff({ kind, phone: dialable, name: contact.fullName, sentBy: phone });
+    if (!sent.ok) return sent.retry ? stay(sent.message) : close(sent.message);
+    return close(controlRoom.howToSentMessage({ kind, name: sent.name || contact.fullName, phone: dialable }), {}, { howToSent: kind });
+  }
+
+  // ── 6 → 3: the payment link for a private owner's listing ──────────────────
+  if (currentStep === 'employee_pay_link_owner') {
+    const listings = await controlRoom.findOwnerListings(db, cleanBody);
+    if (!listings.length) {
+      return stay(`I could not find a private listing for “${cleanBody.slice(0, 60)}”.\n\nSend the owner's phone number, or the listing reference (MK-…).\n\nIf they are an agent, type *CANCEL*, then *Agent 007* → *6* → *1*.`);
+    }
+    const next = {
+      ...data,
+      pay_link_owner_listings: listings.map((row) => ({
+        id: row.id,
+        title: row.title,
+        status: row.status,
+        lister_name: row.lister_name,
+        lister_phone: row.lister_phone,
+        lister_paid_until: row.lister_paid_until,
+        lister_billing_suspended_at: row.lister_billing_suspended_at
+      }))
+    };
+    await replaceEmployeeSession(phone, 'employee_pay_link_owner_pick', next);
+    return stay(controlRoom.payLinkOwnerPickMessage(listings), 'employee_pay_link_owner_pick');
+  }
+  if (currentStep === 'employee_pay_link_owner_pick') {
+    if (/^(?:no|n|search)$/i.test(cleanBody)) {
+      const next = { ...data };
+      delete next.pay_link_owner_listings;
+      await replaceEmployeeSession(phone, 'employee_pay_link_owner', next);
+      return stay(controlRoom.payLinkOwnerPrompt(), 'employee_pay_link_owner');
+    }
+    const list = Array.isArray(data.pay_link_owner_listings) ? data.pay_link_owner_listings : [];
+    const selected = list[Number.parseInt(cleanBody, 10) - 1];
+    if (!selected) return stay('Reply with one of the numbers shown, or *NO* to search again.');
+    const paid = require('../services/revenueService').isoDay(selected.lister_paid_until);
+    if (paid && paid >= require('../services/revenueService').kampalaDate()) {
+      return close(`*${selected.title || 'That listing'}* is paid until ${paid}, so I did not send a payment link.`);
+    }
+    let sent;
+    try {
+      sent = await sendOwnerListingPayLink({ listing: selected, requestedBy: phone });
+    } catch (error) {
+      logger.error('Owner pay link send failed:', error);
+      return stay(`I could not send the link just then and nothing went out: ${error.message || 'unknown error'}\n\nReply the number again to retry, or *NO* to search again.`);
+    }
+    return close(controlRoom.payLinkOwnerSentMessage({
+      listing: selected,
+      url: sent.url,
+      code: sent.code,
+      amountLabel: `UGX ${Number(sent.amount_ugx || 0).toLocaleString('en-US')}`,
+      sentStatus: sent.status
+    }), {
+      employee_intake_last_pay_link_code: sent.code,
+      employee_intake_last_pay_link_at: new Date().toISOString()
+    }, { payLinkSent: sent.code });
+  }
+
+  // ── 7: who still owes ──────────────────────────────────────────────────────
+  if (currentStep === 'employee_owes_list' || currentStep === 'employee_owes_person') {
+    const rows = Array.isArray(data.owes_rows) ? data.owes_rows : [];
+    const showList = async (prefix = '') => {
+      const opened = await openWhoOwes({ phone, data });
+      return prefix ? { ...opened, message: `${prefix}\n\n${opened.message}` } : opened;
+    };
+    if (currentStep === 'employee_owes_list') {
+      const row = rows[Number.parseInt(cleanBody, 10) - 1];
+      if (!/^\d{1,2}$/.test(cleanBody) || !row) return stay('Reply the number of the person to open, or *CANCEL* to close.');
+      const next = { ...data, owes_selected: rows.indexOf(row) };
+      await replaceEmployeeSession(phone, 'employee_owes_person', next);
+      return stay(controlRoom.owesPersonMessage(row, { payLink: await latestPayLinkForOwesRow(row) }), 'employee_owes_person');
+    }
+    const row = rows[Number(data.owes_selected)];
+    if (!row) return showList();
+    if (/^(?:0|back|list)$/i.test(cleanBody)) return showList();
+    const actions = controlRoom.owesActions(row);
+    const action = actions[Number.parseInt(cleanBody, 10) - 1];
+    if (!/^\d$/.test(cleanBody) || !action) return stay('Reply one of the numbers shown, or *0* to go back to the list.');
+    if (action.blocked) return stay(`A reminder already went to ${row.name} today, so I have not sent another.\n\nReply *0* for the list, or *CANCEL* to close.`);
+    if (action.key !== 'pay_link') {
+      const quiet = chaseQuietHoursMessage();
+      if (quiet) return stay(`${quiet}\n\nReply *0* for the list, or *CANCEL* to close.`);
+    }
+    // They may have paid since the list was shown: look again before asking for money.
+    const fresh = (await controlRoom.whoOwes(db)).rows.find((item) => item.kind === row.kind && item.id === row.id);
+    if (!fresh) return showList(`✅ ${row.name} no longer owes anything: it was paid or closed since I showed you the list. Nothing was sent.`);
+    const actor = `whatsapp:${staffDigits}`;
+    const billingOps = require('../services/billingOpsService');
+    let done = '';
+    try {
+      if (action.key === 'pay_link') {
+        if (row.kind === 'agent') {
+          const sent = await sendStaffPayLink({ name: row.name, phone: row.phone, agentId: row.id, requestedBy: phone });
+          done = `✅ *Payment link sent to ${row.name}* — ${sent.fee_label} a month\n${sent.url}`;
+        } else {
+          const sent = await sendOwnerListingPayLink({ listing: { id: row.id, lister_phone: row.phone }, requestedBy: phone });
+          done = ['sent', 'queued', 'simulated'].includes(sent.status)
+            ? `✅ *Payment link sent to ${row.name}* — UGX ${Number(sent.amount_ugx || 0).toLocaleString('en-US')} a month\n${sent.url}`
+            : `⚠️ The link was made but not sent (${sent.status}). Forward it yourself:\n${sent.url}`;
+        }
+      } else {
+        const result = row.kind === 'agent'
+          ? await billingOps.sendAgentBillingMessage(db, { agentId: row.id, kind: action.key, actor, force: action.key === 'reminder' })
+          : await billingOps.sendListerBillingMessage(db, { propertyId: row.id, kind: action.key, actor });
+        const ok = ['sent', 'queued', 'simulated'].includes(String(result.status || ''));
+        const label = action.key === 'final_reminder' ? 'Final reminder' : 'Reminder';
+        done = ok
+          ? `✅ *${label} sent to ${row.name}*, with the payment link and the MoMo card.`
+          : `⚠️ The ${label.toLowerCase()} did not go (${result.status || 'unknown'}).`;
+        if (ok) {
+          const stamp = new Date().toISOString();
+          if (action.key === 'final_reminder') row.final_reminder_at = stamp;
+          else row.last_reminder_at = stamp;
+        }
+      }
+    } catch (error) {
+      logger.warn('Who-owes action failed', { action: action.key, kind: row.kind, error: error.message });
+      return stay(`That did not work: ${error.message || 'unknown error'}\n\nReply *0* for the list, or *CANCEL* to close.`);
+    }
+    await replaceEmployeeSession(phone, 'employee_owes_person', { ...data, owes_rows: rows });
+    return stay(`${done}\n\nI will tell you the moment they pay.\n\nReply *0* for the list, or *CANCEL* to close.`, 'employee_owes_person', { owesAction: action.key });
+  }
+
+  // ── 8: look someone up ─────────────────────────────────────────────────────
+  if (currentStep === 'employee_lookup' || currentStep === 'employee_lookup_pick' || currentStep === 'employee_lookup_action') {
+    const showDossier = async (lookupPhone, typed = '') => {
+      const dossier = await controlRoom.personDossier(db, lookupPhone);
+      const next = { ...data, employee_role: 'lookup', lookup_phone: dossier?.phone || '', lookup_name: '' };
+      delete next.lookup_candidates;
+      if (dossier?.known) {
+        next.lookup_name = String(dossier.agent?.full_name || dossier.own_listings[0]?.lister_name || dossier.prospect?.full_name || '').slice(0, 80);
+        await replaceEmployeeSession(phone, 'employee_lookup_action', next);
+        return stay(controlRoom.lookupCardMessage(dossier, { typed }), 'employee_lookup_action');
+      }
+      await replaceEmployeeSession(phone, 'employee_lookup', next);
+      return stay(controlRoom.lookupCardMessage(dossier, { typed: typed || lookupPhone }), 'employee_lookup');
+    };
+    if (currentStep === 'employee_lookup_pick' && /^\d$/.test(cleanBody)) {
+      const picked = (Array.isArray(data.lookup_candidates) ? data.lookup_candidates : [])[Number(cleanBody) - 1];
+      if (picked) return showDossier(picked.phone);
+    }
+    if (currentStep === 'employee_lookup_action' && /^\d$/.test(cleanBody) && data.lookup_phone) {
+      const dossier = await controlRoom.personDossier(db, data.lookup_phone);
+      const action = controlRoom.lookupActions(dossier)[Number(cleanBody) - 1];
+      if (!action) return stay('Reply one of the numbers shown, send another name or number, or *CANCEL*.');
+      const who = data.lookup_name || controlRoom.prettyPhone(dossier.phone);
+      try {
+        if (action.key === 'agent_pay_link') {
+          const sent = await sendStaffPayLink({ name: dossier.agent.full_name, phone: dossier.phone, agentId: dossier.agent.id, requestedBy: phone });
+          return stay(`✅ *Payment link sent to ${who}* — ${sent.fee_label} a month\n${sent.url}\n\nI will tell you the moment it is paid.\n\nSend another name or number, or *CANCEL*.`, 'employee_lookup_action', { payLinkSent: sent.code });
+        }
+        if (action.key === 'owner_pay_link') {
+          const listing = dossier.own_listings.find((item) => item.id === action.listing_id) || dossier.own_listings[0];
+          const sent = await sendOwnerListingPayLink({ listing, requestedBy: phone });
+          return stay(`${controlRoom.payLinkOwnerSentMessage({ listing, url: sent.url, code: sent.code, amountLabel: `UGX ${Number(sent.amount_ugx || 0).toLocaleString('en-US')}`, sentStatus: sent.status })}\n\nSend another name or number, or *CANCEL*.`, 'employee_lookup_action', { payLinkSent: sent.code });
+        }
+        const kind = action.key === 'owner_howto' ? 'owner' : 'agent';
+        const sent = await sendHowToFromStaff({ kind, phone: dossier.phone, name: data.lookup_name, sentBy: phone });
+        if (!sent.ok) return stay(`${sent.message}\n\nSend another name or number, or *CANCEL*.`);
+        return stay(`${controlRoom.howToSentMessage({ kind, name: who, phone: dossier.phone })}\n\nSend another name or number, or *CANCEL*.`, 'employee_lookup_action', { howToSent: kind });
+      } catch (error) {
+        logger.warn('Look-up action failed', { action: action.key, error: error.message });
+        return stay(`That did not work: ${error.message || 'unknown error'}\n\nSend another name or number, or *CANCEL*.`);
+      }
+    }
+    // Anything else is the next person to look up.
+    const digits = cleanBody.replace(/\D/g, '');
+    if (digits.length >= 9 && /^[+\d\s().-]+$/.test(cleanBody)) return showDossier(digits, cleanBody);
+    if (cleanBody.length < 2) return stay(controlRoom.lookupPrompt(), 'employee_lookup');
+    const people = await controlRoom.findPeopleByName(db, cleanBody);
+    if (!people.length) {
+      return stay(`Nobody on makaug matches “${cleanBody.slice(0, 40)}”: no agent, no private owner and nobody we have sent a film to.\n\nSend another name, or their phone number. *CANCEL* to stop.`, 'employee_lookup');
+    }
+    if (people.length === 1) return showDossier(people[0].phone);
+    const next = { ...data, employee_role: 'lookup', lookup_candidates: people };
+    await replaceEmployeeSession(phone, 'employee_lookup_pick', next);
+    return stay(controlRoom.lookupPickMessage(people, cleanBody), 'employee_lookup_pick');
+  }
+
+  return null;
+}
+
+/**
+ * A how-to video from Arthur or Ronald (Agent 007 → 5, or from a look-up).
+ * The agent film only works for an approved agent: this number is how the bot
+ * knows them. An owner gets the how-to-list film, which ends "reply LIST".
+ */
+async function sendHowToFromStaff({ kind = 'agent', phone = '', name = '', sentBy = '' } = {}) {
+  const dialable = String(phone || '').replace(/\D/g, '');
+  const allowed = await staffMayMessage(dialable);
+  if (!allowed.ok) return { ok: false, message: `I did not send it.\n\n${allowed.message}` };
+  const agent = await findApprovedAgentByPhone(dialable).catch(() => null);
+  if (kind === 'agent' && !agent) {
+    return {
+      ok: false,
+      message: `I did not send it: ${name || dialable} is not an approved agent on makaug yet, and posting by WhatsApp only works from an approved agent's number.\n\nSend them the agent intro film (*Agent 007* → *3*), or register them (*Agent 007* → *1*).`
+    };
+  }
+  if (kind === 'owner' && agent) {
+    return {
+      ok: false,
+      message: `I did not send it: ${agent.full_name} is a makaug agent, so the owner video would only confuse them. Choose *1 — An agent* instead.`
+    };
+  }
+  const videoKind = kind === 'owner' ? 'lister' : 'agent_howto';
+  // Twice in a day is a slip of the thumb, not a decision.
+  const recent = await db.query(
+    `SELECT created_at FROM audit_logs
+      WHERE action = 'explainer_video_sent' AND details->>'kind' = $2 AND created_at > NOW() - INTERVAL '24 hours'
+        AND RIGHT(regexp_replace(COALESCE(details->>'phone', ''), '\\D', '', 'g'), 9) = $1
+      LIMIT 1`,
+    [dialable.slice(-9), videoKind]
+  ).catch(() => ({ rows: [] }));
+  if (recent.rows.length) {
+    return { ok: false, message: `I did not send it: ${name || dialable} was sent this video in the last 24 hours. If they cannot find it, ask them to scroll up in the makaug chat.` };
+  }
+  const displayName = agent ? agentGreetingName(agent, '') || name : name;
+  try {
+    await sendHowToVideo({ kind, phone: dialable, name: displayName, sentBy });
+  } catch (error) {
+    logger.error('How-to video send failed:', error);
+    return { ok: false, retry: true, message: 'I could not send the video just then and nothing went out. Send the name and number again.' };
+  }
+  return { ok: true, name: agent?.full_name || name };
 }
 
 async function handleEmployeeWhatsappIntake({
@@ -10113,7 +10728,10 @@ async function handleEmployeeWhatsappIntake({
   if (!triggered && !active && !isStaffCustomerMode(session)
     && pitchFollowUpOpen(session) && isBarePitchContact(cleanBody)
     && employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) })) {
-    currentStep = 'employee_pitch_contact';
+    // The owner film (option 4) follows on the same way as the agent film.
+    currentStep = session?.session_data?.employee_intake_last_pitch_kind === 'owner'
+      ? 'employee_owner_pitch_contact'
+      : 'employee_pitch_contact';
     active = true;
   }
   if (!triggered && !active) {
@@ -10296,10 +10914,36 @@ async function handleEmployeeWhatsappIntake({
   // whatever was typed instead got stored as a property caption — "Close the
   // batch" became a property called "Close the batch". Anything already sent to
   // staff review stays there; only the unfinished work in hand is dropped.
+  // An agent who asked to change their profile photo and thought better of it:
+  // that CANCEL is about the photo ("Reply CANCEL to leave it for now"), not
+  // their properties. It closed their whole session and told them to "start
+  // again with Agent 007", the team's word.
+  if (isEmployeeIntakeCancel(cleanBody) && currentStep === 'employee_property_media'
+    && data.whatsapp_agent_self_intake === true && data.awaiting_profile_photo === true) {
+    const photoReply = await handleAgentProfilePhotoReply({ phone, data, candidates: [], cleanBody, inboundMessageId, runtime, currentStep });
+    if (photoReply) return photoReply;
+  }
   if (isEmployeeIntakeCancel(cleanBody)) {
     const confirmedInReview = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
     employeeBatchSummaryLastSent.delete(String(phone || ''));
     await replaceEmployeeSession(phone, 'main_menu', {});
+    // An agent's own chat: they never opened "Agent 007", so they are not told to.
+    if (data.whatsapp_agent_self_intake === true) {
+      return {
+        handled: true,
+        nextStep: 'main_menu',
+        message: confirmedInReview
+          ? `Okay, closed. ${confirmedInReview === 1 ? 'The property you sent is' : `The ${confirmedInReview} properties you sent are`} with our team for review, and I will send you the link when ${confirmedInReview === 1 ? 'it is' : 'each one is'} live. Anything unfinished has been dropped.\n\nSend the next property any time: photos and a caption.`
+          : 'Okay, closed. Nothing was sent for review.\n\nSend a property any time: photos and a caption.'
+      };
+    }
+    // Leaving the menu, a film, a payment link, the who-owes list or a look-up:
+    // there is no batch to talk about.
+    const noBatch = !confirmedInReview
+      && (!data.employee_role || ['pitch', 'owner_pitch', 'how_to', 'pay_link', 'owes', 'lookup'].includes(data.employee_role));
+    if (noBatch) {
+      return { handled: true, nextStep: 'main_menu', message: 'Agent 007 is closed.\n\nOpen it again any time with *Agent 007*.' };
+    }
     return {
       handled: true,
       nextStep: 'main_menu',
@@ -10333,7 +10977,22 @@ async function handleEmployeeWhatsappIntake({
     // needs the film first.
     if (role === 'pitch') {
       await replaceEmployeeSession(phone, 'employee_pitch_contact', data);
-      return { handled: true, nextStep: 'employee_pitch_contact', message: employeePitchContactPrompt() };
+      return { handled: true, nextStep: 'employee_pitch_contact', message: employeePitchContactPrompt(agentMonthlyFeeLabel()) };
+    }
+    // The control room (14 Nov 2026): the owner film, the how-to videos, who
+    // still owes, and looking someone up. Their steps are in handleControlRoomStep.
+    if (role === 'owner_pitch') {
+      await replaceEmployeeSession(phone, 'employee_owner_pitch_contact', data);
+      return { handled: true, nextStep: 'employee_owner_pitch_contact', message: controlRoom.ownerFilmPrompt() };
+    }
+    if (role === 'how_to') {
+      await replaceEmployeeSession(phone, 'employee_howto_who', data);
+      return { handled: true, nextStep: 'employee_howto_who', message: controlRoom.howToWhoPrompt() };
+    }
+    if (role === 'owes') return openWhoOwes({ phone, data });
+    if (role === 'lookup') {
+      await replaceEmployeeSession(phone, 'employee_lookup', data);
+      return { handled: true, nextStep: 'employee_lookup', message: controlRoom.lookupPrompt() };
     }
     // Somebody has agreed to pay and is waiting for the link.
     if (role === 'pay_link') {
@@ -10357,7 +11016,7 @@ async function handleEmployeeWhatsappIntake({
   if (currentStep === 'employee_pitch_contact') {
     const contact = parsePitchContact(cleanBody);
     if (!contact) {
-      return { handled: true, nextStep: currentStep, message: employeePitchContactPrompt() };
+      return { handled: true, nextStep: currentStep, message: employeePitchContactPrompt(agentMonthlyFeeLabel()) };
     }
     const prospects = require('../services/agentProspectService');
     // 12 Nov 2026: "Lukandwa property | 07044120230" — eleven digits — was
@@ -10416,22 +11075,29 @@ async function handleEmployeeWhatsappIntake({
     }
     await replaceEmployeeSession(phone, 'main_menu', {
       employee_intake_last_pitch_at: new Date().toISOString(),
-      employee_intake_last_pitch_name: contact.fullName
+      employee_intake_last_pitch_name: contact.fullName,
+      employee_intake_last_pitch_kind: 'agent'
     });
     return {
       handled: true,
       nextStep: 'main_menu',
       prospectPitched: true,
-      message: `✅ *Video sent to ${contact.fullName}* — ${dialable}\n\n`
-        + `They have the joining film: what we do, who sees their listings, how listing works and the plan (${agentMonthlyFeeLabel()} a month).\n\n`
-        + 'They have been asked to reply *AGENT* if they want to join.\n\n'
-        + 'When they say yes, reply *Agent 007* and choose *1* to register them.\n\n'
-        + 'I am keeping them on the Outreach list until they sign up.\n\n'
-        + `➡️ *Next one?* Send their *Name | phone number* in the next ${PITCH_FOLLOW_UP_MINUTES} minutes and the video goes straight out. No need for Agent 007 and 3.`
+      message: controlRoom.filmSentMessage({
+        kind: 'agent',
+        name: contact.fullName,
+        phone: dialable,
+        agentFee: agentMonthlyFeeLabel(),
+        followUpMinutes: PITCH_FOLLOW_UP_MINUTES
+      })
     };
   }
 
-  // ── Agent 007 option 4: send a payment link ────────────────────────────────
+  if (controlRoom.CONTROL_ROOM_STEPS.includes(currentStep)) {
+    const controlReply = await handleControlRoomStep({ phone, currentStep, cleanBody, data });
+    if (controlReply) return controlReply;
+  }
+
+  // ── Agent 007 option 6 (4 until 14 Nov 2026): send a payment link ─────────
   //
   // Registered agent or new prospect. The answer decides whether the link hangs
   // off an agent profile (so the payment settles their subscription) or stands
@@ -10445,6 +11111,10 @@ async function handleEmployeeWhatsappIntake({
     if (who === 'registered') {
       await replaceEmployeeSession(phone, 'employee_pay_link_lookup', data);
       return { handled: true, nextStep: 'employee_pay_link_lookup', message: employeePayLinkLookupPrompt() };
+    }
+    if (who === 'owner') {
+      await replaceEmployeeSession(phone, 'employee_pay_link_owner', data);
+      return { handled: true, nextStep: 'employee_pay_link_owner', message: controlRoom.payLinkOwnerPrompt() };
     }
     await replaceEmployeeSession(phone, 'employee_pay_link_prospect', data);
     return {
@@ -10465,7 +11135,7 @@ async function handleEmployeeWhatsappIntake({
         nextStep: currentStep,
         message: `No approved agent on makaug.com matches “${cleanBody}”.\n\n`
           + 'Send the name or agent number again.\n\n'
-          + 'If they are not registered yet, type *CANCEL*, then *Agent 007* and choose *4* then *2* to send them the link as a new prospect.'
+          + 'If they are not registered yet, type *CANCEL*, then *Agent 007* and choose *6* then *2* to send them the link as a new prospect.'
       };
     }
     data.pay_link_candidates = matches.map((agent) => ({
@@ -10613,7 +11283,7 @@ async function handleEmployeeWhatsappIntake({
         fullName: contact.fullName,
         phone: dialable,
         pitchedBy: phone,
-        metadata: { sent_via: 'agent_007_option_4', pay_link_code: sent.code },
+        metadata: { sent_via: 'agent_007_pay_link', pay_link_code: sent.code },
         allowDuplicate: true
       }).catch((error) => logger.warn('Agent prospect not recorded:', error.message || String(error)));
     }
@@ -18144,7 +18814,9 @@ async function agentFilmSentTo(phone) {
   const prospects = require('../services/agentProspectService');
   const prospect = await prospects.findProspectByPhone(phone).catch(() => null);
   const days = (at) => (Date.now() - new Date(at).getTime()) / 86400000;
-  if (prospect && prospect.pitched_at && days(prospect.pitched_at) <= AGENT_FILM_DAYS) {
+  // The owner film is on the same list (video_kind 'owner'): its replies are
+  // handleOwnerFilmReply's.
+  if (prospect && String(prospect.video_kind || 'agent') !== 'owner' && prospect.pitched_at && days(prospect.pitched_at) <= AGENT_FILM_DAYS) {
     return {
       at: prospect.pitched_at,
       by: normalizeInput(prospect.pitched_by_name) || staffNameForNumber(prospect.pitched_by),
@@ -18167,11 +18839,14 @@ async function agentFilmSentTo(phone) {
     [tail, AGENT_FILM_DAYS]
   ).catch(() => ({ rows: [] }))).rows[0];
   if (!row) return null;
+  const agentProspect = prospect && String(prospect.video_kind || 'agent') !== 'owner' ? prospect : null;
   return {
     at: row.created_at,
     by: staffNameForNumber(row.details?.sent_by),
     name: normalizeInput(row.details?.name || ''),
-    status: prospect?.status || '',
+    // No row of their own on the list: they got the film some other way (with a
+    // payment link, say), and are treated as pitched.
+    status: agentProspect?.status || (prospect ? 'pitched' : ''),
     prospect: Boolean(prospect),
     ageDays: days(row.created_at)
   };
@@ -18359,6 +19034,262 @@ async function agentMonthlyFeeUgx() {
   } catch (_ignored) {
     return 50000;
   }
+}
+
+// --- Replies to the owner film, and an owner looking after their listing ------
+// The owner intro film (sendOwnerPitchVideo) and the how-to-list video
+// (sendHowToVideo) end "Reply LIST". What a reply means, and what Arthur and
+// Ronald are told, is in services/ownerFilmReplyService.js.
+// "Yes" or "1" still means the film this long after it. LIST always does.
+const OWNER_FILM_YES_DAYS = 14;
+const OWNER_FILM_FIRST_REPLY_DAYS = 7;
+
+/** The owner film or how-to-list video a staff member sent this number in the last 30 days. */
+async function ownerFilmSentTo(phone) {
+  const tail = String(phone || '').replace(/\D/g, '').slice(-9);
+  if (tail.length !== 9) return null;
+  const row = (await db.query(
+    `SELECT created_at, details
+       FROM audit_logs
+      WHERE action = 'explainer_video_sent'
+        AND created_at > NOW() - ($2::int * INTERVAL '1 day')
+        AND (details->>'kind' = 'owner' OR (details->>'kind' = 'lister' AND details->>'employee_pitch' = 'true'))
+        AND RIGHT(regexp_replace(COALESCE(details->>'phone', ''), '\\D', '', 'g'), 9) = $1
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [tail, AGENT_FILM_DAYS]
+  ).catch(() => ({ rows: [] }))).rows[0];
+  if (!row) return null;
+  const prospect = await require('../services/agentProspectService').findProspectByPhone(phone).catch(() => null);
+  const ownerProspect = prospect && String(prospect.video_kind || '') === 'owner' ? prospect : null;
+  return {
+    at: row.created_at,
+    by: staffNameForNumber(row.details?.sent_by) || normalizeInput(ownerProspect?.pitched_by_name),
+    name: normalizeInput(row.details?.name || ownerProspect?.full_name || ''),
+    kind: row.details?.kind === 'lister' ? 'lister' : 'owner',
+    status: ownerProspect?.status || '',
+    prospect: Boolean(ownerProspect),
+    ageDays: (Date.now() - new Date(row.created_at).getTime()) / 86400000
+  };
+}
+
+/** Where an owner is on the Outreach list: interested (said LIST), signed_up (submitted), declined. */
+async function markOwnerProspectReply(phone, status, reply = '') {
+  const tail = String(phone || '').replace(/\D/g, '').slice(-9);
+  if (tail.length !== 9) return;
+  const from = {
+    declined: ['pitched', 'interested'],
+    interested: ['pitched'],
+    signed_up: ['pitched', 'interested'],
+    approved: ['pitched', 'interested', 'signed_up']
+  }[status] || [];
+  await db.query(
+    `UPDATE agent_prospects
+        SET status = CASE WHEN status = ANY($3::text[]) THEN $2 ELSE status END,
+            signed_up_at = CASE WHEN $2 = 'signed_up' AND status = ANY($3::text[]) THEN NOW() ELSE signed_up_at END,
+            metadata = COALESCE(metadata, '{}'::jsonb)
+              || CASE WHEN $4::text <> '' THEN jsonb_build_object('last_reply_at', NOW()::text, 'last_reply', $4::text) ELSE '{}'::jsonb END,
+            updated_at = NOW()
+      WHERE phone_key = $1 AND video_kind = 'owner'`,
+    [tail, status, from, normalizeInput(reply).slice(0, 300)]
+  ).catch((error) => logger.warn('Owner prospect reply not recorded:', error.message || String(error)));
+}
+
+/** Arthur and Ronald, and the lead-desk list: something about a private owner. */
+function tellTeamAboutOwner({ action = '', digits = '', said = '', body = '', type = 'owner_film_reply', withinHours = 12, pause = false } = {}) {
+  deferWhatsappWork(`Owner notice (${type})`, async () => {
+    if (action) {
+      const recent = await db.query(
+        `SELECT 1 FROM audit_logs WHERE action = $1 AND details->>'phone' = $2 AND created_at > NOW() - ($3::int * INTERVAL '1 hour') LIMIT 1`,
+        [action, String(digits || ''), withinHours]).catch(() => ({ rows: [] }));
+      if (recent.rows.length) return;
+      await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', $1, $2::jsonb)`, [action, JSON.stringify({ phone: String(digits || ''), text: normalizeInput(said).slice(0, 300) })]).catch(() => {});
+    }
+    if (pause) await agentFilmAlertPause();
+    const desk = require('../services/leadDeskService');
+    if (typeof desk.sendToTeam === 'function') await desk.sendToTeam(db, body, type, { extraRecipients: agentFilm.agentJoinAlertRecipients() });
+  });
+}
+
+/**
+ * A reply to the owner film. Returns { message, nextStep } when it answers the
+ * message (startListing: their listing has begun), or null to carry on as usual.
+ */
+async function handleOwnerFilmReply({ phone, body = '', step = '', lang = 'en', conversationControl = null, contactName = '', hasMedia = false } = {}) {
+  if (hasMedia) return null;
+  const control = conversationControl || {};
+  if (['off', 'copilot'].includes(String(control.ai_mode || '').toLowerCase())
+    || ['needs_human', 'escalated'].includes(String(control.status || '').toLowerCase())) return null;
+  if (!AGENT_FILM_RESTING_STEPS.has(String(step || ''))) return null;
+  const answer = ownerFilm.ownerFilmAnswer(body);
+  if (!answer) return null;
+  const film = await ownerFilmSentTo(phone);
+  if (!film) return null;
+  // A newer agent film wins: they are being spoken to as a possible agent.
+  const agentFilmRow = await agentFilmSentTo(phone).catch(() => null);
+  if (agentFilmRow && new Date(agentFilmRow.at).getTime() > new Date(film.at).getTime()) return null;
+  // An approved agent posts under their profile, whatever film reached them.
+  if (await findApprovedAgentByPhone(phone).catch(() => null)) return null;
+
+  const digits = String(phone || '').replace(/\D/g, '');
+  const name = film.name || contactName;
+  const first = ownerFilm.personalFirstName(name);
+  const said = normalizeInput(body).slice(0, 300);
+  const helpName = agentHelpContact().name;
+  const listed = ['signed_up', 'approved'].includes(film.status);
+
+  // "AGENT", as the reply to "I am an agent" asks: the agent sign-up takes it.
+  if (/^(?:yes\s+)?agent(?:\s+please)?[.!]*$/i.test(said)) {
+    return { message: await agentJoinRequestReply({ phone, text: said, name }), nextStep: 'main_menu' };
+  }
+  if (answer === 'list') {
+    const bare = !/\blist\b|\bpost\b|\bsell/i.test(said);
+    if (bare && film.ageDays > OWNER_FILM_YES_DAYS) return null;
+    if (!listed) await markOwnerProspectReply(phone, 'interested', said);
+    // The how-to goes with it, once: they are about to do exactly what it shows.
+    queueExplainerVideoOnce({ phone, kind: 'lister' });
+    tellTeamAboutOwner({
+      action: 'owner_list_started',
+      digits,
+      said,
+      type: 'owner_list_started',
+      body: ownerFilm.ownerFilmNotice({ kind: 'list', digits, name, said, film, helpName })
+    });
+    return {
+      message: `${ownerFilm.ownerListStartLine({ first })}\n\n${t(lang, 'askListingType')}`,
+      nextStep: 'listing_type',
+      startListing: true
+    };
+  }
+  if (answer === 'no') {
+    await markOwnerProspectReply(phone, 'declined', said);
+    // STOP is still an opt-out: the rest of the bot records it.
+    if (/^(STOP|UNSUBSCRIBE)\b/i.test(said)) return null;
+    return { message: ownerFilm.ownerFilmReply({ kind: 'no', first }), nextStep: 'main_menu' };
+  }
+  // Past the film: their listing is with us, and the rest of the bot answers.
+  if (listed || !['', 'pitched', 'interested'].includes(film.status)) return null;
+  if (/\b(?:PAID|DEPOSITED|TRANSFERRED|TRANSACTION|TXN|RECEIPT|TRANS ID)\b/i.test(said)) return null;
+
+  // Their first reply that is not LIST: Arthur and Ronald hear, once.
+  let passedOn = false;
+  if (film.ageDays <= OWNER_FILM_FIRST_REPLY_DAYS) {
+    const told = await db.query(
+      `SELECT 1 FROM audit_logs WHERE action IN ('owner_film_reply_notified', 'owner_list_started') AND details->>'phone' = $1 AND created_at > NOW() - INTERVAL '12 hours' LIMIT 1`,
+      [digits]).catch(() => ({ rows: [] }));
+    passedOn = true;
+    if (!told.rows.length) {
+      tellTeamAboutOwner({
+        action: 'owner_film_reply_notified',
+        digits,
+        said,
+        type: 'owner_film_reply',
+        pause: true,
+        body: ownerFilm.ownerFilmNotice({ kind: answer === 'agent' ? 'agent' : 'reply', digits, name, said, film, helpName })
+      });
+    }
+  }
+  await markOwnerProspectReply(phone, film.status === 'interested' ? 'interested' : 'pitched', said);
+  const message = ownerFilm.ownerFilmReply({ kind: answer, first, sentBy: film.by || '', passedOn });
+  if (!message) return null;
+  // Never the same words twice in a row.
+  const [lastSent] = await recentOutboundTo(phone, { days: 1, limit: 1 });
+  if (lastSent && normalizeInput(lastSent.text || '') === normalizeInput(message)) {
+    return { message: '', nextStep: 'main_menu', silent: true };
+  }
+  return { message, nextStep: 'main_menu' };
+}
+
+/**
+ * A private owner's own commands: REMOVE (with a "which one" and an "are you
+ * sure"), STATUS, HELP, and "thanks" after sending a property. Only for a
+ * number with a listing of its own; an agent has their own STATUS and HELP.
+ */
+async function handleOwnerListingCommand({ phone, body = '', step = '', session = {}, hasMedia = false, contactName = '' } = {}) {
+  if (hasMedia) return null;
+  const text = normalizeInput(body);
+  if (!text) return null;
+  const currentStep = String(step || '');
+  const data = session.session_data && typeof session.session_data === 'object' ? session.session_data : {};
+  const upper = text.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim();
+
+  if (currentStep === ownerListing.OWNER_REMOVE_PICK_STEP || currentStep === ownerListing.OWNER_REMOVE_CONFIRM_STEP) {
+    const pending = data.owner_remove && typeof data.owner_remove === 'object' ? data.owner_remove : null;
+    const ids = Array.isArray(pending?.ids) ? pending.ids : [];
+    const leave = async (message) => {
+      await patchSessionData(phone, { owner_remove: null });
+      return { message, nextStep: 'main_menu' };
+    };
+    if (!ids.length) { await patchSessionData(phone, { owner_remove: null }); return { resetStep: 'main_menu' }; }
+    const listings = (await ownerListing.ownerListings(db, phone, { statuses: ['pending', 'approved'] })).filter((row) => ids.includes(row.id));
+    if (!listings.length) return leave('That listing is already off makaug.com, so there is nothing to remove.');
+    if (/^(CANCEL|STOP|MENU|NO|N|NOPE|KEEP|KEEP IT|LEAVE IT|0|NONE)$/.test(upper)) {
+      return leave('Okay, nothing changed. Your listing stays as it is.');
+    }
+    // "Sold" instead: the SOLD flow marks it, with its 7 days of badge.
+    if (isSoldAnnouncement(text)) { await patchSessionData(phone, { owner_remove: null }); return { resetStep: 'main_menu' }; }
+    if (currentStep === ownerListing.OWNER_REMOVE_PICK_STEP) {
+      const chosen = /^\d{1,2}$/.test(upper) ? listings[Number(upper) - 1] : null;
+      if (!chosen) return { message: `Reply the number of the listing to remove (1-${listings.length}), or *0* to leave them.`, nextStep: currentStep };
+      await patchSessionData(phone, { owner_remove: { ids: [chosen.id] } });
+      return { message: ownerListing.removeConfirmMessage(chosen), nextStep: ownerListing.OWNER_REMOVE_CONFIRM_STEP };
+    }
+    if (!/^(YES|Y|YEAH|YEP|YE|REMOVE|REMOVE IT|CONFIRM|OK|OKAY|SURE|1)$/.test(upper)) {
+      return { message: 'Reply *YES* to take it off makaug, or *NO* to keep it.', nextStep: currentStep };
+    }
+    const row = listings[0];
+    const removed = await ownerListing.removeOwnerListing(db, { listing: row, phone }).catch((error) => {
+      logger.error('Owner listing removal failed', { error: error.message, listingId: row.id });
+      return false;
+    });
+    if (!removed) return leave('I could not remove it just now. The team has been told and will take it down for you.');
+    tellTeamAboutOwner({ type: 'owner_listing_removed', body: ownerListing.removedTeamNotice({ row, phone }) });
+    return leave(ownerListing.removedMessage(row));
+  }
+
+  if (!AGENT_FILM_RESTING_STEPS.has(currentStep)) return null;
+  const wantsRemove = ownerListing.isRemoveRequest(text);
+  const wantsStatus = ownerListing.isStatusRequest(text);
+  const wantsHelp = ownerListing.isHelpRequest(text);
+  const saysThanks = ownerListing.isThanks(text);
+  if (!wantsRemove && !wantsStatus && !wantsHelp && !saysThanks) return null;
+  if (isAiCeoOwnerPhone(phone) || isStaffIntakeNumber({ phone, session }) || staffNameForNumber(phone)) return null;
+  if (await findApprovedAgentByPhone(phone).catch(() => null)) return null;
+
+  const listings = await ownerListing.ownerListings(db, phone);
+  const name = listings[0]?.lister_name || contactName;
+  if (saysThanks) {
+    // Only right after sending one in: later, "thanks" is the playbook's.
+    const waiting = listings.filter((row) => String(row.status).toLowerCase() === 'pending'
+      && Date.now() - new Date(row.created_at).getTime() < 6 * 3600 * 1000);
+    if (!waiting.length) return null;
+    return { message: ownerListing.submittedThanksReply({ listings: waiting, name }), nextStep: 'main_menu' };
+  }
+  if (wantsHelp) {
+    // An owner with a listing, or one we sent the film to. Anyone else keeps the usual help.
+    if (!listings.length && !(await ownerFilmSentTo(phone))) return null;
+    tellTeamAboutOwner({
+      action: 'owner_help_requested',
+      digits: String(phone || '').replace(/\D/g, ''),
+      said: text,
+      withinHours: 1,
+      type: 'owner_help_request',
+      body: ownerListing.ownerHelpTeamNotice({ name, phone, said: text, listings })
+    });
+    return { message: ownerListing.ownerHelpReply({ name, contact: agentHelpContact() }), nextStep: 'main_menu' };
+  }
+  if (!listings.length) return null;
+  if (wantsStatus) return { message: ownerListing.ownerStatusMessage(listings, { name }), nextStep: 'main_menu' };
+
+  const removable = listings.filter((row) => ['pending', 'approved'].includes(String(row.status).toLowerCase()));
+  if (!removable.length) {
+    return { message: 'You have nothing live on makaug.com to remove.\n\nAnother property to list? Reply *LIST*.', nextStep: 'main_menu' };
+  }
+  await patchSessionData(phone, { owner_remove: { ids: removable.map((row) => row.id), asked_at: new Date().toISOString() } });
+  if (removable.length === 1) {
+    return { message: ownerListing.removeConfirmMessage(removable[0]), nextStep: ownerListing.OWNER_REMOVE_CONFIRM_STEP };
+  }
+  return { message: ownerListing.removePickMessage(removable), nextStep: ownerListing.OWNER_REMOVE_PICK_STEP };
 }
 
 // --- Replies to what we sent ---------------------------------------------------
@@ -18591,12 +19522,19 @@ async function handleReplyPlaybook({ phone, body = '', step = '', conversationCo
 
 // Short explainer film, sent once (per 30 days) when someone wants to list a
 // property or join as an agent. Goes before the bot's text reply.
+// The four films (14 Nov 2026, scripts/films). Each shows the real chat, the
+// real pages and numbers we can stand behind; the source for every claim is in
+// scripts/films/README.md.
+//   agent        the agent intro film       Agent 007 → 3, and "AGENT" replies
+//   owner        the owner intro film       Agent 007 → 4
+//   lister       how to list, for an owner  Agent 007 → 5, and when a listing starts
+//   agent_howto  how to post, for an agent  Agent 007 → 5, and the welcome pack
+// The agent caption still leaves the fee to the film and the terms they sign.
 const EXPLAINER_VIDEOS = {
-  // v3 / v4 (10 Nov 2026): no free days — the price scenes say UGX 20,000 a
-  // month per property and UGX 50,000 a month for agents. The agent caption
-  // still leaves the fee to the terms they sign.
-  lister: { path: '/assets/marketing/makaug-list-your-property-v3.mp4', caption: '🎬 *How listing on makaug works* — under a minute: send photos, confirm it\'s you, agree to the terms, and your property goes live in front of Ugandans at home and abroad (UK, Dubai, Canada, South Africa). UGX 20,000 a month per property — we send you the payment link, nothing is charged automatically.' },
-  agent: { path: '/assets/marketing/makaug-join-as-agent-v4.mp4', caption: '🎬 *makaug for agents* — what you get, who sees your listings (Ugandans at home and abroad) and how to join.' }
+  lister: { path: '/assets/marketing/makaug-owner-how-to-list-v4.mp4', caption: '🎬 *How to list your property on makaug* — step by step, about 5 minutes: answer a few short questions, send your photos, confirm it\'s you and agree to the terms. Our team checks it and you get the link when it is live. UGX 20,000 a month per property — we send you how to pay, nothing is charged automatically.' },
+  agent: { path: '/assets/marketing/makaug-agent-intro-v5.mp4', caption: '🎬 *makaug for agents* — what you get, who sees your listings (Ugandans at home and abroad) and how to join.' },
+  owner: { path: '/assets/marketing/makaug-owner-intro-v1.mp4', caption: '🎬 *Selling or renting out your own property?* This short film shows how makaug works for owners.' },
+  agent_howto: { path: '/assets/marketing/makaug-agent-how-to-post-v3.mp4', caption: '🎬 *How to post a property on makaug, right here on WhatsApp* — one property from start to finish, in about a minute.' }
 };
 
 /** The fee, in the words an agent reads — one source, so it cannot drift. */
@@ -18627,11 +19565,13 @@ async function sendAgentPitchVideo({ phone, name = '', sentBy = '' } = {}) {
   }
   const firstName = normalizeInput(name).split(/\s+/)[0] || '';
   const greeting = firstName ? `Hello ${firstName} 👋\n\n` : '';
+  // The countries are the ones our own analytics show listings being opened
+  // from (agentWelcomeService.computePlatformStats, 14 Nov 2026).
   const caption = `${greeting}${video.caption}\n\n`
-    + '• Most of our visitors are in Uganda, and Ugandans abroad find us from the UK, USA, Canada, Dubai, Germany, Sweden, Switzerland, South Africa and more.\n'
-    + '• The site speaks 9 languages, including Luganda and Swahili.\n'
-    + '• You post straight from WhatsApp: send the photos and the details, our team checks it, it goes live.\n'
-    + '• You get your own agent page, and every property you list sits under it.\n\n'
+    + '• You post straight from WhatsApp: send the photos and one caption, our team checks it, it goes live under your name.\n'
+    + '• Every enquiry comes straight to your WhatsApp with the buyer\'s name and number. makaug takes no commission.\n'
+    + '• You get your own agent page, a weekly report of views and enquiries, and the Morning Brief every day at 7am.\n'
+    + '• Listings are opened in Uganda and by people abroad: the UK, USA, UAE, Canada, South Africa, Kenya and more. The site speaks 9 languages, including Luganda and Swahili.\n\n'
     + 'Reply *AGENT* here if you would like to join and we will set you up.';
 
   await db.query(
@@ -18658,6 +19598,101 @@ async function sendAgentPitchVideo({ phone, name = '', sentBy = '' } = {}) {
 }
 
 /**
+ * Agent 007 option 4: the owner intro film, to somebody selling or renting out
+ * their own property. Deliberate, like the agent film: it waits for the send,
+ * so the staff member is told what actually happened. The reply it asks for
+ * (LIST) is answered by handleOwnerFilmReply.
+ */
+async function sendOwnerPitchVideo({ phone, name = '', sentBy = '' } = {}) {
+  const video = EXPLAINER_VIDEOS.owner;
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 9) {
+    const error = new Error('That phone number is too short to send to');
+    error.status = 400;
+    throw error;
+  }
+  const first = ownerFilm.personalFirstName(name);
+  const caption = [
+    first ? `Hello ${first} 👋` : 'Hello 👋',
+    '',
+    video.caption,
+    '',
+    '• *Buyers and tenants call you direct.* Your name and number are on the listing, and makaug takes no commission.',
+    '• *About 5 minutes on WhatsApp.* A few short questions and your photos. Our team checks it, then it goes live.',
+    '• Listings are opened in Uganda and by people abroad, in 9 languages.',
+    `• *${controlRoom.ownerFeeLabel()} a month per property*, from the day it goes live. Nothing is charged automatically.`,
+    '',
+    'Reply *LIST* here and I will take you through it now.'
+  ].join('\n');
+
+  await db.query(
+    `INSERT INTO audit_logs (actor_id, action, details) VALUES ($1, 'explainer_video_sent', $2::jsonb)`,
+    [normalizeInput(sentBy) || 'whatsapp', JSON.stringify({ phone: digits, kind: 'owner', name: normalizeInput(name).slice(0, 120), sent_by: String(sentBy || ''), employee_pitch: true })]
+  ).catch(() => null);
+
+  return queueWhatsappWebBridgeMessage({
+    recipient: digits,
+    text: caption,
+    mediaUrl: `${HOME_URL}${video.path}`,
+    mediaType: 'video',
+    source: 'whatsapp_runtime',
+    actorId: normalizeInput(sentBy) || 'system',
+    metadata: {
+      message_kind: 'explainer_video_owner',
+      employee_pitch: true,
+      reply_dedupe_key: `pitch:owner:${digits}:${Date.now()}`
+    }
+  });
+}
+
+/**
+ * Agent 007 option 5: a how-to video from a staff member. An owner's ends
+ * "reply LIST", which handleOwnerFilmReply answers; an agent's ends "send me
+ * your first one", which their own posting session takes.
+ */
+async function sendHowToVideo({ kind = 'agent', phone, name = '', sentBy = '' } = {}) {
+  const key = kind === 'owner' ? 'lister' : 'agent_howto';
+  const video = EXPLAINER_VIDEOS[key];
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 9) {
+    const error = new Error('That phone number is too short to send to');
+    error.status = 400;
+    throw error;
+  }
+  const first = ownerFilm.personalFirstName(name);
+  const caption = kind === 'owner'
+    ? [first ? `Hello ${first} 👋` : 'Hello 👋', '', video.caption, '', 'Reply *LIST* here to start.'].join('\n')
+    : [
+      `Hi${first ? ` ${first}` : ''} 👋`,
+      '',
+      video.caption,
+      '',
+      'Then send me your first one: photos or a short video, and a caption with what it is, the exact area and the price.',
+      '',
+      '*SHARE* gives you your page link and card. *STATUS* shows where your properties are. *SOLD* marks one as gone. *HELP* gets you a person.'
+    ].join('\n');
+
+  await db.query(
+    `INSERT INTO audit_logs (actor_id, action, details) VALUES ($1, 'explainer_video_sent', $2::jsonb)`,
+    [normalizeInput(sentBy) || 'whatsapp', JSON.stringify({ phone: digits, kind: key, name: normalizeInput(name).slice(0, 120), sent_by: String(sentBy || ''), employee_pitch: true, how_to: true })]
+  ).catch(() => null);
+
+  return queueWhatsappWebBridgeMessage({
+    recipient: digits,
+    text: caption,
+    mediaUrl: `${HOME_URL}${video.path}`,
+    mediaType: 'video',
+    source: 'whatsapp_runtime',
+    actorId: normalizeInput(sentBy) || 'system',
+    metadata: {
+      message_kind: `explainer_video_${key}`,
+      employee_pitch: true,
+      reply_dedupe_key: `howto:${key}:${digits}:${Date.now()}`
+    }
+  });
+}
+
+/**
  * Only promise the payment methods the page will actually offer.
  *
  * Card, Apple Pay and Google Pay appear on /pay/<code> only when Revolut is
@@ -18675,7 +19710,8 @@ async function payLinkMethodLine(code) {
 }
 
 /**
- * Agent 007 option 4: a staff member sends somebody the monthly payment link.
+ * Agent 007 option 6 (4 until 14 Nov 2026): a staff member sends somebody the
+ * monthly payment link.
  *
  * One function for both branches, because everything after "who is it for" is
  * the same errand: make the link, send it, write down that it was sent, and
@@ -20934,6 +21970,21 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       const feeLine = fee.free_days > 0
         ? `🗓️ Once approved, your property is live *free for ${fee.free_days} days*. After that it is UGX ${fee.monthly_ugx.toLocaleString('en-US')} a month to stay live — we'll message you before then, with how many people have viewed it.`
         : `🗓️ Once our team approves it, your property goes live and I send you the payment link: *UGX ${fee.monthly_ugx.toLocaleString('en-US')} a month* keeps it live. Nothing is charged automatically.`;
+      // English: one message saying what was sent and what happens next. It had
+      // been two stitched together: a link that did not work yet, "set up your
+      // profile", a thank-you, then the fee.
+      if (resolveLangCode(lang) === 'en' && !IS_SOUTH_AFRICA && !(fee.free_days > 0)) {
+        const sent = { ...draft, ...acceptance };
+        const price = Number(sent.price || 0);
+        return respond(ownerListing.submittedMessage({
+          name: sent.contact_display_name || sent.lister_name || '',
+          title: sent.title || '',
+          location: [sent.area, sent.district].filter(Boolean).join(', '),
+          price: price > 0 ? formatPrice(price, sent.price_period) : '',
+          reference: result.inquiryReference || '',
+          monthlyFee: `UGX ${fee.monthly_ugx.toLocaleString('en-US')}`
+        }), result.nextStep);
+      }
       return respond(`${result.message}\n\n✅ Thank you for agreeing to the terms.\n${feeLine}`, result.nextStep);
     }
     if (isNegativeReply(cleanBody) || /^(no|cancel|stop)\b/.test(answer)) {
@@ -21372,6 +22423,104 @@ async function processInboundRuntimeUnlocked({
       return { message: '', nextStep: sessionStep };
     }
   }
+
+  // An open SOLD question ("Reply 1 = Yes, mark it SOLD"): its answer is read
+  // here, before anything below can take the 1 for something of its own. A
+  // message that is plainly not the answer closes the question, marks nothing,
+  // and is then read the ordinary way.
+  if (sessionStep === SOLD_CONFIRM_STEP || sessionStep === SOLD_LINK_STEP) {
+    const soldQuestion = await settleOpenSoldQuestion({
+      phone,
+      session: sessionForMessage,
+      body: effectiveBody,
+      mediaUrl: effectiveMediaUrl,
+      // A voice note is read by its words; a photo or video is never the answer.
+      hasMedia: Boolean(inboundPhotoCandidates.length || inboundMediaCandidates.length || (effectiveMediaUrl && !isAudioNote))
+    }).catch((error) => {
+      logger.error('SOLD question could not be settled:', error);
+      return { failed: true };
+    });
+    if (soldQuestion.reply) {
+      deferWhatsappWork('WhatsApp SOLD answer intent log', () => logIntent({
+        userPhone: phone,
+        waMessageId: inboundMessageId,
+        detectedIntent: 'listing_sold',
+        confidence: 1,
+        language: sessionLang,
+        currentStep: sessionStep,
+        rawText: effectiveBody,
+        transcript: transcriptRecord?.text || null,
+        entities: { next_step: soldQuestion.reply.nextStep || 'main_menu', via: 'sold_question' },
+        modelUsed: 'sold_question'
+      }));
+      return { message: soldQuestion.reply.message || '', nextStep: soldQuestion.reply.nextStep || 'main_menu' };
+    }
+    if (soldQuestion.failed) {
+      return { message: 'I could not mark it just then and nothing was changed. Please reply *1* again in a moment.', nextStep: sessionStep };
+    }
+    if (soldQuestion.closed) {
+      sessionStep = soldQuestion.step;
+      for (const held of [session, sessionForMessage]) {
+        held.current_step = soldQuestion.step;
+        held.session_data = { ...(held.session_data || {}), agent_sold: null };
+      }
+    }
+  }
+
+  // A private owner looking after their own listing: REMOVE, STATUS, HELP, and
+  // "thanks" after sending one in.
+  const ownerCommandReply = await handleOwnerListingCommand({
+    phone,
+    body: effectiveBody,
+    step: sessionStep,
+    session: sessionForMessage,
+    contactName,
+    hasMedia: Boolean(inboundPhotoCandidates.length || effectiveMediaUrl)
+  }).catch((error) => {
+    logger.warn('Owner listing command check failed:', error.message || String(error));
+    return null;
+  });
+  if (ownerCommandReply?.message) {
+    await updateSession(phone, { current_step: ownerCommandReply.nextStep || 'main_menu' });
+    return { message: ownerCommandReply.message, nextStep: ownerCommandReply.nextStep || 'main_menu' };
+  }
+  if (ownerCommandReply?.resetStep) {
+    await updateSession(phone, { current_step: ownerCommandReply.resetStep });
+    sessionStep = ownerCommandReply.resetStep;
+    sessionForMessage.current_step = ownerCommandReply.resetStep;
+  }
+
+  // A reply to the owner film ("Reply LIST here and I will take you through
+  // it"): their listing starts, and Arthur and Ronald are told who it is.
+  const ownerFilmReplied = await handleOwnerFilmReply({
+    phone,
+    body: effectiveBody,
+    step: sessionStep,
+    lang: sessionLang,
+    conversationControl,
+    contactName,
+    hasMedia: Boolean(inboundPhotoCandidates.length || (effectiveMediaUrl && !isAudioNote))
+  }).catch((error) => {
+    logger.warn('Owner film reply check failed:', error.message || String(error));
+    return null;
+  });
+  if (ownerFilmReplied?.message) {
+    await updateSession(phone, { current_step: ownerFilmReplied.nextStep || 'main_menu' });
+    deferWhatsappWork('WhatsApp owner film reply intent log', () => logIntent({
+      userPhone: phone,
+      waMessageId: inboundMessageId,
+      detectedIntent: ownerFilmReplied.startListing ? 'property_listing' : 'owner_film_reply',
+      confidence: 1,
+      language: sessionLang,
+      currentStep: sessionStep,
+      rawText: effectiveBody,
+      transcript: null,
+      entities: { next_step: ownerFilmReplied.nextStep || 'main_menu', via: 'owner_film_reply' },
+      modelUsed: 'owner_film_reply'
+    }));
+    return { message: ownerFilmReplied.message, nextStep: ownerFilmReplied.nextStep || 'main_menu' };
+  }
+  if (ownerFilmReplied?.silent) return { message: '', nextStep: ownerFilmReplied.nextStep || sessionStep };
 
   // A reply to the agent film ("Reply AGENT here if you would like to join"):
   // someone who wants to join, not someone looking for an agent. Arthur and
@@ -23329,6 +24478,11 @@ module.exports.__test = {
   startSoldAnnouncement,
   handleSoldConfirmReply,
   handleSoldLinkReply,
+  settleOpenSoldQuestion,
+  soldListingNamedIn,
+  soldAnswerKind,
+  SOLD_QUESTION_OPEN_HOURS,
+  handleSoldLinkReply,
   markListingSoldFromWhatsapp,
   soldAnnouncementAppliesTo,
   sendAgentPropertySubmittedAlert,
@@ -23353,6 +24507,19 @@ module.exports.__test = {
   commercialUseInSearch,
   inferListingTypeFromStartRequest,
   sendAgentPitchVideo,
+  sendOwnerPitchVideo,
+  sendHowToVideo,
+  sendHowToFromStaff,
+  handleControlRoomStep,
+  handleOwnerFilmReply,
+  handleOwnerListingCommand,
+  ownerFilmSentTo,
+  notifyTeamOwnerListingSubmitted,
+  chaseQuietHoursMessage,
+  listingPricePrompt,
+  fastListingProgressReply,
+  whatsappContactConfirmationPrompt,
+  EXPLAINER_VIDEOS,
   sendStaffPayLink,
   recoverInterruptedEmployeeIntakeStep,
   agentMonthlyFeeLabel,

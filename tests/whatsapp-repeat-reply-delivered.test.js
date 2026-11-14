@@ -217,7 +217,7 @@ test('the reply queued for a new message carries the repeat line', async () => {
     const queued = await route.__test.queueWhatsappWebBridgeAutoReply({ phone: ARTHUR, message: MENU, nextStep: 'employee_intake_role', inboundMessageId: 'in-4' });
     assert.strictEqual(queued.id, 'q-new');
     assert.strictEqual(inserted.length, 1);
-    assert.ok(inserted[0].text.startsWith('🔁 Here it is again:\n\n🔐 *makaug employee intake*'), inserted[0].text.slice(0, 80));
+    assert.ok(inserted[0].text.startsWith('🔁 Here it is again:\n\n🔐 *Agent 007* · makaug control room'), inserted[0].text.slice(0, 80));
   } finally {
     db.query = original;
   }

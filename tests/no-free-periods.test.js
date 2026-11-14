@@ -137,10 +137,18 @@ test('the agent terms PDF no longer says "Your first 0 days are free"', () => {
 
 test('the WhatsApp films are the new cuts, and their captions and the menu offer no free days', () => {
   const route = read('routes/whatsapp.js');
-  assert.match(route, /makaug-list-your-property-v3\.mp4/);
-  assert.match(route, /makaug-join-as-agent-v4\.mp4/);
-  assert.ok(fs.existsSync(path.join(root, 'assets/marketing/makaug-list-your-property-v3.mp4')));
-  assert.ok(fs.existsSync(path.join(root, 'assets/marketing/makaug-join-as-agent-v4.mp4')));
+  // The 14 Nov 2026 films: an intro and a how-to each, for agents and for owners.
+  for (const film of ['makaug-owner-how-to-list-v4.mp4', 'makaug-agent-intro-v5.mp4', 'makaug-owner-intro-v1.mp4', 'makaug-agent-how-to-post-v3.mp4']) {
+    assert.ok(route.includes(`/assets/marketing/${film}`), film);
+    assert.ok(fs.existsSync(path.join(root, 'assets/marketing', film)), `${film} is in the repository`);
+  }
+  // What they say on screen, and the assistant's words they print, offer no free days either.
+  for (const source of ['scripts/films/films/agent-intro.js', 'scripts/films/films/owner-intro.js', 'scripts/films/films/agent-howto.js', 'scripts/films/films/owner-howto.js', 'scripts/films/transcript.js']) {
+    const said = read(source).replace(/no free days/gi, '');
+    assert.ok(!/free trial|days free|free for|free until|first week|14 days|\bfree\b/i.test(said), `${source} offers no free days`);
+  }
+  assert.match(read('scripts/films/films/owner-intro.js'), /UGX 20,000 a month/);
+  assert.match(read('scripts/films/films/agent-intro.js'), /UGX 50,000 a month/);
   const films = route.slice(route.indexOf('const EXPLAINER_VIDEOS = {'), route.indexOf('/** The fee, in the words an agent reads'))
     .split('\n').filter((line) => !line.trim().startsWith('//')).join('\n');
   assert.ok(!/days free|free days|First 7/i.test(films));

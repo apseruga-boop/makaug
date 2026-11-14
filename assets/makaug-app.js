@@ -51671,7 +51671,10 @@ function listingBadgeRowHtml(p = {}, options = {}) {
   }
   const isSold = normalizeModerationStatus(p.status) === "sold";
   if (isSold) {
-    badges.push(badgeHtml({ label: "SOLD", cls: "bg-blue-600 text-white", icon: "" }, sizeClass));
+    // A rental that has gone is let, not sold (the rule the King's "Mark let" uses).
+    const isLet = String(p.availability_status || p.availabilityStatus || "").toLowerCase() === "let_agreed"
+      || /rent|short|student/i.test(String(p.listing_type || p.type || ""));
+    badges.push(badgeHtml({ label: isLet ? "LET" : "SOLD", cls: "bg-blue-600 text-white", icon: "" }, sizeClass));
   }
   badges.push(listingNewBadgeHtml(p, sizeClass));
   badges.push(listingFoundOnlineBadgeHtml(p, sizeClass));
