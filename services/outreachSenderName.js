@@ -43,10 +43,43 @@ function canonicalSenderName(name) {
   return text;
 }
 
+/**
+ * The staff added to Agent 007 in King (Sales & Revenue › Settings), by first
+ * name, as Arthur and Ronald are: [{ key: 'jane', name: 'Jane', phone }].
+ * Somebody who shares a first name with Arthur or Ronald is listed with them.
+ */
+function savedStaffSenders() {
+  try {
+    const seen = new Set(['arthur', 'ronald', 'other', 'all']);
+    const out = [];
+    for (const member of require('./whatsappEmployeeIntakeService').savedAgent007StaffList()) {
+      const name = canonicalSenderName(String(member.name || '').trim().split(/\s+/)[0]);
+      const key = name.toLowerCase().replace(/[^a-z0-9]+/g, '');
+      if (!name || !key) continue;
+      out.push({ key, name, phone: member.phone, listed: !seen.has(key) });
+      seen.add(key);
+    }
+    return out;
+  } catch (_) {
+    return [];
+  }
+}
+
+/** Who a film can be "sent by" on the Outreach desk: Arthur, Ronald, then the staff added in King. Names only. */
+function staffSenderChoices() {
+  return [
+    { key: 'arthur', name: 'Arthur' },
+    { key: 'ronald', name: 'Ronald' },
+    ...savedStaffSenders().filter((member) => member.listed).map(({ key, name }) => ({ key, name }))
+  ];
+}
+
 function senderBucket(name) {
   const text = String(name || '').trim().toLowerCase();
   if (text === 'arthur' || text.startsWith('arthur ')) return 'arthur';
   if (text === 'ronald' || text.startsWith('ronald ')) return 'ronald';
+  const first = text.split(/\s+/)[0].replace(/[^a-z0-9]+/g, '');
+  if (first && savedStaffSenders().some((member) => member.listed && member.key === first)) return first;
   return 'other';
 }
 
@@ -57,6 +90,8 @@ function knownOutreachSenders(env = process.env, extras = {}) {
     const label = canonicalSenderName(name);
     if (key.length === 9 && label) map[key] = label;
   };
+  // The staff added in King first, so Arthur and Ronald below keep their own numbers.
+  for (const member of savedStaffSenders()) add(member.phone, member.name);
   add(env.AGENT_HELP_CONTACT_PHONE, env.AGENT_HELP_CONTACT_NAME || 'Ronald');
   try {
     const film = require('./agentFilmReplyService');
@@ -109,6 +144,8 @@ module.exports = {
   looksLikePhoneLabel,
   canonicalSenderName,
   senderBucket,
+  savedStaffSenders,
+  staffSenderChoices,
   knownOutreachSenders,
   knownOutreachSenderName,
   resolveOutreachSenderName,

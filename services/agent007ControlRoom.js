@@ -178,7 +178,7 @@ function agentFilmPrompt({ agentFee = agentFeeLabel() } = {}) {
     '',
     `For an agent or broker who is not on makaug yet. They get the film and a short message: who sees their listings, how posting from WhatsApp works, and the plan (${agentFee} a month). It asks them to reply *AGENT*.`,
     '',
-    'When they do, I tell them Ronald will call, and you both get a WhatsApp with their number.',
+    'When they do, I tell them Ronald will call, and Arthur and Ronald both get a WhatsApp with their number.',
     '',
     'Who should it go to? Send:',
     '*Name | phone number*',

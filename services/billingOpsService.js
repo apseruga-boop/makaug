@@ -36,14 +36,37 @@ async function getSettings(db, { fresh = false } = {}) {
 }
 
 async function setSetting(db, key, value, actor = 'admin') {
-  const allowed = new Set(['pay_to', 'confirmers', 'agent_fee', 'lister_fee', 'lister_views_message', 'card_payments']);
+  const allowed = new Set(['pay_to', 'confirmers', 'agent_fee', 'lister_fee', 'lister_views_message', 'card_payments', 'agent007_staff']);
   if (!allowed.has(key)) throw revenue.httpError(400, 'Unknown setting');
+  // Who else can use Agent 007 (Arthur and Ronald always can). Every line has to
+  // be a name and a full WhatsApp number, or nothing is saved: a typo must not
+  // quietly leave somebody out, or let the wrong number in.
+  if (key === 'agent007_staff') {
+    const intake = require('./whatsappEmployeeIntakeService');
+    const { staff, rejected } = intake.parseAgent007Staff(value);
+    if (!Array.isArray(value) || rejected.length) {
+      throw revenue.httpError(400, `Agent 007: each person needs a name and a WhatsApp number with its country code${rejected.length ? ` (check: ${rejected.join(', ')})` : ''}.`);
+    }
+    value = staff;
+  }
   await db.query(
     `INSERT INTO billing_settings (key, value, updated_by, updated_at) VALUES ($1, $2::jsonb, $3, NOW())
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = NOW()`,
     [key, JSON.stringify(value), actor]
   );
   settingsCache = { at: 0, value: null };
+  // Saved: they can come in from their very next message.
+  if (key === 'agent007_staff') require('./whatsappEmployeeIntakeService').rememberAgent007Staff(value);
+}
+
+/**
+ * Who else can use Agent 007, as saved in Sales & Revenue › Settings. Reading it
+ * here also hands it to whatsappEmployeeIntakeService, which answers "may this
+ * number come in?" without waiting on the database.
+ */
+async function loadAgent007Staff(db) {
+  const settings = await getSettings(db);
+  return require('./whatsappEmployeeIntakeService').rememberAgent007Staff(settings?.agent007_staff);
 }
 
 /**
@@ -1234,6 +1257,7 @@ function startBillingScheduler(db) {
 }
 
 module.exports = {
+  loadAgent007Staff,
   AGENT_MESSAGE_KINDS,
   getSettings,
   setSetting,

@@ -208,9 +208,13 @@ async function screenWhatsappDemand(db) {
 
 async function loadExtraInternalPhones(db) {
   try {
-    const rows = await db.query(`SELECT value FROM billing_settings WHERE key = 'confirmers'`);
-    const list = Array.isArray(rows.rows[0]?.value) ? rows.rows[0].value : [];
-    extraInternalPhones = list.map((c) => String(c?.phone || '')).filter(Boolean);
+    // The people who confirm payments, and the staff added to Agent 007 in
+    // King: when one of them tries the assistant out, it is not a lead.
+    const rows = await db.query(`SELECT value FROM billing_settings WHERE key IN ('confirmers', 'agent007_staff')`);
+    extraInternalPhones = rows.rows
+      .flatMap((row) => (Array.isArray(row?.value) ? row.value : []))
+      .map((c) => String(c?.phone || ''))
+      .filter(Boolean);
   } catch (_ignored) { /* table may not exist yet */ }
 }
 
@@ -1387,6 +1391,7 @@ module.exports = {
   alertRecipients,
   slaHours,
   internalPhoneKeys,
+  loadExtraInternalPhones,
   RESPONSES,
   SOURCES,
   archiveLeads,

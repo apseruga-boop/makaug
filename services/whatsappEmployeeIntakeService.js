@@ -237,13 +237,74 @@ function looksLikePropertyCaption(value = '') {
 // agent. The environment list, when it is set, replaces these two.
 const DEFAULT_EMPLOYEE_INTAKE_NUMBERS = Object.freeze(['447757773202', '256709402189']);
 
+// Arthur, 15 Nov 2026: "we have a new employee working with us ... can you add
+// her number to agent 007 she will be doing the same as ronald". Anyone after
+// the first two is added in King (Sales & Revenue › Settings › "Who else can
+// use Agent 007"), not here: a new member of staff needs no deploy, and their
+// number stays out of the code. routes/whatsapp.js reads the saved list before
+// it asks whether a number may come in.
+const MAX_SAVED_AGENT_007_STAFF = 20;
+let savedAgent007Staff = Object.freeze([]);
+
+/** A number as WhatsApp gives it: every digit, country code first. '' when it is not one. */
+function fullStaffNumber(value = '') {
+  let number = digits(value && typeof value === 'object' ? value.phone : value);
+  if (number.startsWith('00')) number = number.slice(2);
+  // A Ugandan mobile typed the local way.
+  if (/^07\d{8}$/.test(number)) number = `256${number.slice(1)}`;
+  return number.length >= 10 && number.length <= 15 && !number.startsWith('0') ? number : '';
+}
+
+/**
+ * The saved list as King sends it ([{ name, phone }]), tidied. `rejected` is
+ * every entry that has no name or no full number, so the person saving it is
+ * told instead of someone being left out without a word.
+ */
+function parseAgent007Staff(list) {
+  const staff = [];
+  const rejected = [];
+  const seen = new Set();
+  for (const entry of Array.isArray(list) ? list : []) {
+    const name = cleanText(entry && typeof entry === 'object' ? entry.name : '').slice(0, 60);
+    const phone = fullStaffNumber(entry);
+    if (!name || !phone) { rejected.push(name || 'a line with no name'); continue; }
+    if (seen.has(phone)) continue;
+    seen.add(phone);
+    staff.push({ name, phone });
+  }
+  return { staff: staff.slice(0, MAX_SAVED_AGENT_007_STAFF), rejected };
+}
+
+/** Keep the saved list for the checks below. Returns what was kept. */
+function rememberAgent007Staff(list) {
+  savedAgent007Staff = Object.freeze(parseAgent007Staff(list).staff);
+  return savedAgent007Staff;
+}
+
+function savedAgent007StaffList() {
+  return savedAgent007Staff;
+}
+
+/**
+ * The saved member of staff this number belongs to, or null. The whole number
+ * has to match: the last nine digits of a British number are also the last
+ * nine of numbers in other countries.
+ */
+function savedAgent007StaffFor(phone, staff = savedAgent007Staff) {
+  const incoming = fullStaffNumber(phone);
+  if (!incoming) return null;
+  return (Array.isArray(staff) ? staff : []).find((member) => member.phone === incoming) || null;
+}
+
 function employeeIntakePhoneAllowed(phone, {
   ownerAuthorized = false,
-  allowlist = process.env.WHATSAPP_EMPLOYEE_INTAKE_NUMBERS || ''
+  allowlist = process.env.WHATSAPP_EMPLOYEE_INTAKE_NUMBERS || '',
+  staff = savedAgent007Staff
 } = {}) {
   if (ownerAuthorized) return true;
   const normalizedPhone = digits(phone);
   if (normalizedPhone.length < 9) return false;
+  if (savedAgent007StaffFor(normalizedPhone, staff)) return true;
   const configured = String(allowlist || '')
     .split(/[,;\r\n]+/)
     .map(digits)
@@ -572,6 +633,10 @@ module.exports = {
   employeeAgentExistingPrompt,
   employeeAgentLogoPrompt,
   employeeIntakePhoneAllowed,
+  parseAgent007Staff,
+  rememberAgent007Staff,
+  savedAgent007StaffList,
+  savedAgent007StaffFor,
   employeeIntakeConfirmPrompt,
   employeeIntakeFixPrompt,
   employeeMediaPrompt,

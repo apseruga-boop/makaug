@@ -22,6 +22,8 @@ function registerOutreachTrackerRoutes(router, { writeAudit, actorLabel } = {}) 
       return res.json({
         ok: true,
         data: rows,
+        // Who a send can be "by": Arthur, Ronald and the staff added to Agent 007 in King. First names only.
+        senders: require('../services/outreachSenderName').staffSenderChoices(),
         week_note: 'Tracking starts from the week of 10–16 Nov 2026 (London). New sends from Agent 007 option 3 are recorded automatically. Use Log a send for videos already sent this week that are not in the list.'
       });
     } catch (error) {
