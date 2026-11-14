@@ -2991,6 +2991,17 @@ function scheduleStartupDataRepairs() {
     } catch (error) {
       logger.warn('Benard Mukono fix 224 skipped:', error.message || String(error));
     }
+    // 003434 reopened with its 3 photos, 49C4BA rejected (Arthur, 14 Nov
+    // 2026). Migration 225 only creates the backup table.
+    try {
+      const { runModerationReversal225 } = require('./scripts/run-moderation-reversal-225');
+      const reversal = await runModerationReversal225(db, { logger });
+      if (reversal && !reversal.skipped && (reversal.updated || reversal.stopped_early)) {
+        logger.info('Moderation reversal 225 finished a pass', reversal);
+      }
+    } catch (error) {
+      logger.warn('Moderation reversal 225 skipped:', error.message || String(error));
+    }
   }, staggeredBootDelay('startup_data_repairs'));
   timer.unref?.();
 }
