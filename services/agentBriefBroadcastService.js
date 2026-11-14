@@ -22,8 +22,11 @@
  * Until it goes, a brief can be held: hold() withdraws every message still waiting.
  */
 
+const fs = require('fs');
+const path = require('path');
 const agentHowToPost = require('./agentHowToPostBroadcastService');
 
+const REPO_ROOT = path.join(__dirname, '..');
 const KEY_PREFIX = 'agent_brief';
 const SLOTS = Object.freeze(['morning', 'afternoon', 'evening']);
 // Arthur's standing instruction: never message these agents. Matched on the full
@@ -98,6 +101,47 @@ function checkCaption(value) {
   if (!/\bSTOP\b/.test(text)) throw badRequest('caption must tell agents they can reply STOP');
   if (!/\bPhillip\b/.test(text)) throw badRequest('caption must be signed by Phillip');
   return text;
+}
+
+/**
+ * The Morning Brief made for a date, if it shipped: its edition
+ * (scripts/agent-brief/editions/<date>.json) and its one video under
+ * assets/marketing/morning-brief. Null when either is missing, the caption
+ * would be refused, or there are two videos for the day (a re-render: which
+ * one is meant is a person's call).
+ *
+ * 13 Nov 2026: the 4:47pm run shipped the 14 Nov brief at 19:46 Kampala and
+ * stopped before it sent the preview, so nothing was queued. The 9:47pm check
+ * could see that nothing had been previewed, but not what had been made, and
+ * none of the 23 agents got it at 7:00am. With this it can finish the job.
+ */
+function shippedEdition({ date, slot = 'morning', root = REPO_ROOT } = {}) {
+  const day = String(date || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const s = String(slot || 'morning').trim().toLowerCase();
+  if (s !== 'morning') return null;
+  let edition;
+  try {
+    edition = JSON.parse(fs.readFileSync(path.join(root, 'scripts', 'agent-brief', 'editions', `${day}.json`), 'utf8'));
+  } catch (_ignored) {
+    return null;
+  }
+  if (String(edition?.slot || 'morning').trim().toLowerCase() !== s) return null;
+  let videos;
+  try {
+    const name = new RegExp(`^makaug-morning-brief-${day}-[0-9a-f]{8}\\.mp4$`);
+    videos = fs.readdirSync(path.join(root, 'assets', 'marketing', 'morning-brief')).filter((file) => name.test(file));
+  } catch (_ignored) {
+    return null;
+  }
+  if (videos.length !== 1) return null;
+  let caption;
+  try {
+    caption = checkCaption(edition.caption);
+  } catch (_ignored) {
+    return null;
+  }
+  return { date: day, slot: s, video_url: `https://${siteHost()}/assets/marketing/morning-brief/${videos[0]}`, caption };
 }
 
 /**
@@ -302,6 +346,7 @@ module.exports = {
   kampalaTime,
   checkVideoUrl,
   checkCaption,
+  shippedEdition,
   listRecipients,
   alreadyQueuedAgentIds,
   scheduleBrief,
