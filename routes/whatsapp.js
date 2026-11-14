@@ -148,6 +148,7 @@ const {
   isEmployeeIntakeComplete,
   isEmployeeIntakeStep,
   isEmployeeIntakeTrigger,
+  isEmployeeIntakeShortTrigger,
   parseCustomerDetails,
   parseEmployeeRole,
   parseAgentLookupChoice,
@@ -10758,6 +10759,13 @@ async function handleEmployeeWhatsappIntake({
   let active = isEmployeeIntakeStep(currentStep);
   // Who may use Agent 007 besides Arthur and Ronald, before anything below asks.
   await refreshAgent007Staff();
+  // From a number that is already staff, "007" on its own is the key as well.
+  // Never from anyone else, and never half way through a step, where it could
+  // be part of what they are typing.
+  if (!triggered && !active && isEmployeeIntakeShortTrigger(cleanBody)
+    && employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) })) {
+    triggered = true;
+  }
   // Set when this message is the one that opened an agent's own posting
   // session, so the first reply can greet them rather than starting mid-flow.
   let openedAgentSelfIntake = false;

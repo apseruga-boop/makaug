@@ -254,6 +254,46 @@ test('they are staff from their first message: "I want to post houses" opens Age
 });
 
 // ---------------------------------------------------------------------------
+// The key itself
+// ---------------------------------------------------------------------------
+
+test('the key is Agent 007 however a thumb types it, and it is still the whole message', () => {
+  for (const typed of ['Agent 007', 'AGENT007', 'agent007', '  agent   007  ', 'Agent-007', 'Agent 007.', '“Agent 007”', '*Agent 007*', 'Agent OO7']) {
+    assert.strictEqual(intake.isEmployeeIntakeTrigger(typed), true, typed);
+  }
+  for (const typed of ['Agent 007 please', '007', 'agent 0077', 'agent 07', 'my agent 007', 'agent 1007', 'agent', 'find an agent', 'Agent 007\nKato Brian']) {
+    assert.strictEqual(intake.isEmployeeIntakeTrigger(typed), false, typed);
+  }
+  for (const typed of ['007', ' 007 ', 'OO7', '007.']) assert.strictEqual(intake.isEmployeeIntakeShortTrigger(typed), true, typed);
+  for (const typed of ['7', '0007', '007 please', '1007', 'Kato Brian\n007']) assert.strictEqual(intake.isEmployeeIntakeShortTrigger(typed), false, typed);
+});
+
+test('AGENT007 from staff opens the menu, and so does 007 alone, but only for staff with nothing open', async () => {
+  await withSettings([{ name: 'Jane Example', phone: NEW_STAFF_NUMBER }], async () => {
+    const menu = (await at(RONALD, 'main_menu', 'Agent 007')).message;
+    // 14 Nov 2026: typed twice by a new member of staff, and answered "I think you meant: find a broker".
+    for (const typed of ['AGENT007', 'agent007', 'Agent 007.', '007']) {
+      const opened = await at(NEW_STAFF.phone, 'main_menu', typed);
+      assert.strictEqual(opened.nextStep, 'employee_intake_role', typed);
+      assert.strictEqual(opened.message, menu, `${typed}: the same menu`);
+    }
+    assert.strictEqual((await at(RONALD, 'main_menu', '007')).nextStep, 'employee_intake_role');
+    assert.strictEqual((await at(ARTHUR, 'greeting', 'agent007')).nextStep, 'employee_intake_role');
+    // With a question from the customer assistant left hanging in their session, as hers was.
+    const hanging = await at(NEW_STAFF.phone, 'main_menu', 'AGENT007', { pending_intent_confirmation: { intent: 'agent_search' } });
+    assert.strictEqual(hanging.nextStep, 'employee_intake_role');
+    // Somebody else: the full key is refused as before, and 007 alone is not the key at all.
+    assert.match((await at(STRANGER, 'main_menu', 'AGENT007')).message, /Agent 007 is for the makaug team only/);
+    const stranger = await at(STRANGER, 'main_menu', '007');
+    assert.notStrictEqual(stranger.nextStep, 'employee_intake_role');
+    assert.doesNotMatch(String(stranger.message || ''), /makaug team only/, 'left to the ordinary assistant');
+    // Half way through a step, 007 is part of what they are typing, not the key.
+    const midway = await at(NEW_STAFF.phone, 'employee_agent_lookup', '007', { employee_role: 'agent' });
+    assert.notStrictEqual(midway.message, menu);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // By name, wherever Arthur and Ronald are named
 // ---------------------------------------------------------------------------
 
