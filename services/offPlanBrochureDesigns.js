@@ -9,6 +9,7 @@ const QRCode = require('qrcode');
 const { normalizeDevelopmentRow } = require('./offPlanService');
 const { distanceKmBetween, formatDate, localAssetPath, projectUrl } = require('./offPlanBrochureService');
 const { OSM_ATTRIBUTION } = require('./osmStaticMap');
+const { normalizeBrochureLanguage } = require('./offPlanBrochureI18n');
 
 const REG = path.join(__dirname, '..', 'assets', 'fonts', 'share-card', 'PlusJakartaSans-Regular.ttf');
 const SEMI = path.join(__dirname, '..', 'assets', 'fonts', 'share-card', 'PlusJakartaSans-SemiBold.ttf');
@@ -24,6 +25,108 @@ const W = 595.28;
 const H = 841.89;
 const MAP_W = 1200;
 const MAP_H = 680;
+
+// Every word the brochure prints itself, in the languages the project page
+// speaks. 14 Nov 2026: Arthur asked for the Vanta House brochure in Luganda to
+// send to the developer. The page's Download button already asked for
+// ?lang=lg, but this layout printed English whatever it was asked; the
+// project's own Luganda (description, key facts, timeline, diary) was never
+// read. A language without a pack prints English.
+const COPY = Object.freeze({
+  en: {
+    offPlanProject: 'OFF-PLAN PROJECT', offPlanFallback: 'Off-plan project', from: 'FROM', indicative: '{amount} indicative',
+    homes: '{count} homes', bedroomSummary: '{list} bedroom', and: 'and', expectedHandover: 'Expected handover',
+    months: '{count} months', onSigning: '{percent}% on signing', paymentPeriod: 'Payment period',
+    artistImpression: 'Artist’s impression. Final finishes may differ.',
+    theDevelopment: 'The development', constructionSoFar: 'Construction so far', inTheBuilding: 'In the building',
+    homesSection: 'Homes', unitTypes: 'Unit types and prices', homesAndPrices: 'Homes and prices', home: 'Home',
+    bedroom: '{count} bedroom', bedrooms: '{count} bedrooms', bathroom: '{count} bathroom', bathrooms: '{count} bathrooms',
+    sqm: '{size} sq m', serviceCharge: 'Service charge {fee}', aMonth: '{amount} a month',
+    paymentSection: 'Payment', paymentFooter: 'Payment plan and timing', howPaid: 'How the price is paid', timing: 'Timing', payment: 'Payment',
+    developerEstimate: 'Developer estimate, not a promise',
+    locationSection: 'Location', mapData: 'Map data {attribution}. The pin is the project coordinate.', openPin: 'Open this pin on OpenStreetMap',
+    gallerySection: 'Gallery', projectImages: 'Project images', theBuilding: 'The building', onSite: 'On site', construction: 'Construction',
+    floorPlans: 'Floor plans', plansSupplied: 'Plans supplied by the developer',
+    plansGuidance: 'Plans are for guidance. Confirm dimensions and the plan attached to the sale agreement.',
+    enquireSection: 'Enquire', howToEnquire: 'How to enquire', talkToProject: 'Talk to the project', projectPage: 'Project page',
+    whatsapp: 'WhatsApp  {phone}', salesDesk: 'Sales desk  {phone}', theContact: 'the project contact',
+    stepOpen: 'Open the live project on makaug.com.', stepMessage: 'Message {name} on WhatsApp to ask about a visit.',
+    stepAsk: 'Ask for the home and the written price before you pay.', stepFloor: 'Confirm the unit, the floor and the written price.',
+    stepLawyer: 'Have your own lawyer read the agreement before you pay.', stepBudget: 'Budget separately for {charges}.',
+    disclaimer: 'Prices, availability and handover dates can change. makaug.com publishes the developer’s figures. This brochure is not an offer.',
+    school: 'School', hospital: 'Hospital', university: 'University', shopping: 'Shopping', market: 'Market', airstrip: 'Airstrip',
+    underKm: 'under 0.1 km', sitePhotos: 'Site photos, {date}'
+  },
+  lg: {
+    offPlanProject: 'PULOJEKITI YA OFF-PLAN', offPlanFallback: 'Pulojekiti ya off-plan', from: 'OKUVA KU', indicative: '{amount}, nga bwe kibalirirwa',
+    homes: 'Amaka {count}', bedroomSummary: 'ag’ebisenge {list}', and: 'ne', expectedHandover: 'Okuwaayo okusuubirwa',
+    months: 'Emyezi {count}', onSigning: '{percent}% ng’oteeka omukono', paymentPeriod: 'Ekiseera ky’okusasula',
+    artistImpression: 'Ekifaananyi kiraga bwe kinaafaanana. Ebimalirizibwa ebisembayo biyinza okwawukanako.',
+    theDevelopment: 'Ebikwata ku pulojekiti', constructionSoFar: 'Okuzimba we kutuuse', inTheBuilding: 'Ebiri mu kizimbe',
+    homesSection: 'Amaka', unitTypes: 'Ebika by’amaka n’emiwendo', homesAndPrices: 'Amaka n’emiwendo', home: 'Ennyumba',
+    bedroom: 'ekisenge {count}', bedrooms: 'ebisenge {count}', bathroom: 'ekinaabiro {count}', bathrooms: 'ebinaabiro {count}',
+    sqm: '{size} m²', serviceCharge: 'Ssente z’obuweereza {fee}', aMonth: '{amount} buli mwezi',
+    paymentSection: 'Okusasula', paymentFooter: 'Enteekateeka y’okusasula n’ebiseera', howPaid: 'Engeri omuwendo gye gusasulwamu', timing: 'Ebiseera', payment: 'Okusasula',
+    developerEstimate: 'Okubalirira kw’omuzimbi, si kisuubizo',
+    locationSection: 'Ekifo', mapData: 'Maapu: {attribution}. Akamanyiso kalaga pulojekiti we eri.', openPin: 'Ggulawo ekifo kino ku OpenStreetMap',
+    gallerySection: 'Ebifaananyi', projectImages: 'Ebifaananyi bya pulojekiti', theBuilding: 'Ekizimbe', onSite: 'Ku kifo', construction: 'Okuzimba',
+    floorPlans: 'Pulaani z’amaka', plansSupplied: 'Pulaani ziweereddwa omuzimbi',
+    plansGuidance: 'Pulaani za kulambika bulambisi. Kakasa ebipimo ne pulaani eri mu ndagaano y’okugula.',
+    enquireSection: 'Okubuuza', howToEnquire: 'Engeri y’okubuuza', talkToProject: 'Yogera ne pulojekiti', projectPage: 'Omukutu gwa pulojekiti',
+    whatsapp: 'WhatsApp  {phone}', salesDesk: 'Abatunzi  {phone}', theContact: 'omuntu wa pulojekiti',
+    stepOpen: 'Ggulawo pulojekiti ku makaug.com.', stepMessage: 'Weereza {name} obubaka ku WhatsApp osabe okulambula.',
+    stepAsk: 'Saba ennyumba n’omuwendo mu buwandiike nga tonnasasula.', stepFloor: 'Kakasa ennyumba, omwaliiro n’omuwendo mu buwandiike.',
+    stepLawyer: 'Munnamateeka wo asome endagaano nga tonnasasula.', stepBudget: 'Teekateeka ssente ez’enjawulo eza {charges}.',
+    disclaimer: 'Emiwendo, amaka agaliwo n’ennaku z’okuwaayo biyinza okukyuka. makaug.com efulumya ebibalo by’omuzimbi. Brochure eno si ndagaano ya kugula.',
+    school: 'Essomero', hospital: 'Eddwaliro', university: 'Ettendekero', shopping: 'Amaduuka', market: 'Akatale', airstrip: 'Ekisaawe ky’ennyonyi',
+    underKm: 'wansi wa km 0.1', sitePhotos: 'Ebifaananyi by’oku kifo, {date}'
+  },
+  sw: {
+    offPlanProject: 'MRADI WA OFF-PLAN', offPlanFallback: 'Mradi wa off-plan', from: 'KUANZIA', indicative: '{amount} (makadirio)',
+    homes: 'Nyumba {count}', bedroomSummary: 'za vyumba {list}', and: 'na', expectedHandover: 'Makabidhiano yanayotarajiwa',
+    months: 'Miezi {count}', onSigning: '{percent}% wakati wa kusaini', paymentPeriod: 'Muda wa malipo',
+    artistImpression: 'Mchoro wa msanii. Umaliziaji wa mwisho unaweza kutofautiana.',
+    theDevelopment: 'Kuhusu mradi', constructionSoFar: 'Ujenzi ulipofikia', inTheBuilding: 'Ndani ya jengo',
+    homesSection: 'Nyumba', unitTypes: 'Aina za nyumba na bei', homesAndPrices: 'Nyumba na bei', home: 'Nyumba',
+    bedroom: 'chumba {count} cha kulala', bedrooms: 'vyumba {count} vya kulala', bathroom: 'bafu {count}', bathrooms: 'mabafu {count}',
+    sqm: '{size} m²', serviceCharge: 'Ada ya huduma {fee}', aMonth: '{amount} kwa mwezi',
+    paymentSection: 'Malipo', paymentFooter: 'Mpango wa malipo na ratiba', howPaid: 'Jinsi bei inavyolipwa', timing: 'Ratiba', payment: 'Malipo',
+    developerEstimate: 'Makadirio ya msanidi, si ahadi',
+    locationSection: 'Eneo', mapData: 'Data ya ramani {attribution}. Alama ni eneo la mradi.', openPin: 'Fungua alama hii kwenye OpenStreetMap',
+    gallerySection: 'Picha', projectImages: 'Picha za mradi', theBuilding: 'Jengo', onSite: 'Eneo la ujenzi', construction: 'Ujenzi',
+    floorPlans: 'Michoro ya nyumba', plansSupplied: 'Michoro imetolewa na msanidi',
+    plansGuidance: 'Michoro ni kwa mwongozo. Thibitisha vipimo na mchoro ulioambatishwa kwenye mkataba wa mauzo.',
+    enquireSection: 'Uliza', howToEnquire: 'Jinsi ya kuuliza', talkToProject: 'Wasiliana na mradi', projectPage: 'Ukurasa wa mradi',
+    whatsapp: 'WhatsApp  {phone}', salesDesk: 'Mauzo  {phone}', theContact: 'mwakilishi wa mradi',
+    stepOpen: 'Fungua mradi kwenye makaug.com.', stepMessage: 'Mtumie {name} ujumbe kwenye WhatsApp kuuliza kuhusu kutembelea.',
+    stepAsk: 'Omba nyumba na bei kwa maandishi kabla ya kulipa.', stepFloor: 'Thibitisha nyumba, sakafu na bei kwa maandishi.',
+    stepLawyer: 'Mwombe wakili wako asome mkataba kabla ya kulipa.', stepBudget: 'Tenga bajeti ya {charges}.',
+    disclaimer: 'Bei, upatikanaji na tarehe za makabidhiano zinaweza kubadilika. makaug.com huchapisha takwimu za msanidi. Brosha hii si ofa.',
+    school: 'Shule', hospital: 'Hospitali', university: 'Chuo kikuu', shopping: 'Ununuzi', market: 'Soko', airstrip: 'Uwanja wa ndege mdogo',
+    underKm: 'chini ya km 0.1', sitePhotos: 'Picha za eneo la ujenzi, {date}'
+  }
+});
+
+function copyFor(language) {
+  const code = normalizeBrochureLanguage(language);
+  return { code: COPY[code] ? code : 'en', words: COPY[code] || COPY.en };
+}
+
+function say(model, key, values = {}) {
+  const words = (model && model.copy) || COPY.en;
+  let phrase = words[key] == null ? COPY.en[key] : words[key];
+  Object.entries(values).forEach(([name, value]) => { phrase = phrase.split(`{${name}}`).join(String(value)); });
+  return phrase;
+}
+
+// The project's own words in this language, where it has them: `titles.lg`
+// beside `title`, `labels.sw` beside `label`.
+function localized(item, field, code) {
+  if (!item || typeof item !== 'object') return item;
+  const bag = item[`${field}s`];
+  if (code !== 'en' && bag && typeof bag === 'object' && clean(bag[code])) return bag[code];
+  return item[field];
+}
 
 function clean(value, max = 2000) {
   return String(value == null ? '' : value).replace(/\s+/g, ' ').trim().slice(0, max);
@@ -72,22 +175,51 @@ function lede(description) {
   return text || source.slice(0, 360);
 }
 
-function categoryName(category) {
+function categoryName(category, words = COPY.en) {
   const key = clean(category, 40).toLowerCase();
-  if (/school|child|nursery/.test(key)) return 'School';
-  if (/hospital|clinic|health/.test(key)) return 'Hospital';
-  if (/university|college/.test(key)) return 'University';
-  if (/mall|shop|supermarket/.test(key)) return 'Shopping';
-  if (/market/.test(key)) return 'Market';
-  if (/airport|airstrip/.test(key)) return 'Airstrip';
+  if (/school|child|nursery/.test(key)) return words.school;
+  if (/hospital|clinic|health/.test(key)) return words.hospital;
+  if (/university|college/.test(key)) return words.university;
+  if (/mall|shop|supermarket/.test(key)) return words.shopping;
+  if (/market/.test(key)) return words.market;
+  if (/airport|airstrip/.test(key)) return words.airstrip;
   const label = clean(category, 40);
   return missing(label) ? '' : label;
 }
 
-function kmLabel(km) {
+function kmLabel(km, words = COPY.en) {
   if (!Number.isFinite(km)) return '';
-  if (km < 0.1) return 'under 0.1 km';
+  if (km < 0.1) return words.underKm;
   return `${km < 10 ? km.toFixed(1) : String(Math.round(km))} km`;
+}
+
+function phraseWith(words, key, values = {}) {
+  return say({ copy: words }, key, values);
+}
+
+/** "1, 2 and 3" in the brochure's language. */
+function listWithAnd(items, words) {
+  const list = items.map(String);
+  if (list.length < 2) return list.join('');
+  return `${list.slice(0, -1).join(', ')} ${words.and} ${list[list.length - 1]}`;
+}
+
+/** A home's name when the project only has it in English: "1 Bedroom (1 BHK) · 52 m²". */
+function localUnitLabel(unit, words, code) {
+  const label = missing(unit.label) ? '' : clean(unit.label, 80);
+  if (code === 'en' || !(Number(unit.bedrooms) > 0)) return label;
+  const beds = Number(unit.bedrooms);
+  const size = Number(unit.size_sqm_min || unit.size_sqm);
+  return [
+    `${words.home} · ${phraseWith(words, beds === 1 ? 'bedroom' : 'bedrooms', { count: beds })}`,
+    size > 0 ? phraseWith(words, 'sqm', { size }) : ''
+  ].filter(Boolean).join(' · ');
+}
+
+/** `count` items spread evenly from first to last, in order. */
+function spread(items, count) {
+  if (items.length <= count) return items;
+  return Array.from({ length: count }, (_, index) => items[Math.round((index * (items.length - 1)) / (count - 1))]);
 }
 
 function sourceOf(image, buffers, index) {
@@ -98,13 +230,18 @@ function sourceOf(image, buffers, index) {
 function prepareModel(projectInput, options = {}) {
   const project = normalizeDevelopmentRow(projectInput);
   const extra = project.extra_fields && typeof project.extra_fields === 'object' ? project.extra_fields : {};
+  const { code, words } = copyFor(options.language);
+  const translation = code !== 'en' && extra.translations && typeof extra.translations[code] === 'object' ? extra.translations[code] : {};
+  const inLanguage = (field, fallback) => (clean(translation[field]) ? translation[field] : fallback);
+  const description = inLanguage('description', project.description);
   const buffers = Array.isArray(options.imageBuffers) ? options.imageBuffers : [];
   const images = (project.images || []).map((image, index) => ({
     ...image,
+    caption: localized(image, 'caption', code),
     path: sourceOf(image, buffers, index)
   })).filter((image) => image.path);
   const hero = images.find((image) => image.kind === 'artist_impression') || images[0] || null;
-  const plans = (project.floor_plans || []).map((plan) => ({ ...plan, path: localAssetPath(plan.url) })).filter((plan) => plan.path);
+  const plans = (project.floor_plans || []).map((plan) => ({ ...plan, caption: localized(plan, 'caption', code), path: localAssetPath(plan.url) })).filter((plan) => plan.path);
   const units = (project.unit_types || []).map((unit) => {
     const currency = clean(unit.price_original_currency || project.original_currency || 'USD', 3).toUpperCase();
     const originalPriceMax = Number(unit.price_original_max);
@@ -114,17 +251,17 @@ function prepareModel(projectInput, options = {}) {
     const sizeMin = Number(unit.size_sqm_min || unit.size_sqm);
     const sizeMax = Number(unit.size_sqm_max);
     return {
-      label: missing(unit.label) ? '' : clean(unit.label, 80),
+      label: localUnitLabel(unit, words, code),
       bedrooms: Number(unit.bedrooms),
       bathrooms: Number(unit.bathrooms),
       size: sizeMin > 0 ? sizeMin : null,
-      sizeLabel: sizeMin > 0 && sizeMax > sizeMin ? `${sizeMin}–${sizeMax} sq m` : sizeMin > 0 ? `${sizeMin} sq m` : '',
+      sizeLabel: sizeMin > 0 && sizeMax > sizeMin ? phraseWith(words, 'sqm', { size: `${sizeMin}–${sizeMax}` }) : sizeMin > 0 ? phraseWith(words, 'sqm', { size: sizeMin }) : '',
       usd: unit.price_original_currency === 'UGX' ? '' : usd,
       ugx,
       price: usd || ugx,
-      fee: Number(unit.management_fee_usd_month) > 0 ? `${money(unit.management_fee_usd_month, 'USD')} a month` : '',
-      balcony: missing(unit.balcony) ? '' : clean(unit.balcony, 80),
-      living: missing(unit.living) ? '' : clean(unit.living, 80),
+      fee: Number(unit.management_fee_usd_month) > 0 ? phraseWith(words, 'aMonth', { amount: money(unit.management_fee_usd_month, 'USD') }) : '',
+      balcony: missing(unit.balcony) ? '' : clean(localized(unit, 'balcony', code), 80),
+      living: missing(unit.living) ? '' : clean(localized(unit, 'living', code), 80),
       plan: plans.find((plan) => plan.unit_key && plan.unit_key === unit.key) || null
     };
   }).filter((unit) => unit.price);
@@ -141,22 +278,33 @@ function prepareModel(projectInput, options = {}) {
   const portraitUrl = referenced.find((url) => url.includes('/assets/agents/'));
   const places = (project.nearby_places || []).map((place) => {
     const point = { latitude: Number(place.latitude ?? place.lat), longitude: Number(place.longitude ?? place.lng) };
-    return { name: clean(place.name, 120), category: categoryName(place.category), km: distanceKmBetween(project, point) };
+    return { name: clean(place.name, 120), category: categoryName(place.category, words), km: distanceKmBetween(project, point) };
   }).filter((place) => place.name && !missing(place.name)).sort((a, b) => (a.km ?? 99) - (b.km ?? 99));
   const area = missing(project.area) ? '' : clean(project.area, 80);
   const district = missing(project.district) ? '' : clean(project.district, 80);
   const beds = [...new Set(units.map((unit) => unit.bedrooms).filter((value) => Number.isFinite(value) && value > 0))];
   const signing = (project.payment_plan || []).find((item) => Number(item.percent) > 0);
+  const areaOverview = inLanguage('area_overview', extra.area_overview);
+  const investment = inLanguage('investment_note', extra.investment_note);
+  const progressBasis = inLanguage('progress_basis', extra.progress_basis);
+  const floorRule = localized(extra.floor_price_rule, 'note', code);
+  const latestUpdate = (Array.isArray(extra.construction_updates) ? extra.construction_updates : []).find((item) => !missing(item?.title) || !missing(item?.note)) || null;
+  // The newest diary entry's own photos, when they are on makaug.com.
+  const diaryPhotos = (Array.isArray(latestUpdate?.image_urls) ? latestUpdate.image_urls : [])
+    .map((url) => ({ url, kind: 'construction_photo', caption: '', path: localAssetPath(url) }))
+    .filter((image) => image.path);
   return {
-    name: clean(project.name, 120) || 'Off-plan project',
+    lang: code,
+    copy: words,
+    name: clean(project.name, 120) || words.offPlanFallback,
     areaLine: [area, district].filter(Boolean).join(', '),
     address: missing(project.address) ? '' : clean(project.address, 180),
-    description: missing(project.description) || clean(project.description, 4000).length < 40 ? '' : clean(project.description, 4000),
-    lede: lede(project.description),
-    areaOverview: missing(extra.area_overview) ? '' : clean(extra.area_overview, 1200),
+    description: missing(description) || clean(description, 4000).length < 40 ? '' : clean(description, 4000),
+    lede: lede(description),
+    areaOverview: missing(areaOverview) ? '' : clean(areaOverview, 1200),
     developer: missing(project.developer_name) ? '' : clean(project.developer_name, 160),
     contactName: missing(contact.name) ? (agent && !missing(agent.full_name) ? clean(agent.full_name, 80) : '') : clean(contact.name, 80),
-    contactRole: missing(contact.role) ? '' : clean(contact.role, 80),
+    contactRole: missing(contact.role) ? '' : clean(localized(contact, 'role', code), 80),
     contactEmail: missing(contact.email)
       ? (agent && !missing(agent.email) ? clean(agent.email, 80) : (extra.contact_mode === 'makaug_managed' ? 'info@makaug.com' : ''))
       : clean(contact.email, 80),
@@ -167,28 +315,35 @@ function prepareModel(projectInput, options = {}) {
       founderLink: waLink(contact.whatsapp || contact.phone || agent?.whatsapp || agent?.phone),
       salesLink: waLink(contact.sales_phone)
     },
-    bio: agent && !missing(agent.bio) ? clean(agent.bio, 280) : '',
+    bio: code === 'en' && agent && !missing(agent.bio) ? clean(agent.bio, 280) : '',
     units,
     payments: (project.payment_plan || []).filter((item) => !missing(item.label) || Number(item.percent) > 0 || Number(item.amount_original) > 0).map((item) => ({
-      label: missing(item.label) ? 'Payment' : clean(item.label, 120),
-      due: missing(item.due) ? '' : clean(item.due, 220),
+      label: missing(item.label) ? words.payment : clean(localized(item, 'label', code), 120),
+      due: missing(item.due) ? '' : clean(localized(item, 'due', code), 220),
       percent: Number(item.percent)
     })),
-    amenities: (project.amenities || []).map((item) => clean(typeof item === 'string' ? item : item.label, 80)).filter((item) => item && !missing(item)),
+    amenities: (project.amenities || []).map((item) => clean(typeof item === 'string' ? item : localized(item, 'label', code), 80)).filter((item) => item && !missing(item)),
     places: places.slice(0, 8),
-    timeline: (Array.isArray(extra.construction_timeline) ? extra.construction_timeline : []).filter((step) => !missing(step.label)),
-    charges: (Array.isArray(extra.government_charges) ? extra.government_charges : []).filter((item) => !missing(item.label) && !missing(item.value)),
-    keyFacts: (Array.isArray(extra.key_facts) ? extra.key_facts : []).filter((item) => !missing(item.label) && !missing(item.value)).slice(0, 7),
-    investment: missing(extra.investment_note) ? '' : clean(extra.investment_note, 600),
-    floorRule: missing(extra.floor_price_rule?.note) ? '' : clean(extra.floor_price_rule.note, 400),
-    progressBasis: missing(extra.progress_basis) ? '' : clean(extra.progress_basis, 500),
+    timeline: (Array.isArray(extra.construction_timeline) ? extra.construction_timeline : [])
+      .filter((step) => !missing(step.label))
+      .map((step) => ({ ...step, label: localized(step, 'label', code) })),
+    charges: (Array.isArray(extra.government_charges) ? extra.government_charges : [])
+      .filter((item) => !missing(item.label) && !missing(item.value))
+      .map((item) => ({ ...item, label: localized(item, 'label', code), value: localized(item, 'value', code) })),
+    keyFacts: (Array.isArray(extra.key_facts) ? extra.key_facts : [])
+      .filter((item) => !missing(item.label) && !missing(item.value))
+      .slice(0, 7)
+      .map((item) => ({ ...item, label: localized(item, 'label', code), value: localized(item, 'value', code) })),
+    investment: missing(investment) ? '' : clean(investment, 600),
+    floorRule: missing(floorRule) ? '' : clean(floorRule, 400),
+    progressBasis: missing(progressBasis) ? '' : clean(progressBasis, 500),
     serviceSteps: (Array.isArray(extra.makaug_service_steps) ? extra.makaug_service_steps : []).map((step) => clean(step, 180)).filter((step) => step && !missing(step)).slice(0, 6),
-    completion: project.completion_date ? formatDate(project.completion_date, 'en') : '',
+    completion: project.completion_date ? formatDate(project.completion_date, code) : '',
     progress: project.construction_progress == null || project.construction_progress === '' || !Number.isFinite(Number(project.construction_progress)) ? null : Number(project.construction_progress),
     months: Number(project.payment_plan_months) > 0 ? Number(project.payment_plan_months) : null,
     homes: Number(project.units_total) > 0 ? Number(project.units_total) : null,
-    homeSummary: beds.length ? `${beds.join(', ').replace(/, ([^,]*)$/, ' and $1')} bedroom` : '',
-    signingLabel: signing ? `${signing.percent}% on signing` : '',
+    homeSummary: beds.length ? phraseWith(words, 'bedroomSummary', { list: listWithAnd(beds, words) }) : '',
+    signingLabel: signing ? phraseWith(words, 'onSigning', { percent: signing.percent }) : '',
     priceUsd: units.find((unit) => unit.usd)?.usd || '',
     priceUgx: money(project.launch_price_ugx, 'UGX') || units.find((unit) => unit.ugx)?.ugx || '',
     hasCoordinates: Number.isFinite(Number(project.latitude)) && Number.isFinite(Number(project.longitude)),
@@ -198,12 +353,13 @@ function prepareModel(projectInput, options = {}) {
     url: project.slug ? projectUrl(project) : '',
     hero,
     gallery: images.filter((image) => image !== hero && image.kind !== 'construction_photo' && image.kind !== 'location_map'),
-    construction: images.filter((image) => image.kind === 'construction_photo'),
+    construction: diaryPhotos.length ? spread(diaryPhotos, 9) : images.filter((image) => image.kind === 'construction_photo'),
+    sitePhotos: diaryPhotos.length && latestUpdate.date ? phraseWith(words, 'sitePhotos', { date: formatDate(latestUpdate.date, code) }) : '',
     sketch: images.find((image) => image.kind === 'location_map') || null,
     plans,
     typicalPlan: plans.find((plan) => plan.unit_key === 'typical') || null,
     portrait: portraitUrl ? { path: localAssetPath(portraitUrl) } : (agentPhoto ? { path: agentPhoto } : null),
-    update: (Array.isArray(extra.construction_updates) ? extra.construction_updates : []).find((item) => !missing(item?.title) || !missing(item?.note)) || null,
+    update: latestUpdate ? { ...latestUpdate, title: localized(latestUpdate, 'title', code), note: localized(latestUpdate, 'note', code) } : null,
     managed: extra.contact_mode === 'makaug_managed'
   };
 }
@@ -230,8 +386,15 @@ function nextPage(doc) {
   doc.page.margins = { top: 0, right: 0, bottom: 0, left: 0 };
 }
 
+// The brochure font has no ŋ, which Luganda uses ("ekuŋŋaanyizibwa"). It is
+// written ng’ wherever ŋ cannot be typed, the older spelling every reader
+// knows; an unknown glyph would print as nothing.
+function printable(value) {
+  return String(value || '').replace(/ŋŋ|ŋ/g, 'ng’').replace(/ŊŊ|Ŋ/g, 'Ng’');
+}
+
 function text(doc, value, x, y, width, size, font, color, extra = {}) {
-  const body = clean(value, extra.max || 2000);
+  const body = printable(clean(value, extra.max || 2000));
   if (!body) return y;
   doc.font(font).fontSize(size).fillColor(color);
   const options = {
@@ -287,7 +450,7 @@ function drawCover(doc, model) {
   if (split) paintCover(doc, model.hero, 300, 0, W - 300, H);
   const width = split ? 246 : 520;
   text(doc, 'makaug.com', 32, 36, width, 12, 'Bold', GREEN, { lineBreak: false, height: 16 });
-  text(doc, 'OFF-PLAN PROJECT', 32, 58, width, 8, 'Semi', GOLD, { tracking: 1.3, lineBreak: false, height: 12 });
+  text(doc, say(model, 'offPlanProject'), 32, 58, width, 8, 'Semi', GOLD, { tracking: 1.3, lineBreak: false, height: 12 });
   let y = text(doc, model.name, 32, 84, width, split ? 32 : 36, 'Bold', INK, { height: 84 }) + 8;
   if (model.areaLine) y = text(doc, model.areaLine, 32, y, width, 12, 'Reg', MUTED, { height: 18 }) + 4;
   if (model.address) y = text(doc, model.address, 32, y, width, 8.5, 'Reg', MUTED, { height: 28 }) + 8;
@@ -296,15 +459,15 @@ function drawCover(doc, model) {
   const primary = model.priceUsd || model.priceUgx;
   if (primary) {
     doc.roundedRect(32, y, Math.min(width, 320), model.priceUsd && model.priceUgx ? 78 : 64, 8).fill(WHITE);
-    text(doc, 'FROM', 46, y + 10, width - 28, 8, 'Semi', GOLD, { tracking: 1.1, lineBreak: false, height: 12 });
+    text(doc, say(model, 'from'), 46, y + 10, width - 28, 8, 'Semi', GOLD, { tracking: 1.1, lineBreak: false, height: 12 });
     text(doc, primary, 46, y + 26, width - 28, 16, 'Bold', GREEN, { lineBreak: false, height: 20 });
-    if (model.priceUsd && model.priceUgx) text(doc, `${model.priceUgx} indicative`, 46, y + 48, width - 28, 8, 'Reg', MUTED, { height: 16 });
+    if (model.priceUsd && model.priceUgx) text(doc, say(model, 'indicative', { amount: model.priceUgx }), 46, y + 48, width - 28, 8, 'Reg', MUTED, { height: 16 });
     y += (model.priceUsd && model.priceUgx ? 78 : 64) + 18;
   }
   const facts = [
-    model.homes ? [`${model.homes} homes`, model.homeSummary] : null,
-    model.completion && !missing(model.completion) ? [model.completion, 'Expected handover'] : null,
-    model.months ? [`${model.months} months`, model.signingLabel || 'Payment period'] : null
+    model.homes ? [say(model, 'homes', { count: model.homes }), model.homeSummary] : null,
+    model.completion && !missing(model.completion) ? [model.completion, say(model, 'expectedHandover')] : null,
+    model.months ? [say(model, 'months', { count: model.months }), model.signingLabel || say(model, 'paymentPeriod')] : null
   ].filter((fact) => fact && fact[0] && !missing(fact[0]));
   facts.forEach((fact) => {
     if (y > 760) return;
@@ -314,14 +477,17 @@ function drawCover(doc, model) {
     y += fact[1] ? 48 : 28;
   });
   if (model.hero?.kind === 'artist_impression') {
-    text(doc, 'Artist’s impression. Final finishes may differ.', 32, H - 36, width, 8, 'Reg', MUTED, { height: 20 });
+    const note = say(model, 'artistImpression');
+    doc.font('Reg').fontSize(8);
+    const tall = doc.heightOfString(printable(note), { width });
+    text(doc, note, 32, H - 26 - Math.round(tall), width, 8, 'Reg', MUTED, { height: Math.ceil(tall) + 2 });
   }
 }
 
 function drawStory(doc, model, page) {
-  head(doc, model, 'The development');
+  head(doc, model, say(model, 'theDevelopment'));
   footer(doc, page, model.areaLine || model.name);
-  text(doc, 'The development', 36, 52, 520, 20, 'Bold', INK, { lineBreak: false, height: 26 });
+  text(doc, say(model, 'theDevelopment'), 36, 52, 520, 20, 'Bold', INK, { lineBreak: false, height: 26 });
   let y = model.description ? text(doc, model.description, 36, 86, 523, 9.5, 'Reg', INK, { height: 220, lineGap: 2 }) + 16 : 86;
   model.keyFacts.forEach((item) => {
     if (y > 700) return;
@@ -332,7 +498,7 @@ function drawStory(doc, model, page) {
     y = text(doc, model.areaOverview, 36, y, 523, 9, 'Reg', INK, { height: 70, lineGap: 1 }) + 10;
   }
   if (model.progress != null && y < 690) {
-    text(doc, 'Construction so far', 36, y + 4, 400, 12, 'Bold', INK, { lineBreak: false, height: 16 });
+    text(doc, say(model, 'constructionSoFar'), 36, y + 4, 400, 12, 'Bold', INK, { lineBreak: false, height: 16 });
     text(doc, `${Math.round(model.progress)}%`, 430, y + 4, 129, 12, 'Bold', GREEN, { align: 'right', lineBreak: false, height: 16 });
     doc.roundedRect(36, y + 26, 523, 8, 4).fill('#e3e8e2');
     doc.roundedRect(36, y + 26, Math.max(8, 523 * Math.min(100, model.progress) / 100), 8, 4).fill(GREEN);
@@ -340,7 +506,7 @@ function drawStory(doc, model, page) {
     if (model.progressBasis) y = text(doc, model.progressBasis, 36, y, 523, 8.5, 'Reg', MUTED, { height: 48, lineGap: 1 }) + 8;
   }
   if (model.amenities.length && y < 640) {
-    text(doc, 'In the building', 36, y, 520, 13, 'Bold', INK, { lineBreak: false, height: 16 });
+    text(doc, say(model, 'inTheBuilding'), 36, y, 520, 13, 'Bold', INK, { lineBreak: false, height: 16 });
     y += 22;
     model.amenities.forEach((amenity, index) => {
       const col = index % 2;
@@ -360,9 +526,9 @@ function chunk(list, size) {
 }
 
 function drawHomes(doc, model, units, page, first) {
-  head(doc, model, 'Homes');
-  footer(doc, page, 'Unit types and prices');
-  text(doc, 'Homes and prices', 36, 52, 520, 20, 'Bold', INK, { lineBreak: false, height: 26 });
+  head(doc, model, say(model, 'homesSection'));
+  footer(doc, page, say(model, 'unitTypes'));
+  text(doc, say(model, 'homesAndPrices'), 36, 52, 520, 20, 'Bold', INK, { lineBreak: false, height: 26 });
   let y = 84;
   if (first && model.floorRule) y = text(doc, model.floorRule, 36, y, 523, 8.5, 'Reg', MUTED, { height: 36, lineGap: 1 }) + 8;
   units.forEach((unit) => {
@@ -370,26 +536,26 @@ function drawHomes(doc, model, units, page, first) {
     if (unit.plan) paintFit(doc, unit.plan, 48, y + 12, 140, 144);
     const x = unit.plan ? 204 : 52;
     const textWidth = unit.plan ? 330 : 480;
-    text(doc, unit.label || 'Home', x, y + 14, textWidth, 13, 'Bold', INK, { height: 32 });
+    text(doc, unit.label || say(model, 'home'), x, y + 14, textWidth, 13, 'Bold', INK, { height: 32 });
     text(doc, unit.usd || unit.ugx, x, y + 48, textWidth, 14, 'Bold', GREEN, { lineBreak: false, height: 18 });
-    if (unit.usd && unit.ugx) text(doc, `${unit.ugx} indicative`, x, y + 68, textWidth, 8.5, 'Reg', MUTED, { lineBreak: false, height: 12 });
+    if (unit.usd && unit.ugx) text(doc, say(model, 'indicative', { amount: unit.ugx }), x, y + 68, textWidth, 8.5, 'Reg', MUTED, { lineBreak: false, height: 12 });
     const meta = [
-      unit.sizeLabel || (unit.size ? `${unit.size} sq m` : ''),
-      Number.isFinite(unit.bedrooms) && unit.bedrooms > 0 ? `${unit.bedrooms} bedroom${unit.bedrooms === 1 ? '' : 's'}` : '',
-      Number.isFinite(unit.bathrooms) && unit.bathrooms > 0 ? `${unit.bathrooms} bathroom${unit.bathrooms === 1 ? '' : 's'}` : ''
+      unit.sizeLabel || (unit.size ? say(model, 'sqm', { size: unit.size }) : ''),
+      Number.isFinite(unit.bedrooms) && unit.bedrooms > 0 ? say(model, unit.bedrooms === 1 ? 'bedroom' : 'bedrooms', { count: unit.bedrooms }) : '',
+      Number.isFinite(unit.bathrooms) && unit.bathrooms > 0 ? say(model, unit.bathrooms === 1 ? 'bathroom' : 'bathrooms', { count: unit.bathrooms }) : ''
     ].filter(Boolean).join('   ·   ');
     if (meta) text(doc, meta, x, y + (unit.usd && unit.ugx ? 86 : 72), textWidth, 9, 'Semi', INK, { lineBreak: false, height: 14 });
     const detail = [unit.living, unit.balcony].filter(Boolean).join(' · ');
     if (detail) text(doc, detail, x, y + 106, textWidth, 8.5, 'Reg', MUTED, { height: 22 });
-    if (unit.fee) text(doc, `Service charge ${unit.fee}`, x, y + 132, textWidth, 8.5, 'Reg', INK, { lineBreak: false, height: 14 });
+    if (unit.fee) text(doc, say(model, 'serviceCharge', { fee: unit.fee }), x, y + 132, textWidth, 8.5, 'Reg', INK, { lineBreak: false, height: 14 });
     y += (unit.plan ? 168 : 92) + 12;
   });
 }
 
 function drawPayment(doc, model, page) {
-  head(doc, model, 'Payment');
-  footer(doc, page, 'Payment plan and timing');
-  text(doc, model.payments.length ? 'How the price is paid' : 'Timing', 36, 52, 520, 20, 'Bold', INK, { height: 26 });
+  head(doc, model, say(model, 'paymentSection'));
+  footer(doc, page, say(model, 'paymentFooter'));
+  text(doc, model.payments.length ? say(model, 'howPaid') : say(model, 'timing'), 36, 52, 520, 20, 'Bold', INK, { height: 26 });
   let y = 90;
   model.payments.slice(0, 4).forEach((item, index) => {
     doc.circle(50, y + 12, 11).fill(GREEN);
@@ -400,11 +566,11 @@ function drawPayment(doc, model, page) {
     y += detail ? 52 : 36;
   });
   if (model.timeline.length && y < 620) {
-    text(doc, 'Timing', 36, y, 520, 14, 'Bold', INK, { lineBreak: false, height: 18 });
+    text(doc, say(model, 'timing'), 36, y, 520, 14, 'Bold', INK, { lineBreak: false, height: 18 });
     y += 24;
     model.timeline.slice(0, 5).forEach((step) => {
       doc.circle(46, y + 6, 4).fill(step.status === 'done' ? GREEN : GOLD);
-      const when = step.date ? formatDate(step.date, 'en') : '';
+      const when = step.date ? formatDate(step.date, model.lang) : '';
       text(doc, when && !missing(when) ? `${when}  —  ${clean(step.label, 140)}` : clean(step.label, 160), 60, y, 490, 9, 'Reg', INK, { lineBreak: false, height: 14 });
       y += 24;
     });
@@ -412,7 +578,7 @@ function drawPayment(doc, model, page) {
   }
   if (model.investment && y < 680) {
     doc.roundedRect(36, y, 523, 72, 8).fill('#fff8ea');
-    text(doc, 'Developer estimate, not a promise', 50, y + 8, 490, 8, 'Semi', GOLD, { lineBreak: false, height: 12 });
+    text(doc, say(model, 'developerEstimate'), 50, y + 8, 490, 8, 'Semi', GOLD, { lineBreak: false, height: 12 });
     text(doc, model.investment, 50, y + 24, 490, 8.5, 'Reg', INK, { height: 40, lineGap: 1 });
     y += 84;
   }
@@ -424,9 +590,9 @@ function drawPayment(doc, model, page) {
 }
 
 function drawLocation(doc, model, map, page) {
-  head(doc, model, 'Location');
+  head(doc, model, say(model, 'locationSection'));
   footer(doc, page, model.hasCoordinates && map ? OSM_ATTRIBUTION : model.areaLine);
-  text(doc, model.areaLine || 'Location', 36, 50, 520, 18, 'Bold', INK, { height: 24 });
+  text(doc, model.areaLine || say(model, 'locationSection'), 36, 50, 520, 18, 'Bold', INK, { height: 24 });
   let y = 80;
   if (model.address) y = text(doc, model.address, 36, y, 523, 9, 'Reg', MUTED, { height: 16 }) + 6;
   if (model.areaOverview) y = text(doc, model.areaOverview, 36, y, 523, 8.5, 'Reg', INK, { height: 72, lineGap: 1 }) + 8;
@@ -434,8 +600,8 @@ function drawLocation(doc, model, map, page) {
     const mapH = Math.round(523 * MAP_H / MAP_W);
     doc.image(map, 36, y, { width: 523, height: mapH });
     y += mapH + 6;
-    text(doc, `Map data ${OSM_ATTRIBUTION}. The pin is the project coordinate.`, 36, y, 360, 7.5, 'Reg', MUTED, { height: 18 });
-    if (model.mapLink) text(doc, 'Open this pin on OpenStreetMap', 360, y, 199, 8, 'Bold', GREEN, { align: 'right', lineBreak: false, height: 12, link: model.mapLink });
+    text(doc, say(model, 'mapData', { attribution: OSM_ATTRIBUTION }), 36, y, 360, 7.5, 'Reg', MUTED, { height: 18 });
+    if (model.mapLink) text(doc, say(model, 'openPin'), 360, y, 199, 8, 'Bold', GREEN, { align: 'right', lineBreak: false, height: 12, link: model.mapLink });
     y += 22;
   } else if (model.sketch?.path) {
     paintCover(doc, model.sketch, 36, y, 523, 180);
@@ -449,15 +615,15 @@ function drawLocation(doc, model, map, page) {
     const top = y + row * 32;
     if (top > 780) return;
     text(doc, place.name, x, top, 250, 8.5, 'Semi', INK, { lineBreak: false, height: 12 });
-    const meta = [place.category, kmLabel(place.km)].filter(Boolean).join('  ·  ');
+    const meta = [place.category, kmLabel(place.km, model.copy)].filter(Boolean).join('  ·  ');
     if (meta) text(doc, meta, x, top + 13, 250, 7.5, 'Reg', MUTED, { lineBreak: false, height: 11 });
   });
 }
 
 function drawGallery(doc, model, page) {
-  head(doc, model, 'Gallery');
-  footer(doc, page, 'Project images');
-  text(doc, 'The building', 36, 50, 400, 18, 'Bold', INK, { lineBreak: false, height: 22 });
+  head(doc, model, say(model, 'gallerySection'));
+  footer(doc, page, say(model, 'projectImages'));
+  text(doc, say(model, 'theBuilding'), 36, 50, 400, 18, 'Bold', INK, { lineBreak: false, height: 22 });
   const images = model.gallery.slice(0, 5);
   let y = 80;
   if (images.length === 1) {
@@ -485,25 +651,27 @@ function drawGallery(doc, model, page) {
 }
 
 function drawSite(doc, model, page) {
-  head(doc, model, 'On site');
-  footer(doc, page, 'Construction');
-  text(doc, model.update?.title || 'On site', 36, 50, 520, 18, 'Bold', INK, { height: 24 });
-  let y = 78;
-  if (model.update?.note && !missing(model.update.note)) y = text(doc, model.update.note, 36, y, 523, 8.5, 'Reg', INK, { height: 48, lineGap: 1 }) + 8;
+  head(doc, model, say(model, 'onSite'));
+  footer(doc, page, say(model, 'construction'));
+  let y = Math.max(78, text(doc, model.update?.title || say(model, 'onSite'), 36, 50, 520, 18, 'Bold', INK, { height: 46 }) + 6);
+  if (model.update?.note && !missing(model.update.note)) y = text(doc, model.update.note, 36, y, 523, 8.5, 'Reg', INK, { height: 72, lineGap: 1 }) + 8;
+  if (model.sitePhotos) y = text(doc, model.sitePhotos, 36, y + 2, 523, 8, 'Semi', GOLD, { lineBreak: false, height: 12 }) + 8;
+  // Diary photos come without captions, so they get the caption space.
+  const captioned = model.construction.some((image) => clean(image.caption));
   model.construction.slice(0, 9).forEach((image, index) => {
     const col = index % 3;
     const row = Math.floor(index / 3);
     const x = 36 + col * 176;
-    const top = y + row * 168;
-    paintCover(doc, image, x, top, 168, 112);
-    text(doc, image.caption, x, top + 116, 168, 7, 'Reg', MUTED, { height: 28 });
+    const top = y + row * (captioned ? 168 : 180);
+    paintCover(doc, image, x, top, 168, captioned ? 112 : 170);
+    if (captioned) text(doc, image.caption, x, top + 116, 168, 7, 'Reg', MUTED, { height: 28 });
   });
 }
 
 function drawPlans(doc, model, page) {
-  head(doc, model, 'Floor plans');
-  footer(doc, page, 'Plans supplied by the developer');
-  text(doc, 'Floor plans', 36, 50, 520, 18, 'Bold', INK, { height: 24 });
+  head(doc, model, say(model, 'floorPlans'));
+  footer(doc, page, say(model, 'plansSupplied'));
+  text(doc, say(model, 'floorPlans'), 36, 50, 520, 18, 'Bold', INK, { height: 24 });
   const unitPlans = model.units.map((unit) => unit.plan).filter(Boolean);
   const typical = model.typicalPlan;
   const extras = model.plans.filter((plan) => plan !== typical && !unitPlans.includes(plan));
@@ -522,15 +690,15 @@ function drawPlans(doc, model, page) {
     const row = Math.floor(index / columns);
     const top = y + row * 190;
     paintFit(doc, plan, x, top, width, columns === 1 ? 280 : 140);
-    text(doc, plan.caption, x, top + (columns === 1 ? 286 : 144), width, 7.5, 'Reg', MUTED, { height: 28 });
+    text(doc, plan.caption, x, top + (columns === 1 ? 286 : 144), width, 7.5, 'Reg', MUTED, { height: 40 });
   });
-  if (y < 730) text(doc, 'Plans are for guidance. Confirm dimensions and the plan attached to the sale agreement.', 36, Math.max(y + 16, 700), 523, 8, 'Reg', MUTED, { height: 22 });
+  if (y < 730) text(doc, say(model, 'plansGuidance'), 36, Math.max(y + 16, 700), 523, 8, 'Reg', MUTED, { height: 22 });
 }
 
 function drawEnquire(doc, model, qr, page) {
-  head(doc, model, 'Enquire');
-  footer(doc, page, 'How to enquire');
-  text(doc, model.contactName ? 'Talk to the project' : 'Enquire', 36, 52, 400, 20, 'Bold', INK, { height: 26 });
+  head(doc, model, say(model, 'enquireSection'));
+  footer(doc, page, say(model, 'howToEnquire'));
+  text(doc, model.contactName ? say(model, 'talkToProject') : say(model, 'enquireSection'), 36, 52, 400, 20, 'Bold', INK, { height: 26 });
   let y = 90;
   if (model.portrait?.path) paintCover(doc, model.portrait, 36, y, 120, 140);
   const x = model.portrait?.path ? 172 : 36;
@@ -539,26 +707,26 @@ function drawEnquire(doc, model, qr, page) {
   if (model.contactName) line = text(doc, model.contactName, x, line, width, 16, 'Bold', INK, { height: 22 }) + 4;
   const role = [model.contactRole, model.developer].filter(Boolean).join(' · ');
   if (role) line = text(doc, role, x, line, width, 9, 'Reg', MUTED, { height: 24 }) + 6;
-  if (model.phones.founder) line = text(doc, `WhatsApp  ${model.phones.founder}`, x, line, width, 11, 'Bold', GREEN, { lineBreak: false, height: 16, link: model.phones.founderLink || undefined }) + 4;
-  if (model.phones.sales) line = text(doc, `Sales desk  ${model.phones.sales}`, x, line, width, 10, 'Semi', INK, { lineBreak: false, height: 14, link: model.phones.salesLink || undefined }) + 4;
+  if (model.phones.founder) line = text(doc, say(model, 'whatsapp', { phone: model.phones.founder }), x, line, width, 11, 'Bold', GREEN, { lineBreak: false, height: 16, link: model.phones.founderLink || undefined }) + 4;
+  if (model.phones.sales) line = text(doc, say(model, 'salesDesk', { phone: model.phones.sales }), x, line, width, 10, 'Semi', INK, { lineBreak: false, height: 14, link: model.phones.salesLink || undefined }) + 4;
   if (model.contactEmail) line = text(doc, model.contactEmail, x, line, width, 9, 'Reg', INK, { lineBreak: false, height: 14, link: model.contactEmail === 'info@makaug.com' ? 'mailto:info@makaug.com' : `mailto:${model.contactEmail}` }) + 4;
   if (model.contactWebsite) line = text(doc, model.contactWebsite, x, line, width, 9, 'Reg', GREEN, { lineBreak: false, height: 14, link: model.contactWebsite }) + 4;
   if (qr && model.url) {
     doc.image(qr, 470, y, { width: 86, height: 86 });
-    text(doc, 'Project page', 456, y + 90, 110, 8, 'Reg', MUTED, { align: 'center', lineBreak: false, height: 12 });
+    text(doc, say(model, 'projectPage'), 456, y + 90, 110, 8, 'Reg', MUTED, { align: 'center', lineBreak: false, height: 12 });
   }
   y = Math.max(line, model.portrait?.path ? y + 156 : line, qr ? y + 110 : line) + 16;
   if (model.bio) y = text(doc, model.bio, 36, y, 523, 9, 'Reg', INK, { height: 40 }) + 8;
   const steps = model.serviceSteps.length ? model.serviceSteps : [
-    model.url ? 'Open the live project on makaug.com.' : '',
-    model.phones.founder ? `Message ${model.contactName || 'the project contact'} on WhatsApp to ask about a visit.` : '',
-    model.units.length ? 'Ask for the home and the written price before you pay.' : '',
-    model.floorRule ? 'Confirm the unit, the floor and the written price.' : '',
-    'Have your own lawyer read the agreement before you pay.',
-    model.charges.length ? `Budget separately for ${model.charges.map((charge) => clean(charge.label, 40).toLowerCase()).join(' and ')}.` : ''
+    model.url ? say(model, 'stepOpen') : '',
+    model.phones.founder ? say(model, 'stepMessage', { name: model.contactName || say(model, 'theContact') }) : '',
+    model.units.length ? say(model, 'stepAsk') : '',
+    model.floorRule ? say(model, 'stepFloor') : '',
+    say(model, 'stepLawyer'),
+    model.charges.length ? say(model, 'stepBudget', { charges: model.charges.map((charge) => clean(charge.label, 40).toLowerCase()).join(` ${say(model, 'and')} `) }) : ''
   ].filter((step, index, list) => step && !missing(step) && list.indexOf(step) === index).slice(0, 5);
   if (steps.length) {
-    text(doc, 'How to enquire', 36, y, 520, 14, 'Bold', INK, { lineBreak: false, height: 18 });
+    text(doc, say(model, 'howToEnquire'), 36, y, 520, 14, 'Bold', INK, { lineBreak: false, height: 18 });
     y += 24;
     steps.forEach((step, index) => {
       text(doc, String(index + 1), 36, y, 18, 11, 'Bold', GREEN, { lineBreak: false, height: 14 });
@@ -566,7 +734,7 @@ function drawEnquire(doc, model, qr, page) {
     });
   }
   if (model.url) y = text(doc, model.url.replace(/^https:\/\//, ''), 36, y + 6, 523, 9, 'Bold', GREEN, { lineBreak: false, height: 14, link: model.url }) + 10;
-  text(doc, 'Prices, availability and handover dates can change. makaug.com publishes the developer’s figures. This brochure is not an offer.', 36, Math.min(y, 760), 523, 8.5, 'Reg', MUTED, { height: 36, lineGap: 1 });
+  text(doc, say(model, 'disclaimer'), 36, Math.min(y, 760), 523, 8.5, 'Reg', MUTED, { height: 36, lineGap: 1 });
 }
 
 function pdfBuffer(doc) {
