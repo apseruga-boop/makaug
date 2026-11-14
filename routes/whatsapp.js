@@ -125,6 +125,8 @@ const {
   employeeAgentExistingPrompt,
   employeeAgentLogoPrompt,
   employeeIntakePhoneAllowed,
+  rememberAgent007Staff,
+  savedAgent007StaffFor,
   employeeIntakeConfirmPrompt,
   employeeIntakeFixPrompt,
   employeeMediaPrompt,
@@ -9635,9 +9637,11 @@ function staffIntakeGreetingReply({ phone = '', session = {}, cleanBody = '' } =
     // through the staff flow rather than merely having a session open.
     || data.employee_role
   );
-  // Since 13 Nov 2026 only Arthur's and Ronald's numbers can use Agent 007, so
-  // only they get the staff menu.
-  if (!isAiCeoOwnerPhone(phone) && (!hasIntakeHistory || !employeeIntakePhoneAllowed(phone))) return '';
+  // Since 13 Nov 2026 only makaug's own staff can use Agent 007 (Arthur and
+  // Ronald, and whoever is added in King), so only they get the staff menu.
+  // Somebody added in King gets it from their first hello, before any batch.
+  if (!isAiCeoOwnerPhone(phone) && !savedAgent007StaffFor(phone)
+    && (!hasIntakeHistory || !employeeIntakePhoneAllowed(phone))) return '';
 
   const lastSubject = normalizeInput(data.employee_intake_last_subject_name || '');
   const lastCount = Number(data.employee_intake_last_properties_set_up || 0);
@@ -9684,7 +9688,22 @@ function isStaffIntakeNumber({ phone = '', session = {} } = {}) {
     || data.employee_intake_last_subject_name
     || data.employee_role
     || data.staff_customer_mode === true
-  ) || isAiCeoOwnerPhone(phone);
+  ) || isAiCeoOwnerPhone(phone)
+    // Somebody added to Agent 007 in King is staff from their first message,
+    // before they have a batch to their name.
+    || Boolean(savedAgent007StaffFor(phone));
+}
+
+/**
+ * Who else can use Agent 007, as saved in King (Sales & Revenue › Settings).
+ * Read before anything asks whether a number may come in; the settings are
+ * kept for a minute, so this costs a query a minute at most. If it cannot be
+ * read, the list already in hand stands, and Arthur and Ronald always can.
+ */
+async function refreshAgent007Staff() {
+  try {
+    await require('../services/billingOpsService').loadAgent007Staff(db);
+  } catch (_error) { /* keep what we have */ }
 }
 
 /**
@@ -10737,6 +10756,8 @@ async function handleEmployeeWhatsappIntake({
   const cleanBody = normalizeInput(body);
   let triggered = isEmployeeIntakeTrigger(cleanBody);
   let active = isEmployeeIntakeStep(currentStep);
+  // Who may use Agent 007 besides Arthur and Ronald, before anything below asks.
+  await refreshAgent007Staff();
   // Set when this message is the one that opened an agent's own posting
   // session, so the first reply can greet them rather than starting mid-flow.
   let openedAgentSelfIntake = false;
@@ -10927,7 +10948,8 @@ async function handleEmployeeWhatsappIntake({
     || employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) });
   if (!allowed) {
     logger.warn('Restricted WhatsApp employee intake trigger rejected', { phone_suffix: employeeIntakePhoneSuffix(phone) });
-    // Not one of ours (Agent 007 is Arthur's and Ronald's since 13 Nov 2026).
+    // Not one of ours (Agent 007 is for Arthur, Ronald and the staff added in
+    // King since 13 Nov 2026).
     // Close anything it left open, so the next message is read as an ordinary
     // one, and say where to go instead.
     if (active) await replaceEmployeeSession(phone, 'main_menu', {});
@@ -22283,7 +22305,9 @@ async function processInboundRuntimeUnlocked({
   const runtimeStartedAt = Date.now();
   const [session, conversationControl] = await Promise.all([
     getSession(phone),
-    getWhatsappConversationControl(phone)
+    getWhatsappConversationControl(phone),
+    // Who is staff, before anything below treats this number as a customer's.
+    refreshAgent007Staff()
   ]);
   // After the session, so an ID number typed for a short-stay listing stays out of the server log.
   const loggedPreview = shortStayWhatsapp.isIdStep(session.current_step)
@@ -23560,6 +23584,7 @@ router.post('/web-bridge/employee-batch-recovery', asyncRoute(async (req, res) =
 
   const phone = normalizeBridgeInboundKey(req.body.phone || req.body.chat_key || req.body.contact_key);
   if (!phone) return res.status(400).json({ ok: false, error: 'phone or chat_key is required' });
+  await refreshAgent007Staff();
   if (!employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) })) {
     return res.status(403).json({ ok: false, error: 'employee intake phone is not authorized' });
   }
@@ -23775,6 +23800,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     && inboundMetadata.owner_history_backfill === true;
   const suppressOwnerHistoryReply = isAuthorizedOwnerHistoryBackfill
     && inboundMetadata.suppress_reply === true;
+  if (inboundMetadata.employee_batch_ordered_replay === true) await refreshAgent007Staff();
   const isAuthorizedEmployeeBatchReplay = !dryRun
     && employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) })
     && inboundMetadata.employee_batch_ordered_replay === true;
@@ -24589,6 +24615,8 @@ module.exports.__test = {
   staffModeSwitchReply,
   isStaffCustomerMode,
   isStaffIntakeNumber,
+  refreshAgent007Staff,
+  staffNameForNumber,
   trustQuestionKind,
   trustQuestionReply,
   commercialUseInSearch,

@@ -23565,6 +23565,8 @@ async function staffOutreachLoad(scope) {
   try {
     const res = await apiRequest("/api/admin/outreach-tracker?limit=200", { headers: adminAuthHeaders() });
     state.data = Array.isArray(res?.data) ? res.data : [];
+    // The staff added to Agent 007 in King get a chip and a choice each, after Arthur and Ronald.
+    state.moreSenders = Array.isArray(res?.senders) ? res.senders.filter((s) => s && /^[a-z0-9]+$/.test(String(s.key || "")) && s.name && !["arthur", "ronald", "other", "all"].includes(s.key)) : [];
     state.note = res?.week_note || "";
     state.error = "";
     state.loadedAt = Date.now();
@@ -23604,6 +23606,7 @@ function staffOutreachRender(scope) {
   const rows = Array.isArray(state.data) ? state.data : [];
   const filter = state.filter || "";
   const sender = state.sender || "all";
+  const moreSenders = Array.isArray(state.moreSenders) ? state.moreSenders : [];
   const visible = rows.filter((row) => staffOutreachMatches(row, filter, sender));
   const chip = (key, label, current, fn) => {
     const on = current === key;
@@ -23625,7 +23628,7 @@ function staffOutreachRender(scope) {
     <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
       <div class="min-w-0">
         <h3 class="text-xl font-black text-gray-900">Outreach</h3>
-        <p class="text-xs text-gray-500 mt-1">Every person Arthur or Ronald sends the joining video to, from Agent 007 option 3. Tracks who sent it, when, the follow-up, and whether we can contact them again. The same video is never sent twice.</p>
+        <p class="text-xs text-gray-500 mt-1">Every person the team sends the joining video to, from Agent 007 option 3. Tracks who sent it, when, the follow-up, and whether we can contact them again. The same video is never sent twice.</p>
         <p class="text-xs text-gray-600 mt-2 leading-relaxed"><strong>Yes</strong> — they want to join. Call them, then register them with Agent 007 option 1 (or add them as an agent), and mark Called or Registered when that is done. <strong>No</strong> — they declined. The loop is closed and the same film will not be sent again; you can still mark Do not contact again for a hard stop. <strong>No reply</strong> — still waiting. After a day, call them and log a recontact (this does not resend the film). <strong>Do not contact again</strong> — hard stop. No further outreach, and recontact is not offered.</p>
         <p class="text-xs text-gray-600 mt-1">${adminEscape(state.note || "Tracking starts from the week of 10–16 Nov 2026 (London).")}</p>
       </div>
@@ -23637,6 +23640,7 @@ function staffOutreachRender(scope) {
       ${chip("all", "All senders", sender, "staffOutreachSenderFilter")}
       ${chip("arthur", "Sent by Arthur", sender, "staffOutreachSenderFilter")}
       ${chip("ronald", "Sent by Ronald", sender, "staffOutreachSenderFilter")}
+      ${moreSenders.map((s) => chip(s.key, `Sent by ${s.name}`, sender, "staffOutreachSenderFilter")).join("\n      ")}
       ${chip("other", "Sent by someone else", sender, "staffOutreachSenderFilter")}
     </div>
     <div class="rounded-xl border border-gray-200 p-3 mb-4 bg-gray-50">
@@ -23646,7 +23650,7 @@ function staffOutreachRender(scope) {
       <form class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3" onsubmit="staffOutreachLog(event, '${scope}')">
         <label class="text-xs font-semibold block">Name<input name="full_name" required class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="Name"></label>
         <label class="text-xs font-semibold block">Phone<input name="phone" required class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="07… or 256…" autocomplete="off"></label>
-        <label class="text-xs font-semibold block">Who sent it<select name="pitched_by_name" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"><option value="Arthur">Arthur</option><option value="Ronald">Ronald</option><option value="">Someone else</option></select></label>
+        <label class="text-xs font-semibold block">Who sent it<select name="pitched_by_name" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"><option value="Arthur">Arthur</option><option value="Ronald">Ronald</option>${moreSenders.map((s) => `<option value="${adminAttr(s.name)}">${adminEscape(s.name)}</option>`).join("")}<option value="">Someone else</option></select></label>
         <div class="grid grid-cols-2 gap-2">
           <label class="text-xs font-semibold block">Sent on (date)<input name="pitched_on" type="date" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"></label>
           <label class="text-xs font-semibold block">Time (optional)<input name="pitched_time" type="time" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"></label>
@@ -37365,7 +37369,7 @@ function renderAdminRevenue() {
 
   const settingsBlock = `<div class="rounded-xl border ${d.pay_to_line ? "border-gray-200" : "border-red-300 bg-red-50"} p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-black text-gray-900">Settings</h4><button type="button" onclick="adminOpenBillingSettings()" class="rounded border border-gray-300 px-2 py-1 text-xs font-bold">Edit settings</button></div>
     <p class="text-xs mt-1">${d.pay_to_line ? `People are told to pay to: <strong>${adminEscape(d.pay_to_line.replace(/\\*/g, ""))}</strong>` : `<strong class="text-red-800">No pay-to number yet — reminders and payment messages are switched off until you add the number and registered name.</strong>`}</p>
-    <p class="text-xs text-gray-600">Confirmers: ${adminEscape((d.settings?.confirmers || []).map((c) => c.name).join(", ") || "—")} · Agent fee ${adminFormatUgx(d.settings?.agent_fee?.monthly_ugx || publishedMarketplacePricing().agent.monthly_ugx)} a month · Private listing ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || publishedMarketplacePricing().owner_listing.monthly_ugx)} per listing, per month · Short stays ${adminFormatUgx(publishedMarketplacePricing().short_stay.monthly_ugx)}/month for non-agents, included in the agent plan. No automatic free period from 10 Nov 2026. Free (staff override) stays a manual choice.</p></div>`;
+    <p class="text-xs text-gray-600">Confirmers: ${adminEscape((d.settings?.confirmers || []).map((c) => c.name).join(", ") || "—")} · Agent 007: ${adminEscape(["Arthur", "Ronald", ...(Array.isArray(d.settings?.agent007_staff) ? d.settings.agent007_staff : []).map((c) => c.name)].filter(Boolean).join(", "))} · Agent fee ${adminFormatUgx(d.settings?.agent_fee?.monthly_ugx || publishedMarketplacePricing().agent.monthly_ugx)} a month · Private listing ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || publishedMarketplacePricing().owner_listing.monthly_ugx)} per listing, per month · Short stays ${adminFormatUgx(publishedMarketplacePricing().short_stay.monthly_ugx)}/month for non-agents, included in the agent plan. No automatic free period from 10 Nov 2026. Free (staff override) stays a manual choice.</p></div>`;
 
   const reconBlock = `<div class="rounded-xl border border-gray-200 p-3"><h4 class="font-black text-gray-900">Weekly reconciliation</h4><p class="text-xs text-gray-600 mb-2">Upload a statement (CSV export from Absa, the bank or MoMo). Lines are matched to the entries above; anything on the statement that nobody recorded — and anything recorded that is not on the statement — is listed.</p>
     <div class="flex flex-wrap gap-2 items-center text-xs"><select id="admin-recon-account" class="rounded border border-gray-300 px-2 py-1">${(d.accounts || []).map((a) => `<option value="${adminAttr(a.key)}">${adminEscape(a.name)}</option>`).join("")}</select><input id="admin-recon-file" type="file" accept=".csv,text/csv,text/plain" class="text-xs"><button type="button" onclick="adminUploadStatement()" class="rounded bg-gray-900 px-3 py-1 font-bold text-white">Upload & match</button></div>
@@ -37745,6 +37749,7 @@ function adminOpenBillingSettings() {
   const agentFee = s.agent_fee || {};
   const listerFee = s.lister_fee || {};
   const confirmers = (s.confirmers || []).map((c) => `${c.name || ""}, ${c.phone || ""}`).join("\n");
+  const agent007Staff = (Array.isArray(s.agent007_staff) ? s.agent007_staff : []).map((c) => `${c.name || ""}, +${c.phone || ""}`).join("\n");
   const views = s.lister_views_message?.text || "";
   adminBillingModal({
     title: "Billing settings",
@@ -37755,6 +37760,7 @@ function adminOpenBillingSettings() {
           <button type="button" class="ml-2 rounded border border-amber-300 bg-white px-2 py-1 text-xs font-bold" data-momo-copy="${adminAttr(momoMerchantCode())}">Copy merchant code</button><br>
           <span class="text-xs">${adminEscape(momoPayUssdText())}</span></p></fieldset>
       <label class="block"><span class="font-bold">Who confirms payments</span> <span class="text-xs text-gray-500">(one per line: name, WhatsApp number)</span><textarea name="confirmers" rows="2" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2">${adminEscape(confirmers)}</textarea></label>
+      <label class="block"><span class="font-bold">Who else can use Agent 007</span> <span class="text-xs text-gray-500">(one per line: name, WhatsApp number with its country code, like Jane, +44 7700 900123. Arthur and Ronald always can. A change here takes effect within a minute: a new number can come in, and one taken out is refused.)</span><textarea name="agent007_staff" rows="2" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2">${adminEscape(agent007Staff)}</textarea></label>
       <p class="text-xs text-gray-600">From 10 Nov 2026 new agents and new private listings pay from approval. Free (staff override) is still a manual choice, with a reason. Agents and listings already on a free period keep it.</p>
       <div class="grid grid-cols-3 gap-2">
         <label class="block"><span class="font-bold text-xs">Agent fee / month</span><input name="agent_monthly" inputmode="numeric" value="${adminAttr(agentFee.monthly_ugx || publishedMarketplacePricing().agent.monthly_ugx)}" class="mt-1 w-full rounded-lg border border-gray-300 px-2 py-2"></label>
@@ -37774,6 +37780,22 @@ function adminOpenBillingSettings() {
         return name && phone ? { name, phone: phone.replace(/\D/g, "") } : null;
       }).filter(Boolean);
       if (!confirmersList.length) throw new Error("Add at least one person who confirms payments.");
+      // Checked before anything is saved: a number with no country code would let nobody in, or the wrong person.
+      const agent007Lines = String(data.get("agent007_staff") || "").split(/\n+/).map((line) => line.trim()).filter(Boolean);
+      const agent007List = agent007Lines.map((line) => {
+        const cut = line.indexOf(",");
+        const name = (cut < 0 ? "" : line.slice(0, cut)).trim();
+        const typed = (cut < 0 ? line : line.slice(cut + 1)).trim();
+        let phone = typed.replace(/\D/g, "").replace(/^00/, "");
+        if (/^07\d{8}$/.test(phone)) phone = `256${phone.slice(1)}`;
+        return { name, phone, ok: Boolean(name) && phone.length >= 10 && phone.length <= 15 && !phone.startsWith("0") };
+      });
+      const agent007Bad = agent007List.find((person) => !person.ok);
+      if (agent007Bad) throw new Error(`Agent 007: "${agent007Bad.name || agent007Lines[agent007List.indexOf(agent007Bad)]}" needs a name, a comma, then a WhatsApp number with its country code (for example Jane, +44 7700 900123).`);
+      // Saved only when the box was changed, so a page left open cannot put an old list back.
+      if (agent007Lines.join("\n") !== agent007Staff.split(/\n+/).map((line) => line.trim()).filter(Boolean).join("\n")) {
+        await put("agent007_staff", agent007List.map(({ name, phone }) => ({ name, phone })));
+      }
       await put("pay_to", { ...pay, name: String(data.get("pay_name") || "").trim() });
       await put("confirmers", confirmersList);
       await put("agent_fee", { ...agentFee, monthly_ugx: num(data.get("agent_monthly"), publishedMarketplacePricing().agent.monthly_ugx), agent_trial_days: 0, remind_days_before: num(data.get("remind_days"), 3), final_after_days_overdue: num(data.get("final_days"), 7) });

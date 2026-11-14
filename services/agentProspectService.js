@@ -555,6 +555,8 @@ async function listProspects({ status = '', pitchedBy = '', limit = 200 } = {}) 
 async function listOutreach({ status = '', pitchedBy = '', sender = '', limit = 200 } = {}) {
   const rows = await listProspects({ status: PROSPECT_STATUSES.includes(status) ? status : '', pitchedBy, limit });
   const activity = await activityForPhoneKeys(rows.map((row) => row.phone_key));
+  // The staff added to Agent 007 in King, so their sends carry their name.
+  await require('./billingOpsService').loadAgent007Staff(db).catch(() => null);
   const known = knownOutreachSenders();
   const mapped = rows.map((row) => publicProspect(row, activity.get(row.phone_key) || {}, known));
   const followUp = ['yes', 'no', 'no_reply', 'do_not_contact'].includes(String(status || '')) ? status : '';
