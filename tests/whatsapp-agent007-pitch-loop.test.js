@@ -54,7 +54,7 @@ test('right after a video, the next "Name | phone" sends the next one', async ()
     assert.match(done.message, /Video sent to Bob Shan/);
     assert.match(done.message, /256758561835/);
     assert.strictEqual(sent.length, 1, 'one film queued');
-    assert.match(JSON.stringify(sent[0]), /makaug-join-as-agent/);
+    assert.match(JSON.stringify(sent[0]), /makaug-agent-intro/);
     assert.strictEqual(getSession()?.employee_intake_last_pitch_name, 'Bob Shan', 'and the next one can follow it');
   });
 });
@@ -124,7 +124,7 @@ test('Agent 007 still opens the menu straight after a video', async () => {
   await withStubbedWorld(async ({ at, sent }) => {
     const menu = await at('main_menu', 'Agent 007', justPitched());
     assert.strictEqual(menu.nextStep, 'employee_intake_role');
-    assert.match(menu.message, /employee intake/);
+    assert.match(menu.message, /\*Agent 007\* · makaug control room/);
     assert.strictEqual(sent.length, 0);
   });
 });

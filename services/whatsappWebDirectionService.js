@@ -24,6 +24,8 @@ function isLikelyMakaugOutboundPreview(value = '') {
   const text = normalizeSenderLabel(value);
   if (!text) return false;
   return /^(?:🔐\s*)?makaug employee intake\b/i.test(text)
+    // The Agent 007 menu since 14 Nov 2026. The bare trigger "Agent 007" is not ours.
+    || /^(?:🔐\s*)?\*?Agent 007\*?\s*·\s*makaug control room\b/i.test(text)
     || /^Is the agent already registered on makaug\.com\?/i.test(text)
     || /^Send the agent(?:'|’)?s exact name\b/i.test(text)
     || /^How many properties are you sending\?/i.test(text)

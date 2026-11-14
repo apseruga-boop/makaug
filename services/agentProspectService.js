@@ -4,9 +4,13 @@
  * The people we have pitched, before they are agents.
  *
  * An employee sends the join-as-an-agent film from WhatsApp (Agent 007,
- * option 3 — or option 4 when a new prospect also gets the payment link).
+ * option 3 — or option 6 when a new prospect also gets the payment link).
  * This is the book for "who did Arthur or Ronald send the video to, when,
  * what happened, and may we contact them again".
+ *
+ * Since 14 Nov 2026 the owner intro film (Agent 007, option 4) is on the same
+ * list, as video_kind 'owner': pitched, interested (they said LIST),
+ * signed_up (their property is in review), approved (it is live).
  *
  * A second send of the same film to the same number is blocked. Staff can
  * log a send they already made by hand, mark the follow-up, log a recontact
@@ -77,9 +81,23 @@ function isUsableProspectPhone(value) {
   return prospectPhoneKey(value).length === 9 && !prospectPhoneProblem(value);
 }
 
+const OWNER_FOLLOW_UP_LABELS = Object.freeze({
+  pitched: 'No reply yet',
+  interested: 'Yes — they said LIST',
+  signed_up: 'Yes — their property is in review',
+  approved: 'Yes — their property is live',
+  declined: 'No — they said no',
+  archived: 'Archived'
+});
+
+function isOwnerFilm(row = {}) {
+  return String(row.video_kind || 'agent') === 'owner';
+}
+
 function followUpLabel(row = {}) {
   if (row.do_not_contact) return 'Do not contact again';
-  return FOLLOW_UP_LABELS[row.status] || 'No reply yet';
+  const labels = isOwnerFilm(row) ? OWNER_FOLLOW_UP_LABELS : FOLLOW_UP_LABELS;
+  return labels[row.status] || 'No reply yet';
 }
 
 function daysSince(value, now = new Date()) {
@@ -106,6 +124,7 @@ function senderLabel(row = {}, known) {
 function videoLabel(row = {}) {
   const kind = String(row.video_kind || 'agent').trim() || 'agent';
   if (kind === 'agent') return 'Joining film (Agent 007 option 3)';
+  if (kind === 'owner') return 'Owner film (Agent 007 option 4)';
   return kind;
 }
 
@@ -114,12 +133,15 @@ function canRecontact(row = {}) {
 }
 
 function canMarkCalled(row = {}) {
+  if (isOwnerFilm(row)) return false;
   return row.do_not_contact !== true
     && String(row.status || '') === 'interested'
     && !row.called_at;
 }
 
 function canMarkRegistered(row = {}) {
+  // An owner is never registered as an agent: their own listing moves them on.
+  if (isOwnerFilm(row)) return false;
   if (row.do_not_contact === true || row.registered_at) return false;
   const status = String(row.status || '');
   return status === 'interested' || status === 'signed_up';
@@ -164,6 +186,24 @@ function prospectNextStep(row = {}) {
   }
   const days = Number(row.days_since_last_touch ?? row.days_since_pitch ?? daysSince(lastTouchAt(row)) ?? 0);
   const dayBit = days === 0 ? 'today' : days === 1 ? '1 day ago' : `${days} days ago`;
+  if (isOwnerFilm(row)) {
+    switch (row.status) {
+      case 'pitched':
+        return days >= 1
+          ? `No reply yet (${dayBit}). Call them. Do not send the same film again.`
+          : 'Waiting for them to reply LIST. If they do not, call them — do not send the same film again.';
+      case 'interested':
+        return 'They said LIST and their listing has started on WhatsApp. If nothing arrives, call them and help them finish, or list it for them with Agent 007 option 2.';
+      case 'signed_up':
+        return 'Their property is with us for review. Approve it in Listings › pending: the link and the payment link go to them, and you are told.';
+      case 'approved':
+        return 'Done — their property is live. Agent 007 option 7 (Who still owes) shows whether they have paid.';
+      case 'declined':
+        return 'Closed — they said no. Do not send the same film again.';
+      default:
+        return '';
+    }
+  }
   switch (row.status) {
     case 'pitched':
       if (row.recontacted_at) {
@@ -345,10 +385,27 @@ async function recordProspectPitch({
      VALUES ($1, $2, $3, $4, NULLIF($5, ''), NULLIF($6, ''), COALESCE($7::timestamptz, NOW()), $8, $9::jsonb)
      ON CONFLICT (phone_key) DO UPDATE
         SET full_name = COALESCE(NULLIF(EXCLUDED.full_name, ''), agent_prospects.full_name),
-            pitched_by_name = COALESCE(NULLIF(agent_prospects.pitched_by_name, ''), EXCLUDED.pitched_by_name),
+            -- A different film to the same person (the agent film, then the
+            -- owner film) starts that film's own follow-up: who sent it, when,
+            -- and "no reply yet". The earlier film is kept in metadata.
+            pitched_by_name = CASE WHEN agent_prospects.video_kind IS DISTINCT FROM EXCLUDED.video_kind
+              THEN COALESCE(NULLIF(EXCLUDED.pitched_by_name, ''), agent_prospects.pitched_by_name)
+              ELSE COALESCE(NULLIF(agent_prospects.pitched_by_name, ''), EXCLUDED.pitched_by_name) END,
+            pitched_by = CASE WHEN agent_prospects.video_kind IS DISTINCT FROM EXCLUDED.video_kind
+              THEN COALESCE(EXCLUDED.pitched_by, agent_prospects.pitched_by) ELSE agent_prospects.pitched_by END,
+            pitched_at = CASE WHEN agent_prospects.video_kind IS DISTINCT FROM EXCLUDED.video_kind
+              THEN EXCLUDED.pitched_at ELSE agent_prospects.pitched_at END,
+            status = CASE WHEN agent_prospects.video_kind IS DISTINCT FROM EXCLUDED.video_kind
+                AND agent_prospects.status IN ('pitched', 'interested', 'declined')
+              THEN 'pitched' ELSE agent_prospects.status END,
             last_nudged_at = NOW(),
             updated_at = NOW(),
             metadata = agent_prospects.metadata || EXCLUDED.metadata
+              || CASE WHEN agent_prospects.video_kind IS DISTINCT FROM EXCLUDED.video_kind
+                THEN jsonb_build_object('previous_film', jsonb_build_object(
+                  'kind', agent_prospects.video_kind, 'at', agent_prospects.pitched_at::text, 'status', agent_prospects.status))
+                ELSE '{}'::jsonb END,
+            video_kind = EXCLUDED.video_kind
      RETURNING *, (xmax = 0) AS newly_created`,
     [
       String(fullName || '').trim() || 'Unnamed prospect',

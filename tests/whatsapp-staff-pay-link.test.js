@@ -34,19 +34,22 @@ const RONALD = '+256709402189';
 // The menu and the parsers
 // ---------------------------------------------------------------------------
 
-test('the menu offers a fourth thing to do, with the price on it', () => {
+// The payment link is option 6 since the control room menu (14 Nov 2026); it
+// was 4. Options 1 to 3 are where they were.
+test('the menu offers the payment link, with the price on it', () => {
   const prompt = intake.employeeRolePrompt('UGX 50,000');
-  assert.match(prompt, /4 — /, 'there must be a fourth option');
-  assert.match(prompt, /payment link/i);
+  assert.match(prompt, /\*6\* · \*Payment link\*/, 'the payment link has its own option');
+  assert.match(prompt, /To an agent, a new prospect or a private owner/, 'and says who it can go to');
   assert.match(prompt, /UGX 50,000/, 'the amount, so nobody has to remember it');
-  // The three that were already there must still read the same.
-  assert.match(prompt, /1 — An \*agent or broker\*/);
-  assert.match(prompt, /2 — A \*private owner\*/);
-  assert.match(prompt, /3 — No properties yet/);
+  // The three that were already there are still 1, 2 and 3.
+  assert.match(prompt, /\*1\* · For an \*agent or broker\*/);
+  assert.match(prompt, /\*2\* · For a \*private owner\*/);
+  assert.match(prompt, /\*3\* · \*Agent intro film\*/);
 });
 
-test('"4" is the payment link, and the other answers are unchanged', () => {
-  assert.strictEqual(intake.parseEmployeeRole('4'), 'pay_link');
+test('"6" is the payment link, and the other answers are unchanged', () => {
+  assert.strictEqual(intake.parseEmployeeRole('6'), 'pay_link');
+  assert.strictEqual(intake.parseEmployeeRole('4'), 'owner_pitch', '4 is the owner film now');
   for (const spelling of ['payment link', 'pay link', 'send payment link', 'PAYMENT']) {
     assert.strictEqual(intake.parseEmployeeRole(spelling), 'pay_link', `"${spelling}"`);
   }
@@ -55,16 +58,18 @@ test('"4" is the payment link, and the other answers are unchanged', () => {
   assert.strictEqual(intake.parseEmployeeRole('3'), 'pitch');
 });
 
-test('registered or prospect is the first question, and it has only two answers', () => {
+test('who it is for is the first question: registered, a prospect, or a private owner', () => {
   assert.strictEqual(intake.parsePayLinkWho('1'), 'registered');
   assert.strictEqual(intake.parsePayLinkWho('2'), 'prospect');
   assert.strictEqual(intake.parsePayLinkWho('registered'), 'registered');
   assert.strictEqual(intake.parsePayLinkWho('new prospect'), 'prospect');
+  assert.strictEqual(intake.parsePayLinkWho('3'), 'owner');
   assert.strictEqual(intake.parsePayLinkWho('maybe'), '', 'anything else must re-ask, not guess');
   const prompt = intake.employeePayLinkWhoPrompt('UGX 50,000');
   assert.match(prompt, /already registered/i);
-  assert.match(prompt, /new prospect/i);
-  assert.match(prompt, /joining video/i, 'a prospect must be told the film comes too');
+  assert.match(prompt, /new agent prospect/i);
+  assert.match(prompt, /agent intro film goes with it/i, 'a prospect must be told the film comes too');
+  assert.match(prompt, /private owner\* with a listing/i);
 });
 
 test('the registered branch asks for the name the way the listing flow does', () => {
@@ -178,9 +183,9 @@ const AGENT = {
   pay_link_sent_at: null
 };
 
-test('4 → 1 → a name → confirm, and the link goes with the reference back to Ronald', async () => {
+test('6 → 1 → a name → confirm, and the link goes with the reference back to Ronald', async () => {
   await withStubbedWorld(async ({ at, sent, payLinkRows, agentUpdates, getSentStamp }) => {
-    const chose = await at('employee_intake_role', '4', { whatsapp_employee_intake: true });
+    const chose = await at('employee_intake_role', '6', { whatsapp_employee_intake: true });
     assert.strictEqual(chose.nextStep, 'employee_pay_link_who');
     assert.match(chose.message, /already registered/i);
 
@@ -221,7 +226,7 @@ test('4 → 1 → a name → confirm, and the link goes with the reference back 
     assert.match(payload, /MKTEST1234/);
     assert.match(payload, /256772123456/, 'it went to the agent');
     assert.match(payload, /Payment link sent/i, 'the staff notice');
-    assert.ok(!/makaug-join-as-agent-v4\.mp4/.test(payload),
+    assert.ok(!/makaug-agent-intro-v5\.mp4/.test(payload),
       'a registered agent does not need the joining film again');
 
     // Sent, and written down as sent — without that the loop cannot be closed.
@@ -238,7 +243,7 @@ test('a name nobody matches re-asks and sends nothing', async () => {
     });
     assert.strictEqual(miss.nextStep, 'employee_pay_link_lookup');
     assert.match(miss.message, /No approved agent/i);
-    assert.match(miss.message, /\*4\* then \*2\*/, 'and the way out, for somebody not registered yet');
+    assert.match(miss.message, /\*6\* then \*2\*/, 'and the way out, for somebody not registered yet');
     assert.strictEqual(sent.length, 0, 'nothing may go out on a failed search');
   }, { agents: [] });
 });
@@ -349,7 +354,7 @@ test('the search list marks an exempt agent, so nobody bills one by accident', a
   }, { agents: [{ ...AGENT, fee_exempt: true }], feeExempt: true });
 });
 
-test('4 → 2 → name and number, and the film and the link go out together', async () => {
+test('6 → 2 → name and number, and the film and the link go out together', async () => {
   await withStubbedWorld(async ({ at, sent, payLinkRows, getProspect }) => {
     const who = await at('employee_pay_link_who', '2', {
       whatsapp_employee_intake: true, employee_role: 'pay_link'
@@ -369,9 +374,9 @@ test('4 → 2 → name and number, and the film and the link go out together', a
     // Both, in that order: a bare payment link from an unknown number is
     // indistinguishable from a scam.
     const payload = sent.map((p) => JSON.stringify(p)).join(' ');
-    assert.match(payload, /makaug-join-as-agent-v4\.mp4/, 'the joining film');
+    assert.match(payload, /makaug-agent-intro-v5\.mp4/, 'the joining film');
     assert.match(payload, /MKTEST1234/, 'and the link');
-    const filmIndex = sent.findIndex((p) => JSON.stringify(p).includes('makaug-join-as-agent-v4'));
+    const filmIndex = sent.findIndex((p) => JSON.stringify(p).includes('makaug-agent-intro-v5'));
     const linkIndex = sent.findIndex((p) => /pay\/MKTEST1234/.test(JSON.stringify(p)));
     assert.ok(filmIndex > -1 && linkIndex > filmIndex, 'the film has to arrive before the bill');
 
@@ -384,7 +389,7 @@ test('4 → 2 → name and number, and the film and the link go out together', a
     const recorded = getProspect();
     assert.ok(recorded, 'they go on the prospects list like any other pitch');
     assert.strictEqual(recorded.phone_key, '772123456');
-    assert.match(String(recorded.metadata), /agent_007_option_4/);
+    assert.match(String(recorded.metadata), /agent_007_pay_link/);
     assert.match(String(recorded.metadata), /MKTEST1234/, 'with the reference, so the follow-up knows what was asked for');
   }, { agents: [] });
 });

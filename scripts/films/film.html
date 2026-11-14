@@ -1,0 +1,15 @@
+<!doctype html>
+<!-- One page for every makaug film: film.html?film=agent-intro&t=12.5 draws that film at 12.5 seconds. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="film.css">
+<script src="engine.js"></script>
+<script src="transcript.js"></script>
+<script>
+  const name = new URLSearchParams(location.search).get('film') || 'agent-intro';
+  document.write(`<script src="films/${name.replace(/[^a-z0-9-]/g, '')}.js"><\/script>`);
+</script>
+</head>
+<body></body>
+</html>

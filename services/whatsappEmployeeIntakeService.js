@@ -1,3 +1,5 @@
+const controlRoom = require('./agent007ControlRoom');
+
 const EMPLOYEE_INTAKE_TRIGGER = 'Agent 007';
 
 const EMPLOYEE_INTAKE_STEPS = Object.freeze([
@@ -18,7 +20,10 @@ const EMPLOYEE_INTAKE_STEPS = Object.freeze([
   'employee_intake_fix',
   'employee_agent_pay_link',
   'employee_property_count',
-  'employee_property_media'
+  'employee_property_media',
+  // The control room (14 Nov 2026): owner film, how-to videos, a private
+  // owner's payment link, who still owes, look someone up.
+  ...controlRoom.CONTROL_ROOM_STEPS
 ]);
 
 function cleanText(value = '') {
@@ -256,17 +261,15 @@ function choice(value, options = {}) {
   return '';
 }
 
+/**
+ * The option chosen at the Agent 007 menu:
+ *   agent · customer (a private owner) · pitch (agent intro film)
+ *   owner_pitch (owner intro film) · how_to · pay_link · owes · lookup
+ * The numbers and the words are in agent007ControlRoom.js. Until 14 Nov 2026
+ * there were four options and the payment link was 4; it is 6 now.
+ */
 function parseEmployeeRole(value = '') {
-  return choice(value, {
-    agent: ['1', 'agent', 'an agent', 'broker'],
-    customer: ['2', 'customer', 'new customer', 'owner', 'property owner', 'normal person'],
-    // Not a property at all: an employee standing in front of somebody who might
-    // become an agent, who needs the pitch film before anything else happens.
-    pitch: ['3', 'video', 'send video', 'agent video', 'pitch', 'send the video', 'invite'],
-    // No properties and no pitch either: somebody has agreed to pay and is
-    // waiting for the link.
-    pay_link: ['4', 'pay', 'payment', 'pay link', 'payment link', 'send payment link', 'send pay link', 'send the payment link', 'invoice']
-  });
+  return controlRoom.parseControlRoomChoice(value);
 }
 
 /**
@@ -279,17 +282,12 @@ function parseEmployeeRole(value = '') {
  * know is indistinguishable from a scam.
  */
 function employeePayLinkWhoPrompt(feeLabel = 'UGX 50,000') {
-  return `\u{1F4B3} *Send a payment link* — ${feeLabel} a month.\n\nWho is it for?\n\n`
-    + '1 — An agent *already registered* on makaug.com\n'
-    + '2 — A *new prospect* — not registered yet (they get the joining video with the link)\n\n'
-    + 'Type *CANCEL* to stop.';
+  return controlRoom.payLinkWhoPrompt({ agentFee: feeLabel });
 }
 
+/** registered · prospect · owner (a private owner with a listing, since 14 Nov 2026). */
 function parsePayLinkWho(value = '') {
-  return choice(value, {
-    registered: ['1', 'registered', 'yes', 'existing', 'already registered', 'agent', 'registered agent'],
-    prospect: ['2', 'prospect', 'new', 'new prospect', 'not registered', 'no', 'new agent']
-  });
+  return controlRoom.parsePayLinkWho(value);
 }
 
 function employeePayLinkLookupPrompt() {
@@ -345,8 +343,8 @@ function parsePayLinkChoice(value = '') {
   });
 }
 
-function employeePitchContactPrompt() {
-  return '🎬 *Send the makaug agent video*\n\nWho should it go to?\n\nSend their details like this:\n\n*Name | phone number*\n\nFor example: Kato Brian | 0772123456\n\nType *CANCEL* to stop.';
+function employeePitchContactPrompt(feeLabel = 'UGX 50,000') {
+  return controlRoom.agentFilmPrompt({ agentFee: feeLabel });
 }
 
 function parseYesNo(value = '') {
@@ -534,14 +532,13 @@ function parseCustomerDetails(value = '') {
 }
 
 /**
- * The single most expensive answer in this flow. "2" here means the listings
- * belong to the person who owns them, so no agent profile is created and
- * nothing links the listings to anybody. It was being chosen for agents over
- * and over, so the question now says what each answer costs.
+ * The Agent 007 menu (agent007ControlRoom.controlRoomMenu). "2" is still the
+ * most expensive answer on it: the listings belong to the person who owns
+ * them, so no agent profile is created. It was being chosen for agents over
+ * and over, so each option says what it does.
  */
 function employeeRolePrompt(feeLabel = 'UGX 50,000') {
-  return '🔐 *makaug employee intake*\nWho do these properties belong to?\n\n1 — An *agent or broker* (they get a makaug profile, and every property is listed under it)\n2 — A *private owner* selling their own property (no agent profile is created)\n\n3 — No properties yet — *send someone the makaug agent video* (what we are, how to list, what it costs)'
-    + `\n4 — No properties yet — *send a payment link* (${feeLabel} a month, to a registered agent or a new prospect)`;
+  return controlRoom.controlRoomMenu({ agentFee: feeLabel });
 }
 
 function employeeAgentExistingPrompt() {
