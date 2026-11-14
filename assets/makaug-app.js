@@ -14160,27 +14160,54 @@ async function previewAgentWelcome() {
   try {
     const res = await apiRequest(`/api/admin/agent-welcome/${encodeURIComponent(agentId)}`, { headers: adminAuthHeaders() });
     const data = res?.data || {};
-    const videoUrl = agentReportSafeUrl(data.video_url);
-    if (box) {
-      box.innerHTML = `
-        <div class="grid gap-4 lg:grid-cols-[300px_1fr]">
-          ${videoUrl ? `<video src="${adminAttr(videoUrl)}" controls playsinline preload="none" class="w-full rounded-xl border border-gray-200 bg-white"></video>` : `<div class="rounded-xl border border-dashed border-gray-300 p-4 text-xs text-gray-600">Video is not available on this server; the message still sends.</div>`}
-          <div>
-            <div class="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Message to ${adminEscape(data.agent?.full_name || "the agent")} (${adminEscape(data.agent?.makaug_agent_number || "no agent ID")})</div>
-            <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
-              <label for="admin-agent-greeting-name" class="font-bold text-gray-700">Greet as</label>
-              <input id="admin-agent-greeting-name" type="text" maxlength="40" value="${adminAttr(data.greeting_name || "")}" class="rounded-lg border border-gray-300 px-2 py-1 text-sm w-40" aria-describedby="admin-agent-greeting-help">
-              <button type="button" onclick="saveAgentGreetingName()" class="rounded-lg bg-green-700 px-3 py-1 font-bold text-white">Save</button>
-              <span id="admin-agent-greeting-help" class="text-gray-500">The name every WhatsApp message uses — e.g. "Amos" for Agaba Amos.</span>
-            </div>
-            <pre class="whitespace-pre-wrap rounded-xl bg-white p-3 text-xs text-gray-800 max-h-96 overflow-auto">${adminEscape(data.message || "")}</pre>
-            ${agentReportSafeUrl(data.share_card_url) ? `<div class="mt-3 flex items-start gap-3"><img src="${adminAttr(data.share_card_url)}" alt="Share card" class="w-32 rounded-lg border border-gray-200"><div class="text-xs text-gray-600"><b>Share card</b><br>Posted to the agent as a third message for their WhatsApp status. The code opens <a href="${adminAttr(data.profile_url || "#")}" target="_blank" rel="noopener" class="font-bold text-green-700">their profile</a>.</div></div>` : ""}
-          </div>
-        </div>`;
-    }
+    if (box) box.innerHTML = agentWelcomePreviewHtml(data);
   } catch (error) {
     if (box) box.innerHTML = `<p class="text-sm text-red-700">${adminEscape(error?.message || "Couldn't build the welcome pack.")}</p>`;
   }
+}
+
+// The three messages of a new agent's welcome, in the order they are sent.
+function agentWelcomePreviewHtml(data = {}) {
+  const messages = Array.isArray(data.messages) ? data.messages : [];
+  const titles = { approved: "Approved, and what to do", how_to_film: "The how-to-post film", plan: "How to pay" };
+  const languages = { lg: "Luganda", sw: "Swahili" };
+  const bubbles = messages.map((message, index) => {
+    const mediaUrl = agentReportSafeUrl(message.media_url);
+    const media = !mediaUrl ? ""
+      : message.kind === "video"
+        ? `<video src="${adminAttr(mediaUrl)}" controls playsinline preload="none" class="mb-2 w-full max-w-xs rounded-lg border border-gray-200 bg-black"></video>`
+        : `<img src="${adminAttr(mediaUrl)}" alt="" class="mb-2 w-full max-w-xs rounded-lg border border-gray-200">`;
+    const note = message.part === "how_to_film" && languages[message.lang] ? ` · in ${languages[message.lang]}, the language they were first written to in`
+      : (message.sample ? " · their own payment link is made when it is sent" : "");
+    return `<div class="rounded-xl border border-gray-200 bg-white p-3">
+      <div class="mb-2"><span class="text-xs font-bold uppercase tracking-wide text-gray-500">${index + 1} of ${messages.length} · ${adminEscape(titles[message.part] || message.part || "")}</span><span class="text-xs text-gray-500">${adminEscape(note)}</span></div>
+      ${media}<pre class="whitespace-pre-wrap text-xs text-gray-800">${adminEscape(message.text || "")}</pre>
+    </div>`;
+  }).join("");
+  // "Send to agent" sends exactly these, so the notes say what is in them and why.
+  const hasPlan = messages.some((message) => message.part === "plan");
+  const noPlanWhy = {
+    employee_declined: "A payment is due, but whoever registered them asked for no payment link, so there is no payment message.",
+    not_approved: "They are not approved yet, so there is no payment message."
+  };
+  const facts = [
+    data.welcomed_at ? `They were sent a welcome on ${adminEscape(adminShortDate(data.welcomed_at))}. “Send to agent” sends this one as well.` : "",
+    data.held_until ? `It is night in Kampala: sent now, it would wait for ${adminEscape(adminKampalaClock(data.held_until))}.` : `Sent now, it goes straight away: the film 20 seconds after the first message${hasPlan ? ", the payment message 25 seconds after that" : ""}.`,
+    data.terms_accepted ? "They have already accepted the terms, so they are not asked again." : "",
+    data.fee_due ? (data.pay_message_off ? (noPlanWhy[data.pay_message_off] || "A payment is due, but there is no payment message for them.") : "") : "Nothing is due from them now, so there is no payment message.",
+    Number(data.listings) ? `${adminEscape(String(data.listings))} of their properties are live already.` : ""
+  ].filter(Boolean).map((fact) => `<li>${fact}</li>`).join("");
+  return `
+    <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
+      <span class="font-bold text-gray-700">To ${adminEscape(data.agent?.full_name || "the agent")} (${adminEscape(data.agent?.makaug_agent_number || "no agent ID")})</span>
+      <label for="admin-agent-greeting-name" class="font-bold text-gray-700">· Greet as</label>
+      <input id="admin-agent-greeting-name" type="text" maxlength="40" value="${adminAttr(data.greeting_name || "")}" class="rounded-lg border border-gray-300 px-2 py-1 text-sm w-40" aria-describedby="admin-agent-greeting-help">
+      <button type="button" onclick="saveAgentGreetingName()" class="rounded-lg bg-green-700 px-3 py-1 font-bold text-white">Save</button>
+      <span id="admin-agent-greeting-help" class="text-gray-500">The name every WhatsApp message uses — e.g. "Amos" for Agaba Amos.</span>
+    </div>
+    <div class="grid gap-3 lg:grid-cols-3">${bubbles}</div>
+    <ul class="mt-3 list-disc pl-5 text-xs text-gray-600 space-y-1">${facts}</ul>
+    <p class="mt-2 text-xs text-gray-500">Their share card is one word away for them (SHARE), and the agent guide is linked under the film. The long introduction and the personal film are no longer sent.</p>`;
 }
 
 async function saveAgentGreetingName() {
@@ -14218,7 +14245,7 @@ async function sendAgentWelcome(preview = false) {
   }
   try {
     const res = await apiRequest(`/api/admin/agent-welcome/${encodeURIComponent(agentId)}/send`, { method: "POST", headers: adminAuthHeaders(), body });
-    toast(preview ? `Welcome pack sent to ${res?.data?.to}.` : "Welcome pack sent to the agent.");
+    toast(preview ? `Welcome sent to ${res?.data?.to}.` : (res?.data?.held_until ? `It is night in Kampala: the welcome goes to the agent at ${adminKampalaClock(res.data.held_until)}.` : "Welcome sent to the agent."));
   } catch (error) {
     toast(error?.message || "Couldn't send the welcome pack.");
   }
@@ -36719,13 +36746,15 @@ async function adminSetAgentStatus(agentId, status, payment = null, feeOverride 
     const welcome = response?.data?.welcome;
     const paid = response?.data?.payment;
     const override = response?.data?.fee_override;
+    // At night the payment message waits for the morning with the rest of the welcome: say so, not "sent".
+    const payLinkHeld = Boolean(response?.data?.fee_link?.goes_at);
     const overrideNote = override
       ? (override.mode === "free_period" ? ` Free offer until ${override.offer_until}.`
-        : override.mode === "pay_later" ? (response?.data?.fee_link?.sent ? " Pay link sent on WhatsApp." : " Pay later — send the pay link from their card.")
+        : override.mode === "pay_later" ? (response?.data?.fee_link?.sent ? (payLinkHeld ? " The pay link goes with their welcome." : " Pay link sent on WhatsApp.") : " Pay later — send the pay link from their card.")
         : " Fee waived.")
       : "";
     if (status === "approved") {
-      toast(`Approved.${overrideNote}${!override && response?.data?.fee_link?.sent ? " Payment link sent." : ""}${paid ? ` Payment recorded — paid until ${paid.period_end}.` : ""}${welcome?.error ? ` Welcome pack NOT sent: ${welcome.error}` : (welcome?.skipped ? " Welcome pack was already sent before." : " Welcome pack and how-to-post film sent on WhatsApp.")}`);
+      toast(`Approved.${overrideNote}${!override && response?.data?.fee_link?.sent ? (payLinkHeld ? " The payment link goes with their welcome." : " Payment link sent.") : ""}${paid ? ` Payment recorded — paid until ${paid.period_end}.` : ""}${welcome?.error ? ` Welcome NOT sent: ${welcome.error}` : (welcome?.skipped ? " They were welcomed before, so nothing was sent again." : (welcome?.held_until ? ` It is night in Kampala: their welcome goes at ${adminKampalaClock(welcome.held_until)}.` : " Welcome and how-to-post film sent on WhatsApp."))}`);
     }
     await refreshBrokersFromApi({ silent: true }).catch(() => {});
     await refreshSharedKingToolsUi();
@@ -37016,7 +37045,7 @@ function adminPayLinksBlock(d) {
   const rows = (d.pay_links || []).slice(0, 25).map((l) => {
     const who = l.agent_name || l.property_title || l.payer_name || (l.description || "");
     const code = adminAttr(l.code);
-    const paid = l.status === "paid" ? `Paid ${l.paid_method === "card" ? "by card" : "by MoMo"} ${adminEscape(adminShortDate(l.paid_at))}` : (l.status === "open" ? (l.opened_at ? "Opened, not paid" : (l.sent_at ? "Sent" : "Not sent")) : l.status);
+    const paid = l.status === "paid" ? `Paid ${l.paid_method === "card" ? "by card" : "by MoMo"} ${adminEscape(adminShortDate(l.paid_at))}` : (l.status === "open" ? ((l.opened_by_them ?? Boolean(l.opened_at)) ? "Opened, not paid" : (l.sent_at ? "Sent, not opened" : "Not sent")) : l.status);
     const actions = l.status === "open" ? `<button type="button" onclick="adminSendPayLink('${code}')" class="underline font-bold">WhatsApp it</button> <button type="button" onclick="adminCopyPayLink('${adminAttr(l.url)}')" class="underline">Copy</button> ${l.provider_order_id ? `<button type="button" onclick="adminCheckPayLink('${code}')" class="underline">Check card</button>` : ""} <button type="button" onclick="adminCancelPayLink('${code}')" class="underline text-red-700">Cancel</button>` : "";
     return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 whitespace-nowrap">${adminEscape(adminShortDate(l.created_at))}</td><td class="py-2 pr-3 font-bold">${adminEscape(who)}<div class="text-[11px] font-normal text-gray-500">${adminEscape(l.code)}${l.sent_to ? ` · to +${adminEscape(l.sent_to)}` : ""}</div></td><td class="py-2 pr-3 whitespace-nowrap">${adminFormatUgx(l.amount_ugx)}<div class="text-[11px] text-gray-500">card ${adminEscape(l.card_text || "")}</div></td><td class="py-2 pr-3 font-bold ${tone[l.status] || ""}">${paid}</td><td class="py-2 text-xs space-x-2 whitespace-nowrap">${actions}</td></tr>`;
   }).join("");
@@ -37167,6 +37196,40 @@ function adminMoneyReconciledBlock(d) {
     <div class="mt-2">${status}</div>${pending}</div>`;
 }
 
+// Everyone with money due on one list, agents then private owners: the list
+// Agent 007 option 7 reads out on WhatsApp, in the same order and the same words.
+function adminWhoOwesBlock(d) {
+  const owes = d && d.who_owes;
+  if (!owes) return "";
+  const rows = Array.isArray(owes.rows) ? owes.rows : [];
+  if (!rows.length) {
+    return `<div id="admin-who-owes" class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800"><strong>✓ Nobody owes anything right now.</strong> Every agent on the plan and every private listing is paid up.</div>`;
+  }
+  let n = 0;
+  const line = (row) => {
+    n += 1;
+    const owner = row.kind === "owner";
+    const title = adminEscape(row.title || "Listing");
+    const what = owner
+      ? `<div class="text-[11px] text-gray-600">${row.listing_url ? `<a href="${adminAttr(row.listing_url)}" target="_blank" rel="noopener" class="underline">${title}</a>` : title}${row.reference ? ` · ${adminEscape(row.reference)}` : ""}</div>`
+      : (row.company && row.company !== row.name && !/^independent (agent|broker)$/i.test(row.company) ? `<div class="text-[11px] text-gray-600">${adminEscape(row.company)}</div>` : "");
+    const state = row.copy_of
+      ? `Second copy${row.copy_of_reference ? ` of ${adminEscape(row.copy_of_reference)}` : ""} · not billed`
+      : adminEscape(row.state_line || "");
+    const tone = row.copy_of ? "text-amber-800" : (row.state === "taken_down" ? "text-gray-900" : "text-red-700");
+    const money = row.copy_of ? "unpublish this copy" : `${adminFormatUgx(row.amount_ugx)} a month`;
+    return `<li class="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 py-1.5"><div class="min-w-0"><span class="text-gray-500">${n}.</span> <strong>${adminEscape(row.name || "")}</strong>${what}</div><div class="ml-auto text-right font-bold ${tone}">${state}<div class="text-[11px] font-normal text-gray-500">${money}</div></div></li>`;
+  };
+  const column = (title, sub, list, target, more) => `<div class="min-w-0"><div class="flex flex-wrap items-center justify-between gap-2"><h5 class="font-black text-gray-900">${title}</h5><button type="button" onclick="adminScrollTo('${target}')" class="text-xs font-bold underline">${more}</button></div><p class="text-[11px] text-gray-500">${sub}</p>${list.length ? `<ul class="mt-1 divide-y divide-gray-100 text-xs">${list.map(line).join("")}</ul>` : `<p class="mt-1 text-xs text-emerald-700">✓ All paid up.</p>`}</div>`;
+  // Agents first, then owners, so the numbers match the WhatsApp list.
+  const agentsColumn = column(`Agents · ${rows.filter((row) => row.kind === "agent").length}`, `${adminFormatUgx(d.fee_ugx || publishedMarketplacePricing().agent.monthly_ugx)} a month each`, rows.filter((row) => row.kind === "agent"), "#admin-agent-fees", "Chase them ↓");
+  const ownersColumn = column(`Private owners · ${Number(owes.owners || 0)}`, `${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || publishedMarketplacePricing().owner_listing.monthly_ugx)} a month for each listing, from the day it went live`, rows.filter((row) => row.kind === "owner"), "#admin-private-listings", "Chase them ↓");
+  const people = Number(owes.people || 0);
+  return `<div id="admin-who-owes" class="rounded-xl border border-red-200 bg-white p-3"><h4 class="font-black text-gray-900">💰 Who still owes — ${people} ${people === 1 ? "person" : "people"} · ${adminFormatUgx(owes.total_ugx)} a month not coming in</h4>
+    <p class="text-xs text-gray-600 mb-2">Agents on the monthly plan and private owners with a listing live, on one list. It is the list Agent 007 option 7 reads out on WhatsApp, numbered the same way. Reminders, pay links and taking down are in the two tables further down this page.</p>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">${agentsColumn}${ownersColumn}</div></div>`;
+}
+
 function renderAdminRevenue() {
   const box = document.getElementById("admin-revenue-body");
   const d = adminRevenueData || {};
@@ -37174,13 +37237,22 @@ function renderAdminRevenue() {
   const card = (label, value, tone = "text-gray-900", sub = "") => `<div class="rounded-xl border border-gray-200 bg-gray-50 p-3"><div class="text-xs text-gray-500">${label}</div><div class="text-xl font-black ${tone}">${value}</div>${sub ? `<div class="text-[11px] text-gray-500 mt-0.5">${sub}</div>` : ""}</div>`;
   const month = d.month || {};
   const unverified = d.unverified || {};
-  const cards = `<div class="grid grid-cols-2 lg:grid-cols-6 gap-2">
+  // Private owners sit beside the agents here: for a month they were only in a
+  // table at the foot of this page, so nobody saw that they owed anything.
+  const owes = d.who_owes || null;
+  const ownersOwing = owes ? Number(owes.owners || 0) : (d.listers || []).filter((p) => ["due", "taken_down"].includes(p.billing_state) && !p.duplicate_of).length;
+  const ownersSub = owes
+    ? `${owes.owner_listings || 0} listing${Number(owes.owner_listings) === 1 ? "" : "s"}${Number(owes.owner_copies) ? ` + ${owes.owner_copies} second cop${Number(owes.owner_copies) === 1 ? "y" : "ies"}` : ""} · ${adminFormatUgx(owes.owners_ugx)} a month`
+    : "";
+  const cards = `<div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
     ${card("Money in this month", adminFormatUgx(month.money_in), "text-emerald-700")}
     ${card("Agent fees this month", adminFormatUgx(month.subscriptions), "text-gray-900", `${month.subscription_payments || 0} payment(s)`)}
     ${card("Monthly recurring", adminFormatUgx(d.mrr_ugx), "text-gray-900", `${d.paying_agents || 0} paying agent(s)`)}
     ${card("Money out this month", adminFormatUgx(month.money_out), "text-gray-900")}
     ${card("Not yet checked", adminFormatUgx(unverified.amount), Number(unverified.count) ? "text-amber-700" : "text-gray-900", `${unverified.count || 0} entr${Number(unverified.count) === 1 ? "y" : "ies"}`)}
-    ${card("Agents overdue / unpaid", String(d.overdue_agents || 0), Number(d.overdue_agents) ? "text-red-700" : "text-gray-900")}
+    ${card("Agents overdue / unpaid", String(d.overdue_agents || 0), Number(d.overdue_agents) ? "text-red-700" : "text-gray-900", owes ? `${adminFormatUgx(owes.agents_ugx)} a month` : "")}
+    ${card("Private owners unpaid", String(ownersOwing), ownersOwing ? "text-red-700" : "text-gray-900", ownersSub)}
+    ${card("Not coming in each month", adminFormatUgx(owes ? owes.total_ugx : 0), owes && Number(owes.total_ugx) ? "text-red-700" : "text-gray-900", owes ? `${owes.people || 0} ${Number(owes.people) === 1 ? "person" : "people"} · listed just below` : "")}
   </div>`;
 
   const accounts = (d.accounts || []).map((a) => {
@@ -37221,26 +37293,57 @@ function renderAdminRevenue() {
       <td class="py-2 text-xs space-x-2 whitespace-nowrap"><button type="button" onclick="adminOpenAgentPayment('${id}', 'renew')" class="underline font-bold text-emerald-800">Record payment</button> <button type="button" onclick="adminCreatePayLink({ purpose: 'agent_subscription', agent_id: '${id}' })" class="underline font-bold">💳 Pay link</button> ${remindBtn} ${finalBtn} ${downBtn} ${backBtn}</td></tr>`;
   }).join("");
   const exemptCount = (d.billing || []).filter((a) => a.fee_exempt).length;
-  const billingTable = `<div><h4 class="font-black text-gray-900 mb-1">Agent fees</h4><p class="text-xs text-gray-500 mb-2">${exemptCount} agent(s) who joined before ${adminEscape(d.fee_start_date || "")} list for free. Reminders go automatically ${adminEscape(String(d.settings?.agent_fee?.remind_days_before || 3))} days before and on the due date; everything after that is your call. Paying puts a taken-down agent back exactly as they were.</p>
+  const billingTable = `<div id="admin-agent-fees" class="scroll-mt-28"><h4 class="font-black text-gray-900 mb-1">Agent fees</h4><p class="text-xs text-gray-500 mb-2">${exemptCount} agent(s) who joined before ${adminEscape(d.fee_start_date || "")} list for free. Reminders go automatically ${adminEscape(String(d.settings?.agent_fee?.remind_days_before || 3))} days before and on the due date; everything after that is your call. Paying puts a taken-down agent back exactly as they were.</p>
     ${billingRows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Agent</th><th class="py-1 pr-3">Status</th><th class="py-1 pr-3">Paid until</th><th></th></tr></thead><tbody>${billingRows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No paying agents yet.</p>`}</div>`;
 
-  const listerRows = (d.listers || []).map((p) => {
+  const listedHowWords = { website: "on the website", whatsapp: "on WhatsApp", team: "by the team" };
+  // Each listing, then any second copy of it straight underneath.
+  const allListers = d.listers || [];
+  const listerIds = new Set(allListers.map((p) => String(p.id)));
+  const isCopyHere = (p) => Boolean(p.duplicate_of) && listerIds.has(String(p.duplicate_of));
+  const orderedListers = [];
+  allListers.filter((p) => !isCopyHere(p)).forEach((p) => {
+    orderedListers.push(p, ...allListers.filter((copy) => isCopyHere(copy) && String(copy.duplicate_of) === String(p.id)));
+  });
+  const listerRows = orderedListers.map((p) => {
     const id = adminAttr(p.id);
-    const label = { free_week: `Free week (to ${adminEscape(p.free_until)})`, paid: `Paid to ${adminEscape(p.lister_paid_until || "")}`, due: `Due — ${p.days_overdue} day(s)`, taken_down: "⛔ Taken down" }[p.billing_state] || p.billing_state;
-    const tone = { free_week: "text-sky-700", paid: "text-emerald-700", due: "text-red-700", taken_down: "text-gray-900" }[p.billing_state] || "";
+    const copiesOfThis = allListers.filter((copy) => copy.duplicate_of && String(copy.duplicate_of) === String(p.id));
+    // The same listing sent in twice: the second copy is not billed and nobody is chased for it.
+    const copy = Boolean(p.duplicate_of);
+    const label = copy ? "Second copy — not billed" : ({ free_week: `Free week (to ${adminEscape(p.free_until)})`, paid: `Paid to ${adminEscape(p.lister_paid_until || "")}`, due: `Due — ${p.days_overdue} day(s)`, taken_down: "⛔ Taken down" }[p.billing_state] || p.billing_state);
+    const tone = copy ? "text-amber-800" : ({ free_week: "text-sky-700", paid: "text-emerald-700", due: "text-red-700", taken_down: "text-gray-900" }[p.billing_state] || "");
     const log = p.lister_billing_log || {};
-    const btns = [
+    const sentOn = (entry) => (entry && entry.at ? ` ${adminShortDate(entry.at)}` : "");
+    const sent = [
+      log.views ? `“seen by” message${sentOn(log.views)}` : "",
+      log.reminder ? `reminder${sentOn(log.reminder)}` : "",
+      log.final_reminder ? `final reminder${sentOn(log.final_reminder)}` : ""
+    ].filter(Boolean).join(" · ");
+    const openLink = p.listing_url ? `<a href="${adminAttr(p.listing_url)}" target="_blank" rel="noopener" class="underline">Open the listing</a>` : "";
+    const btns = (copy ? [openLink] : [
       `<button type="button" onclick="adminListerMessage('${id}', 'views')" class="underline">Views message${log.views ? " ✓" : ""}</button>`,
       p.billing_state === "due" ? `<button type="button" onclick="adminListerMessage('${id}', 'reminder')" class="underline font-bold">Reminder${log.reminder ? " ✓" : ""}</button>` : "",
       p.billing_state === "due" && p.days_overdue >= finalAfter ? `<button type="button" onclick="adminListerMessage('${id}', 'final_reminder')" class="underline font-bold text-red-700">Final reminder${log.final_reminder ? " ✓" : ""}</button>` : "",
       p.billing_state === "due" && log.final_reminder ? `<button type="button" onclick="adminListerTakeDown('${id}')" class="underline font-bold text-red-800">Take down</button>` : "",
       `<button type="button" onclick="adminListerPayment('${id}')" class="underline font-bold text-emerald-800">Record payment</button>`,
-      `<button type="button" onclick="adminCreatePayLink({ purpose: 'listing_fee', property_id: '${id}' })" class="underline font-bold">💳 Pay link</button>`
-    ].filter(Boolean).join(" ");
-    return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(p.title || "Listing")}<div class="text-[11px] font-normal text-gray-500">${adminEscape(p.lister_name || "")} ${adminEscape(p.lister_phone || "")}</div></td><td class="py-2 pr-3 font-bold ${tone}">${label}</td><td class="py-2 text-xs space-x-2">${btns}</td></tr>`;
+      `<button type="button" onclick="adminCreatePayLink({ purpose: 'listing_fee', property_id: '${id}' })" class="underline font-bold">💳 Pay link</button>`,
+      openLink
+    ]).filter(Boolean).join(" ");
+    const who = [p.owner_name || p.lister_name || "No name given", p.lister_phone || "no phone number", p.has_email ? "email on file" : ""].filter(Boolean).join(" · ");
+    const place = [p.area, p.district].map((part) => String(part || "").trim()).filter(Boolean).filter((part, i, all) => all.indexOf(part) === i).join(", ");
+    const facts = [Number(p.price) ? adminFormatUgx(p.price) : "", place, p.inquiry_reference || ""].filter(Boolean).join(" · ");
+    const how = listedHowWords[p.listed_how] || "";
+    const origin = [p.created_at ? `Listed${how ? ` ${how}` : ""} ${adminShortDate(p.created_at)}` : "", p.reviewed_at ? `approved ${adminShortDate(p.reviewed_at)}` : ""].filter(Boolean).join(" · ");
+    const notes = [
+      copy ? `♻️ The same listing, at the same price, from the same person${p.duplicate_ref ? ` as ${p.duplicate_ref}` : ""}. It is not billed and gets no automatic messages. Unpublish this copy in All Listings and it leaves this table.` : "",
+      copiesOfThis.length ? `♻️ Sent in twice: a second copy is live too${copiesOfThis.map((c) => c.inquiry_reference).filter(Boolean).length ? ` (${copiesOfThis.map((c) => c.inquiry_reference).filter(Boolean).join(", ")})` : ""}. One fee covers the property.` : "",
+      p.says_they_are === "agent" ? `🧑‍💼 Said they are an agent selling for the owner${p.public_display_name ? `, shown on the site as ${p.public_display_name}` : ""}. Worth offering the agent plan.` : "",
+      p.prefers_calls ? "📞 The form says to reach them by phone call." : ""
+    ].filter(Boolean).map((note) => `<div class="mt-1 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-normal text-amber-900">${adminEscape(note)}</div>`).join("");
+    return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(p.plain_title || p.title || "Listing")}<div class="text-[11px] font-normal text-gray-600">${adminEscape(who)}</div>${facts ? `<div class="text-[11px] font-normal text-gray-500">${adminEscape(facts)}</div>` : ""}${origin ? `<div class="text-[11px] font-normal text-gray-500">${adminEscape(origin)}</div>` : ""}${notes}</td><td class="py-2 pr-3 font-bold ${tone}">${label}${sent ? `<div class="text-[11px] font-normal text-gray-500">Sent: ${adminEscape(sent)}</div>` : (copy ? "" : `<div class="text-[11px] font-normal text-gray-500">Nothing sent yet</div>`)}</td><td class="py-2 text-xs space-x-2">${btns}</td></tr>`;
   }).join("");
-  const listerTable = `<div><h4 class="font-black text-gray-900 mb-1">Private listings — ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || publishedMarketplacePricing().owner_listing.monthly_ugx)} per listing, per month from approval</h4><p class="text-xs text-gray-500 mb-2">The day-${adminEscape(String(d.settings?.lister_fee?.views_message_day || 3))} “people have seen your property” message goes automatically (edit it in Settings). Reminders and taking down are your call.</p>
-    ${listerRows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Listing</th><th class="py-1 pr-3">Status</th><th></th></tr></thead><tbody>${listerRows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No private listings since ${adminEscape(d.settings?.lister_fee?.start_date || "")}.</p>`}</div>`;
+  const listerTable = `<div id="admin-private-listings" class="scroll-mt-28"><h4 class="font-black text-gray-900 mb-1">Private listings — ${adminFormatUgx(d.settings?.lister_fee?.monthly_ugx || publishedMarketplacePricing().owner_listing.monthly_ugx)} per listing, per month from approval</h4><p class="text-xs text-gray-500 mb-2">Every listing with no agent on it that went live since ${adminEscape(d.settings?.lister_fee?.start_date || "5 Oct 2026")}: an owner listed it on the website or on WhatsApp and the team approved it. Found-online listings are never billed and are not here. The day-${adminEscape(String(d.settings?.lister_fee?.views_message_day || 3))} “people have seen your property” message goes automatically (edit it in Settings). Reminders and taking down are your call.</p>
+    ${listerRows ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Listing and owner</th><th class="py-1 pr-3">Status</th><th></th></tr></thead><tbody>${listerRows}</tbody></table></div>` : `<p class="text-xs text-gray-500">No private listings since ${adminEscape(d.settings?.lister_fee?.start_date || "")}.</p>`}</div>`;
 
   const claims = (d.claims || []);
   const pendingClaims = claims.filter((c) => c.status === "pending");
@@ -37285,7 +37388,7 @@ function renderAdminRevenue() {
   const entriesTable = `<div><h4 class="font-black text-gray-900 mb-1">Every entry</h4>
     ${entries ? `<div class="overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Date</th><th class="py-1 pr-3">Who / what</th><th class="py-1 pr-3">Amount</th><th class="py-1 pr-3">How</th><th class="py-1 pr-3">Recorded by</th><th class="py-1 pr-3">Checked?</th><th></th></tr></thead><tbody>${entries}</tbody></table></div>` : `<p class="text-xs text-gray-500">Nothing recorded yet.</p>`}</div>`;
 
-  box.innerHTML = settingsBlock + adminPayLinksBlock(d) + cards + adminMoneyReconciledBlock(d) + claimsBlock + smsBlock + accountsTable + reconBlock + billingTable + listerTable + entriesTable;
+  box.innerHTML = settingsBlock + adminPayLinksBlock(d) + cards + adminWhoOwesBlock(d) + adminMoneyReconciledBlock(d) + claimsBlock + smsBlock + accountsTable + reconBlock + billingTable + listerTable + entriesTable;
 }
 
 function adminOpenMoneyEntry(direction = "in", prefill = {}) {
@@ -37706,12 +37809,22 @@ async function adminUploadStatement() {
   }
 }
 
+/** "7:30am": a time as Kampala reads the clock, for a welcome held overnight. */
+function adminKampalaClock(value) {
+  const at = new Date(value);
+  if (Number.isNaN(at.getTime())) return "the morning";
+  const local = new Date(at.getTime() + 3 * 3600 * 1000);
+  const hour = local.getUTCHours();
+  const minute = String(local.getUTCMinutes()).padStart(2, "0");
+  return `${hour % 12 || 12}${minute === "00" ? "" : `:${minute}`}${hour < 12 ? "am" : "pm"}`;
+}
+
 // What the agent was sent when they were approved, in one line for the toast.
 function adminApprovalFollowUpNote(data = {}) {
   const w = data?.welcome;
   const f = data?.fee_link;
-  const welcome = w?.error ? ` Welcome pack NOT sent: ${w.error}.` : (w?.skipped === "already_sent" ? " Welcome pack was sent before." : (w ? " Welcome pack sent on WhatsApp." : ""));
-  const pay = f?.sent ? " Payment link sent." : (f?.reason === "already_sent" ? " Payment link was sent before." : (f?.reason === "already_paid" ? " Already paid." : (f?.reason === "fee_exempt" ? " No fee for this agent." : (f?.error || f?.reason ? ` Payment link NOT sent (${f.error || f.reason}).` : ""))));
+  const welcome = w?.error ? ` Welcome pack NOT sent: ${w.error}.` : (w?.skipped === "already_sent" ? " Welcome pack was sent before." : (w?.held_until ? ` It is night in Kampala: their welcome goes at ${adminKampalaClock(w.held_until)}.` : (w ? " Welcome pack sent on WhatsApp." : "")));
+  const pay = f?.sent ? (f.goes_at ? " The payment link goes with it." : " Payment link sent.") : (f?.reason === "already_sent" ? " Payment link was sent before." : (f?.reason === "already_paid" ? " Already paid." : (f?.reason === "fee_exempt" ? " No fee for this agent." : (f?.error || f?.reason ? ` Payment link NOT sent (${f.error || f.reason}).` : ""))));
   return `${welcome}${pay}`;
 }
 

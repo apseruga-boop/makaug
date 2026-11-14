@@ -10648,11 +10648,20 @@ router.get('/revenue/summary', async (req, res, next) => {
       revenue.moneyReconciliation(db).catch(() => null)
     ]);
     const { revolut_webhook: revolutWebhook, ...publicSettings } = settings || {};
+    // Everyone with money due, agents and private owners on one list: the same
+    // list, in the same order and words, that Agent 007 option 7 reads out.
+    const whoOwes = await require('../services/agent007ControlRoom')
+      .whoOwes(db, { summary, listerRows: listers })
+      .catch((error) => {
+        logger.warn('Who still owes list failed for King', { error: error.message });
+        return null;
+      });
     return res.json({
       ok: true,
       data: {
         ...summary,
         settings: publicSettings,
+        who_owes: whoOwes,
         pay_links: links,
         pay_links_awaiting: awaiting,
         pay_link_stats: linkStats,
@@ -11292,17 +11301,15 @@ router.patch('/agents/:id/status', async (req, res, next) => {
     let welcome = null;
     if (status === 'approved') {
       accountProvisioning = await provisionApprovedBrokerAccount(updated.rows[0], req);
-      // Approval sends the welcome pack and the how-to-post film straight away,
-      // once per agent (resend_welcome: true to send it again).
+      // Approval sends the welcome (approved, the how-to-post film, then the
+      // payment message) once per agent (resend_welcome: true to send it again).
       if (req.body.send_welcome !== false && (!beforeApproval?.welcome_sent_at || req.body.resend_welcome === true)) {
-        // The payment link (when one is due) follows the welcome pack, never before it.
+        // The payment message (when one is due) is the last of the welcome, never before it.
         const feeLinkDue = !paymentResult && !['free_period', 'waive'].includes(req.feeOverrideApplied?.mode);
         welcome = await queueAgentWelcomePack({
           agentId: req.params.id,
           actorId: adminActorId(req),
-          afterQueued: feeLinkDue
-            ? () => sendAgentFeeLinkOnApproval({ agent: updated.rows[0], actor: adminActorId(req), force: req.body.send_pay_link === true })
-            : null
+          feeLink: feeLinkDue ? { agent: updated.rows[0], force: req.body.send_pay_link === true } : null
         })
           .catch((error) => ({ error: error.message }));
         req.feeLinkAfterWelcome = feeLinkDue && !welcome?.error;
@@ -11330,8 +11337,9 @@ router.patch('/agents/:id/status', async (req, res, next) => {
     // and the owner are told — with the amount, and whether it has been paid.
     let feeLink = null;
     if (req.feeLinkAfterWelcome) {
-      feeLink = revenue.agentFeeRequired(updated.rows[0]) && (updated.rows[0].pay_link_on_approval !== false || req.body.send_pay_link === true)
-        ? { sent: true, after_welcome: true }
+      // What actually happened to the payment message, not what was meant to.
+      feeLink = welcome?.fee_link
+        ? { ...welcome.fee_link, ...(welcome.fee_link.sent ? { after_welcome: true } : {}) }
         : { sent: false, reason: revenue.agentFeeRequired(updated.rows[0]) ? 'employee_declined' : 'fee_not_due' };
     } else if (status === 'approved' && !paymentResult && req.feeOverrideApplied?.mode !== 'free_period' && req.feeOverrideApplied?.mode !== 'waive') {
       feeLink = await sendAgentFeeLinkOnApproval({
@@ -15471,25 +15479,31 @@ router.patch('/agent-reports/:id', async (req, res, next) => {
   }
 });
 
+// What a new agent's welcome will say, message by message, before it is sent.
 router.get('/agent-welcome/:agentId', async (req, res, next) => {
   try {
     const pack = await agentWelcome.buildWelcomePack(cleanText(req.params.agentId));
-    const version = new Date().toISOString().slice(0, 10).replace(/\D/g, '');
+    const number = String(pack.agent.whatsapp || pack.agent.phone || '').replace(/\D+/g, '');
+    const [lang, inChat, byHand] = await Promise.all([agentFilmLanguageFor(number), agentIsInChat(number), handSentWelcomeFee(pack.agent.id)]);
+    const feeDue = revenue.agentFeeRequired(pack.agent);
+    // The messages "Send to agent" would send them now.
+    const built = await buildAgentWelcomeMessages(pack, { lang, sampleFee: byHand.payMessage });
+    const schedule = agentWelcome.welcomeSchedule({ now: new Date(), inChat });
     return res.json({
       ok: true,
       data: {
         agent: pack.agent,
         greeting_name: agentGreetingName(pack.agent),
-        stats: pack.stats,
         listings: pack.listings,
         profile_url: pack.profile_url,
-        share_card_url: pack.share_card_url,
-        message: agentWelcome.buildWelcomeMessage(pack),
-        caption: agentWelcome.buildWelcomeCaption(pack),
-        share_caption: agentWelcome.buildShareCardCaption(pack),
-        video_url: agentReportVideos.isVideoRenderingAvailable()
-          ? agentReportVideos.welcomeVideoUrl(pack.agent, agentWeeklyReports.siteUrl(), version)
-          : ''
+        messages: built.messages,
+        terms_accepted: built.terms_accepted,
+        fee_due: feeDue,
+        pay_message: byHand.payMessage,
+        pay_message_off: feeDue && !byHand.payMessage ? byHand.reason : '',
+        welcomed_at: byHand.agent?.welcome_sent_at || null,
+        language: lang || 'en',
+        held_until: schedule.held_until
       }
     });
   } catch (error) {
@@ -15747,11 +15761,6 @@ router.post('/agent-broadcast/brief/hold', async (req, res, next) => {
 });
 
 /**
- * The welcome pack: welcome film, full welcome message, share card, then the
- * one-minute "how to post on WhatsApp" film. Sent by the admin button and,
- * since 2 Oct 2026, automatically the moment an agent is approved.
- */
-/**
  * The fee link, at the moment of approval.
  *
  * Approval already sent the welcome pack. It never sent a pay link, and nothing
@@ -15764,56 +15773,80 @@ router.post('/agent-broadcast/brief/hold', async (req, res, next) => {
  * link, and the employee who brought them in and the owner both get the amount
  * and the fact that it is now outstanding.
  */
-async function sendAgentFeeLinkOnApproval({ agent = {}, actor = 'admin', force = false } = {}) {
-  if (!agent?.id) return { sent: false, reason: 'no_agent' };
-  if (agent.pay_link_on_approval === false && !force) return { sent: false, reason: 'employee_declined' };
+/** Whether the payment message goes to this agent now, and if not, why not. Nothing is sent or made here. */
+function agentFeeLinkDecision(agent = {}, { force = false } = {}) {
+  if (!agent?.id) return { send: false, reason: 'no_agent' };
+  if (agent.pay_link_on_approval === false && !force) return { send: false, reason: 'employee_declined' };
   if (!revenue.agentFeeRequired(agent)) {
-    return { sent: false, reason: agent.fee_exempt ? 'fee_exempt' : 'fee_not_due' };
+    return { send: false, reason: agent.fee_exempt ? 'fee_exempt' : 'fee_not_due' };
   }
   const agentPhone = String(agent.whatsapp || agent.phone || '').replace(/\D/g, '');
-  if (agentPhone.length < 9) return { sent: false, reason: 'no_agent_phone' };
+  if (agentPhone.length < 9) return { send: false, reason: 'no_agent_phone' };
+  return { send: true, agentPhone };
+}
+
+/**
+ * The payment link and the words that go with it, made before anything is
+ * sent: the welcome's first message says "how to pay is in the last message
+ * below", and it must not say so unless there is one.
+ */
+async function prepareAgentFeeLink({ agent = {}, actor = 'admin', force = false } = {}) {
+  const decision = agentFeeLinkDecision(agent, { force });
+  if (!decision.send) return decision;
 
   const { feeUgx } = revenue.feeConfig();
-  const feeLabel = `UGX ${Number(feeUgx || 0).toLocaleString('en-GB')}`;
   let link;
   try {
     link = await payLinks.createPayLink(db, { purpose: 'agent_subscription', agent_id: agent.id }, actor);
   } catch (error) {
-    return { sent: false, reason: 'pay_link_failed', error: error.message || String(error) };
+    return { send: false, reason: 'pay_link_failed', error: error.message || String(error) };
   }
   const url = link?.url || '';
-  if (!url) return { sent: false, reason: 'pay_link_empty' };
+  if (!url) return { send: false, reason: 'pay_link_empty' };
+  const code = link.link?.code || link.code;
 
   // Say only what the payment page will actually offer them. Card, Apple Pay
   // and Google Pay appear only when Revolut is configured; promising them when
   // it is not sends an agent to a page that offers mobile money alone. MoMo is
   // the merchant code (27248497), with the card image on top (10 Nov 2026).
-  const page = await payLinks.pageData(db, link.link?.code || link.code, { track: false }).catch(() => null);
+  const page = await payLinks.pageData(db, code, { track: false }).catch(() => null);
   const methodLine = [
     billingOps.momoHowToPay({ amountUgx: feeUgx }),
     page?.card_available ? 'Or pay by card, Apple Pay or Google Pay on your payment page.' : ''
   ].filter(Boolean).join('\n');
+  // The card is this link's own: it carries the amount.
+  const cardUrl = require('../services/momoMerchantCardService').momoCardUrl({ code: link.link?.code || link.code });
+  return { send: true, agentPhone: decision.agentPhone, feeUgx, url, code, cardUrl, methodLine };
+}
 
-  const firstName = String(agent.full_name || '').trim().split(/\s+/)[0] || 'there';
+/** Queue a prepared payment message for the agent, note that it went, and tell the team. */
+async function queueAgentFeeLink(prepared = {}, { agent = {}, actor = 'admin', sendAt = null, withWelcome = false, heldUntil = null } = {}) {
+  const { agentPhone, feeUgx, url, cardUrl, methodLine } = prepared;
+  const feeLabel = `UGX ${Number(feeUgx || 0).toLocaleString('en-GB')}`;
   await queueWhatsappWebBridgeMessage({
     recipient: agentPhone,
-    text: `✅ *You are approved, ${firstName}* — your makaug agent account is live.\n\n`
-      + `Your subscription is ${feeLabel} a month.\n${methodLine}\n\n`
-      + `Your payment page: ${url}\nYour listings stay live while you are paid up.`,
-    mediaUrl: require('../services/momoMerchantCardService').momoCardUrl({ code: link.link?.code || link.code }),
+    text: agentWelcome.buildPlanMessage({ agent, methodLine, url, withWelcome }),
+    mediaUrl: cardUrl,
     mediaType: 'image',
     // The browser worker only claims an allow-listed set of sources; 'admin' is
     // not one of them, so a message queued under it is never sent at all.
     source: agentReportWhatsappSource(),
     actorId: actor,
-    metadata: { message_kind: 'agent_fee_link_on_approval', agent_id: agent.id, reply_dedupe_key: `agent_fee_link:${agent.id}` }
+    sendAt,
+    metadata: { message_kind: 'agent_fee_link_on_approval', agent_id: agent.id, ...(withWelcome ? { part: 'welcome_plan' } : {}), reply_dedupe_key: `agent_fee_link:${agent.id}` }
   }).catch(() => null);
 
   await db.query('UPDATE agents SET pay_link_sent_at = NOW() WHERE id = $1', [agent.id]).catch(() => null);
+  // The link itself is marked as sent too. Until 15 Nov 2026 it was not, so it
+  // read "made, not sent": the agent's "how do I pay?" was answered with the
+  // menu, and they were missing from King's list of people asked and gone quiet.
+  await payLinks.recordPayLinkSent(db, { code: prepared.code, to: agentPhone, status: 'queued' }).catch(() => null);
 
-  // The employee who registered them, and the owner.
+  // The employee who registered them, and the owner. They are told now, whenever the agent's own message goes.
   const told = [];
-  const staffNote = `💳 *${agent.full_name} is approved and the payment link has gone to them.*\n\n`
+  const staffNote = (heldUntil
+    ? `💳 *${agent.full_name} is approved.* It is night in Kampala, so their welcome and the payment link go to them at ${agentWelcome.kampalaClock(heldUntil)}.\n\n`
+    : `💳 *${agent.full_name} is approved and the payment link has gone to them.*\n\n`)
     + `Amount: ${feeLabel} a month\nNumber: ${agentPhone}\nPaid: not yet\n\n`
     + 'I will tell you when the payment lands.';
   const recipients = new Set();
@@ -15830,7 +15863,14 @@ async function sendAgentFeeLinkOnApproval({ agent = {}, actor = 'admin', force =
     }).catch(() => null);
     told.push(recipient);
   }
-  return { sent: true, url, fee_ugx: feeUgx, agent_phone: agentPhone, notified: told };
+  return { sent: true, url, fee_ugx: feeUgx, agent_phone: agentPhone, notified: told, ...(heldUntil && sendAt ? { goes_at: new Date(sendAt).toISOString() } : {}) };
+}
+
+/** The payment message on its own: for an agent welcomed earlier, or approved without a welcome. */
+async function sendAgentFeeLinkOnApproval({ agent = {}, actor = 'admin', force = false } = {}) {
+  const prepared = await prepareAgentFeeLink({ agent, actor, force });
+  if (!prepared.send) return { sent: false, reason: prepared.reason, ...(prepared.error ? { error: prepared.error } : {}) };
+  return queueAgentFeeLink(prepared, { agent, actor });
 }
 
 /**
@@ -15838,16 +15878,17 @@ async function sendAgentFeeLinkOnApproval({ agent = {}, actor = 'admin', force =
  * is switched on, the welcome pack goes once, and if they haven't paid, the
  * payment link follows (recorded as "pay later"). Safe to call twice.
  */
-async function runAgentApprovalFollowUps({ agentId, req = null, wasApproved = false, actor = '', allowVideoRender = true } = {}) {
+async function runAgentApprovalFollowUps({ agentId, req = null, wasApproved = false, actor = '' } = {}) {
   const actorId = actor || (req ? adminActorId(req) : 'admin');
   const agent = (await db.query(
-    `SELECT id, makaug_agent_number, full_name, company_name, phone, whatsapp, email, districts_covered, specializations,
+    `SELECT id, makaug_agent_number, full_name, greeting_name, company_name, phone, whatsapp, email, districts_covered, specializations,
             status, fee_exempt, paid_until, welcome_sent_at, pay_link_sent_at, pay_link_on_approval,
             registered_by_phone, fee_offer_mode
        FROM agents WHERE id = $1`,
     [agentId]
   )).rows[0];
   if (!agent || agent.status !== 'approved') return { follow_up: 'skipped_not_approved' };
+  forgetAgentLookup(agent);
 
   const result = {};
   if (!wasApproved) {
@@ -15871,173 +15912,258 @@ async function runAgentApprovalFollowUps({ agentId, req = null, wasApproved = fa
       ? await sendFeeLink().catch((error) => ({ error: error.message }))
       : (feeDue ? { sent: false, reason: 'already_sent', sent_at: agent.pay_link_sent_at } : { sent: false, reason: agent.fee_exempt ? 'fee_exempt' : 'already_paid' });
   } else {
-    // Welcome pack first; the payment link follows once it is queued.
-    result.welcome = await queueAgentWelcomePack({ agentId, actorId, allowVideoRender, afterQueued: feeLinkWanted ? sendFeeLink : null })
+    // The welcome's three messages in order; the payment message is the last of them.
+    let fellBack = null;
+    result.welcome = await queueAgentWelcomePack({ agentId, actorId, feeLink: feeLinkWanted ? { agent, force: true } : null })
       .catch(async (error) => {
-        if (feeLinkWanted) await sendFeeLink().catch(() => null);
+        if (feeLinkWanted) fellBack = await sendFeeLink().catch(() => null);
         return { error: error.message };
       });
     result.fee_link = feeLinkWanted
-      ? { sent: true, after_welcome: true }
+      ? (result.welcome?.fee_link ? { ...result.welcome.fee_link, after_welcome: true } : (fellBack || { sent: false, reason: 'welcome_failed' }))
       : (feeDue ? { sent: false, reason: 'already_sent', sent_at: agent.pay_link_sent_at } : { sent: false, reason: agent.fee_exempt ? 'fee_exempt' : 'already_paid' });
   }
   return result;
 }
 
-async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', previewTrial = false, actorId = 'admin', afterQueued = null, allowVideoRender = true } = {}) {
-    let pack = await agentWelcome.buildWelcomePack(cleanText(agentId));
-    const previewTo = String(previewToRaw || '').replace(/\D+/g, '');
-    const preview = Boolean(previewTo);
-    // Staff preview only: show the pack as a new agent on the free period sees it.
-    if (preview && previewTrial) pack = agentReportVideos.trialVariant(pack);
-    const to = preview ? previewTo : String(pack.agent.whatsapp || pack.agent.phone || '').replace(/\D+/g, '');
-    if (!to || to.length < 9) throw Object.assign(new Error('No WhatsApp number to send to'), { status: 400 });
+/**
+ * The assistant remembers for five minutes whether a number belongs to an
+ * approved agent. Somebody approved a minute after writing to us would have
+ * their AGREE, or their first property, answered as a stranger's until that
+ * lapsed. Approval makes it look again.
+ */
+function forgetAgentLookup(agent = {}) {
+  try {
+    const whatsapp = require('./whatsapp');
+    if (typeof whatsapp.forgetAgentPhone !== 'function') return;
+    [agent.whatsapp, agent.phone].filter(Boolean).forEach((number) => whatsapp.forgetAgentPhone(number));
+  } catch (_error) { /* best effort: it lapses on its own */ }
+}
 
-    const actor = actorId || 'admin';
-    const source = agentReportWhatsappSource();
-    const version = `${preview && previewTrial ? 't' : ''}${new Date().toISOString().slice(0, 10).replace(/\D/g, '')}`;
-    const dedupeBase = `agent_welcome:${pack.agent.id}:${preview ? `preview:${Date.now()}` : version}`;
-    const message = agentWelcome.buildWelcomeMessage(pack);
-    const caption = agentWelcome.buildWelcomeCaption(pack);
-    const videoUrl = agentReportVideos.isVideoRenderingAvailable()
-      ? agentReportVideos.welcomeVideoUrl(pack.agent, agentWeeklyReports.siteUrl(), version)
-      : '';
+/** The language an agent was first written to in: the intro film a member of staff sent them (Agent 007 → 3). */
+async function agentFilmLanguageFor(phone = '') {
+  const tail = String(phone || '').replace(/\D/g, '').slice(-9);
+  if (tail.length !== 9) return '';
+  const row = (await db.query(
+    `SELECT details->>'lang' AS lang
+       FROM audit_logs
+      WHERE action = 'explainer_video_sent'
+        AND created_at > NOW() - INTERVAL '120 days'
+        AND details->>'kind' IN ('agent', 'agent_howto')
+        AND RIGHT(regexp_replace(COALESCE(details->>'phone', ''), '\D', '', 'g'), 9) = $1
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [tail]
+  ).catch(() => ({ rows: [] }))).rows[0];
+  return require('../services/filmLanguageService').filmLanguage(row?.lang || '');
+}
 
-    const queueWelcome = async (media) => {
-      const first = media
-        ? await queueWhatsappWebBridgeMessage({
-          recipient: to,
-          text: caption,
-          mediaUrl: media,
-          mediaType: 'video',
-          source,
-          actorId: actor,
-          metadata: { message_kind: 'agent_welcome', agent_id: pack.agent.id, preview, reply_dedupe_key: `${dedupeBase}:media` }
-        })
-        : null;
-      const full = await queueWhatsappWebBridgeMessage({
-        recipient: to,
-        text: message,
-        source,
-        actorId: actor,
-        metadata: { message_kind: 'agent_welcome', agent_id: pack.agent.id, preview, part: 'full_welcome', reply_dedupe_key: `${dedupeBase}:text` }
-      });
-      // Third: the share card, ready for the agent's WhatsApp status.
-      let share = null;
-      if (pack.share_card_url) {
-        share = await queueWhatsappWebBridgeMessage({
-          recipient: to,
-          text: agentWelcome.buildShareCardCaption(pack),
-          mediaUrl: pack.share_card_url,
-          mediaType: 'image',
-          source,
-          actorId: actor,
-          metadata: { message_kind: 'agent_welcome', agent_id: pack.agent.id, preview, part: 'share_card', reply_dedupe_key: `${dedupeBase}:share` }
-        });
-      }
-      // Fourth: the one-minute "how to post on WhatsApp" film. Marked with the
-      // broadcast key so the all-agents broadcast never sends it to them twice.
-      let howTo = null;
-      try {
-        howTo = await queueWhatsappWebBridgeMessage({
-          recipient: to,
-          text: agentHowToPost.buildWelcomeFilmCaption({ name: agentGreetingName(pack.agent) }),
-          mediaUrl: agentHowToPost.videoUrl(),
-          mediaType: 'video',
-          source,
-          actorId: actor,
-          metadata: {
-            message_kind: 'agent_how_to_post',
-            broadcast_key: agentHowToPost.BROADCAST_KEY,
-            agent_id: pack.agent.id,
-            preview,
-            part: 'welcome_how_to_film',
-            reply_dedupe_key: `${dedupeBase}:how_to`
-          }
-        });
-      } catch (error) {
-        console.warn('[agent-welcome] how-to film queue failed:', error.message);
-      }
-      // Fifth: the agent guide PDF (cover image + link to the PDF).
-      let guide = null;
-      try {
-        const listingDocs = require('../services/listingDocsService');
-        guide = await queueWhatsappWebBridgeMessage({
-          recipient: to,
-          text: listingDocs.agentGuideCaption({ name: agentGreetingName(pack.agent) }),
-          mediaUrl: listingDocs.docUrls('agent_guide').cover,
-          mediaType: 'image',
-          source,
-          actorId: actor,
-          metadata: { message_kind: 'agent_guide_pdf', agent_id: pack.agent.id, preview, part: 'agent_guide', guide_version: listingDocs.AGENT_GUIDE_VERSION, reply_dedupe_key: `${dedupeBase}:guide` }
-        });
-      } catch (error) {
-        console.warn('[agent-welcome] agent guide queue failed:', error.message);
-      }
-      // Sixth: the agent terms (cover + PDF link). Reply AGREE is recorded.
-      let terms = null;
-      try {
-        const listingDocs = require('../services/listingDocsService');
-        terms = await queueWhatsappWebBridgeMessage({
-          recipient: to,
-          text: listingDocs.agentTermsCaption({ name: agentGreetingName(pack.agent) }),
-          mediaUrl: listingDocs.docUrls('agent_terms').cover,
-          mediaType: 'image',
-          source,
-          actorId: actor,
-          metadata: { message_kind: 'agent_terms_pdf', agent_id: pack.agent.id, preview, part: 'agent_terms', terms_version: listingDocs.AGENT_TERMS_VERSION, reply_dedupe_key: `${dedupeBase}:terms` }
-        });
-      } catch (error) {
-        console.warn('[agent-welcome] agent terms queue failed:', error.message);
-      }
-      return { media_id: first?.id || null, text_id: full?.id || null, share_id: share?.id || null, how_to_id: howTo?.id || null, guide_id: guide?.id || null, terms_id: terms?.id || null };
-    };
+/**
+ * A welcome sent by hand from King (the preview, "Send to my WhatsApp" and
+ * "Send to agent"): whether how to pay is its third message, and the agent as
+ * that message needs them. One answer for all three, so what staff are shown
+ * is what goes. A payment has to be due from an approved agent, and nobody
+ * must have asked for no payment link when they were registered.
+ */
+async function handSentWelcomeFee(agentId) {
+  const agent = (await db.query(
+    `SELECT id, makaug_agent_number, full_name, greeting_name, company_name, phone, whatsapp, email,
+            status, fee_exempt, paid_until, welcome_sent_at, pay_link_sent_at, pay_link_on_approval,
+            registered_by_phone, fee_offer_mode
+       FROM agents WHERE id = $1`,
+    [cleanText(agentId)]
+  ).catch(() => ({ rows: [] }))).rows[0] || null;
+  if (!agent) return { agent: null, payMessage: false, reason: 'no_agent' };
+  if (agent.status !== 'approved') return { agent, payMessage: false, reason: 'not_approved' };
+  const decision = agentFeeLinkDecision(agent);
+  return { agent, payMessage: decision.send === true, reason: decision.send ? '' : decision.reason };
+}
 
-    // Whatever must follow the welcome (the payment link) goes after it, not before.
-    const thenFollow = () => {
-      if (preview || typeof afterQueued !== 'function') return null;
-      return Promise.resolve().then(afterQueued).catch((error) => console.warn('[agent-welcome] follow-up failed:', error.message));
-    };
-    // An agent counts as welcomed only once the messages are actually in the
-    // queue. If the render or the process dies first, welcome_sent_at stays
-    // empty, so the start-up catch-up tries them again.
-    const markWelcomedThenFollow = async (queuedIds) => {
-      const queuedAny = Boolean(queuedIds && Object.values(queuedIds).some(Boolean));
-      if (!queuedAny) {
-        console.warn('[agent-welcome] nothing was queued; agent left un-welcomed', pack.agent.id);
-        return queuedIds;
+/** Whether they have written to us in the last half hour: awake, and in the chat. */
+async function agentIsInChat(phone = '') {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 9) return false;
+  const row = (await db.query(
+    `SELECT 1 FROM whatsapp_messages
+      WHERE user_phone = ANY($1::text[]) AND direction = 'inbound'
+        AND created_at > NOW() - ($2::int * INTERVAL '1 minute')
+      LIMIT 1`,
+    [[digits, `+${digits}`], agentWelcome.WELCOME_IN_CHAT_MINUTES]
+  ).catch(() => ({ rows: [] }))).rows[0];
+  return Boolean(row);
+}
+
+/**
+ * The three messages of a new agent's welcome, as they will be sent: used by
+ * the preview in King and by the send itself, so what staff are shown is what goes.
+ * fee: a prepared payment link ({ url, code, methodLine }), or null when none goes.
+ */
+async function buildAgentWelcomeMessages(pack, { fee = null, lang = '', sampleFee = false } = {}) {
+  const termsAccepted = Boolean(await require('../services/agentTermsService').acceptedAt(db, pack.agent.id).catch(() => null));
+  const film = agentWelcome.buildHowToFilm(pack, { lang });
+  const messages = [
+    { part: 'approved', kind: 'text', text: agentWelcome.buildApprovedMessage(pack, { payment: fee || sampleFee ? 'follows' : '', termsAccepted }) },
+    { part: 'how_to_film', kind: 'video', text: film.caption, media_url: film.url, lang: film.lang }
+  ];
+  if (fee) {
+    messages.push({
+      part: 'plan',
+      kind: 'image',
+      text: agentWelcome.buildPlanMessage({ agent: pack.agent, methodLine: fee.methodLine, url: fee.url, withWelcome: true }),
+      media_url: fee.cardUrl
+    });
+  } else if (sampleFee && !agentWelcome.trialTerms(pack.agent)) {
+    // A preview makes no payment link: the words and the card are the real ones, the link is theirs alone.
+    messages.push({
+      part: 'plan',
+      kind: 'image',
+      sample: true,
+      text: agentWelcome.buildPlanMessage({
+        agent: pack.agent,
+        methodLine: billingOps.momoHowToPay({ amountUgx: revenue.feeConfig().feeUgx }),
+        url: `${agentWeeklyReports.siteUrl()}/pay/(their own link)`,
+        withWelcome: true
+      }),
+      media_url: require('../services/momoMerchantCardService').momoCardUrl({})
+    });
+  }
+  return { messages, terms_accepted: termsAccepted };
+}
+
+/**
+ * A new agent's welcome: three messages, in order (15 Nov 2026).
+ *   1. approved: their ID, their page and what to do, numbered;
+ *   2. the one-minute how-to-post film;
+ *   3. the payment message with the MoMo card, when a payment is due.
+ * Sent by the button in King and, since 2 Oct 2026, the moment an agent is
+ * approved. Between 22:00 and 07:00 in Kampala it waits for 7:30am unless the
+ * agent is in the chat with us. services/agentWelcomeService.js has the words
+ * and why it is three and not the seven it was.
+ *
+ * feeLink: { agent, force } when the payment message should be the third.
+ * samplePayMessage: for a preview, whether to show that third message (with no
+ *   link made); left out, it is shown whenever a payment is due.
+ * afterQueued: anything else that must follow once the welcome is in the queue.
+ */
+async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', previewTrial = false, actorId = 'admin', afterQueued = null, feeLink = null, samplePayMessage, now = new Date() } = {}) {
+  let pack = await agentWelcome.buildWelcomePack(cleanText(agentId));
+  const previewTo = String(previewToRaw || '').replace(/\D+/g, '');
+  const preview = Boolean(previewTo);
+  // Staff preview only: show the pack as an agent on a free period sees it.
+  if (preview && previewTrial) pack = agentReportVideos.trialVariant(pack);
+  const agentNumber = String(pack.agent.whatsapp || pack.agent.phone || '').replace(/\D+/g, '');
+  const to = preview ? previewTo : agentNumber;
+  if (!to || to.length < 9) throw Object.assign(new Error('No WhatsApp number to send to'), { status: 400 });
+  // They are about to be asked to reply AGREE: the assistant must know them when they do.
+  if (!preview) forgetAgentLookup(pack.agent);
+
+  const actor = actorId || 'admin';
+  const source = agentReportWhatsappSource();
+  const version = `${preview && previewTrial ? 't' : ''}${new Date().toISOString().slice(0, 10).replace(/\D/g, '')}`;
+  const dedupeBase = `agent_welcome:${pack.agent.id}:${preview ? `preview:${Date.now()}` : version}`;
+
+  // The payment link is made first, so the first message only promises a payment message that exists.
+  const fee = !preview && feeLink?.agent
+    ? await prepareAgentFeeLink({ agent: feeLink.agent, actor, force: feeLink.force === true })
+      .catch((error) => ({ send: false, reason: 'pay_link_failed', error: error.message || String(error) }))
+    : null;
+  const [lang, inChat] = await Promise.all([
+    agentFilmLanguageFor(agentNumber),
+    preview ? false : agentIsInChat(agentNumber)
+  ]);
+  const { messages } = await buildAgentWelcomeMessages(pack, {
+    fee: fee?.send ? fee : null,
+    lang,
+    sampleFee: preview && (samplePayMessage === undefined ? revenue.agentFeeRequired(pack.agent) : samplePayMessage === true)
+  });
+  const schedule = agentWelcome.welcomeSchedule({ now, inChat, preview });
+  const byPart = Object.fromEntries(messages.map((message) => [message.part, message]));
+
+  const queued = { text_id: null, how_to_id: null, plan_id: null };
+  const first = await queueWhatsappWebBridgeMessage({
+    recipient: to,
+    text: byPart.approved.text,
+    source,
+    actorId: actor,
+    sendAt: schedule.approved_at,
+    metadata: { message_kind: 'agent_welcome', agent_id: pack.agent.id, preview, part: 'approved', reply_dedupe_key: `${dedupeBase}:text` }
+  });
+  queued.text_id = first?.id || null;
+  // An agent counts as welcomed only once the welcome is actually in the queue.
+  // If it is not, welcome_sent_at stays empty so the start-up catch-up tries
+  // them again, and neither the film nor the payment message goes without it.
+  if (!queued.text_id) {
+    console.warn('[agent-welcome] nothing was queued; agent left un-welcomed', pack.agent.id);
+    return { to, preview, format: 'three_messages', held_until: schedule.held_until, language: lang || 'en', queued, fee_link: fee ? { sent: false, reason: fee.send ? 'welcome_not_queued' : fee.reason } : null };
+  }
+  if (!preview) await db.query('UPDATE agents SET welcome_sent_at = NOW() WHERE id = $1', [pack.agent.id]).catch(() => {});
+
+  // The film is marked with the broadcast key so the all-agents broadcast never sends it to them twice.
+  try {
+    const film = await queueWhatsappWebBridgeMessage({
+      recipient: to,
+      text: byPart.how_to_film.text,
+      mediaUrl: byPart.how_to_film.media_url,
+      mediaType: 'video',
+      source,
+      actorId: actor,
+      sendAt: schedule.film_at,
+      metadata: {
+        message_kind: 'agent_how_to_post',
+        broadcast_key: agentHowToPost.BROADCAST_KEY,
+        agent_id: pack.agent.id,
+        preview,
+        part: 'welcome_how_to_film',
+        ...(byPart.how_to_film.lang ? { film_language: byPart.how_to_film.lang } : {}),
+        reply_dedupe_key: `${dedupeBase}:how_to`
       }
-      if (!preview) await db.query('UPDATE agents SET welcome_sent_at = NOW() WHERE id = $1', [pack.agent.id]).catch(() => {});
-      await thenFollow();
-      return queuedIds;
-    };
-    if (videoUrl && !allowVideoRender) {
-      // No rendering here (e.g. the start-up catch-up): use the film only if it
-      // already exists, otherwise send the welcome without it.
-      const existing = await agentReportVideos.ensureWelcomeVideo(pack, version, { allowRender: false }).catch(() => '');
-      const queued = await queueWelcome(existing ? videoUrl : '');
-      await markWelcomedThenFollow(queued);
-      return { to, preview, format: existing ? 'video' : 'text', queued };
-    }
-    if (videoUrl) {
-      agentReportVideos.ensureWelcomeVideo(pack, version)
-        .then(() => queueWelcome(videoUrl))
-        .catch((error) => {
-          console.warn('[agent-welcome] video render failed, sending text only:', error.message);
-          return queueWelcome('');
-        })
-        .then(markWelcomedThenFollow)
-        .catch((error) => console.warn('[agent-welcome] WhatsApp queue failed:', error.message));
-      return { to, preview, format: 'video', status: 'rendering' };
-    }
-    const queued = await queueWelcome('');
-    await markWelcomedThenFollow(queued);
-    return { to, preview, format: 'text', queued };
+    });
+    queued.how_to_id = film?.id || null;
+  } catch (error) {
+    console.warn('[agent-welcome] how-to film queue failed:', error.message);
+  }
+
+  // Third and last: how to pay. For a real agent it is their own link, and the
+  // team is told; a preview shows the same words without making a link.
+  let feeResult = null;
+  if (preview && byPart.plan) {
+    const plan = await queueWhatsappWebBridgeMessage({
+      recipient: to,
+      text: byPart.plan.text,
+      mediaUrl: byPart.plan.media_url,
+      mediaType: 'image',
+      source,
+      actorId: actor,
+      sendAt: schedule.plan_at,
+      metadata: { message_kind: 'agent_welcome', agent_id: pack.agent.id, preview, part: 'welcome_plan', reply_dedupe_key: `${dedupeBase}:plan` }
+    }).catch(() => null);
+    queued.plan_id = plan?.id || null;
+  } else if (fee) {
+    feeResult = fee.send
+      ? await queueAgentFeeLink(fee, { agent: feeLink.agent, actor, sendAt: schedule.plan_at, withWelcome: true, heldUntil: schedule.held_until })
+        .catch((error) => ({ sent: false, error: error.message || String(error) }))
+      : { sent: false, reason: fee.reason, ...(fee.error ? { error: fee.error } : {}) };
+  }
+  if (!preview && typeof afterQueued === 'function') {
+    await Promise.resolve().then(afterQueued).catch((error) => console.warn('[agent-welcome] follow-up failed:', error.message));
+  }
+  return { to, preview, format: 'three_messages', held_until: schedule.held_until, language: lang || 'en', queued, fee_link: feeResult };
 }
 
 router.post('/agent-welcome/:agentId/send', async (req, res, next) => {
   try {
-    const data = await queueAgentWelcomePack({ agentId: req.params.agentId, previewTo: req.body?.preview_to, previewTrial: Boolean(req.body?.preview_trial), actorId: adminActorId(req) });
+    // A welcome sent by hand is the one King's preview shows. When a payment is
+    // due from them, how to pay is its third message: their own link for the
+    // agent, the same words with no link made for a preview to a member of staff.
+    const byHand = await handSentWelcomeFee(req.params.agentId);
+    const data = await queueAgentWelcomePack({
+      agentId: req.params.agentId,
+      previewTo: req.body?.preview_to,
+      previewTrial: Boolean(req.body?.preview_trial),
+      actorId: adminActorId(req),
+      feeLink: byHand.payMessage ? { agent: byHand.agent, force: false } : null,
+      samplePayMessage: byHand.payMessage
+    });
     return res.json({ ok: true, data });
   } catch (error) {
     if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
@@ -16176,6 +16302,7 @@ router.post('/agent-reports/:id/send', async (req, res, next) => {
 module.exports = router;
 module.exports.runAgentApprovalFollowUps = runAgentApprovalFollowUps;
 module.exports.queueAgentWelcomePack = queueAgentWelcomePack;
+module.exports.handSentWelcomeFee = handSentWelcomeFee;
 module.exports._test = {
   ADMIN_REVIEW_STAGES,
   adminReviewListingPatchFromBody

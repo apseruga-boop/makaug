@@ -189,10 +189,15 @@ async function newAgent(db, rest, actor) {
   const welcome = result.data.welcome;
   const lines = [
     `✅ *${agent.full_name}* (${pretty(phone)}) is live.`,
-    welcome?.error ? `Welcome pack NOT sent: ${welcome.error}` : 'Welcome pack and how-to-post guide sent to them on WhatsApp.'
+    welcomeLine(welcome)
   ];
   if (unpaid) lines.push(payLinkSentLine(result.data), '', "I'll WhatsApp you the moment they pay. Until then they are on *UNPAID*.");
   return lines.join('\n');
+}
+
+/** What happened to their welcome: sent, held until the Kampala morning, or not sent and why. */
+function welcomeLine(welcome = null) {
+  return require('./agentWelcomeService').welcomeSentLine(welcome || {});
 }
 
 /** The fee override for a new agent approved without a payment: live now, link with the welcome pack. */
@@ -287,7 +292,7 @@ async function approve(db, rest, actor) {
   const welcome = result.data.welcome;
   return [
     `✅ *${agent.full_name}* is approved.`,
-    welcome?.error ? `Welcome pack NOT sent: ${welcome.error}` : 'Welcome pack and how-to-post guide sent to them on WhatsApp.',
+    welcomeLine(welcome),
     unpaid ? `${payLinkSentLine(result.data)} I'll tell you when they pay (*UNPAID* shows the list).` : ''
   ].filter(Boolean).join('\n');
 }

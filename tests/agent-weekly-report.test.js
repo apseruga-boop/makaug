@@ -331,8 +331,12 @@ test('welcome pack carries the agent profile link and a share card', async () =>
   const png = await cards.renderAgentShareCardPng({ agent, listings: 184, profileUrl });
   assert.equal(png.subarray(1, 4).toString(), 'PNG');
 
+  // Since 15 Nov 2026 the card is not pushed at a new agent with their welcome:
+  // the first message carries their page link, and SHARE gives them the card.
   const admin = fs.readFileSync('routes/admin.js', 'utf8');
-  assert.match(admin, /part: 'share_card'/);
+  assert.doesNotMatch(admin, /part: 'share_card'/);
+  assert.ok(welcome.buildApprovedMessage({ agent }).includes(`Your page: ${profileUrl}`), 'the welcome gives them their page');
+  assert.match(fs.readFileSync('routes/whatsapp.js', 'utf8'), /cardUrl = welcome\.shareCardUrl\(agent\)/, 'SHARE still hands over the card');
   const agents = fs.readFileSync('routes/agents.js', 'utf8');
   assert.match(agents, /router\.get\('\/share-card\/:id\.png'/);
 });

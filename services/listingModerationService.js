@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const logger = require('../config/logger');
 const { sendSupportEmail, getSupportEmail, getSupportPhone } = require('./emailService');
 const { isPriceOnApplication } = require('../utils/listingPriceQuality');
+const { stripMarkdownEmphasis } = require('./publicListingCopy');
 const { isPointInUganda } = require('./locationSearchService');
 const { areaCentreForUnpinnedListing } = require('./listingCoordinateRepairService');
 const { normalizeUgPhoneForWhatsApp, sendWhatsAppText } = require('./whatsappNotificationService');
@@ -801,7 +802,11 @@ async function approvalListerFee(listing = {}) {
   }
 }
 
-function buildOwnerStatusMessage({ listing = {}, status, reason, listerFee = null, agentLiveCount = null }) {
+function buildOwnerStatusMessage({ listing: asStored = {}, status, reason, listerFee = null, agentLiveCount = null }) {
+  // A title pasted with **stars** round it would print them in the WhatsApp
+  // message, the email and the share links, so everything below reads the plain one.
+  const plainTitle = stripMarkdownEmphasis(asStored.title || '').replace(/\s+/g, ' ').trim();
+  const listing = plainTitle && plainTitle !== asStored.title ? { ...asStored, title: plainTitle } : asStored;
   const reference = getListingReference(listing);
   const label = statusLabel(status);
   const title = listing.title || 'Your property listing';

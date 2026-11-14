@@ -303,8 +303,159 @@ function buildWelcomeCaption({ agent = {}, stats = {} } = {}) {
   return lines.join('\n');
 }
 
+// ---------------------------------------------------------------------------
+// The welcome an agent gets on the day they are approved (15 Nov 2026)
+// ---------------------------------------------------------------------------
+/**
+ * Approval used to send seven to nine messages inside a minute: a personal
+ * film, the 3,200-character message above, a share card, the how-to film, the
+ * guide, the terms and the payment message, in whatever order the bridge sent
+ * them. The two things a new agent has to do, accept the terms and pay, were
+ * the sixth and seventh messages, and both were going unanswered.
+ *
+ * So it is three messages, in a fixed order, built round what the agent has
+ * to do next:
+ *   1. approved: their ID, their page and the steps, numbered;
+ *   2. the one-minute how-to-post film;
+ *   3. the payment message with the MoMo card, when a payment is due.
+ * The share card (SHARE), the guide (its link is under the film) and a person
+ * (HELP) are a word away rather than pushed at them on the first day. The long
+ * message above is no longer part of it.
+ */
+
+const WELCOME_FILM_AFTER_MS = 20 * 1000;
+const WELCOME_PLAN_AFTER_MS = 45 * 1000;
+const WELCOME_NIGHT_FROM_HOUR = 22;
+const WELCOME_NIGHT_TO_HOUR = 7;
+const WELCOME_MORNING = { hour: 7, minute: 30 };
+/** Somebody who wrote to us this recently is awake and in the chat. */
+const WELCOME_IN_CHAT_MINUTES = 30;
+
+function feeLabel() {
+  const revenue = require('./revenueService');
+  return `UGX ${Number(revenue.feeConfig().feeUgx || 50000).toLocaleString('en-GB')}`;
+}
+
+/**
+ * The first message: approved, and what to do, in the order it is quickest to do it.
+ * payment: 'follows' when the payment message is the last of the three, '' when nothing is due now.
+ */
+function buildApprovedMessage({ agent = {}, listings = 0 } = {}, { payment = '', termsAccepted = false } = {}) {
+  const docs = require('./listingDocsService');
+  const first = agentGreetingName(agent, '');
+  const live = toInt(listings);
+  const trial = trialTerms(agent);
+  const lines = [`✅ *You are approved${first ? `, ${first}` : ''}. Welcome to makaug.*`, ''];
+  if (agent.makaug_agent_number) lines.push(`Your agent ID: *${agent.makaug_agent_number}*`);
+  lines.push(`Your page: ${agentProfileUrl(agent)}`);
+  if (live) lines.push(`You already have ${nfmt(live)} ${live === 1 ? 'property' : 'properties'} live on it.`);
+
+  const steps = [];
+  if (!termsAccepted) steps.push(`Reply *AGREE* to accept the agent terms: ${docs.docUrls('agent_terms').pdf}`);
+  steps.push(`Send your ${live ? 'next' : 'first'} property: photos or a short video, with what it is, the exact area and the price. The one-minute video below shows how.`);
+  if (payment === 'follows' && !trial) steps.push(`Pay your plan, ${feeLabel()} a month. How to pay is in the last message below.`);
+  const count = ['', 'One thing', 'Two things', 'Three things'][steps.length];
+  lines.push('', `*${count} to do, in this chat:*`);
+  steps.forEach((step, index) => lines.push(`*${index + 1}.* ${step}`));
+
+  // A free period somebody gave them by hand: said once, with the day it ends.
+  if (trial) {
+    lines.push('', `🎁 Your plan is free until ${trial.ends}. From ${trial.first_due} it is UGX ${trial.fee} a month, and we remind you before then.`);
+  }
+  lines.push('', 'Every enquiry on your properties comes straight to this number, with the buyer’s name and number. makaug takes no commission.');
+  lines.push('', 'Reply *HELP* at any time and a person will answer.');
+  return lines.join('\n');
+}
+
+/** The second message: the how-to-post film, in the language they were first written to in. */
+function buildHowToFilm({ agent = {} } = {}, { lang = '' } = {}) {
+  const howTo = require('./agentHowToPostBroadcastService');
+  const films = require('./filmLanguageService');
+  const docs = require('./listingDocsService');
+  const code = films.filmLanguage(lang);
+  const name = agentGreetingName(agent, '');
+  const guide = docs.docUrls('agent_guide').pdf;
+  const caption = code
+    ? [films.filmMessage('agent_howto', code, { first: name, greet: false }), '', `📘 Agent guide (PDF): ${guide}`].join('\n')
+    : [
+      howTo.buildWelcomeFilmCaption({ name }),
+      '',
+      '*SHARE* gives you your page link and card. *STATUS* shows where your properties are. *HELP* gets you a person.',
+      `The two-page agent guide: ${guide}`
+    ].join('\n');
+  return { url: films.filmPath(howTo.videoUrl(), code), caption, lang: code };
+}
+
+/**
+ * The third message: the plan and how to pay it, under the MoMo card.
+ * As the last of the welcome it does not say "approved" again; sent on its own
+ * (the welcome went earlier, or was not wanted) it does.
+ */
+function buildPlanMessage({ agent = {}, methodLine = '', url = '', withWelcome = true } = {}) {
+  const first = agentGreetingName(agent, 'there');
+  const pay = [methodLine, '', url ? `Your payment page: ${url}` : '', 'Your listings stay live while you are paid up.'].filter((line, index, all) => line !== '' || (all[index - 1] !== '' && index > 0)).join('\n');
+  if (!withWelcome) {
+    return `✅ *You are approved, ${first}* — your makaug agent account is live.\n\nYour subscription is ${feeLabel()} a month.\n${pay}`;
+  }
+  return `💳 *Your makaug plan: ${feeLabel()} a month*\n\n${pay}`;
+}
+
+/** When the Kampala night ends, if it is night there now: 7:30 in the morning. Null in the day. */
+function kampalaNightEnds(now = new Date()) {
+  const local = new Date(new Date(now).getTime() + 3 * 3600 * 1000);
+  const hour = local.getUTCHours();
+  if (hour >= WELCOME_NIGHT_TO_HOUR && hour < WELCOME_NIGHT_FROM_HOUR) return null;
+  const morning = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + (hour >= WELCOME_NIGHT_FROM_HOUR ? 1 : 0), WELCOME_MORNING.hour, WELCOME_MORNING.minute);
+  return new Date(morning - 3 * 3600 * 1000);
+}
+
+/**
+ * When each of the three goes. In order, a little apart, so the film never
+ * lands above the message that introduces it. Between 22:00 and 07:00 in
+ * Kampala the whole welcome waits for the morning, unless the agent is in the
+ * chat with us right now (or it is a preview to a member of staff).
+ */
+function welcomeSchedule({ now = new Date(), inChat = false, preview = false } = {}) {
+  const morning = preview || inChat ? null : kampalaNightEnds(now);
+  const start = morning || new Date(now);
+  return {
+    held_until: morning ? morning.toISOString() : null,
+    approved_at: morning,
+    film_at: new Date(start.getTime() + WELCOME_FILM_AFTER_MS),
+    plan_at: new Date(start.getTime() + WELCOME_PLAN_AFTER_MS)
+  };
+}
+
+/** "7:30am" for a held welcome, as Kampala reads the clock. */
+function kampalaClock(value) {
+  const at = new Date(value);
+  if (Number.isNaN(at.getTime())) return '';
+  const local = new Date(at.getTime() + 3 * 3600 * 1000);
+  const hour = local.getUTCHours();
+  const minute = String(local.getUTCMinutes()).padStart(2, '0');
+  return `${hour % 12 || 12}${minute === '00' ? '' : `:${minute}`}${hour < 12 ? 'am' : 'pm'}`;
+}
+
+/** One line for the member of staff who approved them: sent, or waiting for the morning. */
+function welcomeSentLine(welcome = null) {
+  if (!welcome) return '';
+  if (welcome.error) return `Welcome NOT sent: ${welcome.error}`;
+  if (welcome.skipped === 'already_sent') return 'They were welcomed before, so nothing was sent again.';
+  if (welcome.skipped) return 'No welcome was sent with this approval.';
+  if (welcome.held_until) return `It is night in Kampala, so their welcome goes at ${kampalaClock(welcome.held_until)}.`;
+  return 'Their welcome and the how-to-post video have gone to them on WhatsApp.';
+}
+
 module.exports = {
   VERTICALS,
+  WELCOME_IN_CHAT_MINUTES,
+  buildApprovedMessage,
+  buildHowToFilm,
+  buildPlanMessage,
+  kampalaNightEnds,
+  kampalaClock,
+  welcomeSchedule,
+  welcomeSentLine,
   networkAudience,
   networkExtraCountries,
   targetMonthName,

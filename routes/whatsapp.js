@@ -8319,14 +8319,20 @@ const AGENT_PAY_LINK_QUESTION = /\b(tap|click|open|press|follow)\b.*\blink\b|\bl
 async function outstandingAgentPayLink(agent = {}) {
   if (!agent?.id) return null;
   try {
+    // Sent, or the link made for the payment message that went when they were
+    // approved: until 15 Nov 2026 that message did not mark its link as sent, so
+    // four agents who asked "how do I pay?" would have been shown the menu.
     const row = (await db.query(
-      `SELECT code, amount_ugx, sent_at
-         FROM pay_links
-        WHERE agent_id = $1::uuid
-          AND status = 'open'
-          AND sent_at IS NOT NULL
-          AND sent_at > NOW() - INTERVAL '14 days'
-        ORDER BY sent_at DESC
+      `SELECT l.code, l.amount_ugx, COALESCE(l.sent_at, a.pay_link_sent_at) AS sent_at
+         FROM pay_links l
+         LEFT JOIN agents a ON a.id = l.agent_id
+        WHERE l.agent_id = $1::uuid
+          AND l.status = 'open'
+          AND (l.sent_at IS NOT NULL
+            OR (a.pay_link_sent_at IS NOT NULL
+              AND l.created_at BETWEEN a.pay_link_sent_at - INTERVAL '10 minutes' AND a.pay_link_sent_at + INTERVAL '10 minutes'))
+          AND COALESCE(l.sent_at, a.pay_link_sent_at) > NOW() - INTERVAL '14 days'
+        ORDER BY COALESCE(l.sent_at, a.pay_link_sent_at) DESC
         LIMIT 1`,
       [agent.id]
     )).rows[0];
@@ -8347,13 +8353,16 @@ async function outstandingAgentPayLink(agent = {}) {
  * reference to quote. And it says listing is not blocked, because an agent who
  * thinks he cannot work until he has paid simply stops working.
  */
-function agentPayLinkAnswer({ agent = {}, link = {} } = {}) {
+function agentPayLinkAnswer({ agent = {}, link = {}, asked = '' } = {}) {
   const first = agentGreetingName(agent, '');
   const amount = Number(link.amount_ugx) > 0
     ? `UGX ${Math.round(Number(link.amount_ugx)).toLocaleString('en-GB')}`
     : agentMonthlyFeeLabel();
+  // "How do I pay?" is not a yes-or-no question: "Yes, tap it" answers "can I tap the link".
+  const question = String(asked || '');
+  const asksHow = /\b(how|where|when)\b.*\bpay\b/i.test(question) && !/\b(tap|click|open|press|follow|link|safe|real|genuine|scam)\b/i.test(question);
   return [
-    `Yes${first ? `, ${first}` : ''} — tap it, it is from us. 👍`,
+    asksHow ? `Here is how${first ? `, ${first}` : ''}. 👇` : `Yes${first ? `, ${first}` : ''} — tap it, it is from us. 👍`,
     '',
     `It is your makaug agent subscription: *${amount} a month*.`,
     `${HOME_URL}/pay/${link.code}`,
@@ -8376,7 +8385,7 @@ async function agentPayLinkAside({ agent = {}, cleanBody = '' } = {}) {
   const text = normalizeInput(cleanBody);
   if (!text || !AGENT_PAY_LINK_QUESTION.test(text)) return null;
   const link = await outstandingAgentPayLink(agent);
-  return link ? agentPayLinkAnswer({ agent, link }) : null;
+  return link ? agentPayLinkAnswer({ agent, link, asked: text }) : null;
 }
 
 /**
@@ -10307,7 +10316,29 @@ function slimOwesRow(row = {}) {
     since: row.since || null,
     amount_ugx: row.amount_ugx,
     last_reminder_at: row.last_reminder_at || null,
-    final_reminder_at: row.final_reminder_at || null
+    final_reminder_at: row.final_reminder_at || null,
+    // A private owner's card: whose listing, where it came from, what was sent,
+    // and whether it is a second copy (which is never chased).
+    ...(row.kind === 'owner' ? {
+      named: row.named === true,
+      owner_key: row.owner_key || '',
+      reference: row.reference || '',
+      listing_url: row.listing_url || '',
+      price_ugx: row.price_ugx || 0,
+      where: row.where || '',
+      listed_how: row.listed_how || '',
+      listed_at: row.listed_at || null,
+      approved_at: row.approved_at || null,
+      display_name: row.display_name || '',
+      says_they_are: row.says_they_are || '',
+      prefers_calls: row.prefers_calls === true,
+      has_email: row.has_email === true,
+      views_message_at: row.views_message_at || null,
+      copy_of: row.copy_of || null,
+      copy_of_reference: row.copy_of_reference || '',
+      copies: row.copies || 0,
+      copy_references: Array.isArray(row.copy_references) ? row.copy_references : []
+    } : {})
   };
 }
 
@@ -10331,10 +10362,31 @@ async function openWhoOwes({ phone, data = {} } = {}) {
 async function latestPayLinkForOwesRow(row = {}) {
   const where = row.kind === 'agent' ? 'agent_id = $1::uuid' : 'property_id = $1::uuid';
   const result = await db.query(
-    `SELECT code, status, amount_ugx, sent_at, opened_at, paid_at, claim_id FROM pay_links WHERE ${where} ORDER BY created_at DESC LIMIT 1`,
+    // An agent's link from the day they were approved was sent without being
+    // marked so (until 15 Nov 2026): the agent's own row has when it went.
+    `SELECT code, status, amount_ugx,
+            COALESCE(sent_at, (SELECT a.pay_link_sent_at FROM agents a
+                                WHERE a.id = pay_links.agent_id
+                                  AND pay_links.created_at BETWEEN a.pay_link_sent_at - INTERVAL '10 minutes' AND a.pay_link_sent_at + INTERVAL '10 minutes')) AS sent_at,
+            opened_at, paid_at, claim_id, created_at
+       FROM pay_links WHERE ${where} ORDER BY created_at DESC LIMIT 1`,
     [row.id]
   ).catch(() => ({ rows: [] }));
   return result.rows[0] || null;
+}
+
+/** When this number last wrote to us and we last wrote to it (120 days): who is worth a call. */
+async function lastWhatsappContact(phone = '') {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 9) return null;
+  const result = await db.query(
+    `SELECT direction, MAX(created_at) AS at FROM whatsapp_messages
+      WHERE user_phone = ANY($1::text[]) AND created_at > NOW() - INTERVAL '120 days' GROUP BY 1`,
+    [[digits, `+${digits}`]]
+  ).catch(() => null);
+  if (!result) return null;
+  const lastOf = (direction) => (result.rows || []).find((row) => row.direction === direction)?.at || null;
+  return { last_inbound_at: lastOf('inbound'), last_outbound_at: lastOf('outbound') };
 }
 
 /** A private owner's payment link for one listing: made (or reused), sent with the MoMo card. */
@@ -10516,7 +10568,8 @@ async function handleControlRoomStep({ phone, currentStep, cleanBody, data = {} 
       if (!/^\d{1,2}$/.test(cleanBody) || !row) return stay('Reply the number of the person to open, or *CANCEL* to close.');
       const next = { ...data, owes_selected: rows.indexOf(row) };
       await replaceEmployeeSession(phone, 'employee_owes_person', next);
-      return stay(controlRoom.owesPersonMessage(row, { payLink: await latestPayLinkForOwesRow(row) }), 'employee_owes_person');
+      const [payLink, contact] = await Promise.all([latestPayLinkForOwesRow(row), lastWhatsappContact(row.phone)]);
+      return stay(controlRoom.owesPersonMessage(row, { payLink, contact }), 'employee_owes_person');
     }
     const row = rows[Number(data.owes_selected)];
     if (!row) return showList();
@@ -10784,6 +10837,17 @@ async function handleEmployeeWhatsappIntake({
     // listing a house OR a plot; he was asking a question.
     const askedText = normalizeInput(cleanBody);
     const agentVoiceOnly = !askedText && !mediaUrl && /audio|ogg|opus|voice/.test(String(runtime.mediaType || ''));
+    // A question about paying, from an agent with an unpaid payment link, is
+    // about that link wherever they are in the chat. "How do I pay?" a minute
+    // after the welcome was being answered with the customer menu, because
+    // only an agent already posting, or one who happened to use a how-to-post
+    // phrase, reached the payment answer (15 Nov 2026). No unpaid link: nothing
+    // changes, and the message carries on as before.
+    if (!active && AGENT_PAY_LINK_QUESTION.test(askedText)) {
+      const payingAgent = await findApprovedAgentByPhone(phone);
+      const payAnswer = payingAgent ? await agentPayLinkAside({ agent: payingAgent, cleanBody: askedText }) : null;
+      if (payAnswer) return { handled: true, nextStep: currentStep, message: payAnswer };
+    }
     if (!active && (agentVoiceOnly || AGENT_HELP.test(askedText) || AGENT_IS_IT_DONE.test(askedText) || AGENT_HOW_TO_POST.test(askedText) || WANTS_TO_POST.test(askedText) || AGENT_GREETING.test(askedText) || isAgentProfilePhotoRequest(askedText) || AGENT_SHARE_REQUEST.test(askedText) || AGENT_TERMS_AGREE.isAgreeReply(askedText))) {
       const askingAgent = await findApprovedAgentByPhone(phone);
       if (askingAgent) {
@@ -15935,6 +15999,8 @@ async function billingPausedAgentReply({ phone, body = '' } = {}) {
 }
 
 const WHATSAPP_PHOTO_CAPTION_LIMIT = 1000;
+/** Steps whose replies are Agent 007's own cards: sent as written, never as a listing card. */
+const STAFF_CARD_STEPS = new Set(['employee_owes_list', 'employee_owes_person']);
 
 /** A reply that asks the person to answer something: its words cannot be swapped for a card. */
 function replyAsksSomething(text = '') {
@@ -15956,9 +16022,13 @@ async function queueWhatsappWebBridgeAutoReply({
   let mediaType = 'text';
   const propertyIds = propertyIdsFromWhatsappReply(text, HOME_URL);
   const propertyId = propertyIds.length === 1 ? propertyIds[0] : '';
+  // "Who still owes" is a card for the member of staff reading it. A private
+  // owner's card names their listing by its link, and would otherwise be
+  // swapped for that listing's public card: the chase card would never arrive.
+  const staffCard = STAFF_CARD_STEPS.has(String(nextStep || ''));
   // A listing enquiry answer (who holds it, the safety steps) stays as written:
   // turned into the card, all of that was dropped (13 Nov 2026, 11:15).
-  if (propertyId && !isListingEnquiryReply(text)) {
+  if (propertyId && !isListingEnquiryReply(text) && !staffCard) {
     const result = await db.query(
       `SELECT p.id, p.title, p.listing_type, p.transaction_type, p.district, p.area,
               p.price, p.price_period, p.extra_fields, img.url AS primary_image_url

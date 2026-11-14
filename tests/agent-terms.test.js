@@ -53,8 +53,12 @@ test('the caption names no fee or free period; the PDF is where it is stated', (
   assert.match(caption, /Reply \*AGREE\*/);
 });
 
-test('the welcome pack sends the terms and an agent can AGREE', () => {
-  assert.match(read('routes/admin.js'), /message_kind: 'agent_terms_pdf'/);
+test('the welcome asks for AGREE in its first message, and an agent can AGREE', () => {
+  // Until 15 Nov 2026 the terms were the sixth message of the pack, a picture
+  // of their own, and went unanswered. Now it is step one.
+  const first = require('../services/agentWelcomeService').buildApprovedMessage({ agent: { id: 'a1', full_name: 'Jane Nakato' } });
+  assert.match(first, /\*1\.\* Reply \*AGREE\* to accept the agent terms: https:\/\/\S+makaug-agent-terms\.pdf/);
+  assert.doesNotMatch(read('routes/admin.js'), /message_kind: 'agent_terms_pdf'/);
   const wa = read('routes/whatsapp.js');
   assert.match(wa, /AGENT_TERMS_AGREE\.isAgreeReply\(askedText\)/);
   assert.match(wa, /recordAcceptance\(db, \{ agent: askingAgent, phone \}\)/);

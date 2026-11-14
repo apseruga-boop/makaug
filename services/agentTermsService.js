@@ -3,7 +3,9 @@
 /**
  * Agent terms: which agents have accepted them, and when.
  *
- * An agent is sent the terms PDF in their welcome pack and replies AGREE. The
+ * The first message of an agent's welcome asks them to reply AGREE, with a
+ * link to the terms PDF (until 15 Nov 2026 the terms were a message of their
+ * own, the sixth, and nobody answered it). The
  * acceptance (version, number, time) is written to audit_logs — the same place
  * the lister terms and explainer sends are recorded — so it needs no migration
  * and is a permanent record. The free-trial tracker reads it to show who has
