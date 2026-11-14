@@ -130,12 +130,14 @@ function filmCaption(kind = '', lang = '', { ownerFee = 'UGX 20,000' } = {}) {
  * Swahili. '' when the language is English, so the caller keeps its own words.
  * kind: agent · owner · lister · agent_howto
  */
-function filmMessage(kind = '', lang = '', { first = '', ownerFee = 'UGX 20,000' } = {}) {
+function filmMessage(kind = '', lang = '', { first = '', ownerFee = 'UGX 20,000', greet = true } = {}) {
   const code = filmLanguage(lang);
   const words = MESSAGES[code];
   const caption = filmCaption(kind, code, { ownerFee });
   if (!words || !words[kind] || !caption) return '';
-  return [words.hello(String(first || '').trim()), '', caption, '', ...words[kind]({ ownerFee })].join('\n');
+  // greet: false when the film follows a message that has already said hello (a new agent's welcome).
+  const hello = greet === false ? [] : [words.hello(String(first || '').trim()), ''];
+  return [...hello, caption, '', ...words[kind]({ ownerFee })].join('\n');
 }
 
 module.exports = {

@@ -128,7 +128,8 @@ async function createPayLink(db, input = {}, actor = 'admin') {
     if (property.agent_id) throw revenue.httpError(409, "This is an agent's listing — it is covered by the agent's monthly fee");
     propertyId = property.id;
     amountUgx = amountUgx || Number(settings.lister_fee?.monthly_ugx || 20000);
-    description = description || `makaug listing — 1 month: ${property.title || 'your property'}`.slice(0, 200);
+    // The title as a person would say it: a pasted advert's **stars** would print in the message and on the page.
+    description = description || `makaug listing — 1 month: ${billingOps.plainListingTitle(property.title) || 'your property'}`.slice(0, 200);
     payerName = payerName || property.lister_name || null;
     payerPhone = payerPhone || digits(property.lister_phone) || null;
   } else if (purpose === 'agent_subscription') {
@@ -238,12 +239,18 @@ function isPersonPayer(link = {}) {
  * Says only what the page will offer: card, Apple Pay and Google Pay appear
  * there only when Revolut is configured.
  */
+/** A link's description with a pasted advert's **stars** and _underscores_ taken off. */
+function plainDescription(value = '') {
+  return String(value || '').replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, '$2').replace(/\*{2,}|_{2,}/g, '').replace(/\s+/g, ' ').trim();
+}
+
 function payLinkMessage(link, { cardAvailable = false, settings = {} } = {}) {
   const name = String(link.payer_name || '').trim().split(/\s+/)[0] || 'there';
   return [
     `Hi ${name} 👋`,
     '',
-    `Payment for *${link.description}*`,
+    // Links made before 15 Nov 2026 kept the stars a pasted advert came with.
+    `Payment for *${plainDescription(link.description)}*`,
     `*${billingOps.ugx(link.amount_ugx)}*`,
     '',
     momoWhatsappSteps({ amountUgx: link.amount_ugx }),
@@ -284,6 +291,41 @@ async function sendPayLink(db, { code, to, actor = 'admin' }) {
  * Only a real human request may set it. Everything server-side passes
  * track: false.
  */
+/**
+ * A fetch that is drawing a link preview or checking a URL, not a person
+ * reading their payment page.
+ *
+ * WhatsApp fetches a link the moment a message carrying it is sent, to draw
+ * the preview, and that fetch was being recorded as the payer opening their
+ * page: every reminder read "opened, not paid" from the minute it went
+ * (14 Nov 2026: ten links "opened" in the same minute they were sent, by
+ * people who have never replied). A person's browser says it is a browser.
+ */
+function isLinkPreviewFetch(userAgent = '') {
+  const ua = String(userAgent || '').trim();
+  if (!/^Mozilla\//i.test(ua)) return true;
+  return /WhatsApp\/|facebookexternalhit|Facebot|TelegramBot|Twitterbot|Slackbot|LinkedInBot|Discordbot|HeadlessChrome|\b(?:bot|crawler|spider|preview|scraper)\b/i.test(ua);
+}
+
+const OUR_OWN_SEND_WINDOW_MS = 3 * 60 * 1000;
+
+/**
+ * Whether a person opened the payment page, as far as the record can tell. An
+ * "open" within three minutes of something we sent (the link being made or
+ * sent, a reminder going out) was the preview being drawn for our own message.
+ */
+function openedByAPerson(link = {}, ourSendTimes = []) {
+  if (!link || !link.opened_at) return false;
+  const opened = new Date(link.opened_at).getTime();
+  if (Number.isNaN(opened)) return false;
+  return ![link.sent_at, link.created_at, ...(Array.isArray(ourSendTimes) ? ourSendTimes : [])]
+    .filter(Boolean)
+    .some((at) => {
+      const ours = new Date(at).getTime();
+      return !Number.isNaN(ours) && Math.abs(opened - ours) <= OUR_OWN_SEND_WINDOW_MS;
+    });
+}
+
 async function pageData(db, code, { track = true } = {}) {
   const link = await loadLink(db, code);
   if (!link) return null;
@@ -297,7 +339,7 @@ async function pageData(db, code, { track = true } = {}) {
   return {
     code: link.code,
     status: link.status,
-    description: link.description,
+    description: plainDescription(link.description),
     amount_ugx: Number(link.amount_ugx),
     amount_ugx_text: billingOps.ugx(link.amount_ugx),
     card_text: money(link.card_amount_minor, link.card_currency),
@@ -723,8 +765,10 @@ async function payLinksAwaitingPayment(db, { afterDays = 3, limit = 100 } = {}) 
     ...row,
     url: payUrl(row.code),
     // The two different problems, named, so a worklist reads as a worklist.
-    next_step: row.opened_at
-      ? `Opened the page ${row.days_waiting} day${row.days_waiting === 1 ? '' : 's'} ago and has not paid — ask what is stopping them`
+    // (An "open" in the minute we sent it was WhatsApp drawing the preview.)
+    opened_by_them: openedByAPerson(row),
+    next_step: openedByAPerson(row)
+      ? `Opened the page and has not paid, ${row.days_waiting} day${row.days_waiting === 1 ? '' : 's'} after it was sent — ask what is stopping them`
       : `Sent ${row.days_waiting} day${row.days_waiting === 1 ? '' : 's'} ago, never opened — check the number and send it again`
   }));
 }
@@ -761,7 +805,7 @@ async function listPayLinks(db, { limit = 100 } = {}) {
        LEFT JOIN agents a ON a.id = l.agent_id
       ORDER BY l.created_at DESC LIMIT $1`,
     [Math.min(300, Math.max(1, Number(limit) || 100))]
-  )).rows.map((l) => ({ ...l, url: payUrl(l.code), card_text: money(l.card_amount_minor, l.card_currency) }));
+  )).rows.map((l) => ({ ...l, url: payUrl(l.code), card_text: money(l.card_amount_minor, l.card_currency), opened_by_them: openedByAPerson(l) }));
 }
 
 async function cancelPayLink(db, code, actor = 'admin') {
@@ -853,6 +897,9 @@ module.exports = {
   payLinkMessage,
   sendPayLink,
   pageData,
+  plainDescription,
+  isLinkPreviewFetch,
+  openedByAPerson,
   startCardCheckout,
   settleFromOrder,
   refreshLink,

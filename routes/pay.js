@@ -239,7 +239,7 @@ pages.get('/:code/momo-card.png', async (req, res, next) => {
     const settings = await billingOps.getSettings(db).catch(() => ({}));
     return sendPng(res, momoCard.renderMomoCard({
       amountUgx: link.amount_ugx,
-      description: link.description,
+      description: payLinks.plainDescription(link.description),
       audience: payLinks.isPersonPayer(link) ? 'person' : 'business',
       settings
     }), 3600);
@@ -321,13 +321,15 @@ pages.post('/confirm/:token', async (req, res, next) => {
 
 pages.get('/:code', async (req, res, next) => {
   try {
-    let d = await payLinks.pageData(db, req.params.code);
+    // A person opening their page is recorded; WhatsApp drawing a link preview is not.
+    const track = !payLinks.isLinkPreviewFetch(req.get('user-agent'));
+    let d = await payLinks.pageData(db, req.params.code, { track });
     if (!d) return send(res, 404, notFoundView());
     if (d.status === 'cancelled') return send(res, 410, layout('Link closed', `<section class="due"><h1>This payment link has been closed</h1><p class="note">Please contact makaug for a new one.</p></section>`));
     // Coming back from Revolut without the return page? Check the order once.
     if (d.status === 'open' && req.query.paid) {
       await payLinks.refreshLink(db, d.code).catch(() => null);
-      d = await payLinks.pageData(db, req.params.code);
+      d = await payLinks.pageData(db, req.params.code, { track });
     }
     if (d.status === 'paid' || d.status === 'settling') return send(res, 200, paidView(d));
     return send(res, 200, openView(d, { claimed: Boolean(req.query.claimed), cardCancelled: Boolean(req.query.card_cancelled) }));

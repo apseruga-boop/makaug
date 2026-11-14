@@ -17,7 +17,9 @@ function cleanText(value = '') {
 }
 
 function cleanWhatsappTitleText(value = '') {
-  return cleanText(value)
+  // A title pasted with **stars** or _underscores_ round it: WhatsApp would
+  // print some of them and embolden the rest ("**1 acre of land**", Oct 2026).
+  return require('./publicListingCopy').stripMarkdownEmphasis(cleanText(value))
     .replace(/https?:\/\/\S+/gi, '')
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '')
     .replace(/\+?\d[\d\s()./-]{6,}\d/g, '')

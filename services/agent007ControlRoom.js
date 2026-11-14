@@ -415,11 +415,12 @@ const FINAL_REMINDER_AFTER_DAYS = 7;
  * Everyone with money due: agents on the monthly plan, and private owners with
  * a listing live. Agents first, the longest overdue at the top.
  */
-async function whoOwes(db, { now = new Date() } = {}) {
+async function whoOwes(db, { now = new Date(), summary: givenSummary = null, listerRows: givenListers = null } = {}) {
   const billingOps = require('./billingOpsService');
+  // King already has both in hand when it asks; Agent 007 fetches them here.
   const [summary, listerRows] = await Promise.all([
-    revenue.revenueSummary(db),
-    billingOps.listerBillingRows(db)
+    givenSummary || revenue.revenueSummary(db),
+    givenListers || billingOps.listerBillingRows(db)
   ]);
   const agentFee = Number(summary.fee_ugx || publishedPricing().agent.monthly_ugx);
   const ownerFee = Number(publishedPricing().owner_listing.monthly_ugx);
@@ -442,34 +443,76 @@ async function whoOwes(db, { now = new Date() } = {}) {
     .sort((a, b) => (a.state === 'taken_down') - (b.state === 'taken_down')
       || b.days_overdue - a.days_overdue
       || String(a.since || '').localeCompare(String(b.since || '')));
-  const owners = (listerRows || [])
-    .filter((row) => OWING_OWNER_STATES.has(row.billing_state))
-    .map((row) => ({
-      kind: 'owner',
-      id: String(row.id),
-      name: clean(row.lister_name, 80) || 'Private owner',
-      title: clean(row.title, 90),
-      phone: fullDigits(row.lister_phone),
-      state: row.billing_state,
-      days_overdue: Number(row.days_overdue || 0),
-      paid_until: row.lister_paid_until || null,
-      since: revenue.kampalaDate(new Date(row.reviewed_at || row.created_at || now)),
-      amount_ugx: ownerFee,
-      last_reminder_at: row.lister_billing_log?.reminder?.at || row.lister_billing_log?.views?.at || null,
-      final_reminder_at: row.lister_billing_log?.final_reminder?.at || null
-    }))
+  const owing = (listerRows || []).filter((row) => OWING_OWNER_STATES.has(row.billing_state));
+  const ownerRows = owing
+    .map((row) => {
+      const phone = fullDigits(row.lister_phone);
+      const ownerName = clean(row.owner_name || row.lister_name, 80);
+      // A second copy of a listing owes nothing of its own: one fee covers the property,
+      // whether the first copy is still to be paid for or already has been.
+      const copyOf = row.duplicate_of ? String(row.duplicate_of) : null;
+      return {
+        kind: 'owner',
+        id: String(row.id),
+        // Nobody is just "Private owner": with no name, the last three digits tell two of them apart.
+        name: ownerName || (phone ? `Private owner …${phone.slice(-3)}` : 'Private owner'),
+        named: Boolean(ownerName),
+        owner_key: clean(row.owner_key, 80) || phoneKey(phone) || String(row.id),
+        title: clean(row.plain_title || row.title, 90),
+        reference: clean(row.inquiry_reference, 24),
+        listing_url: clean(row.listing_url, 120),
+        price_ugx: Number(row.price || 0) || 0,
+        where: [row.area, row.district].map((part) => clean(part, 40)).filter(Boolean).filter((part, i, all) => all.indexOf(part) === i).join(', '),
+        listed_how: clean(row.listed_how, 12),
+        listed_at: row.created_at ? new Date(row.created_at).toISOString() : null,
+        approved_at: row.reviewed_at ? new Date(row.reviewed_at).toISOString() : null,
+        display_name: clean(row.public_display_name, 60),
+        says_they_are: clean(row.says_they_are, 12),
+        prefers_calls: row.prefers_calls === true,
+        has_email: row.has_email === true,
+        phone,
+        state: row.billing_state,
+        days_overdue: Number(row.days_overdue || 0),
+        paid_until: row.lister_paid_until || null,
+        since: revenue.kampalaDate(new Date(row.reviewed_at || row.created_at || now)),
+        amount_ugx: copyOf ? 0 : ownerFee,
+        copy_of: copyOf,
+        copy_of_reference: copyOf ? clean(row.duplicate_ref, 24) : '',
+        views_message_at: row.lister_billing_log?.views?.at || null,
+        last_reminder_at: row.lister_billing_log?.reminder?.at || row.lister_billing_log?.views?.at || null,
+        final_reminder_at: row.lister_billing_log?.final_reminder?.at || null
+      };
+    })
     .sort((a, b) => (a.state === 'taken_down') - (b.state === 'taken_down') || b.days_overdue - a.days_overdue);
-  const rows = [...agents, ...owners];
+  // Each listing, then any second copy of it straight underneath. A copy whose
+  // first listing is paid for is not under anything, so it goes at the end.
+  const owners = [];
+  const placed = new Set();
+  for (const row of ownerRows.filter((item) => !item.copy_of)) {
+    const copies = ownerRows.filter((item) => item.copy_of === row.id);
+    owners.push({ ...row, copy_references: copies.map((copy) => copy.reference).filter(Boolean), copies: copies.length }, ...copies);
+    copies.forEach((copy) => placed.add(copy.id));
+  }
+  owners.push(...ownerRows.filter((item) => item.copy_of && !placed.has(item.id)));
+  const rows = [...agents, ...owners].map((row) => ({ ...row, state_line: owesStateLine(row) }));
+  // People who owe money: an owner with two listings is one person, and a copy alone owes nothing.
+  const owingOwners = new Set(owners.filter((row) => Number(row.amount_ugx) > 0).map((row) => row.owner_key)).size;
   return {
     today: revenue.kampalaDate(now),
     rows,
     agents: agents.length,
-    owners: owners.length,
+    owners: owingOwners,
+    owner_listings: owners.filter((row) => !row.copy_of).length,
+    owner_copies: owners.filter((row) => row.copy_of).length,
+    people: agents.length + owingOwners,
+    agents_ugx: agents.reduce((sum, row) => sum + Number(row.amount_ugx || 0), 0),
+    owners_ugx: owners.reduce((sum, row) => sum + Number(row.amount_ugx || 0), 0),
     total_ugx: rows.reduce((sum, row) => sum + Number(row.amount_ugx || 0), 0)
   };
 }
 
 function owesStateLine(row = {}) {
+  if (row.copy_of) return 'second copy · not billed';
   if (row.state === 'taken_down') return row.kind === 'agent' ? '⛔ paused, unpaid' : '⛔ taken down, unpaid';
   if (row.kind === 'agent') {
     if (row.state === 'never_paid') {
@@ -497,13 +540,20 @@ function owesListMessage(report = {}) {
     lines.push('', heading);
     for (const row of part) {
       index += 1;
+      if (row.copy_of) {
+        // The same plot sent in twice: said once, with what to do about it.
+        lines.push(`*${index}* · ${row.name} · the same listing sent in twice${row.reference ? ` (${row.reference})` : ''} — take this copy down`);
+        continue;
+      }
       const what = kind === 'owner' && row.title ? ` · “${clean(row.title, 44)}”` : '';
       lines.push(`*${index}* · ${row.name}${what} — ${owesStateLine(row)}`);
     }
   };
   section('agent', `*AGENTS* · ${agentFeeLabel()} a month`);
   section('owner', `*PRIVATE OWNERS* · ${ownerFeeLabel()} a property`);
-  lines.push('', `${rows.length} ${rows.length === 1 ? 'person' : 'people'} · ${ugxLabel(report.total_ugx)} a month not coming in`);
+  // People, not rows: an owner with two listings is one person to ring.
+  const people = Number(report.people) || new Set(rows.map((row) => (row.kind === 'owner' ? `o:${row.owner_key || row.id}` : `a:${row.id}`))).size;
+  lines.push('', `${people} ${people === 1 ? 'person' : 'people'} · ${ugxLabel(report.total_ugx)} a month not coming in`);
   if (rows.length > shown.length) lines.push(`Showing ${shown.length} of them. The rest are in King › Sales & Revenue.`);
   lines.push('', 'Reply a *number* to open one and chase them. *CANCEL* closes it.');
   return lines.join('\n');
@@ -518,6 +568,8 @@ function reminderSentToday(at, now = new Date()) {
 
 /** What can be sent to this person now: 1 the link, 2 a reminder, 3 the final reminder. */
 function owesActions(row = {}, { now = new Date() } = {}) {
+  // A second copy of a listing is not billed, so there is nothing to send for it.
+  if (row.copy_of) return [];
   const actions = [{ key: 'pay_link', label: 'Send the payment link again' }];
   if (row.state !== 'taken_down') {
     actions.push({ key: 'reminder', label: 'Send a reminder' });
@@ -528,24 +580,94 @@ function owesActions(row = {}, { now = new Date() } = {}) {
   return actions.map((action) => ({ ...action, blocked: action.key !== 'pay_link' && reminderSentToday(action.key === 'final_reminder' ? row.final_reminder_at : row.last_reminder_at, now) }));
 }
 
-function payLinkStateWord(link = null) {
+/**
+ * Where a payment link stands. ourSendTimes: when we sent this person a
+ * message with the link in it (a reminder, say). An "open" in the same few
+ * minutes was WhatsApp drawing the preview for that message, not them.
+ */
+function payLinkStateWord(link = null, { ourSendTimes = [] } = {}) {
   if (!link) return 'none sent yet';
   if (link.status === 'paid') return `paid${link.paid_at ? ` ${shortDay(link.paid_at)}` : ''}`;
   if (link.claim_id) return 'they say they have paid, waiting for the MoMo SMS';
-  if (link.opened_at) return `opened ${shortDay(link.opened_at)}, not paid`;
+  const sends = (Array.isArray(ourSendTimes) ? ourSendTimes : []).filter(Boolean);
+  if (require('./payLinkService').openedByAPerson(link, sends)) return `opened ${shortDay(link.opened_at)}, not paid`;
   if (link.sent_at) return `sent ${shortDay(link.sent_at)}, not opened yet`;
+  // Reminders carry the link in their own words without marking it as sent.
+  const lastSend = sends.map((at) => new Date(at)).filter((at) => !Number.isNaN(at.getTime())).sort((a, b) => b - a)[0];
+  if (lastSend) return `sent with our message of ${shortDay(lastSend)}, not opened yet`;
   return 'made, not sent';
 }
 
-function owesPersonMessage(row = {}, { payLink = null, now = new Date() } = {}) {
+const LISTED_HOW_WORDS = Object.freeze({ website: 'on the website', whatsapp: 'on WhatsApp', team: 'by the team' });
+
+/** "Listed on the website 12 Oct · approved 13 Oct": where a private listing came from. */
+function ownerOriginLine(row = {}) {
+  const how = LISTED_HOW_WORDS[row.listed_how] || '';
+  const listed = row.listed_at ? `Listed ${how ? `${how} ` : ''}${shortDay(row.listed_at)}`.trim() : (how ? `Listed ${how}` : '');
+  const approved = row.approved_at ? `approved ${shortDay(row.approved_at)}` : '';
+  return [listed, approved].filter(Boolean).join(' · ');
+}
+
+/** When we last heard from them, which says more about the chances than anything we sent. */
+function contactLine(contact = null) {
+  if (!contact) return '';
+  const theirs = contact.last_inbound_at ? `they last wrote ${shortDay(contact.last_inbound_at)}` : 'they have never replied on WhatsApp';
+  const ours = contact.last_outbound_at ? `we last wrote ${shortDay(contact.last_outbound_at)}` : 'we have not written to them';
+  return `💬 ${theirs.charAt(0).toUpperCase()}${theirs.slice(1)} · ${ours}`;
+}
+
+function owesPersonMessage(row = {}, { payLink = null, now = new Date(), contact = null } = {}) {
   const actions = owesActions(row, { now });
+  const owner = row.kind === 'owner';
+  const facts = owner
+    ? [row.price_ugx ? ugxLabel(row.price_ugx) : '', row.where, row.reference].filter(Boolean).join(' · ')
+    : '';
+  // "Phone call" is what the website form is set to unless they change it, so it is
+  // reported as what the form says, not as something they asked for.
+  const reach = [
+    row.prefers_calls ? 'the form says to reach them by phone call' : '',
+    row.has_email ? 'email on file' : ''
+  ].filter(Boolean).join(' · ');
+  const unanswered = owner && contact && !contact.last_inbound_at && Boolean(row.views_message_at || row.last_reminder_at || row.final_reminder_at);
+  const sent = [
+    row.views_message_at ? `“seen by” message ${shortDay(row.views_message_at)}` : '',
+    row.last_reminder_at && row.last_reminder_at !== row.views_message_at ? `reminder ${shortDay(row.last_reminder_at)}` : '',
+    row.final_reminder_at ? `final reminder ${shortDay(row.final_reminder_at)}` : ''
+  ].filter(Boolean).join(' · ');
+  if (row.copy_of) {
+    return [
+      `👤 *${row.name}* · private owner`,
+      row.title ? `🏠 ${row.title}` : '',
+      facts ? `    ${facts}` : '',
+      row.listing_url ? `    ${row.listing_url}` : '',
+      '',
+      `♻️ *This is a second copy.* The same listing, at the same price, from the same person${row.copy_of_reference ? `: the first is ${row.copy_of_reference}` : ''}. It owes nothing of its own, and one fee covers the property.`,
+      `To clear it, open this copy in King › All Listings${row.reference ? ` (search ${row.reference})` : ''} and press Unpublish.`,
+      '',
+      '*0* · Back to the list'
+    ].filter((line, index, all) => line !== '' || all[index - 1] !== '').join('\n');
+  }
   const lines = [
-    `👤 *${row.name}* · ${row.kind === 'agent' ? 'agent' : 'private owner'}${row.company && row.company !== row.name ? ` · ${row.company}` : ''}`,
-    row.kind === 'owner' && row.title ? `🏠 ${row.title}` : '',
+    `👤 *${row.name}* · ${owner ? 'private owner' : 'agent'}${row.company && row.company !== row.name ? ` · ${row.company}` : ''}`,
+    owner && row.title ? `🏠 ${row.title}` : '',
+    facts ? `    ${facts}` : '',
+    owner && row.listing_url ? `    ${row.listing_url}` : '',
+    owner && ownerOriginLine(row) ? `📝 ${ownerOriginLine(row)}` : '',
+    owner && row.copies
+      ? `♻️ Sent in twice: a second copy is live too${row.copy_references?.length ? ` (${row.copy_references.join(', ')})` : ''}. One fee covers the property, and the copy should come down.`
+      : '',
+    owner && row.says_they_are === 'agent'
+      ? `🧑‍💼 Said they are an agent selling for the owner${row.display_name ? `, shown as ${row.display_name}` : ''}. Worth offering the agent plan.`
+      : '',
     row.phone ? `📞 ${prettyPhone(row.phone)} · https://wa.me/${row.phone}` : '📞 no WhatsApp number on file',
+    reach ? `    ${reach}` : '',
     `💳 ${owesStateLine(row)} · ${ugxLabel(row.amount_ugx)}`,
-    `🔗 Payment link: ${payLinkStateWord(payLink)}`,
-    `🔔 Last reminder: ${row.last_reminder_at ? shortDay(row.last_reminder_at) : 'none yet'}${row.final_reminder_at ? ` · final reminder ${shortDay(row.final_reminder_at)}` : ''}`,
+    `🔗 Payment link: ${payLinkStateWord(payLink, { ourSendTimes: [row.views_message_at, row.last_reminder_at, row.final_reminder_at] })}`,
+    owner
+      ? `🔔 Sent so far: ${sent || 'nothing yet'}`
+      : `🔔 Last reminder: ${row.last_reminder_at ? shortDay(row.last_reminder_at) : 'none yet'}${row.final_reminder_at ? ` · final reminder ${shortDay(row.final_reminder_at)}` : ''}`,
+    contactLine(contact),
+    unanswered ? '☎️ Nothing we sent has been answered. A phone call is the next step, not another message.' : '',
     ''
   ].filter((line, index, all) => line !== '' || index === all.length - 1);
   actions.forEach((action, index) => {
@@ -663,7 +785,7 @@ async function personDossier(db, phone = '') {
   const listingIds = (ownListings.rows || []).map((row) => row.id);
   const [payLink, lastMessages] = await Promise.all([
     db.query(
-      `SELECT code, status, amount_ugx, sent_at, opened_at, paid_at, claim_id, purpose
+      `SELECT code, status, amount_ugx, sent_at, opened_at, paid_at, claim_id, purpose, created_at
          FROM pay_links
         WHERE ($2::uuid IS NOT NULL AND agent_id = $2::uuid)
            OR property_id = ANY($3::uuid[])
@@ -842,6 +964,8 @@ module.exports = {
   owesStateLine,
   owesActions,
   owesPersonMessage,
+  ownerOriginLine,
+  contactLine,
   payLinkStateWord,
   lookupPrompt,
   findPeopleByName,

@@ -22,6 +22,7 @@ const { publishedPricing, ownerFreeDaysForListing } = require('../config/publish
 const { agentGreetingName } = require('./agentNameService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 const { momoMerchantCode, momoMerchantName, momoWhatsappSteps, momoAfterPayingLine } = require('../config/momoMerchant');
+const { stripMarkdownEmphasis } = require('./publicListingCopy');
 
 const SITE = () => String(process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
 let settingsCache = { at: 0, value: null };
@@ -66,6 +67,22 @@ function momoHowToPay({ amountUgx = null, lister = false } = {}) {
 function payLinkCardUrl(payLink = '') {
   const match = String(payLink || '').match(/\/pay\/(MK[A-Z0-9]{4,12})\b/i);
   return require('./momoMerchantCardService').momoCardUrl({ code: match ? match[1] : '' });
+}
+
+/**
+ * A message that carried a payment link has gone: say so on the link. Until
+ * 15 Nov 2026 reminders did not, so their links read "not sent", the person was
+ * missing from King's list of people asked and gone quiet, and an agent who
+ * asked "how do I pay?" after a reminder was not shown their link.
+ */
+async function markPayLinkSent(db, payLink = '', to = '', status = '') {
+  const match = String(payLink || '').match(/\/pay\/(MK[A-Z0-9]{4,12})\b/i);
+  if (!match || ['skipped', 'failed'].includes(String(status || ''))) return;
+  try {
+    await require('./payLinkService').recordPayLinkSent(db, { code: match[1], to, status: status || 'queued' });
+  } catch (error) {
+    logger.warn('Could not mark a pay link as sent', { error: error.message });
+  }
 }
 
 function ugx(n) {
@@ -212,6 +229,7 @@ async function sendAgentBillingMessage(db, { agentId, kind, actor = 'admin', for
   // Every message that asks for money carries the merchant-code card.
   const card = PAY_LINK_KINDS.has(kind) ? payLinkCardUrl(payLink) : '';
   const delivery = await deliver(to, body, `agent_billing_${kind}`, `${agent.id}:${periodKey}:${force ? Date.now() : ''}`, card);
+  await markPayLinkSent(db, payLink, to, delivery.status);
   await db.query(
     `UPDATE agents SET billing_reminder_log = COALESCE(billing_reminder_log, '{}'::jsonb) || jsonb_build_object($2::text, jsonb_build_object('at', NOW()::text, 'by', $3::text, 'status', $4::text))
       WHERE id = $1::uuid`,
@@ -715,7 +733,8 @@ async function buildListerMessage(db, kind, property, settings, payLink = '') {
   const fee = Number(settings.lister_fee?.monthly_ugx || publishedPricing().owner_listing.monthly_ugx);
   const pay = payToLine(settings);
   const link = `${SITE()}/property/${property.id}`;
-  const title = property.title || 'property';
+  // Stars from a pasted advert would print as "***title***" in a WhatsApp message.
+  const title = plainListingTitle(property.title) || 'property';
   const freeUntil = prettyDate(listerFreeUntil(property, settings));
   const paidUntil = property.lister_paid_until ? prettyDate(property.lister_paid_until) : '';
   const help = helpContact();
@@ -781,6 +800,7 @@ async function sendListerBillingMessage(db, { propertyId, kind, actor = 'admin',
   const body = String(textOverride || '').trim() || await buildListerMessage(db, kind, property, settings, payLink);
   const card = PAY_LINK_KINDS.has(kind) ? payLinkCardUrl(payLink) : '';
   const delivery = await deliver(to, body, `lister_billing_${kind}`, `${property.id}:${kind}:${Date.now()}`, card);
+  await markPayLinkSent(db, payLink, to, delivery.status);
   await db.query(
     `UPDATE properties SET lister_billing_log = COALESCE(lister_billing_log, '{}'::jsonb) || jsonb_build_object($2::text, jsonb_build_object('at', NOW()::text, 'by', $3::text, 'status', $4::text))
       WHERE id = $1::uuid`,
@@ -803,12 +823,63 @@ async function takeDownListingForBilling(db, { propertyId, actor = 'admin' }) {
   return { taken_down: true, notice };
 }
 
+// --- Who a private listing belongs to, in words a person can act on ---------------
+
+const GENERIC_OWNER_NAMES = /^(?:private\s+(?:lister|owner|seller|landlord)|owner|lister|landlord|seller|n\/?a|none|-+)$/i;
+
+/** A title as a person would say it: no **stars** from a pasted advert, no stray bars. */
+function plainListingTitle(value = '') {
+  const text = stripMarkdownEmphasis(String(value || ''))
+    .replace(/\s*\|\s*/g, ', ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,;:.\-–—]+|[\s,;:\-–—]+$/g, '')
+    .trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
+}
+
+/** The last nine digits of a phone number: how one person's listings are told apart from another's. */
+function phoneTail(value = '') {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.length >= 9 ? digits.slice(-9) : '';
+}
+
+/** website · whatsapp · team · '' : how the listing reached makaug. */
+function listedHow(row = {}) {
+  const via = `${row.listed_via || ''} ${row.source || ''}`.toLowerCase();
+  if (/whatsapp/.test(via)) return 'whatsapp';
+  if (/website|web_form|broker_dashboard/.test(via)) return 'website';
+  if (/admin|staff|employee|field_agent|agent_007/.test(via)) return 'team';
+  return '';
+}
+
+/**
+ * The name to call them by. The website form does not always store one on the
+ * listing ("Private owner" for a month, Oct 2026), but the person signed in to
+ * list, so their account has it. A display name they chose for the public page
+ * comes last, and never the stock "Private lister".
+ */
+function ownerNameFor(row = {}, accountName = '') {
+  const candidates = [row.lister_name, accountName, row.public_display_name]
+    .map((value) => String(value || '').replace(/\s+/g, ' ').trim())
+    .filter((value) => value && !GENERIC_OWNER_NAMES.test(value));
+  if (!candidates.length) return '';
+  const name = candidates[0];
+  // A name typed in capitals on a sign-up form reads better as a name: "MARY NAMULI" becomes "Mary Namuli".
+  return name === name.toUpperCase() && /[A-Z]{2}/.test(name)
+    ? name.toLowerCase().replace(/(^|[\s'-])\p{L}/gu, (m) => m.toUpperCase())
+    : name;
+}
+
 /** Private listings that are in a free week (went live before 10 Nov 2026), due, paid or taken down. */
 async function listerBillingRows(db) {
   const settings = await getSettings(db);
   const start = String(settings.lister_fee?.start_date || '2026-10-05');
   const rows = (await db.query(
-    `SELECT id, title, lister_name, lister_phone, status, created_at, reviewed_at, lister_paid_until, lister_billing_log, lister_billing_suspended_at
+    `SELECT id, title, lister_name, lister_phone, status, created_at, reviewed_at, lister_paid_until, lister_billing_log, lister_billing_suspended_at,
+            inquiry_reference, source, listed_via, listing_type, property_type, district, area, price, lister_email,
+            extra_fields->>'public_display_name' AS public_display_name,
+            COALESCE(extra_fields->>'owner_confirmed', extra_fields->>'land_owner_confirmed') AS owner_confirmed,
+            extra_fields->'verify'->>'contact_preference' AS contact_preference
        FROM properties
       WHERE agent_id IS NULL AND NOT ${foundOnlinePropertySql('properties')}
         AND status IN ('approved', 'hidden') AND created_at >= $1::date
@@ -816,8 +887,32 @@ async function listerBillingRows(db) {
       ORDER BY created_at DESC LIMIT 300`,
     [start]
   )).rows;
+
+  // The account each nameless listing was made from, for its owner's name.
+  const nameless = rows.filter((p) => !ownerNameFor(p));
+  const accountNames = new Map();
+  if (nameless.length) {
+    const emails = [...new Set(nameless.map((p) => String(p.lister_email || '').trim().toLowerCase()).filter(Boolean))];
+    const tails = [...new Set(nameless.map((p) => phoneTail(p.lister_phone)).filter(Boolean))];
+    const accounts = (await db.query(
+      `SELECT LOWER(COALESCE(email, '')) AS email,
+              RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) AS phone_tail,
+              NULLIF(TRIM(CONCAT_WS(' ', first_name, last_name)), '') AS name
+         FROM users
+        WHERE (LOWER(COALESCE(email, '')) = ANY($1::text[]) AND COALESCE(email, '') <> '')
+           OR RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = ANY($2::text[])
+        ORDER BY created_at ASC`,
+      [emails, tails]
+    ).catch(() => ({ rows: [] }))).rows;
+    for (const account of accounts) {
+      if (!account.name) continue;
+      if (account.email && !accountNames.has(`e:${account.email}`)) accountNames.set(`e:${account.email}`, account.name);
+      if (account.phone_tail && !accountNames.has(`p:${account.phone_tail}`)) accountNames.set(`p:${account.phone_tail}`, account.name);
+    }
+  }
+
   const today = revenue.kampalaDate();
-  return rows.map((p) => {
+  const out = rows.map((p) => {
     const freeUntil = listerFreeUntil(p, settings);
     const paid = p.lister_paid_until ? revenue.isoDay(p.lister_paid_until) : '';
     let state;
@@ -827,8 +922,46 @@ async function listerBillingRows(db) {
     else state = 'due';
     const until = paid || freeUntil;
     const daysOver = until < today ? Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${until}T00:00:00Z`)) / 86400000) : 0;
-    return { ...p, free_days: ownerFreeDaysForListing(p), free_until: freeUntil, lister_paid_until: paid || null, billing_state: state, days_overdue: daysOver };
+    const email = String(p.lister_email || '').trim().toLowerCase();
+    const tail = phoneTail(p.lister_phone);
+    const { lister_email: _email, ...rest } = p;
+    return {
+      ...rest,
+      free_days: ownerFreeDaysForListing(p),
+      free_until: freeUntil,
+      lister_paid_until: paid || null,
+      billing_state: state,
+      days_overdue: daysOver,
+      // Who, what and how, for the people who have to chase it (King and Agent 007 option 7).
+      owner_name: ownerNameFor(p, accountNames.get(`e:${email}`) || accountNames.get(`p:${tail}`) || ''),
+      owner_key: tail || (email ? `e:${email}` : `id:${p.id}`),
+      has_email: Boolean(email),
+      plain_title: plainListingTitle(p.title),
+      listed_how: listedHow(p),
+      says_they_are: /agent|broker/i.test(String(p.owner_confirmed || '')) ? 'agent' : '',
+      prefers_calls: /^(?:phone|call)/i.test(String(p.contact_preference || '')),
+      listing_url: `${SITE()}/property/${p.id}`,
+      duplicate_of: null,
+      duplicate_ref: null
+    };
   });
+
+  // The same plot sent in twice by the same person (the form was submitted twice,
+  // eight minutes apart, on 12 Oct 2026, and both went live). The first one in is the
+  // listing; a later copy owes nothing of its own and is flagged so someone takes it down.
+  const firstSeen = new Map();
+  for (const row of [...out].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))) {
+    if (!row.plain_title) continue;
+    const key = [row.owner_key, row.plain_title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim(), Number(row.price || 0)].join('|');
+    const first = firstSeen.get(key);
+    if (first) {
+      row.duplicate_of = first.id;
+      row.duplicate_ref = first.inquiry_reference || null;
+    } else {
+      firstSeen.set(key, row);
+    }
+  }
+  return out;
 }
 
 /**
@@ -850,6 +983,8 @@ async function runListerViewsMessages(db) {
   const rows = await listerBillingRows(db);
   const sent = [];
   for (const p of rows) {
+    // A second copy of a listing is not billed, and its owner has had this message for the first.
+    if (p.duplicate_of) continue;
     if (!wantsViewsMessage(p)) continue;
     const ageDays = Math.floor((Date.now() - new Date(p.reviewed_at || p.created_at).getTime()) / 86400000);
     if (ageDays < day - 1) continue;
@@ -876,6 +1011,7 @@ async function runListerDueReminders(db) {
   const rows = await listerBillingRows(db);
   const sent = [];
   for (const p of rows) {
+    if (p.duplicate_of) continue;
     if (p.billing_state !== 'due' || p.lister_billing_log?.reminder || Number(p.days_overdue) > 2) continue;
     if (Number(p.free_days) === 0 && !p.lister_paid_until) continue;
     try {
@@ -1141,8 +1277,11 @@ module.exports = {
   LISTER_MESSAGE_KINDS,
   buildListerMessage,
   sendListerBillingMessage,
+  markPayLinkSent,
   takeDownListingForBilling,
   listerBillingRows,
+  plainListingTitle,
+  ownerNameFor,
   runListerViewsMessages,
   runListerDueReminders,
   startBillingScheduler,

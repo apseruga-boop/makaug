@@ -138,8 +138,25 @@ function stripStaffInstructions(value = '') {
   return STAFF_INSTRUCTION_PATTERNS.reduce((text, pattern) => text.replace(pattern, ''), String(value || ''));
 }
 
+/**
+ * Adverts are often pasted from WhatsApp or written with an AI tool, and arrive
+ * wrapped in *stars*, **double stars** or _underscores_ (a title of the form
+ * "**1 acre of land for sale**" was live for a month in Oct 2026). On a page
+ * those marks are noise. A pair around words is dropped, and so is a mark left
+ * hanging at the very start or end. A star between two characters stays:
+ * "50*100 ft" is a plot size.
+ */
+function stripMarkdownEmphasis(value = '') {
+  return String(value || '')
+    .replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, '$2')
+    .replace(/(^|[^\w*])\*(?=[^\s*])([^*\n]*?[^\s*])\*(?![\w*])/g, '$1$2')
+    .replace(/(^|[^\w_])_(?=[^\s_])([^_\n]*?[^\s_])_(?![\w_])/g, '$1$2')
+    .replace(/^[\s*_]*[*_]+(?=\S)/, '')
+    .replace(/(\S)[*_]+[\s*_]*$/, '$1');
+}
+
 function cleanPublicListingCopy(value = '') {
-  return stripStaffInstructions(cleanText(value)).trim();
+  return stripStaffInstructions(stripMarkdownEmphasis(cleanText(value))).trim();
 }
 
 function redactThirdPartyPublicText(value = '') {
@@ -706,6 +723,7 @@ module.exports = {
   ACTIVE_PUBLIC_BRAND_LABEL,
   STAFF_COPY_MAX_CHARS,
   cleanPublicListingCopy,
+  stripMarkdownEmphasis,
   redactThirdPartyPublicText,
   publicAreaLabelFor,
   publicListingTransaction,

@@ -500,7 +500,7 @@ async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient 
 
   const result = await db.query(
     `WITH claimable AS (
-      SELECT q.id
+      SELECT q.id, q.next_attempt_at AS due_at
       FROM outbound_message_queue q
       WHERE q.channel = 'whatsapp'
         AND q.status IN ('pending', 'retry')
@@ -536,11 +536,19 @@ async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient 
       updated_at = NOW()
     FROM claimable
     WHERE q.id = claimable.id
-    RETURNING q.*`,
+    RETURNING q.*, claimable.due_at`,
     [safeLimit, normalizedClientId, String(claimWindow), recipientDigits, normalizedAllowedSources, getBridgeMaxClaims()]
   );
 
-  return result.rows;
+  // UPDATE … RETURNING hands rows back in no particular order, and the bridge
+  // sends them in the order it is given. A new agent's welcome reached them
+  // with the payment message in the middle and the first message near the end
+  // (13 Nov 2026). So: in the order they fell due, then the order they were queued.
+  const time = (value) => {
+    const at = new Date(value).getTime();
+    return Number.isNaN(at) ? 0 : at;
+  };
+  return [...(result.rows || [])].sort((a, b) => time(a.due_at) - time(b.due_at) || time(a.created_at) - time(b.created_at));
 }
 
 async function markWhatsappWebBridgeMessageSent(id, patch = {}) {
