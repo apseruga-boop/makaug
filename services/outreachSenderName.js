@@ -97,7 +97,7 @@ function knownOutreachSenders(env = process.env, extras = {}) {
     const film = require('./agentFilmReplyService');
     add(film.ARTHUR_WHATSAPP, 'Arthur');
     if (!prospectPhoneKey(env.AGENT_HELP_CONTACT_PHONE)) {
-      const fallback = film.agentJoinAlertRecipients(env).find(
+      const fallback = film.agentJoinAlertRecipients(env, { staff: [] }).find(
         (phone) => prospectPhoneKey(phone) !== prospectPhoneKey(film.ARTHUR_WHATSAPP)
       );
       if (fallback) add(fallback, env.AGENT_HELP_CONTACT_NAME || 'Ronald');

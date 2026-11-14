@@ -18902,6 +18902,21 @@ const AGENT_FILM_INTERESTED_DAYS = 14;
 // Any other first reply is told to Arthur and Ronald this long after the film.
 const AGENT_FILM_FIRST_REPLY_DAYS = 7;
 
+// A step left open before a film went out is not what they are answering.
+// 14 Nov 2026: a prospect still had a missed-call question from 29 Aug open. His
+// "Agent", a minute after the agent film, was read as the answer to that and
+// he was sent a list of agents; only his second try got through. Somebody who
+// had gone quiet for an hour or more before the film was sent is read as
+// replying to the film, whatever step the old conversation stopped at. Only
+// for the replies a film asks for: anything else is still left to that step.
+const FILM_OVER_OLD_STEP_MINUTES = 60;
+function wentQuietBeforeFilm(lastMessageAt, filmAt) {
+  const last = lastMessageAt ? new Date(lastMessageAt).getTime() : NaN;
+  const sent = filmAt ? new Date(filmAt).getTime() : NaN;
+  if (!Number.isFinite(last) || !Number.isFinite(sent)) return false;
+  return sent - last >= FILM_OVER_OLD_STEP_MINUTES * 60 * 1000;
+}
+
 function staffNameForNumber(value = '') {
   const { knownOutreachSenderName } = require('../services/outreachSenderName');
   const known = knownOutreachSenderName(value);
@@ -18978,7 +18993,7 @@ async function markAgentProspectReply(phone, status, reply = '') {
  * message, { resetStep } when the rest of the bot should take it from the
  * menu, or null to carry on as usual.
  */
-async function handleAgentFilmReply({ phone, body = '', step = '', lang = 'en', conversationControl = null, contactName = '', hasMedia = false } = {}) {
+async function handleAgentFilmReply({ phone, body = '', step = '', lang = 'en', conversationControl = null, contactName = '', hasMedia = false, lastMessageAt = null } = {}) {
   if (hasMedia) return null;
   const control = conversationControl || {};
   if (['off', 'copilot'].includes(String(control.ai_mode || '').toLowerCase())
@@ -18991,11 +19006,15 @@ async function handleAgentFilmReply({ phone, body = '', step = '', lang = 'en', 
     if (choice === 'find') return { message: t(lang, 'askAgentArea'), nextStep: 'agent_area' };
     return { resetStep: 'main_menu' };
   }
-  if (!AGENT_FILM_RESTING_STEPS.has(currentStep)) return null;
   const answer = agentFilm.agentFilmAnswer(body);
   if (!answer) return null;
+  const resting = AGENT_FILM_RESTING_STEPS.has(currentStep);
+  // Half way through something else: only a reply the film asks for, and never a staff step.
+  if (!resting && (!['agent', 'interested', 'no'].includes(answer) || !lastMessageAt || /^employee_/.test(currentStep))) return null;
 
   const film = await agentFilmSentTo(phone);
+  // ... and only from somebody who had gone quiet before the film was sent.
+  if (!resting && (!film || !wentQuietBeforeFilm(lastMessageAt, film.at))) return null;
   const name = (film && film.name) || contactName;
   const said = normalizeInput(body).slice(0, 300);
   if (answer === 'agent') {
@@ -19222,16 +19241,20 @@ function tellTeamAboutOwner({ action = '', digits = '', said = '', body = '', ty
  * A reply to the owner film. Returns { message, nextStep } when it answers the
  * message (startListing: their listing has begun), or null to carry on as usual.
  */
-async function handleOwnerFilmReply({ phone, body = '', step = '', lang = 'en', conversationControl = null, contactName = '', hasMedia = false } = {}) {
+async function handleOwnerFilmReply({ phone, body = '', step = '', lang = 'en', conversationControl = null, contactName = '', hasMedia = false, lastMessageAt = null } = {}) {
   if (hasMedia) return null;
   const control = conversationControl || {};
   if (['off', 'copilot'].includes(String(control.ai_mode || '').toLowerCase())
     || ['needs_human', 'escalated'].includes(String(control.status || '').toLowerCase())) return null;
-  if (!AGENT_FILM_RESTING_STEPS.has(String(step || ''))) return null;
   const answer = ownerFilm.ownerFilmAnswer(body);
   if (!answer) return null;
+  // The same as for the agent film: a step left open before this film was sent
+  // does not stand between the film and the reply it asks for.
+  const resting = AGENT_FILM_RESTING_STEPS.has(String(step || ''));
+  if (!resting && (!['list', 'no', 'agent'].includes(answer) || !lastMessageAt || /^employee_/.test(String(step || '')))) return null;
   const film = await ownerFilmSentTo(phone);
   if (!film) return null;
+  if (!resting && !wentQuietBeforeFilm(lastMessageAt, film.at)) return null;
   // A newer agent film wins: they are being spoken to as a possible agent.
   const agentFilmRow = await agentFilmSentTo(phone).catch(() => null);
   if (agentFilmRow && new Date(agentFilmRow.at).getTime() > new Date(film.at).getTime()) return null;
@@ -22618,6 +22641,8 @@ async function processInboundRuntimeUnlocked({
     lang: sessionLang,
     conversationControl,
     contactName,
+    // When they last wrote before this message: a step older than the film is not what they are answering.
+    lastMessageAt: session.last_message_at,
     hasMedia: Boolean(inboundPhotoCandidates.length || (effectiveMediaUrl && !isAudioNote))
   }).catch((error) => {
     logger.warn('Owner film reply check failed:', error.message || String(error));
@@ -22651,6 +22676,7 @@ async function processInboundRuntimeUnlocked({
     lang: sessionLang,
     conversationControl,
     contactName,
+    lastMessageAt: session.last_message_at,
     // A voice note counts: it arrives here as its transcript.
     hasMedia: Boolean(inboundPhotoCandidates.length || (effectiveMediaUrl && !isAudioNote))
   }).catch((error) => {
@@ -24636,6 +24662,8 @@ module.exports.__test = {
   isBarePitchContact,
   handleControlRoomStep,
   handleOwnerFilmReply,
+  handleAgentFilmReply,
+  wentQuietBeforeFilm,
   handleOwnerListingCommand,
   ownerFilmSentTo,
   notifyTeamOwnerListingSubmitted,

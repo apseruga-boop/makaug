@@ -1230,6 +1230,9 @@ let lastBillingRunDay = '';
 let billingRunning = false;
 function startBillingScheduler(db) {
   if (billingTimer || !process.env.DATABASE_URL || process.env.BILLING_SCHEDULER_ENABLED === 'false') return;
+  // Who is on the team besides Arthur and Ronald, in hand from the start: a
+  // notice sent before the first WhatsApp message arrives still reaches them.
+  loadAgent007Staff(db).catch(() => null);
   const tick = async () => {
     if (billingRunning) return { skipped: true, reason: 'already_running' };
     const now = new Date(Date.now() + 3 * 3600 * 1000);

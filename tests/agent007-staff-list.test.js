@@ -335,7 +335,7 @@ test('King: the list is in the billing settings, and the Outreach desk takes its
   const app = read('assets/makaug-app.js');
   assert.match(app, /<span class="font-bold">Who else can use Agent 007<\/span>/);
   assert.match(app, /name="agent007_staff"/);
-  assert.match(app, /Arthur and Ronald always can\. A change here takes effect within a minute: a new number can come in, and one taken out is refused\./);
+  assert.match(app, /Arthur and Ronald always can\. Anyone here also gets the team notices you and Ronald get: an agent or owner replying to a film, a new property waiting, a listing going live\. A change here takes effect within a minute: a new number can come in, and one taken out is refused\./);
   assert.match(app, /Saved only when the box was changed, so a page left open cannot put an old list back\./);
   assert.match(app, /await put\("agent007_staff", agent007List\.map\(\(\{ name, phone \}\) => \(\{ name, phone \}\)\)\);/);
   assert.match(app, /Agent 007: \$\{adminEscape\(\["Arthur", "Ronald", \.\.\./);
