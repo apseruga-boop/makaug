@@ -968,9 +968,31 @@ function teamRecipients(extraRecipients = []) {
     });
 }
 
+/**
+ * Who a team message goes to now. A notice that goes to Arthur and Ronald by
+ * name goes to the staff added to Agent 007 in King as well, and the saved
+ * list is read here (it is kept for a minute), so somebody added a moment ago
+ * is not missed. A notice for the alert numbers alone is left as it is.
+ */
+async function teamRecipientsNow(db, extraRecipients = []) {
+  const extras = Array.isArray(extraRecipients) ? extraRecipients : [];
+  if (extras.length) {
+    try {
+      const last9 = (value) => String(value || '').replace(/\D+/g, '').slice(-9);
+      const film = require('./agentFilmReplyService');
+      const named = new Set(film.agentJoinAlertRecipients(process.env, { staff: [] }).map(last9));
+      if (extras.some((value) => named.has(last9(value)))) {
+        const staff = await require('./billingOpsService').loadAgent007Staff(db);
+        return teamRecipients([...extras, ...(staff || []).map((member) => `+${member.phone}`)]);
+      }
+    } catch (_ignored) { /* the list as it was given */ }
+  }
+  return teamRecipients(extras);
+}
+
 async function sendToTeam(db, body, type, { extraRecipients = [] } = {}) {
   const results = [];
-  for (const recipient of teamRecipients(extraRecipients)) {
+  for (const recipient of await teamRecipientsNow(db, extraRecipients)) {
     const delivery = await deliverWhatsapp({ to: recipient, body, kind: type, leadId: null, nonce: Date.now() });
     results.push({ to: recipient, status: delivery.status });
   }
@@ -1392,6 +1414,7 @@ module.exports = {
   slaHours,
   internalPhoneKeys,
   loadExtraInternalPhones,
+  teamRecipientsNow,
   RESPONSES,
   SOURCES,
   archiveLeads,

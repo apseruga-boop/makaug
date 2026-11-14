@@ -352,6 +352,96 @@ test('"no thanks" closes it; someone who never got the film is left to the rest 
   });
 });
 
+// 14 Nov 2026. A prospect had a missed-call question from 29 Aug still open when
+// a new member of staff sent him the agent film. His "Agent", a minute later,
+// was read as the answer to that old question and he was sent a list of agents;
+// and when his second try got through, she was not among the people told.
+const agentFilmWorld = (pitchedAt, extra = []) => [
+  [/FROM agent_prospects/i, () => [{ full_name: 'Kato Brian', video_kind: 'agent', status: 'pitched', pitched_at: pitchedAt, pitched_by_name: 'Jane' }]],
+  ...extra
+];
+
+test('a step left open before a film was sent does not stand between the film and its reply', async () => {
+  const aMinuteAgo = hoursAgo(1 / 60);
+  assert.strictEqual(route.wentQuietBeforeFilm(daysAgo(77), aMinuteAgo), true);
+  assert.strictEqual(route.wentQuietBeforeFilm(hoursAgo(0.5), aMinuteAgo), false, 'they were in the chat half an hour before it');
+  assert.strictEqual(route.wentQuietBeforeFilm(null, aMinuteAgo), false, 'when we cannot tell, the step stands');
+  assert.strictEqual(route.wentQuietBeforeFilm(aMinuteAgo, daysAgo(77)), false, 'they have written since the film');
+
+  await withWorld(agentFilmWorld(aMinuteAgo), async ({ calls }) => {
+    const reply = await route.handleAgentFilmReply({ phone: OWNER, body: 'Agent', step: 'missed_call_need', lang: 'sw', contactName: 'K', lastMessageAt: daysAgo(77) });
+    assert.ok(reply && reply.message, 'read as a reply to the film');
+    assert.strictEqual(reply.nextStep, 'main_menu', 'and the old step is closed');
+    assert.match(reply.message, /Join makaug as an agent/);
+    assert.match(reply.message, /Great to hear from you, Kato/);
+    assert.ok(calls.some((c) => /UPDATE agent_prospects/i.test(c.sql) && c.params[1] === 'interested'), 'the Outreach list shows they said yes');
+    await settle(150);
+  });
+  await withWorld(agentFilmWorld(aMinuteAgo), async () => {
+    const no = await route.handleAgentFilmReply({ phone: OWNER, body: 'No thanks', step: 'missed_call_need', lastMessageAt: daysAgo(77) });
+    assert.match(no.message, /No problem/);
+    // Anything the film does not ask for is still that step's to answer.
+    assert.strictEqual(await route.handleAgentFilmReply({ phone: OWNER, body: 'I need a house in Kira', step: 'missed_call_need', lastMessageAt: daysAgo(77) }), null);
+    // In the chat minutes before the film, or no way of telling: the step stands.
+    assert.strictEqual(await route.handleAgentFilmReply({ phone: OWNER, body: 'Agent', step: 'ownership', lastMessageAt: hoursAgo(0.2) }), null);
+    assert.strictEqual(await route.handleAgentFilmReply({ phone: OWNER, body: 'Agent', step: 'ownership' }), null);
+    // A member of staff half way through Agent 007 is never a prospect.
+    assert.strictEqual(await route.handleAgentFilmReply({ phone: OWNER, body: 'Agent', step: 'employee_pitch_contact', lastMessageAt: daysAgo(77) }), null);
+    await settle(60);
+  });
+  // No film went to them: the old step is still theirs.
+  await withWorld([], async () => {
+    assert.strictEqual(await route.handleAgentFilmReply({ phone: OWNER, body: 'Agent', step: 'missed_call_need', lastMessageAt: daysAgo(77) }), null);
+  });
+  // The owner film, the same way.
+  await withWorld(ownerFilmWorld(), async () => {
+    const reply = await route.handleOwnerFilmReply({ phone: OWNER, body: 'List', step: 'missed_call_need', lang: 'en', contactName: 'Sarah N', lastMessageAt: daysAgo(77) });
+    assert.strictEqual(reply.startListing, true);
+    assert.strictEqual(await route.handleOwnerFilmReply({ phone: OWNER, body: 'List', step: 'confirm_whatsapp_contact', lastMessageAt: hoursAgo(2.5) }), null, 'in the chat half an hour before it went');
+    assert.strictEqual(await route.handleOwnerFilmReply({ phone: OWNER, body: 'How much is it', step: 'missed_call_need', lastMessageAt: daysAgo(77) }), null, 'a question is left to the step');
+    await settle(150);
+  });
+});
+
+test('the staff added in King hear what Arthur and Ronald hear', async () => {
+  const billing = require('../services/billingOpsService');
+  const agentFilm = require('../services/agentFilmReplyService');
+  const desk = require('../services/leadDeskService');
+  const JANE = '447700900123'; // the British range kept for television
+  const saved = [/SELECT key, value FROM billing_settings/i, () => [{ key: 'agent007_staff', value: [{ name: 'Jane Example', phone: JANE }] }]];
+  const env = { alert: process.env.LEAD_DESK_ALERT_WHATSAPP, report: process.env.LEAD_DESK_REPORT_WHATSAPP, ceo: process.env.AI_CEO_REPORT_WHATSAPP_RECIPIENTS };
+  process.env.LEAD_DESK_ALERT_WHATSAPP = '+256700555830';
+  try {
+    await withWorld(agentFilmWorld(hoursAgo(1 / 60), [saved]), async ({ text }) => {
+      await billing.getSettings(db, { fresh: true });
+      intake.rememberAgent007Staff([]); // nothing in hand: the list is read when the notice is sent
+      assert.deepStrictEqual(await desk.teamRecipientsNow(db, agentFilm.agentJoinAlertRecipients({})), ['+256700555830', ARTHUR, RONALD, `+${JANE}`]);
+      // A notice for the alert numbers alone, or one that names somebody else, is left as it is.
+      assert.deepStrictEqual(await desk.teamRecipientsNow(db, []), ['+256700555830']);
+      assert.deepStrictEqual(await desk.teamRecipientsNow(db, ['+256700555111']), ['+256700555830', '+256700555111']);
+      // Each person once, however the lists overlap.
+      assert.deepStrictEqual(await desk.teamRecipientsNow(db, [ARTHUR, `+${JANE}`, RONALD, ARTHUR]), ['+256700555830', ARTHUR, `+${JANE}`, RONALD]);
+
+      // The reply to the film she sent: the three of them, and the alert number.
+      await route.handleAgentFilmReply({ phone: OWNER, body: 'AGENT', step: 'main_menu', contactName: 'K', lastMessageAt: daysAgo(3) });
+      await settle(200);
+      assert.match(text(), /Agent wants to join makaug — please call/);
+      assert.match(text(), /from Jane/, 'and it says who sent the film');
+      for (const told of ['447757773202', '256709402189', JANE, '256700555830']) assert.ok(text().includes(told), `${told} is told`);
+      // In hand, the saved staff are part of "who hears" wherever it is asked for.
+      assert.deepStrictEqual(agentFilm.agentJoinAlertRecipients({}), [ARTHUR, RONALD, `+${JANE}`]);
+      assert.deepStrictEqual(agentFilm.agentJoinAlertRecipients({}, { staff: [] }), [ARTHUR, RONALD]);
+      // Leave nothing behind for the tests after this one.
+      await billing.setSetting(db, 'agent007_staff', [], 'test');
+    });
+  } finally {
+    intake.rememberAgent007Staff([]);
+    for (const [key, name] of [['alert', 'LEAD_DESK_ALERT_WHATSAPP'], ['report', 'LEAD_DESK_REPORT_WHATSAPP'], ['ceo', 'AI_CEO_REPORT_WHATSAPP_RECIPIENTS']]) {
+      if (env[key] === undefined) delete process.env[name]; else process.env[name] = env[key];
+    }
+  }
+});
+
 test('the team\'s notices carry who, what and what happens next', () => {
   const submitted = ownerFilm.ownerSubmittedNotice({
     title: '3 Bedroom House In Kira', location: 'Kira, Wakiso', price: 'USh 1.2M', photos: 2, ownerName: 'Sarah Nakato',

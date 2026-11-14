@@ -65,10 +65,23 @@ function agentFilmAnswer(text = '') {
  * 12 Nov 2026: "make sure that I get a notification ... Ronald gets a
  * notification as well"). AGENT_JOIN_ALERT_WHATSAPP (comma-separated) replaces
  * them. The lead-desk alert list still gets it too, as before.
+ *
+ * And the staff added to Agent 007 in King, after those two. Arthur, 14 Nov
+ * 2026, when a new member of staff sent the film and was not told the reply:
+ * "why didnt [she] get the notifcation that me and ronald recived ... fix it".
+ * `staff`: the saved list to use; left out, the one in hand.
  */
-function agentJoinAlertRecipients(env = process.env) {
+function agentJoinAlertRecipients(env = process.env, { staff } = {}) {
   const configured = String(env.AGENT_JOIN_ALERT_WHATSAPP || '').split(/[,;\s]+/).filter(Boolean);
   const list = configured.length ? configured : [ARTHUR_WHATSAPP, String(env.AGENT_HELP_CONTACT_PHONE || '+256709402189')];
+  let saved = staff;
+  if (!Array.isArray(saved)) {
+    try { saved = require('./whatsappEmployeeIntakeService').savedAgent007StaffList(); } catch (_ignored) { saved = []; }
+  }
+  for (const member of saved || []) {
+    const number = digitsOf(member && member.phone);
+    if (number) list.push(`+${number}`);
+  }
   const seen = new Set();
   return list.filter((value) => {
     const key = digitsOf(value).slice(-9);

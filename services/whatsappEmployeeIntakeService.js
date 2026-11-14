@@ -98,8 +98,28 @@ function digits(value = '') {
   return String(value || '').replace(/\D/g, '');
 }
 
+// What is left of a message once the quotes, stars and full stop a phone adds are off it.
+function bareKeyText(value = '') {
+  return cleanText(value).toLowerCase().replace(/^[\s"'“”‘’*_]+|[\s"'“”‘’*_.!?,;:]+$/g, '');
+}
+
+/**
+ * "Agent 007", however a thumb types it: Agent 007, agent007, AGENT-007,
+ * Agent OO7, "Agent 007." On 14 Nov 2026 a new member of staff typed AGENT007,
+ * twice, and was asked whether she wanted to find a broker. It is still the
+ * whole message: "Agent 007 please" is a sentence, not the key.
+ */
 function isEmployeeIntakeTrigger(value = '') {
-  return cleanText(value).toLowerCase() === EMPLOYEE_INTAKE_TRIGGER.toLowerCase();
+  return /^agent[\s\-_.]*[0o]\s*[0o]\s*7$/.test(bareKeyText(value));
+}
+
+/**
+ * The number on its own: "007". Only the key from a number that is already
+ * staff (routes/whatsapp.js asks), and only when they are not half way through
+ * something, where 007 could be part of what they are typing.
+ */
+function isEmployeeIntakeShortTrigger(value = '') {
+  return /^[0o]\s*[0o]\s*7$/.test(bareKeyText(value));
 }
 
 function isEmployeeIntakeStep(value = '') {
@@ -663,6 +683,7 @@ module.exports = {
   isEmployeeIntakeComplete,
   isEmployeeIntakeStep,
   isEmployeeIntakeTrigger,
+  isEmployeeIntakeShortTrigger,
   parseCustomerDetails,
   parseEmployeeRole,
   parseNewAgentDetails,
