@@ -23,6 +23,7 @@
  */
 
 const revenue = require('./revenueService');
+const filmLanguages = require('./filmLanguageService');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 const { publishedPricing, ugxLabel } = require('../config/publishedPricing');
 
@@ -152,6 +153,25 @@ function parseControlRoomChoice(value = '') {
 
 // --- 3 and 4: the intro films -------------------------------------------------
 
+/** How to ask for the Luganda or Swahili film: one more word after the number. */
+function filmLanguageHint(example = 'Kato Brian | 0772123456') {
+  return [
+    '_In Luganda or Swahili? Add it at the end:_',
+    `_${example} | Luganda_`
+  ];
+}
+
+/**
+ * What the staff member is told when the film that went was not the English one.
+ * The film's words and the message are in that language; the chat it shows, and
+ * my own replies to them, are still in English, and they should know that.
+ */
+function filmLanguageNote(lang = '') {
+  const code = filmLanguages.filmLanguage(lang);
+  if (!code) return [];
+  return [`🌍 *${filmLanguages.filmLanguageName(code)}*: the film's words and the message. The chat it shows, and my replies to them, are in English.`, ''];
+}
+
 function agentFilmPrompt({ agentFee = agentFeeLabel() } = {}) {
   return [
     '🎬 *Agent intro film*',
@@ -163,6 +183,8 @@ function agentFilmPrompt({ agentFee = agentFeeLabel() } = {}) {
     'Who should it go to? Send:',
     '*Name | phone number*',
     'For example: Kato Brian | 0772123456',
+    '',
+    ...filmLanguageHint('Kato Brian | 0772123456'),
     '',
     '*CANCEL* to stop.'
   ].join('\n');
@@ -179,6 +201,8 @@ function ownerFilmPrompt({ ownerFee = ownerFeeLabel() } = {}) {
     'Who should it go to? Send:',
     '*Name | phone number*',
     'For example: Sarah Nakato | 0772123456',
+    '',
+    ...filmLanguageHint('Sarah Nakato | 0772123456'),
     '',
     '*CANCEL* to stop.'
   ].join('\n');
@@ -200,12 +224,13 @@ function movedPayLinkNotice() {
   ].join('\n');
 }
 
-function filmSentMessage({ kind = 'agent', name = '', phone = '', agentFee = agentFeeLabel(), ownerFee = ownerFeeLabel(), followUpMinutes = 15 } = {}) {
+function filmSentMessage({ kind = 'agent', name = '', phone = '', agentFee = agentFeeLabel(), ownerFee = ownerFeeLabel(), followUpMinutes = 15, lang = '' } = {}) {
   const who = clean(name, 80) || phone;
   if (kind === 'owner') {
     return [
       `✅ *Owner film sent to ${who}* — ${phone}`,
       '',
+      ...filmLanguageNote(lang),
       `They have the film and the message: buyers call them direct, how listing works, ${ownerFee} a month per property.`,
       '',
       'They have been asked to reply *LIST*. When they do, I send the how-to video and start their listing, and I tell you.',
@@ -218,6 +243,7 @@ function filmSentMessage({ kind = 'agent', name = '', phone = '', agentFee = age
   return [
     `✅ *Video sent to ${who}* — ${phone}`,
     '',
+    ...filmLanguageNote(lang),
     `They have the joining film: what we do, who sees their listings, how listing works and the plan (${agentFee} a month).`,
     '',
     'They have been asked to reply *AGENT* if they want to join.',
@@ -262,16 +288,19 @@ function howToContactPrompt(kind = 'agent') {
     '*Name | phone number*',
     kind === 'owner' ? 'For example: Sarah Nakato | 0772123456' : 'For example: Kato Brian | 0772123456',
     '',
+    ...filmLanguageHint(kind === 'owner' ? 'Sarah Nakato | 0772123456' : 'Kato Brian | 0772123456'),
+    '',
     '*CANCEL* to stop.'
   ].join('\n');
 }
 
-function howToSentMessage({ kind = 'agent', name = '', phone = '' } = {}) {
+function howToSentMessage({ kind = 'agent', name = '', phone = '', lang = '' } = {}) {
   const who = clean(name, 80) || phone;
   if (kind === 'owner') {
     return [
       `✅ *How-to-list video sent to ${who}* — ${phone}`,
       '',
+      ...filmLanguageNote(lang),
       'It shows the questions I ask, the photos to send, the review and the fee. It ends: reply *LIST* to start.',
       '',
       'When they reply LIST, I start their listing and tell you.'
@@ -280,6 +309,7 @@ function howToSentMessage({ kind = 'agent', name = '', phone = '' } = {}) {
   return [
     `✅ *How-to-post video sent to ${who}* — ${phone}`,
     '',
+    ...filmLanguageNote(lang),
     'It shows one property from start to finish: photos, the caption, my confirmation, the review and the link when it is live.'
   ].join('\n');
 }

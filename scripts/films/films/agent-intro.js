@@ -149,7 +149,7 @@
       + word('SHORT STAY', 'List a place by the night', '', 3.9)
       + word('HELP', 'Ronald from our team gets back to you', '', 4.6)
       + `</div>`
-      + `<div class="card" style="position:absolute;left:36px;right:36px;top:908px;padding:20px 24px" data-in="5.6"><div class="tick"><i>✓</i><div>Or just send the next property.<small>You never need a menu, an app or a password.</small></div></div></div>`
+      + `<div class="card" style="position:absolute;left:36px;right:36px;top:934px;padding:20px 24px" data-in="5.6"><div class="tick"><i>✓</i><div>Or just send the next property.<small>You never need a menu, an app or a password.</small></div></div></div>`
       + proof('Each word is answered by the assistant today', 1.4)
   });
 

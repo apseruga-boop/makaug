@@ -3,7 +3,11 @@
  * Captures the assistant's replies for the films, word for word, into
  * transcript.js.
  *
- *   DATABASE_URL=postgresql://postgres@127.0.0.1:5432/makaug_scratch node scripts/films/capture.js
+ *   DATABASE_URL=postgresql://postgres@127.0.0.1:5432/makaug_scratch node scripts/films/capture.js [lg|sw]
+ *
+ * With lg or sw the lister's chat is in Luganda or Swahili and the result goes
+ * to transcript.lg.js or transcript.sw.js: the assistant answers in that
+ * language wherever it has the words, and in English where it does not.
  *
  * It plays an agent posting a property and an owner listing one through the
  * real inbound route, the way the WhatsApp bridge would send them, and keeps
@@ -116,7 +120,9 @@ function tidy(text) {
   t = t.replace(/https:\/\/wa\.me\/\?text=\S+/g, 'https://wa.me/?text=…');
   t = t.replace(/https:\/\/makaug\.com\/api\/agents\/share-card\/\S+/g, 'https://makaug.com/api/agents/share-card/{agent}.png');
   t = t.replace(/MK-\d{8}-[0-9A-F]{6}/g, 'MK-{ref}');
-  if (t.includes('Should viewers contact you')) t = t.replace(/\+256 \d{3} \d{3} \d{3}/g, '{number}');
+  // The lister's own number, which the assistant reads back in bold in every language.
+  // The team's help number is makaug's own and stays as it is.
+  t = t.replace(/\*(\+256 \d{3} \d{3} \d{3})\*/g, (whole, number) => (number === '+256 709 402 189' ? whole : '*{number}*'));
   return t;
 }
 
@@ -143,11 +149,22 @@ window.T = ${JSON.stringify(kept, null, 1)};
 }
 
 const out = {};
+// The language the lister's WhatsApp session is in: en (the default), lg or sw.
+const LANG = ['lg', 'sw'].includes(process.argv[2]) ? process.argv[2] : 'en';
+/** A fresh chat for this number, in the film's language. */
+async function freshChat(number) {
+  await clean(number);
+  if (LANG !== 'en') {
+    await db.query(
+      `INSERT INTO whatsapp_sessions (phone, current_step, language, listing_draft, session_data) VALUES ($1, 'greeting', $2, '{}', '{}')`,
+      [number, LANG]);
+  }
+}
 const keep = (key, entry) => { out[key] = { said: entry.in, media: entry.media || '', reply: entry.reply, queued: (entry.queued || []).filter((q) => q.text && q.text !== entry.reply || q.media).map((q) => ({ to: q.user_phone === entry.phone ? 'them' : 'team', text: q.text, media: q.media ? String(q.media).split('/').pop() : '', kind: q.kind || '' })), step: entry.step }; return entry; };
 (async () => {
   // ---------- the agent ----------
   const phone = `25677${RUN}71`.slice(0, 12);
-  await clean(phone);
+  await freshChat(phone);
   await db.query(`DELETE FROM agents WHERE RIGHT(regexp_replace(COALESCE(phone,''), '\\D', '', 'g'), 9) = $1`, [phone.slice(-9)]).catch(() => null);
   const agent = (await db.query(
     `INSERT INTO agents (full_name, greeting_name, company_name, licence_number, status, phone, whatsapp, approved_at, makaug_agent_number, profile_photo_url)
@@ -189,7 +206,7 @@ const keep = (key, entry) => { out[key] = { said: entry.in, media: entry.media |
 
   // ---------- the owner ----------
   const owner = `25678${RUN}72`.slice(0, 12);
-  await clean(owner);
+  await freshChat(owner);
   await db.query(`DELETE FROM properties WHERE RIGHT(regexp_replace(COALESCE(lister_phone,''), '\\D', '', 'g'), 9) = $1`, [owner.slice(-9)]).catch(() => null);
   const who = 'Sarah N';
   keep('owner_list', await say(owner, { body: 'LIST', name: who, quiet: true }));
@@ -227,8 +244,9 @@ const keep = (key, entry) => { out[key] = { said: entry.in, media: entry.media |
     keep('owner_sold_yes', await say(owner, { body: '1', name: who, quiet: true }));
     keep('owner_status_sold', await say(owner, { body: 'STATUS', name: who, quiet: true }));
   }
-  fs.writeFileSync(path.join(__dirname, 'transcript.js'), transcriptFile(out));
-  console.log(`transcript.js: ${Object.keys(out).length} entries`);
+  const file = LANG === 'en' ? 'transcript.js' : `transcript.${LANG}.js`;
+  fs.writeFileSync(path.join(__dirname, file), transcriptFile(out));
+  console.log(`${file}: ${Object.keys(out).length} entries`);
   await sleep(400);
   process.exit(0);
 })().catch((e) => { console.error(e); process.exit(1); });

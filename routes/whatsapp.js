@@ -19,6 +19,7 @@ const shortStayWhatsapp = require('../services/whatsappShortStayService');
 const agentFilm = require('../services/agentFilmReplyService');
 const replyPlaybook = require('../services/whatsappReplyPlaybook');
 const controlRoom = require('../services/agent007ControlRoom');
+const filmLanguages = require('../services/filmLanguageService');
 const ownerFilm = require('../services/ownerFilmReplyService');
 const ownerListing = require('../services/ownerListingCommandService');
 const { handleAgentBookingReply } = require('../services/agentBookingService');
@@ -7143,7 +7144,11 @@ function isBarePitchContact(text = '') {
   const raw = String(text || '').trim();
   if (!raw.includes('|') || /\r?\n/.test(raw)) return false;
   const parts = raw.split('|').map((part) => part.trim()).filter(Boolean);
-  return parts.length === 2 && /\p{L}/u.test(parts[0]) && /^[+\d][\d\s().-]{7,20}$/.test(parts[1]) && Boolean(parsePitchContact(raw));
+  // A third part is only ever the film's language: "… | Luganda" (14 Nov 2026).
+  if (parts.length === 3 && !filmLanguages.languageWord(parts[2])) return false;
+  if (parts.length !== 2 && parts.length !== 3) return false;
+  const number = filmLanguages.languageWord((parts[1].match(/\s([A-Za-z]+)\.?$/) || [])[1]) ? parts[1].replace(/\s+[A-Za-z]+\.?$/, '') : parts[1];
+  return /\p{L}/u.test(parts[0]) && /^[+\d][\d\s().-]{7,20}$/.test(number) && Boolean(parsePitchContact(raw));
 }
 
 function recoverInterruptedEmployeeIntakeStep(session = {}) {
@@ -10402,7 +10407,7 @@ async function handleControlRoomStep({ phone, currentStep, cleanBody, data = {} 
       return close(`I did not send the film.\n\n${sendDecision.message}`, {}, { outreachBlocked: sendDecision.code });
     }
     try {
-      await sendOwnerPitchVideo({ phone: dialable, name: contact.fullName, sentBy: phone });
+      await sendOwnerPitchVideo({ phone: dialable, name: contact.fullName, sentBy: phone, lang: contact.lang });
     } catch (error) {
       logger.error('Owner film send failed:', error);
       return stay('I could not send the film just then and nothing went out. Check the number and send the name and phone again.');
@@ -10413,10 +10418,10 @@ async function handleControlRoomStep({ phone, currentStep, cleanBody, data = {} 
       pitchedBy: phone,
       pitchedByName: staffNameForNumber(phone),
       videoKind: 'owner',
-      metadata: { sent_via: 'agent_007_owner_film' },
+      metadata: { sent_via: 'agent_007_owner_film', ...(contact.lang ? { film_language: contact.lang } : {}) },
       allowDuplicate: true
     }).catch((error) => logger.warn('Owner prospect not recorded:', error.message || String(error)));
-    return close(controlRoom.filmSentMessage({ kind: 'owner', name: contact.fullName, phone: dialable, followUpMinutes: PITCH_FOLLOW_UP_MINUTES }), {
+    return close(controlRoom.filmSentMessage({ kind: 'owner', name: contact.fullName, phone: dialable, followUpMinutes: PITCH_FOLLOW_UP_MINUTES, lang: contact.lang }), {
       employee_intake_last_pitch_at: new Date().toISOString(),
       employee_intake_last_pitch_name: contact.fullName,
       employee_intake_last_pitch_kind: 'owner'
@@ -10440,9 +10445,9 @@ async function handleControlRoomStep({ phone, currentStep, cleanBody, data = {} 
       return stay(`I did not send it: *${contact.phone}*\n\n${problem}\n\nCheck the number and send the name and number again.`);
     }
     const dialable = prospects.normalizeProspectPhone(contact.phone);
-    const sent = await sendHowToFromStaff({ kind, phone: dialable, name: contact.fullName, sentBy: phone });
+    const sent = await sendHowToFromStaff({ kind, phone: dialable, name: contact.fullName, sentBy: phone, lang: contact.lang });
     if (!sent.ok) return sent.retry ? stay(sent.message) : close(sent.message);
-    return close(controlRoom.howToSentMessage({ kind, name: sent.name || contact.fullName, phone: dialable }), {}, { howToSent: kind });
+    return close(controlRoom.howToSentMessage({ kind, name: sent.name || contact.fullName, phone: dialable, lang: contact.lang }), {}, { howToSent: kind });
   }
 
   // ── 6 → 3: the payment link for a private owner's listing ──────────────────
@@ -10628,7 +10633,7 @@ async function handleControlRoomStep({ phone, currentStep, cleanBody, data = {} 
  * The agent film only works for an approved agent: this number is how the bot
  * knows them. An owner gets the how-to-list film, which ends "reply LIST".
  */
-async function sendHowToFromStaff({ kind = 'agent', phone = '', name = '', sentBy = '' } = {}) {
+async function sendHowToFromStaff({ kind = 'agent', phone = '', name = '', sentBy = '', lang = '' } = {}) {
   const dialable = String(phone || '').replace(/\D/g, '');
   const allowed = await staffMayMessage(dialable);
   if (!allowed.ok) return { ok: false, message: `I did not send it.\n\n${allowed.message}` };
@@ -10659,7 +10664,7 @@ async function sendHowToFromStaff({ kind = 'agent', phone = '', name = '', sentB
   }
   const displayName = agent ? agentGreetingName(agent, '') || name : name;
   try {
-    await sendHowToVideo({ kind, phone: dialable, name: displayName, sentBy });
+    await sendHowToVideo({ kind, phone: dialable, name: displayName, sentBy, lang });
   } catch (error) {
     logger.error('How-to video send failed:', error);
     return { ok: false, retry: true, message: 'I could not send the video just then and nothing went out. Send the name and number again.' };
@@ -11050,7 +11055,7 @@ async function handleEmployeeWhatsappIntake({
       };
     }
     try {
-      await sendAgentPitchVideo({ phone: dialable, name: contact.fullName, sentBy: phone });
+      await sendAgentPitchVideo({ phone: dialable, name: contact.fullName, sentBy: phone, lang: contact.lang });
     } catch (error) {
       logger.error('Agent pitch video send failed:', error);
       return {
@@ -11065,7 +11070,7 @@ async function handleEmployeeWhatsappIntake({
         phone: dialable,
         pitchedBy: phone,
         pitchedByName: staffNameForNumber(phone),
-        metadata: { sent_via: 'agent_007_option_3' },
+        metadata: { sent_via: 'agent_007_option_3', ...(contact.lang ? { film_language: contact.lang } : {}) },
         allowDuplicate: true
       });
     } catch (error) {
@@ -11087,7 +11092,8 @@ async function handleEmployeeWhatsappIntake({
         name: contact.fullName,
         phone: dialable,
         agentFee: agentMonthlyFeeLabel(),
-        followUpMinutes: PITCH_FOLLOW_UP_MINUTES
+        followUpMinutes: PITCH_FOLLOW_UP_MINUTES,
+        lang: contact.lang
       })
     };
   }
@@ -19067,6 +19073,7 @@ async function ownerFilmSentTo(phone) {
     by: staffNameForNumber(row.details?.sent_by) || normalizeInput(ownerProspect?.pitched_by_name),
     name: normalizeInput(row.details?.name || ownerProspect?.full_name || ''),
     kind: row.details?.kind === 'lister' ? 'lister' : 'owner',
+    lang: filmLanguages.filmLanguage(row.details?.lang),
     status: ownerProspect?.status || '',
     prospect: Boolean(ownerProspect),
     ageDays: (Date.now() - new Date(row.created_at).getTime()) / 86400000
@@ -19147,7 +19154,8 @@ async function handleOwnerFilmReply({ phone, body = '', step = '', lang = 'en', 
     if (bare && film.ageDays > OWNER_FILM_YES_DAYS) return null;
     if (!listed) await markOwnerProspectReply(phone, 'interested', said);
     // The how-to goes with it, once: they are about to do exactly what it shows.
-    queueExplainerVideoOnce({ phone, kind: 'lister' });
+    // In the language of the film they were sent, or the one they are being answered in.
+    queueExplainerVideoOnce({ phone, kind: 'lister', lang: film.lang || lang });
     tellTeamAboutOwner({
       action: 'owner_list_started',
       digits,
@@ -19555,8 +19563,10 @@ function agentMonthlyFeeLabel() {
  * The caption carries the three things a prospect asks about before anything
  * else: what makaug is, how listing works, and what it costs.
  */
-async function sendAgentPitchVideo({ phone, name = '', sentBy = '' } = {}) {
+async function sendAgentPitchVideo({ phone, name = '', sentBy = '', lang = '' } = {}) {
   const video = EXPLAINER_VIDEOS.agent;
+  // Luganda or Swahili: the twin film and its message. '' is English, as before.
+  const filmLang = filmLanguages.filmLanguage(lang);
   const digits = String(phone || '').replace(/\D/g, '');
   if (digits.length < 9) {
     const error = new Error('That phone number is too short to send to');
@@ -19567,7 +19577,7 @@ async function sendAgentPitchVideo({ phone, name = '', sentBy = '' } = {}) {
   const greeting = firstName ? `Hello ${firstName} 👋\n\n` : '';
   // The countries are the ones our own analytics show listings being opened
   // from (agentWelcomeService.computePlatformStats, 14 Nov 2026).
-  const caption = `${greeting}${video.caption}\n\n`
+  const caption = filmLanguages.filmMessage('agent', filmLang, { first: firstName }) || `${greeting}${video.caption}\n\n`
     + '• You post straight from WhatsApp: send the photos and one caption, our team checks it, it goes live under your name.\n'
     + '• Every enquiry comes straight to your WhatsApp with the buyer\'s name and number. makaug takes no commission.\n'
     + '• You get your own agent page, a weekly report of views and enquiries, and the Morning Brief every day at 7am.\n'
@@ -19577,18 +19587,19 @@ async function sendAgentPitchVideo({ phone, name = '', sentBy = '' } = {}) {
   await db.query(
     `INSERT INTO audit_logs (actor_id, action, details) VALUES ($1, 'explainer_video_sent', $2::jsonb)`,
     // The name too, so a reply ("AGENT") can tell Arthur and Ronald who it is.
-    [normalizeInput(sentBy) || 'whatsapp', JSON.stringify({ phone: digits, kind: 'agent', name: normalizeInput(name).slice(0, 120), sent_by: String(sentBy || ''), employee_pitch: true })]
+    [normalizeInput(sentBy) || 'whatsapp', JSON.stringify({ phone: digits, kind: 'agent', name: normalizeInput(name).slice(0, 120), sent_by: String(sentBy || ''), employee_pitch: true, ...(filmLang ? { lang: filmLang } : {}) })]
   ).catch(() => null);
 
   const queued = await queueWhatsappWebBridgeMessage({
     recipient: digits,
     text: caption,
-    mediaUrl: `${HOME_URL}${video.path}`,
+    mediaUrl: `${HOME_URL}${filmLanguages.filmPath(video.path, filmLang)}`,
     mediaType: 'video',
     source: 'whatsapp_runtime',
     actorId: normalizeInput(sentBy) || 'system',
     metadata: {
       message_kind: 'explainer_video_agent',
+      ...(filmLang ? { film_language: filmLang } : {}),
       employee_pitch: true,
       // Intentionally unique: an employee re-sending has decided to re-send.
       reply_dedupe_key: `pitch:agent:${digits}:${Date.now()}`
@@ -19603,8 +19614,9 @@ async function sendAgentPitchVideo({ phone, name = '', sentBy = '' } = {}) {
  * so the staff member is told what actually happened. The reply it asks for
  * (LIST) is answered by handleOwnerFilmReply.
  */
-async function sendOwnerPitchVideo({ phone, name = '', sentBy = '' } = {}) {
+async function sendOwnerPitchVideo({ phone, name = '', sentBy = '', lang = '' } = {}) {
   const video = EXPLAINER_VIDEOS.owner;
+  const filmLang = filmLanguages.filmLanguage(lang);
   const digits = String(phone || '').replace(/\D/g, '');
   if (digits.length < 9) {
     const error = new Error('That phone number is too short to send to');
@@ -19612,7 +19624,7 @@ async function sendOwnerPitchVideo({ phone, name = '', sentBy = '' } = {}) {
     throw error;
   }
   const first = ownerFilm.personalFirstName(name);
-  const caption = [
+  const caption = filmLanguages.filmMessage('owner', filmLang, { first, ownerFee: controlRoom.ownerFeeLabel() }) || [
     first ? `Hello ${first} 👋` : 'Hello 👋',
     '',
     video.caption,
@@ -19627,18 +19639,19 @@ async function sendOwnerPitchVideo({ phone, name = '', sentBy = '' } = {}) {
 
   await db.query(
     `INSERT INTO audit_logs (actor_id, action, details) VALUES ($1, 'explainer_video_sent', $2::jsonb)`,
-    [normalizeInput(sentBy) || 'whatsapp', JSON.stringify({ phone: digits, kind: 'owner', name: normalizeInput(name).slice(0, 120), sent_by: String(sentBy || ''), employee_pitch: true })]
+    [normalizeInput(sentBy) || 'whatsapp', JSON.stringify({ phone: digits, kind: 'owner', name: normalizeInput(name).slice(0, 120), sent_by: String(sentBy || ''), employee_pitch: true, ...(filmLang ? { lang: filmLang } : {}) })]
   ).catch(() => null);
 
   return queueWhatsappWebBridgeMessage({
     recipient: digits,
     text: caption,
-    mediaUrl: `${HOME_URL}${video.path}`,
+    mediaUrl: `${HOME_URL}${filmLanguages.filmPath(video.path, filmLang)}`,
     mediaType: 'video',
     source: 'whatsapp_runtime',
     actorId: normalizeInput(sentBy) || 'system',
     metadata: {
       message_kind: 'explainer_video_owner',
+      ...(filmLang ? { film_language: filmLang } : {}),
       employee_pitch: true,
       reply_dedupe_key: `pitch:owner:${digits}:${Date.now()}`
     }
@@ -19650,9 +19663,10 @@ async function sendOwnerPitchVideo({ phone, name = '', sentBy = '' } = {}) {
  * "reply LIST", which handleOwnerFilmReply answers; an agent's ends "send me
  * your first one", which their own posting session takes.
  */
-async function sendHowToVideo({ kind = 'agent', phone, name = '', sentBy = '' } = {}) {
+async function sendHowToVideo({ kind = 'agent', phone, name = '', sentBy = '', lang = '' } = {}) {
   const key = kind === 'owner' ? 'lister' : 'agent_howto';
   const video = EXPLAINER_VIDEOS[key];
+  const filmLang = filmLanguages.filmLanguage(lang);
   const digits = String(phone || '').replace(/\D/g, '');
   if (digits.length < 9) {
     const error = new Error('That phone number is too short to send to');
@@ -19660,7 +19674,7 @@ async function sendHowToVideo({ kind = 'agent', phone, name = '', sentBy = '' } 
     throw error;
   }
   const first = ownerFilm.personalFirstName(name);
-  const caption = kind === 'owner'
+  const caption = filmLanguages.filmMessage(key, filmLang, { first, ownerFee: controlRoom.ownerFeeLabel() }) || (kind === 'owner'
     ? [first ? `Hello ${first} 👋` : 'Hello 👋', '', video.caption, '', 'Reply *LIST* here to start.'].join('\n')
     : [
       `Hi${first ? ` ${first}` : ''} 👋`,
@@ -19670,22 +19684,23 @@ async function sendHowToVideo({ kind = 'agent', phone, name = '', sentBy = '' } 
       'Then send me your first one: photos or a short video, and a caption with what it is, the exact area and the price.',
       '',
       '*SHARE* gives you your page link and card. *STATUS* shows where your properties are. *SOLD* marks one as gone. *HELP* gets you a person.'
-    ].join('\n');
+    ].join('\n'));
 
   await db.query(
     `INSERT INTO audit_logs (actor_id, action, details) VALUES ($1, 'explainer_video_sent', $2::jsonb)`,
-    [normalizeInput(sentBy) || 'whatsapp', JSON.stringify({ phone: digits, kind: key, name: normalizeInput(name).slice(0, 120), sent_by: String(sentBy || ''), employee_pitch: true, how_to: true })]
+    [normalizeInput(sentBy) || 'whatsapp', JSON.stringify({ phone: digits, kind: key, name: normalizeInput(name).slice(0, 120), sent_by: String(sentBy || ''), employee_pitch: true, how_to: true, ...(filmLang ? { lang: filmLang } : {}) })]
   ).catch(() => null);
 
   return queueWhatsappWebBridgeMessage({
     recipient: digits,
     text: caption,
-    mediaUrl: `${HOME_URL}${video.path}`,
+    mediaUrl: `${HOME_URL}${filmLanguages.filmPath(video.path, filmLang)}`,
     mediaType: 'video',
     source: 'whatsapp_runtime',
     actorId: normalizeInput(sentBy) || 'system',
     metadata: {
       message_kind: `explainer_video_${key}`,
+      ...(filmLang ? { film_language: filmLang } : {}),
       employee_pitch: true,
       reply_dedupe_key: `howto:${key}:${digits}:${Date.now()}`
     }
@@ -19845,8 +19860,10 @@ async function sendStaffPayLink({
   };
 }
 
-function queueExplainerVideoOnce({ phone, kind }) {
+function queueExplainerVideoOnce({ phone, kind, lang = '' }) {
   const video = EXPLAINER_VIDEOS[kind];
+  // Somebody the assistant is already answering in Luganda or Swahili gets the film in it too.
+  const filmLang = filmLanguages.filmLanguage(lang);
   const digits = String(phone || '').replace(/\D/g, '');
   if (!video || digits.length < 9 || IS_SOUTH_AFRICA) return;
   deferWhatsappWork(`WhatsApp ${kind} explainer video`, async () => {
@@ -19859,11 +19876,11 @@ function queueExplainerVideoOnce({ phone, kind }) {
         `SELECT 1 FROM agents WHERE status = 'approved' AND removed_at IS NULL AND RIGHT(regexp_replace(COALESCE(whatsapp, phone, ''), '\\D', '', 'g'), 9) = $1 LIMIT 1`, [digits.slice(-9)]).catch(() => ({ rows: [] }));
       if (agent.rows.length) return;
     }
-    await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', 'explainer_video_sent', $1::jsonb)`, [JSON.stringify({ phone: digits, kind })]);
+    await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', 'explainer_video_sent', $1::jsonb)`, [JSON.stringify({ phone: digits, kind, ...(filmLang ? { lang: filmLang } : {}) })]);
     await queueWhatsappWebBridgeMessage({
       recipient: digits,
-      text: video.caption,
-      mediaUrl: `${HOME_URL}${video.path}`,
+      text: filmLanguages.filmCaption(kind, filmLang, { ownerFee: controlRoom.ownerFeeLabel() }) || video.caption,
+      mediaUrl: `${HOME_URL}${filmLanguages.filmPath(video.path, filmLang)}`,
       mediaType: 'video',
       source: 'whatsapp_runtime',
       actorId: 'system',
@@ -20532,7 +20549,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   }
 
   if (explicitListingStart) {
-    queueExplainerVideoOnce({ phone, kind: 'lister' });
+    queueExplainerVideoOnce({ phone, kind: 'lister', lang });
     return routeExplicitListingStart();
   }
 
@@ -20868,7 +20885,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // GREETING
   if (step === 'greeting') {
-    if (cleanBody === '1') { queueExplainerVideoOnce({ phone, kind: 'lister' }); return respond(t(lang, 'askListingType'), 'listing_type'); }
+    if (cleanBody === '1') { queueExplainerVideoOnce({ phone, kind: 'lister', lang }); return respond(t(lang, 'askListingType'), 'listing_type'); }
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '4') return respond(offPlanWhereQuestion(), 'off_plan_where');
@@ -20936,7 +20953,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       );
     }
 
-    if (cleanBody === '1') { queueExplainerVideoOnce({ phone, kind: 'lister' }); return respond(t(lang, 'askListingType'), 'listing_type'); }
+    if (cleanBody === '1') { queueExplainerVideoOnce({ phone, kind: 'lister', lang }); return respond(t(lang, 'askListingType'), 'listing_type'); }
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '4') return respond(offPlanWhereQuestion(), 'off_plan_where');
@@ -24510,6 +24527,7 @@ module.exports.__test = {
   sendOwnerPitchVideo,
   sendHowToVideo,
   sendHowToFromStaff,
+  isBarePitchContact,
   handleControlRoomStep,
   handleOwnerFilmReply,
   handleOwnerListingCommand,

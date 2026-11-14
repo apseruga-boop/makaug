@@ -106,7 +106,7 @@
       + page({
         url: 'makaug.com/property/ad8c5ba2…', shot: `${A}page-seeta.jpg`,
         keys: [[0, -470], [2.2, -470], [3.4, -1560], [5.0, -1560], [6.2, -3720], [8.4, -3720]],
-        rings: [{ x: 44, y: 4190, w: 330, h: 100, in: 6.5 }],
+        rings: [{ x: 56, y: 4244, w: 322, h: 92, in: 6.5 }],
         pins: [{ src: `${A}pin-nav.jpg`, top: 0, in: 0 }, { src: `${A}pin-contact-seeta.jpg`, bottom: 0, in: 0 }]
       })
       + callout({ x: 300, y: 980, in: 1.0, out: 3.2, html: 'Call and WhatsApp buttons<small>with the lister&rsquo;s own number</small>', cls: 'g' })
