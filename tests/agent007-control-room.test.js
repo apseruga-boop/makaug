@@ -533,7 +533,7 @@ test('opening one shows their number, the link\'s state and what can be sent', a
   });
 });
 
-test('a reminder is not sent twice in a day, at night, or to someone who has since paid', async () => {
+test('a reminder is not sent twice in a day, at night, or to someone who has since paid', async (t) => {
   const jane = { kind: 'agent', id: AGENT_ROWS[0].id, name: 'Jane Nakato', phone: '256701000111', state: 'overdue', days_overdue: 12, paid_until: dayOffset(-12), amount_ugx: 50000 };
   await withWorld(owesWorld(), async ({ queued }) => {
     const today = await staffStep(RONALD, 'employee_owes_person', '2', { employee_role: 'owes', owes_rows: [{ ...jane, last_reminder_at: new Date().toISOString() }], owes_selected: 0 });
@@ -544,9 +544,10 @@ test('a reminder is not sent twice in a day, at night, or to someone who has sin
   assert.strictEqual(route.chaseQuietHoursMessage(new Date('2026-11-14T10:00:00Z')), '');
   assert.match(route.chaseQuietHoursMessage(new Date('2026-11-14T03:00:00Z')), /06:00 in Kampala/);
   // Paid since the list was shown: nothing goes, and the list is shown again.
-  const realNow = Date.now;
-  const nineAmUtc = new Date(`${dayOffset(0)}T09:00:00Z`).getTime(); // midday in Kampala
-  Date.now = () => nineAmUtc;
+  // The clock is set to midday in Kampala. Setting Date.now alone is not enough: the
+  // night check reads `new Date()`, so this test used to fail between 10pm and 7am there.
+  const nineAmUtc = new Date(`${dayOffset(0)}T09:00:00Z`).getTime();
+  t.mock.timers.enable({ apis: ['Date'], now: nineAmUtc });
   try {
     await withWorld([
       [/FROM agents\s+WHERE \(status = 'approved' OR billing_suspended_at IS NOT NULL\)/i, () => AGENT_ROWS.map((a) => (a.id === jane.id ? { ...a, paid_until: dayOffset(25) } : a))],
@@ -560,7 +561,7 @@ test('a reminder is not sent twice in a day, at night, or to someone who has sin
       assert.strictEqual(queued.length, 0);
     });
   } finally {
-    Date.now = realNow;
+    t.mock.timers.reset();
   }
 });
 
