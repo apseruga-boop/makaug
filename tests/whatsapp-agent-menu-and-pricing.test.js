@@ -108,14 +108,22 @@ test('one acre priced per acre is just the price', () => {
 // ---------------------------------------------------------------------------
 
 test('the district the agent wrote beats the one we inferred', () => {
-  // Kikyusa is registered under Nakaseke. The agent said Luweero, twice.
+  // Kikyusa was registered under Nakaseke alone. The agent said Luweero, twice.
   const patch = facts(
     'Massive 200 acres on sale in Kamira- Kikyusa. Location: Kamira after kikyuusa Luweero (Bombo rd), '
     + 'mailo land title in luweero district, selling all at once @ 12m each acre'
   ).locationPatch;
   assert.strictEqual(patch.district, 'Luwero', 'the agent named the district and was overruled');
   assert.strictEqual(patch.area, 'Kikyusa', 'and the area they named is kept');
-  assert.strictEqual(patch.canonical_location_match, 'district_stated_by_agent',
+  // Since 15 Nov 2026 the place list knows the Kikyusa in Luwero, so that one
+  // needs no correcting. A place it still files elsewhere shows the rule.
+  const stated = facts(
+    'Massive 200 acres on sale in Semuto. Location: Semuto after Kapeeka Luweero (Bombo rd), '
+    + 'mailo land title in luweero district, selling all at once @ 12m each acre'
+  ).locationPatch;
+  assert.strictEqual(stated.district, 'Luwero');
+  assert.strictEqual(stated.area, 'Kapeeka');
+  assert.strictEqual(stated.canonical_location_match, 'district_stated_by_agent',
     'staff can see the district came from the caption');
 });
 

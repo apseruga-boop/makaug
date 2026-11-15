@@ -529,11 +529,28 @@ function candidateListingCount(entry, counts = new Map()) {
   return Math.max(0, Number(counts?.[entry.key]) || 0);
 }
 
+/**
+ * How well known a place is, by its level. A ward is only the town's word for
+ * a parish, so a ward from the census is ranked as a parish is.
+ *
+ * 14 Nov 2026: "Kagoma, along Bombo road" went live under Mubende. The census
+ * has a Kagoma parish in Jinja and in Kikuube and a Kagoma ward in Mubende,
+ * and the ward outranked the parishes. The property is in none of the three.
+ * With nothing to choose between them the name is ambiguous, and intake asks
+ * which district it is in rather than picking one.
+ */
+function prominenceLevel(entry = {}) {
+  if (entry.level === 'neighborhood' && /^ubos_nphc/.test(String(entry.source || ''))) {
+    return LOCATION_LEVEL_PRIORITY.parish;
+  }
+  return LOCATION_LEVEL_PRIORITY[entry.level] || 0;
+}
+
 function selectProminentCandidate(candidates = [], aliasKey = '', counts = new Map()) {
   if (candidates.length <= 1) return candidates[0] || null;
   const ranked = candidates.map((entry) => ({
     entry,
-    level: LOCATION_LEVEL_PRIORITY[entry.level] || 0,
+    level: prominenceLevel(entry),
     listingCount: candidateListingCount(entry, counts),
     knownMajor: KNOWN_MAJOR_LOCALITY_BY_ALIAS.get(aliasKey) === entry.key ? 1 : 0
   })).sort((a, b) => (
@@ -696,6 +713,23 @@ function resolveCanonicalUgandaLocationFromText(value = '', suppliedDistrict = '
       const districtMatches = candidates.filter((entry) => entry.district === mentionedDistricts[0]);
       if (districtMatches.length) candidates = districtMatches;
     }
+  }
+
+  if (candidates.length > 1 && new Set(candidates.map((entry) => entry.district)).size > 1) {
+    // Another place named beside it settles which one. "Budo Kasenge" is the
+    // Kasenge in Buddo's town in Wakiso, not the Kasenge in Mukono: rentals
+    // there were listed under Mukono on 13 Nov 2026.
+    const townKey = (entry) => normalizeLocationKey(entry.town || '');
+    const nameKey = (entry) => normalizeLocationKey(entry.name || '');
+    const besideEachOther = (a, b) => a.district === b.district && (
+      (townKey(a) && townKey(a) === townKey(b))
+      || (townKey(a) && townKey(a) === nameKey(b))
+      || (townKey(b) && townKey(b) === nameKey(a))
+    );
+    const candidateNames = new Set(candidates.map(nameKey));
+    const companions = found.map((row) => row.entry).filter((entry) => !candidateNames.has(nameKey(entry)));
+    const supported = candidates.filter((entry) => companions.some((other) => besideEachOther(entry, other)));
+    if (supported.length && new Set(supported.map((entry) => entry.district)).size === 1) candidates = supported;
   }
 
   if (candidates.length > 1) {

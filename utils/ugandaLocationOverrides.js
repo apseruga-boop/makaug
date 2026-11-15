@@ -366,6 +366,29 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     'Kasenge', 'Kabembe', 'Kojja', 'Kibuye'
   ], 'Mukono', 'Mukono'),
 
+  // The census file this list is built from has no Luwero rows at all, so a
+  // Luwero village was matched to its namesake elsewhere: two acres at
+  // "Kikyusa town council, village Wabusana" went live under Lyantonde on
+  // 15 Nov 2026. Kikyusa town council is in Bamunanika county, Luwero.
+  ...rows(['Kikyusa', 'Wabusana'], 'Luwero', 'Kikyusa'),
+
+  {
+    // Written "Budo" as often as "Buddo" (King's College Budo).
+    name: 'Buddo', district: 'Wakiso', town: 'Kyengera', level: 'neighborhood',
+    aliases: ['Buddo', 'Budo', 'BUDDO WARD'],
+    source: 'makaug_verified_location_override'
+  },
+
+  {
+    // On the Bombo road between Maganjo and Kawanda, and not in the census
+    // list. Kept at parish level: with the census Kagomas in Jinja, Kikuube
+    // and Mubende the name on its own is still asked about, never guessed,
+    // and now the right answer is one of those offered.
+    name: 'Kagoma', district: 'Wakiso', town: 'Wakiso', level: 'parish',
+    aliases: ['Kagoma'],
+    source: 'makaug_verified_location_override'
+  },
+
   ...rows(['Mpumudde', 'Walukuba', 'Kimaka', 'Mafubira'], 'Jinja', 'Jinja'),
   ...rows(['Nkoma', 'Malukhu', 'Namakwekwe', 'Wanale'], 'Mbale', 'Mbale'),
   ...rows(['Laroo'], 'Gulu', 'Gulu'),

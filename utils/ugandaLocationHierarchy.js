@@ -159,7 +159,11 @@ function normalizeReviewLocationHierarchy(fields = {}, options = {}) {
   }
 
   const areaDistrict = districtForKnownArea(area);
-  if (areaDistrict && areaDistrict !== district) {
+  // The best-known place of that name may be in another district. Kasenge is
+  // in Mukono and in Wakiso, and a listing in the Wakiso one could not be
+  // moved there: the editor refused "Kasenge, Wakiso" because Mukono's came
+  // first. The district staff chose stands when the name is known in it.
+  if (areaDistrict && areaDistrict !== district && !canonicalizeUgandaLocation(area, district)) {
     errors.push('area/neighbourhood must match the selected district');
   }
   const explicitCanonical = canonicalLocationByKey(fields.canonical_location_id);

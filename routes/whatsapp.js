@@ -5407,6 +5407,11 @@ const EMPLOYEE_INTAKE_MIN_PRICE = 10000;
  */
 function normalizeCaptionPriceNotation(caption = '') {
   return String(caption || '')
+    // "Price 25.m per acre": a full stop typed between the figure and its m.
+    // Read as no price at all, so a three-acre plot was held back for a price
+    // its caption gave, and the batch it was in was never closed (14 Nov 2026).
+    // "1.5m" is untouched: there a digit follows the stop.
+    .replace(/(\d)\.\s*(?=(?:m|mn|million|millions|bn|billion|billions|k)\b)/gi, '$1')
     // $2,000 · US$ 2000 · USD2000
     .replace(/(?:us\s*)?\$\s*(\d[\d,.]*)/gi, 'USD $1')
     .replace(/\busd\s*(\d[\d,.]*)/gi, 'USD $1')
@@ -5867,12 +5872,20 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   // districts, so the whole caption resolved as ambiguous and the property was held
   // back for "exact area and district" even though the agent had given it. When
   // exactly one of the named places is unambiguous, that one is the location.
+  // The one name the registry knows in several districts ("Kagoma"). It is the
+  // place the caption means, whatever else the caption opens with: asked about
+  // it, an agent was once asked "which district Money is in", from a caption
+  // that began "Money needed".
+  let ambiguousPlaceName = '';
   if (locationResolution?.status === 'ambiguous' && Array.isArray(locationResolution.candidates)) {
     const byName = new Map();
     for (const candidate of locationResolution.candidates) {
       const name = normalizeInput(candidate?.name || candidate?.area).toLowerCase();
       if (!name) continue;
       byName.set(name, [...(byName.get(name) || []), candidate]);
+    }
+    if (byName.size === 1) {
+      ambiguousPlaceName = normalizeInput(locationResolution.candidates[0]?.name || locationResolution.candidates[0]?.area || '');
     }
     const uniqueNames = [...byName.entries()].filter(([, list]) => list.length === 1);
     if (uniqueNames.length === 1) {
@@ -5970,7 +5983,13 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
       locationResolution = knownHere;
       locationPatch = canonicalWhatsappLocationPatch(knownHere);
     }
-    const carriedArea = locationPatch.area ? '' : statedAreaWithoutDistrict(locationCaption, { allowLeadingToken: false });
+    // The name that was in several districts is the area; the district the
+    // agent has now given is where it is, listed among those or not.
+    const carriedArea = locationPatch.area ? '' : (
+      statedAreaWithoutDistrict(locationCaption, { allowLeadingToken: false })
+      || ambiguousPlaceName
+      || ambiguousPlaceBesideDistrict(locationCaption, locationResolution.match?.district)
+    );
     if (!locationPatch.area) locationPatch = carriedArea
       ? {
         ...canonicalWhatsappLocationPatch(locationResolution, { includeDistrictLevelArea: true }),
@@ -5993,7 +6012,11 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   // so intake can ask which district it is in, instead of asking for an area the
   // agent has already given.
   if (!Object.keys(locationPatch).length && (!locationResolution || locationResolution.status !== 'matched')) {
-    const statedOnly = statedAreaWithoutDistrict(locationCaption);
+    // The place as the agent wrote it, when the caption says where it is. The
+    // caption's first word is a guess, so the registry's name comes before that.
+    const statedOnly = statedAreaWithoutDistrict(locationCaption, { allowLeadingToken: false })
+      || ambiguousPlaceName
+      || statedAreaWithoutDistrict(locationCaption);
     if (statedOnly) {
       // When the place IS in the registry but sits in several districts —
       // Wattuba is in three, Kasana in two — we know the shortlist. Carrying it
@@ -6080,6 +6103,22 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     // what they sent is an update for that page, not a new listing.
     knownDevelopment: knownDevelopment ? { id: knownDevelopment.id, name: knownDevelopment.name, slug: knownDevelopment.slug, status: knownDevelopment.status } : null
   };
+}
+
+/**
+ * The place a caption names that the registry knows in several districts, when
+ * the caption gives the district as well ("... Kagoma ... Wakiso district").
+ * Take the district out, and what is left is ambiguous on that one name.
+ */
+function ambiguousPlaceBesideDistrict(caption = '', district = '') {
+  const districtName = normalizeInput(district);
+  if (!districtName) return '';
+  const pattern = new RegExp(`\\b${districtName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b(?:\\s+district)?`, 'ig');
+  const resolved = resolveWhatsappLocation(normalizeInput(caption).replace(pattern, ' '), { allowText: true });
+  if (resolved?.status !== 'ambiguous' || !Array.isArray(resolved.candidates)) return '';
+  const names = new Set(resolved.candidates.map((candidate) => normalizeInput(candidate?.name || candidate?.area || '').toLowerCase()).filter(Boolean));
+  if (names.size !== 1) return '';
+  return normalizeInput(resolved.candidates[0].name || resolved.candidates[0].area || '');
 }
 
 // Words that turn up beside a place name but are not one.
@@ -6501,6 +6540,45 @@ function promoteEmployeeQueuedSubmission(data = {}) {
 }
 
 /**
+ * The description kept behind a property that is waiting for a detail, when it
+ * is the newest thing the agent described. Its place in the queue, or -1.
+ *
+ * 14 Nov 2026: an agent sent 3.5 acres and was asked which district it is in.
+ * Before answering he sent his next property, a house: its description, then
+ * six photos. The description was "kept safe" with nothing, the six photos
+ * went onto the land that was waiting, and when he gave the district the land
+ * was saved wearing the house and he was asked for the house's photos again.
+ * He had sent them, moved on, and the house was never listed. Photos sent
+ * after a description are that description's photos.
+ */
+function employeeNewerKeptCaptionIndex(data = {}, mediaSenderMs = 0) {
+  const pendingAt = Number(data.pending_caption_sender_ms || 0);
+  if (!pendingAt || !normalizeInput(data.pending_property_caption || '')) return -1;
+  const queue = employeePendingSubmissionQueue(data);
+  let index = -1;
+  queue.forEach((entry, at) => {
+    if (!entry.caption || !(entry.senderMs > pendingAt)) return;
+    if (index < 0 || entry.senderMs >= queue[index].senderMs) index = at;
+  });
+  if (index < 0) return -1;
+  if (Number(mediaSenderMs) > 0 && Number(mediaSenderMs) < queue[index].senderMs) return -1;
+  return index;
+}
+
+/** Put photos with the kept description they followed. Returns how many were new. */
+function addEmployeeQueuedMedia(data = {}, index = -1, storedMedia = []) {
+  const queue = employeePendingSubmissionQueue(data);
+  const entry = queue[index];
+  if (!entry) return 0;
+  const before = entry.media.length;
+  const holder = { pending_property_media: entry.media };
+  rememberEmployeePendingMedia(holder, storedMedia, '');
+  entry.media = holder.pending_property_media;
+  data.pending_property_queue = queue;
+  return entry.media.length - before;
+}
+
+/**
  * Save every held property that is already complete.
  *
  * 9 Oct 2026, 09:16. Two properties sat in a batch reading "needs: nothing more",
@@ -6685,7 +6763,7 @@ async function captionPendingVideosFromOnScreenText({ phone, currentStep, data, 
   return saved;
 }
 
-async function flushReadyEmployeeSubmissions({ phone, currentStep, data, inboundMessageId } = {}) {
+async function flushReadyEmployeeSubmissions({ phone, currentStep, data, inboundMessageId, details = null } = {}) {
   const savedIds = [];
   // Bounded, in case a promotion ever fails to consume its own entry.
   for (let pass = 0; pass < 25; pass += 1) {
@@ -6730,7 +6808,10 @@ async function flushReadyEmployeeSubmissions({ phone, currentStep, data, inbound
     try {
       propertyId = await createEmployeeReviewProperty({
         phone,
-        inboundMessageId,
+        // A kept property saved by somebody else's message is filed under its own.
+        inboundMessageId: Array.isArray(details)
+          ? (normalizeInput(data.pending_property_media_message_id) || inboundMessageId)
+          : inboundMessageId,
         caption,
         facts,
         storedMedia,
@@ -6751,6 +6832,7 @@ async function flushReadyEmployeeSubmissions({ phone, currentStep, data, inbound
     delete data.pending_property_caption;
     clearEmployeePendingMedia(data);
     savedIds.push(propertyId);
+    if (Array.isArray(details)) details.push({ propertyId, caption, facts, storedMedia });
     if (data.whatsapp_agent_self_intake === true) {
       alertTeamAgentPropertySubmitted({ agent: data.agent || {}, propertyId, facts, caption });
     }
@@ -8816,7 +8898,9 @@ function agentMissingPhrases(missing = []) {
     const district = /^which district (.+?) is in(?:\s+—\s+(.+))?$/i.exec(String(item || '').trim());
     if (district) {
       return district[2]
-        ? `which district *${district[1]}* is in — *${district[2]}*? Just the district name is enough.`
+        // The list is what the registry knows, and it does not know every
+        // village: a Kagoma in none of the three it listed is in Wakiso.
+        ? `which district *${district[1]}* is in — *${district[2]}*? Just the district name is enough, and say so if it is another one.`
         : `which district *${district[1]}* is in — just the district name is enough, e.g. Luwero`;
     }
     return item;
@@ -8935,6 +9019,62 @@ function agentSelfIntakeSavedReply({ data = {}, facts = {}, storedMedia = [], op
   lines.push('');
   lines.push('Next property? Send it the same way — one property per message.');
   return lines.join('\n');
+}
+
+/** A second property saved by the same message: the short confirmation. */
+function agentAlsoSavedReply({ facts = {}, storedMedia = [], caption = '' } = {}) {
+  const what = normalizeInput(facts.locationPatch?.area || facts.locationPatch?.district || '');
+  const photos = storedMedia.filter((item) => item.kind === 'image').length;
+  const videos = storedMedia.filter((item) => item.kind === 'video').length;
+  const bits = [];
+  if (photos) bits.push(`${photos} ${photos === 1 ? 'photo' : 'photos'}`);
+  if (videos) bits.push(`${videos} ${videos === 1 ? 'video' : 'videos'}`);
+  const lines = [
+    `✅ *Also saved — your property${what ? ` in ${what}` : ''} is with our team for review.*`,
+    '',
+    ...agentPropertyDetailLines(facts, caption || facts.cleanCaption || '')
+  ];
+  if (bits.length) lines.push(`📸 ${bits.join(' · ')} saved`);
+  return lines.join('\n');
+}
+
+/**
+ * A description kept behind a waiting property, once it has its photos and
+ * needs nothing else: saved now, not held until the earlier one is answered.
+ * An agent who never answers "which district?" still gets the next one listed.
+ */
+async function saveReadyKeptSubmissions({ phone, currentStep = 'employee_property_media', data = {} } = {}) {
+  const saved = [];
+  if (data.whatsapp_agent_self_intake !== true) return saved;
+  const pendingAt = Number(data.pending_caption_sender_ms || 0);
+  if (!pendingAt || !normalizeInput(data.pending_property_caption || '')) return saved;
+  const keep = [];
+  for (const entry of employeePendingSubmissionQueue(data)) {
+    const candidate = Boolean(entry.caption) && entry.media.length > 0 && entry.senderMs > pendingAt;
+    const facts = candidate ? employeePropertyFacts(entry.caption, data) : null;
+    if (!candidate || employeePropertyMissing(facts).length) { keep.push(entry); continue; }
+    try {
+      if (await findEmployeeDuplicateProperty({ caption: entry.caption, facts, sessionData: data })) { keep.push(entry); continue; }
+      const propertyId = await createEmployeeReviewProperty({
+        phone, inboundMessageId: entry.inboundMessageId || '', caption: entry.caption, facts, storedMedia: entry.media, sessionData: data
+      });
+      if (!propertyId) { keep.push(entry); continue; }
+      noteEmployeePropertyCreated(data, propertyId, entry.media, entry.caption);
+      data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
+      data.total_media_count = Number(data.total_media_count || 0) + entry.media.length;
+      alertTeamAgentPropertySubmitted({ agent: data.agent || {}, propertyId, facts, caption: entry.caption });
+      saved.push({ propertyId, caption: entry.caption, facts, storedMedia: entry.media });
+    } catch (error) {
+      logger.error('A kept property could not be saved while the earlier one waits', { error: error.message });
+      keep.push(entry);
+    }
+  }
+  if (saved.length) {
+    if (keep.length) data.pending_property_queue = keep;
+    else delete data.pending_property_queue;
+    if (phone) await replaceEmployeeSession(phone, currentStep, data);
+  }
+  return saved;
 }
 
 /**
@@ -12367,6 +12507,11 @@ async function handleEmployeeWhatsappIntake({
           delete data.pending_property_caption;
           clearEmployeePendingMedia(data);
           const promotedSubmission = promoteEmployeeQueuedSubmission(data);
+          // The next one was kept with its photos while this one waited: save it now.
+          const alsoSaved = [];
+          if (promotedSubmission && data.whatsapp_agent_self_intake === true) {
+            await flushReadyEmployeeSubmissions({ phone, currentStep, data, inboundMessageId, details: alsoSaved });
+          }
           await replaceEmployeeSession(phone, currentStep, data);
           const promotedPrompt = promotedSubmission
             ? `\n\nThe next separately stored property still needs: ${employeePropertyMissing(employeePropertyFacts(promotedSubmission.caption, data)).join(', ') || 'a corrected caption'}. Send its corrected caption; its media is already safe.`
@@ -12379,7 +12524,11 @@ async function handleEmployeeWhatsappIntake({
             // An agent who sent photos first and the words after was saved and
             // told nothing. Confirm it the same way as a captioned photo.
             message: data.whatsapp_agent_self_intake === true
-              ? `${agentSelfIntakeSavedReply({ data, facts: textOnlyFacts, storedMedia: pendingStoredMedia, caption: textCaption })}${promotedPrompt ? `\n\n${agentPendingNotice(data)}` : ''}`
+              ? [
+                agentSelfIntakeSavedReply({ data, facts: textOnlyFacts, storedMedia: pendingStoredMedia, caption: textCaption }),
+                ...alsoSaved.map((item) => agentAlsoSavedReply(item)),
+                promotedPrompt ? agentPendingNotice(data) : ''
+              ].filter(Boolean).join('\n\n')
               : (data.property_batch_mode || 'multiple') === 'single'
               ? `✅ Saved the property to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${pendingStoredMedia.length}\nStatus: pending, not live.\n\nSend any additional media without a new full property caption. When this property is finished, type *COMPLETE*.`
               : [staffDroppedMediaWarning(data, textCaption), promotedPrompt.trim()].filter(Boolean).join('\n\n')
@@ -12523,6 +12672,22 @@ async function handleEmployeeWhatsappIntake({
       && pendingStoredMediaBeforeMessage.length > 0
       && employeeCaptionLikelySameProperty(pendingCaptionBeforeMessage, caption, data);
 
+    // Photos with no words, sent after a description that was kept behind a
+    // property still waiting for a detail: they are that description's photos.
+    const keptIndex = (!ownMediaCaption && !shouldStartProperty) ? employeeNewerKeptCaptionIndex(data, mediaSenderMs) : -1;
+    if (keptIndex >= 0) {
+      try {
+        const keptMedia = await storeEmployeeMedia(candidates, { privateMedia: false, phone, inboundMessageId, provider: runtime.provider });
+        addEmployeeQueuedMedia(data, keptIndex, keptMedia);
+        data.last_inbound_ms = Date.now();
+        await replaceEmployeeSession(phone, currentStep, data);
+      } catch (error) {
+        logger.error('WhatsApp employee kept-property media storage failed:', error);
+        return { handled: true, nextStep: currentStep, message: employeeMediaFailureMessage(error) };
+      }
+      return { handled: true, nextStep: currentStep, message: employeeIncompletePropertyMessage(caption, missing, data) };
+    }
+
     // 23 Oct 2026: Brian's Kiwatule building was saved at 12:57. At 15:26 he sent
     // four photos and three videos of a house in Namugongo, with the caption
     // following two minutes later. The Kiwatule property was still "current", so
@@ -12571,6 +12736,7 @@ async function handleEmployeeWhatsappIntake({
         });
         rememberEmployeePendingMedia(data, pendingStoredMedia, inboundMessageId);
         if (caption) data.pending_property_caption = caption;
+        if (caption && ownMediaCaption) data.pending_caption_sender_ms = mediaSenderMs;
         await replaceEmployeeSession(phone, currentStep, data);
         if (!caption) await settleEmployeeOrphanMedia({ phone, data, currentStep, inboundMessageId });
       } catch (error) {
@@ -12600,6 +12766,7 @@ async function handleEmployeeWhatsappIntake({
         } else {
           rememberEmployeePendingMedia(data, pendingStoredMedia, inboundMessageId);
           data.pending_property_caption = caption;
+          if (ownMediaCaption) data.pending_caption_sender_ms = mediaSenderMs;
         }
         await replaceEmployeeSession(phone, currentStep, data);
       } catch (error) {
@@ -15052,7 +15219,19 @@ function scheduleEmployeeBatchSummary(phone) {
     const current = employeeBatchBursts.get(key);
     if (!current || current.token !== burst.token) return;
     employeeBatchBursts.delete(key);
-    sendEmployeeBatchSummary(key, current.since).catch((error) => {
+    // Behind anything of theirs still being handled. A photo that arrives as
+    // the timer fires is part of the burst, and the summary and that photo
+    // write the same session: run side by side, the summary saved a kept
+    // property without its last photo and the photo was lost.
+    queueWhatsappRuntimeForPhone(key, async () => {
+      const newer = employeeBatchBursts.get(key);
+      if (newer) {
+        // Not quiet after all: the newer timer sends it, from where this one began.
+        if (current.since < newer.since) newer.since = current.since;
+        return null;
+      }
+      return sendEmployeeBatchSummary(key, current.since);
+    }).catch((error) => {
       logger.warn('Agent 007 batch summary failed:', error.message || String(error));
     });
   }, EMPLOYEE_BATCH_SUMMARY_QUIET_MS);
@@ -15540,6 +15719,14 @@ async function buildEmployeeBatchSummary(phone, since) {
       logger.warn('Developer media could not be filed to their project:', error.message || String(error));
     }
   }
+  // The burst is over: a property kept behind one that still needs a detail,
+  // with its photos and nothing missing, is saved rather than left waiting.
+  let keptSaved = [];
+  try {
+    keptSaved = await saveReadyKeptSubmissions({ phone, data });
+  } catch (error) {
+    logger.warn('A kept property could not be saved at the summary:', error.message || String(error));
+  }
 
   const propertyIds = (Array.isArray(data.property_ids) ? data.property_ids : []).map(String);
   const saved = propertyIds.length
@@ -15636,9 +15823,12 @@ async function buildEmployeeBatchSummary(phone, since) {
   // messages for one property, the second in a language he never signed up to.
   if (data.whatsapp_agent_self_intake === true) {
     // Everything saved: he has already been told, once, per property. Anything
-    // outstanding is said in his words, not the staff batch's.
-    if (!notSaved.length) return '';
-    return agentPendingNotice(data);
+    // outstanding is said in his words, not the staff batch's. A property saved
+    // just now, by this summary, has not been confirmed to him yet.
+    const confirmations = keptSaved.map((item, index) => (index === 0
+      ? agentSelfIntakeSavedReply({ data, facts: item.facts, storedMedia: item.storedMedia, caption: item.caption })
+      : agentAlsoSavedReply(item)));
+    return [...confirmations, notSaved.length ? agentPendingNotice(data) : ''].filter(Boolean).join('\n\n');
   }
   lines.push('', 'Nothing is live until a moderator approves it. Type *COMPLETE* when the whole batch is done.');
   return lines.join('\n');
@@ -24803,5 +24993,9 @@ module.exports.__test = {
   handleWhatsappCallEvent,
   handleEmployeeWhatsappIntake,
   prepareEmployeeOrderedBatchReplay,
-  queueWhatsappWebBridgeAutoReply
+  queueWhatsappWebBridgeAutoReply,
+  employeeNewerKeptCaptionIndex,
+  addEmployeeQueuedMedia,
+  agentAlsoSavedReply,
+  ambiguousPlaceBesideDistrict
 };

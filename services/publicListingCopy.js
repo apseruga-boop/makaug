@@ -503,6 +503,49 @@ function looksLikeMakaugTemplateTitle(value = '') {
   return /^(?:student accommodation(?:\s+in|\s+-)|land(?:\s+for\s+(?:sale|rent))?\s+in|plots?\s+for\s+(?:sale|rent)\s+in|property\s+for\s+(?:sale|rent)\s+in|commercial\s+property(?:\s+for\s+(?:sale|rent))?\s+in|\d+-bed\b)/i.test(text);
 }
 
+// What a line of a caption has to carry to stand as a title: something a
+// property is, or its size.
+const TITLE_PROPERTY_SIGNAL = /\b(?:\d+(?:\.\d+)?\s*(?:acres?|decimals?|bed(?:room)?s?|rooms?|units?|plots?|sq\s*m|sqm|stor(?:e)?ys?)|lands?|plots?|acres?|decimals?|houses?|homes?|bungalows?|apartments?|flats?|rentals?|rooms?|shops?|offices?|warehouses?|hostels?|hotels?|lodges?|mansions?|villas?|buildings?|estates?|farms?|condos?|condominiums?|maisonettes?|duplex(?:es)?|commercial|residential|kibanja|bibanja|muzigo|mizigo|doubles|singles|studios?|arcades?|factory|factories|schools?)\b/i;
+
+/**
+ * The line of a caption that says what the property is.
+ *
+ * The first line was taken, whatever it said. 14 Nov 2026: four rental rooms
+ * whose advert opened "Money needed" went live titled "Money needed", and two
+ * acres whose advert opened "Members, members Hot Hot those are 2ACRES on
+ * sale" went live titled exactly that. A line with no property in it is
+ * passed over, and words in front of the property that are an address to the
+ * reader are left off. '' when no line describes a property.
+ */
+function describingCaptionClause(caption = '', property = {}) {
+  const clauses = String(caption || '').split(/[•|\n]/).map((part) => stripTitleNoise(part)).filter(Boolean);
+  for (const raw of clauses) {
+    const at = raw.search(TITLE_PROPERTY_SIGNAL);
+    if (at < 0) continue;
+    const lead = raw.slice(0, at).trim();
+    const leadWords = lead ? lead.split(/\s+/).length : 0;
+    // "Newly built 3 bedroom house" keeps its opening; "Hot deal! 2 acres"
+    // and "Members, members those are 2 acres" start at the property.
+    const dropLead = leadWords >= 4 || /[.!?:]$/.test(lead);
+    let clause = (dropLead ? raw.slice(at) : raw).replace(/\b(\d+(?:\.\d+)?)(acres?|decimals?|bedrooms?)\b/gi, (_m, n, unit) => `${n} ${unit.toLowerCase()}`).trim();
+    // "Three double rooms for sale, plot size 35x45ft, collecting ..." is
+    // titled by what comes before its first comma, when that says enough.
+    const head = clause.split(/,(?!\d)|[.;!?](?=\s|$)/)[0].trim();
+    if (head.length >= 12 && TITLE_PROPERTY_SIGNAL.test(head)) clause = head;
+    clause = clause.replace(/[\s.,;:!?-]+$/, '');
+    if (clause.length < 8 && clauses.length === 1) return '';
+    const area = cleanText(property.area || '');
+    if (clause.length < 28 && area && !clause.toLowerCase().includes(area.toLowerCase())) {
+      const deal = /\b(?:for|on)\s+(?:sale|rent)\b|\bto\s+let\b/i.test(clause)
+        ? ''
+        : ` for ${publicListingTransaction(property) === 'rent' ? 'rent' : 'sale'}`;
+      clause = `${clause}${deal} in ${area}`;
+    }
+    return clause;
+  }
+  return '';
+}
+
 function creatorListingWording(property = {}, extra = {}) {
   const bag = extra && typeof extra === 'object' ? extra : {};
   const nested = property.extra_fields && typeof property.extra_fields === 'object' ? property.extra_fields : {};
@@ -518,8 +561,8 @@ function creatorListingWording(property = {}, extra = {}) {
   if (looksLikeMakaugTemplateTitle(stored) && source && source.toLowerCase() !== stored.toLowerCase()) return source;
   if (stored && !looksLikeMakaugTemplateTitle(stored)) return stored;
   if (source) return source;
-  const caption = cleanText(bag.source_caption || nested.source_caption || property.source_caption || '');
-  const clause = caption.split(/[•|\n]/)[0].trim();
+  const caption = String(bag.source_caption || nested.source_caption || property.source_caption || '');
+  const clause = describingCaptionClause(caption, property);
   if (clause.length >= 8 && !looksLikeMakaugTemplateTitle(clause)) return clause;
   return stored;
 }

@@ -199,6 +199,10 @@ const PROSPECT_WHO = /\b(?:WHO (?:IS|IZ|R|ARE|S) (?:THIS|THAT|DIS|DAT|U|YOU|SPEA
 const PROSPECT_MONEY = /\b(?:MONEY|PAY|PAYING|PAYMENT|PAYMENTS|CHARGE|CHARGES|CHARGED|CHARGING|FREE|FEE|FEES|COST|COSTS|PRICE|PRICES|SUBSCRIPTION|HOW MUCH|UGX|SHS|SHILLINGS|50K|50 000|50000|COMMISSION)\b/;
 const PROSPECT_MENU_PICK = /^(?:[1-6](?: ?(?:AND|N|&|,|\+) ?[1-6])*|LIST(?: A| MY)? PROPERT(?:Y|IES)|LIST|LISTING|POST(?: A| MY)? PROPERT(?:Y|IES)|JOIN|JOIN AS AN AGENT|JOIN MAKAUG|REGISTER|REGISTER ME|SIGN ME UP|SIGN UP)$/;
 const PROSPECT_THANKS = /^(?:(?:OK|OKAY|YES|SURE|GREAT|NICE|COOL|ALRIGHT) )?(?:THANKS?|THANK YOU|THANK U|THANKYOU|THANX|THX|TNX|ASANTE|WEBALE|APWOYO)(?: (?:SO MUCH|VERY MUCH|A LOT|MUCH|SANA|NNYO|KO|BRO|BOSS|SIR|MADAM|DEAR|TEAM|AGAIN))*$/;
+// A greeting with a little more on the end, or a how-are-you: "Good evening
+// brother. It is a weekend. Any program". Friendly, and not yet about the film.
+const PROSPECT_GREETING_OPENER = /^(?:HI+|HELLO+|HELO|HEY|GOOD (?:MORNING|AFTERNOON|EVENING|DAY)|MORNING|AFTERNOON|EVENING|GREETINGS|GYEBALE ?KO|OLI OTYA|JAMBO|HABARI|MAMBO|NIAJE|SALAM|SALAAM|BONJOUR)\b/;
+const PROSPECT_SMALL_TALK = /\b(?:HOW ARE YOU|HOW R U|HOW ARE U|HOW IS (?:THE |YOUR )?(?:DAY|WEEKEND|WORK|BUSINESS|EVENING|MORNING|FAMILY)|HOW S (?:THE |YOUR )?(?:DAY|WEEKEND|WORK|BUSINESS|EVENING|MORNING|FAMILY)|HOPE (?:YOU ARE|YOU RE|U ARE|ALL IS) (?:WELL|FINE|GOOD|OK|OKAY)|WEEKEND|ANY PROGRAM(?:ME)?S?|HAPPY (?:SUNDAY|SABBATH|WEEKEND|NEW (?:WEEK|MONTH|YEAR)|HOLIDAYS?)|BLESSED (?:DAY|SUNDAY|WEEK|EVENING)|WHAT S UP|WASSUP)\b/;
 const CARS = /\b(?:CARS?|VEHICLES?|MOTORS?|MOTORCYCLES?|BODABODA|BODA BODA|BODAS?)\b/;
 const PROPERTY_WORDS = /\b(?:LAND|LANDS|PLOTS?|HOUSES?|HOMES?|RENTALS?|APARTMENTS?|COMMERCIAL|SHOPS?|OFFICES?|BUILDINGS?|PROPERT(?:Y|IES))\b/;
 
@@ -208,7 +212,8 @@ function accentless(text = '') {
 
 /**
  * What a prospect's later message is: 'greeting', 'thanks', 'who', 'money',
- * 'menu' (a menu number or "list a property") or 'note' (anything else).
+ * 'menu' (a menu number or "list a property"), 'smalltalk' (a greeting with a
+ * how-are-you or a word about the weekend) or 'note' (anything else).
  */
 function prospectFollowUpKind(text = '') {
   const t = accentless(text).replace(/\bFEEL FREE\b/g, ' ').replace(/\s+/g, ' ').trim();
@@ -218,7 +223,31 @@ function prospectFollowUpKind(text = '') {
   if (PROSPECT_WHO.test(t)) return 'who';
   if (PROSPECT_MONEY.test(t)) return 'money';
   if (t.length <= 60 && PROSPECT_MENU_PICK.test(t)) return 'menu';
+  // A greeting and how-are-you, and nothing else: a question after the hello
+  // ("Hello, where is your office?") is a note, and goes to whoever sent the film.
+  if (t.length <= 120 && (PROSPECT_GREETING_OPENER.test(t) || PROSPECT_SMALL_TALK.test(t)) && onlySmallTalk(t)) return 'smalltalk';
   return 'note';
+}
+
+const SMALL_TALK_FILLER = new Set(['BROTHER', 'BRO', 'BOSS', 'SIR', 'MADAM', 'DEAR', 'FRIEND', 'TEAM', 'MAKAUG', 'PLEASE', 'PLS', 'IT', 'IS', 'A', 'AN',
+  'THE', 'AND', 'MY', 'YOU', 'U', 'TODAY', 'THERE', 'HOPE', 'WELL', 'FINE', 'GOOD', 'SO', 'FAR', 'TOO', 'ALSO', 'HERE', 'THIS', 'THAT', 'AM', 'I',
+  'WE', 'DOING', 'GOING', 'NICE', 'GREAT', 'BLESSED', 'MAN', 'SISTER', 'SIS', 'SSEBO', 'NNYABO', 'MUKWANO', 'NDUGU', 'OK', 'OKAY', 'S', 'TO', 'ALL', 'HAVE']);
+
+function onlySmallTalk(t = '') {
+  const rest = String(t || '')
+    .replace(PROSPECT_GREETING_OPENER, ' ')
+    .replace(new RegExp(PROSPECT_SMALL_TALK.source, 'g'), ' ')
+    .split(/\s+/)
+    .filter((word) => word && !SMALL_TALK_FILLER.has(word));
+  return rest.length <= 1;
+}
+
+/** Their own greeting back to them: "Good evening" for "Good evening brother". */
+function greetingBack(text = '') {
+  const t = accentless(text);
+  const timed = t.match(/\b(?:GOOD )?(MORNING|AFTERNOON|EVENING)\b/);
+  if (timed) return `Good ${timed[1].toLowerCase()}`;
+  return 'Hello';
 }
 
 function hi(first = '') {
@@ -240,6 +269,16 @@ function prospectFollowUpReply({ kind = '', interested = false, first = '', help
       return interested
         ? `Hello${hi(first)}! 👋 ${helpName} will call you shortly to set you up as a makaug agent.`
         : `Hello${hi(first)}! 👋 This is *makaug.com*. ${sender} from our team sent you our short film about listing your properties with us as an agent.\n\n${join}, or ask me anything about it.`;
+    case 'smalltalk': {
+      // Their greeting back, then what makaug does for them, then the one
+      // word that starts it. The first of these, in Nov 2026, got the menu.
+      const back = greetingBack(text);
+      const weekend = /\bWEEKEND\b/.test(accentless(text)) ? ' I hope the weekend is going well.' : '';
+      if (interested) return `${back}${hi(first)}! 👋${weekend} ${helpName} will call you shortly to set you up as a makaug agent.`;
+      return `${back}${hi(first)}! 👋 Thank you for writing back.${weekend}\n\n`
+        + 'makaug gets your properties seen: you send them here on WhatsApp, they go on makaug.com under your name, and every buyer who enquires comes straight to your number. makaug takes no commission.\n\n'
+        + `Reply *AGENT* if you'd like to join and ${helpName} will call you to set you up. Any question first, just ask me here.`;
+    }
     case 'thanks':
       return interested
         ? `You're welcome${hi(first)}! 🙌 ${helpName} will call you shortly to set you up.`
