@@ -63,6 +63,15 @@ function isDeliverableWhatsappRecipient(value) {
  */
 function classifyBridgeSendError(message = '') {
   const text = String(message || '');
+  // The WhatsApp session itself is down: logged out, restarting, waiting to be
+  // linked. Nothing is wrong with the message or with the person it is for.
+  // WAHA answers 422 for it ("Session status is not as expected"), and a 422
+  // read as "this recipient was refused". 15 Nov 2026: WhatsApp removed the
+  // link at 15:42 and every message queued after it was dropped for good on
+  // its first try.
+  if (/session status is not as expected|"status"\s*:\s*"(?:FAILED|STOPPED|STARTING|SCAN_QR_CODE)"/i.test(text)) {
+    return { permanent: false, reason: 'session_not_ready', retryDelaySeconds: 300 };
+  }
   if (/no LID found|not a valid whatsapp|is not on whatsapp|not registered on whatsapp|item-not-found|unroutable recipient|invalid recipient|invalid chat ?id|empty message body|-> 4(?:00|22):/i.test(text)) {
     return { permanent: true, reason: 'recipient_or_payload_rejected', retryDelaySeconds: null };
   }
@@ -488,10 +497,125 @@ async function queueWhatsappWebBridgeMessage({
   return result.rows[0] || null;
 }
 
+// What a bridge reports when its WhatsApp session cannot send.
+const SESSION_CANNOT_SEND = /^(?:FAILED|STOPPED|STARTING|SCAN_QR_CODE|PASSKEY_REQUIRED|PASSKEY_CONFIRMATION_REQUIRED|NOT_FOUND)$|^ERROR/i;
+
+/**
+ * Whether the bridge asking for messages has just said its WhatsApp session is
+ * down. It says so every half minute, in its heartbeat. While it is down a
+ * message handed over can only fail, and a hand-over is not free: a message is
+ * handed over a few times in its life and then never again. So nothing is
+ * handed over, and everything waits in the queue for the session to come back.
+ * A bridge that has gone quiet (no heartbeat for three minutes) is not
+ * believed either way.
+ */
+async function bridgeSessionCannotSend(clientId) {
+  try {
+    const result = await db.query(
+      `SELECT metadata->>'waha_status' AS waha_status
+         FROM whatsapp_web_bridge_clients
+        WHERE client_id = $1
+          AND last_seen_at >= NOW() - INTERVAL '3 minutes'
+        LIMIT 1`,
+      [String(clientId || '')]
+    );
+    const status = String(result.rows?.[0]?.waha_status || '').trim();
+    return Boolean(status) && SESSION_CANNOT_SEND.test(status);
+  } catch (_error) {
+    return false;
+  }
+}
+
+// A session that will not come back by itself: somebody has to link the number again.
+const SESSION_NEEDS_LINKING = /^(?:FAILED|STOPPED|SCAN_QR_CODE|PASSKEY_REQUIRED|PASSKEY_CONFIRMATION_REQUIRED|NOT_FOUND)$/i;
+
+/**
+ * Whether WhatsApp cannot send for anybody until somebody links the number
+ * again: a bridge heard from in the last three minutes says its session is
+ * logged out or stopped, and no bridge heard from in that time is working. A
+ * session that is only starting is not counted; it is back in a minute. When
+ * it cannot be told, the answer is no.
+ */
+async function whatsappSessionNeedsLinking() {
+  try {
+    const result = await db.query(
+      `SELECT status, metadata->>'waha_status' AS waha_status
+         FROM whatsapp_web_bridge_clients
+        WHERE last_seen_at >= NOW() - INTERVAL '3 minutes'`
+    );
+    const clients = result.rows || [];
+    const working = (client) => /^WORKING$/i.test(String(client.waha_status || '').trim())
+      || (!String(client.waha_status || '').trim() && String(client.status || '').toLowerCase() === 'online');
+    if (clients.some(working)) return false;
+    return clients.some((client) => SESSION_NEEDS_LINKING.test(String(client.waha_status || '').trim()));
+  } catch (_error) {
+    return false;
+  }
+}
+
+/** How long a one-time code is good for, in minutes. */
+function codeMinutes() {
+  return Math.min(60, Math.max(parseInt(process.env.OTP_EXPIRES_MINUTES || '10', 10) || 10, 1));
+}
+
+let lastCodeSweepAt = 0;
+
+/**
+ * A one-time code is good for ten minutes. One that could not be sent in that
+ * time, because the session was down, is let go: a code that arrives hours
+ * later opens nothing, and comes from a number its receiver was not expecting
+ * to hear from. Looked at once a minute at most.
+ */
+async function letGoOfExpiredCodes({ force = false } = {}) {
+  if (!force && Date.now() - lastCodeSweepAt < 60000) return 0;
+  lastCodeSweepAt = Date.now();
+  try {
+    const result = await db.query(
+      `UPDATE outbound_message_queue
+          SET status = 'failed',
+              last_error = 'The code had run out before WhatsApp could send it.',
+              metadata = COALESCE(metadata, '{}'::jsonb) || '{"failure_class":"expired","retry_suppressed":true}'::jsonb,
+              updated_at = NOW()
+        WHERE channel = 'whatsapp'
+          AND status IN ('pending', 'retry')
+          AND LOWER(COALESCE(metadata->>'source', '')) = 'otp'
+          AND created_at < NOW() - ($1 || ' minutes')::interval`,
+      [String(codeMinutes())]
+    );
+    return result.rowCount || 0;
+  } catch (_error) {
+    return 0;
+  }
+}
+
+/**
+ * The hours nobody is messaged late: 22:00 to 07:00 where the business is.
+ * A reply to somebody who has just written goes at any hour. A message that
+ * fell due more than half an hour ago, because the session was down or the
+ * bridge was, does not arrive at two in the morning: it goes at seven.
+ */
+function isOutboxQuietHours(date = new Date()) {
+  const raw = String(process.env.WHATSAPP_QUIET_HOURS ?? '22-7').trim().toLowerCase();
+  if (!raw || raw === 'off') return false;
+  const [start, end] = raw.split('-').map((value) => Number(value));
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start === end) return false;
+  const timeZone = String(process.env.WHATSAPP_QUIET_TZ || '').trim()
+    || (String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase() === 'ZA' ? 'Africa/Johannesburg' : 'Africa/Kampala');
+  let hour;
+  try {
+    hour = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone }).format(date)) % 24;
+  } catch (_error) {
+    return false;
+  }
+  return start > end ? (hour >= start || hour < end) : (hour >= start && hour < end);
+}
+
 async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient = '', allowedSources = [] } = {}) {
   const safeLimit = Math.min(25, Math.max(1, Number(limit) || 10));
   const claimWindow = getBridgeClaimWindowSeconds();
   const normalizedClientId = String(clientId || '').trim() || 'web_bridge';
+  await letGoOfExpiredCodes();
+  if (await bridgeSessionCannotSend(normalizedClientId)) return [];
   const recipientDigits = String(recipient || '').replace(/\D/g, '');
   const normalizedAllowedSources = (Array.isArray(allowedSources) ? allowedSources : String(allowedSources || '').split(','))
     .map((value) => String(value || '').trim().toLowerCase())
@@ -519,6 +643,11 @@ async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient 
         -- Only a phone number can be delivered to. A group id (18 digits) or a
         -- chat title is never handed out, however it got into the queue.
         AND regexp_replace(COALESCE(q.user_phone, ''), '\\D', '', 'g') ~ '^[0-9]{9,15}$'
+        -- In the quiet hours, a message that is more than half an hour late
+        -- waits for the morning.
+        AND NOT ($7::boolean AND q.next_attempt_at < NOW() - INTERVAL '30 minutes')
+        -- A one-time code that has run out is never handed over.
+        AND NOT (LOWER(COALESCE(q.metadata->>'source', '')) = 'otp' AND q.created_at < NOW() - ($8 || ' minutes')::interval)
       ORDER BY q.next_attempt_at ASC, q.created_at ASC
       LIMIT $1
       FOR UPDATE SKIP LOCKED
@@ -537,7 +666,7 @@ async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient 
     FROM claimable
     WHERE q.id = claimable.id
     RETURNING q.*, claimable.due_at`,
-    [safeLimit, normalizedClientId, String(claimWindow), recipientDigits, normalizedAllowedSources, getBridgeMaxClaims()]
+    [safeLimit, normalizedClientId, String(claimWindow), recipientDigits, normalizedAllowedSources, getBridgeMaxClaims(), isOutboxQuietHours(), String(codeMinutes())]
   );
 
   // UPDATE … RETURNING hands rows back in no particular order, and the bridge
@@ -575,6 +704,10 @@ async function markWhatsappWebBridgeMessageFailed(id, errorMessage = 'bridge_sen
   // such user: retrying in a second, eight times, only earns a rate limit.
   const classified = classifyBridgeSendError(errorMessage);
   const suppressRetry = options?.suppressRetry === true || options?.permanent === true || classified.permanent;
+  // The session was down. The try is not counted against the message, nor the
+  // hand-over that led to it: it has not yet had a chance to be sent. After a
+  // day and a half of that, it is let go.
+  const sessionDown = !suppressRetry && classified.reason === 'session_not_ready';
   const retryDelay = Math.max(
     baseDelay,
     Number(options?.retryDelaySeconds) || 0,
@@ -588,11 +721,20 @@ async function markWhatsappWebBridgeMessageFailed(id, errorMessage = 'bridge_sen
   const result = await db.query(
     `UPDATE outbound_message_queue
      SET
-       status = CASE WHEN $5::boolean OR attempts + 1 >= 8 THEN 'failed' ELSE 'retry' END,
-       attempts = attempts + 1,
+       status = CASE
+         WHEN $5::boolean THEN 'failed'
+         WHEN $6::boolean THEN CASE WHEN created_at < NOW() - INTERVAL '36 hours' THEN 'failed' ELSE 'retry' END
+         WHEN attempts + 1 >= 8 THEN 'failed'
+         ELSE 'retry'
+       END,
+       attempts = attempts + CASE WHEN $6::boolean THEN 0 ELSE 1 END,
        last_error = $2,
        next_attempt_at = CASE WHEN $5::boolean THEN NOW() ELSE NOW() + ($3 || ' seconds')::interval END,
-       metadata = COALESCE(metadata, '{}'::jsonb) || $4::jsonb,
+       metadata = COALESCE(metadata, '{}'::jsonb) || $4::jsonb
+         || CASE WHEN $6::boolean
+              THEN jsonb_build_object('claim_count', GREATEST(COALESCE(NULLIF(metadata->>'claim_count', '')::int, 0) - 1, 0))
+              ELSE '{}'::jsonb
+            END,
        updated_at = NOW()
      WHERE id = $1
        -- A message already marked sent has reached the customer. A late or
@@ -600,7 +742,7 @@ async function markWhatsappWebBridgeMessageFailed(id, errorMessage = 'bridge_sen
        -- is delivered again.
        AND status <> 'sent'
      RETURNING *`,
-    [id, String(errorMessage || 'bridge_send_failed'), String(retryDelay), JSON.stringify(metadata), suppressRetry]
+    [id, String(errorMessage || 'bridge_send_failed'), String(retryDelay), JSON.stringify(metadata), suppressRetry, sessionDown]
   );
   return result.rows[0] || null;
 }
@@ -630,6 +772,10 @@ async function getWhatsappWebBridgeStatus() {
 
 module.exports = {
   classifyBridgeSendError,
+  bridgeSessionCannotSend,
+  whatsappSessionNeedsLinking,
+  letGoOfExpiredCodes,
+  isOutboxQuietHours,
   getWhatsappDeliveryMode,
   getWhatsappWebBridgeStatus,
   getWhatsappWebBridgeToken,

@@ -118,6 +118,7 @@ assert(!routeSource.includes('const SELLER_LOCATION_HINTS'), 'WhatsApp must not 
 assert(routeSource.includes("COALESCE(${safeAlias}.extra_fields->>'canonical_location_id', '') = ANY"), 'WhatsApp search should query canonical IDs');
 assert(routeSource.includes('canonical_location_source: d.canonical_location_source'), 'WhatsApp listings should persist shared-resolver provenance');
 assert(routeSource.includes("return respond(whatsappLocationPrompt(locationResolution), 'area')"), 'Unknown or ambiguous WhatsApp listing areas should remain blocked');
-assert(routeSource.includes("if (locationBlockReply) return respond(locationBlockReply, 'search_area')"), 'Unknown or ambiguous WhatsApp searches should ask for clarification');
+// The question is asked, and what else they asked for is kept with it (15 Nov 2026).
+assert(routeSource.includes("await holdSearchForArea(phone, naturalFilters, cleanBody);\n      return respond(locationBlockReply, 'search_area');"), 'Unknown or ambiguous WhatsApp searches should ask for clarification');
 
 console.log('WhatsApp shared location resolver parity checks passed');

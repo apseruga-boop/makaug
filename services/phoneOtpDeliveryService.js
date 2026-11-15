@@ -57,7 +57,24 @@ async function sendPhoneOtp({ to, message, email, otp, expiresMinutes } = {}) {
     };
   }
 
-  if (whatsappBridgeEnabled()) {
+  // The number is logged out of WhatsApp and waiting to be linked again
+  // (15 Nov 2026: for six hours and more). A code queued now could only arrive
+  // after it had run out, and the person would be told it was on its way. So
+  // it is not queued: the email below carries it when there is one, and when
+  // there is not, the site is told the code could not be sent.
+  const needsLinking = whatsappBridgeEnabled() && typeof whatsappWebBridgeService.whatsappSessionNeedsLinking === 'function'
+    ? await whatsappWebBridgeService.whatsappSessionNeedsLinking().catch(() => false)
+    : false;
+  if (needsLinking) {
+    attempts.push(publicAttemptSummary({
+      channel: 'whatsapp',
+      provider: 'whatsapp_web_bridge',
+      status: 'failed',
+      reason: 'whatsapp_session_not_linked'
+    }));
+  }
+
+  if (whatsappBridgeEnabled() && !needsLinking) {
     try {
       const queued = await whatsappWebBridgeService.queueWhatsappWebBridgeMessage({
         recipient,
