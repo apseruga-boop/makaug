@@ -19,9 +19,11 @@ function registerOutreachTrackerRoutes(router, { writeAudit, actorLabel } = {}) 
         sender: String(req.query.sender || '').trim(),
         limit: Number(req.query.limit || 200)
       });
+      // The last outcome tapped on Staff Performance, so both desks agree.
+      const outcomes = await require('../services/staffPerformance').latestOutcomes(rows.map((row) => row.id)).catch(() => new Map());
       return res.json({
         ok: true,
-        data: rows,
+        data: rows.map((row) => (outcomes.has(String(row.id)) ? { ...row, last_outcome: outcomes.get(String(row.id)) } : row)),
         // Who a send can be "by": Arthur, Ronald and the staff added to Agent 007 in King. First names only.
         senders: require('../services/outreachSenderName').staffSenderChoices(),
         week_note: 'Tracking starts from the week of 10–16 Nov 2026 (London). New sends from Agent 007 option 3 are recorded automatically. Use Log a send for videos already sent this week that are not in the list.'
@@ -54,6 +56,18 @@ function registerOutreachTrackerRoutes(router, { writeAudit, actorLabel } = {}) 
       }
       return res.status(201).json({ ok: true, data: prospects.publicProspect(recorded.prospect) });
     } catch (error) {
+      if (['found_online', 'do_not_contact', 'already_sent'].includes(error.code)) {
+        // A wasted number: counted against the sender on Staff Performance.
+        const body = req.body || {};
+        await require('../services/staffPerformance').recordBlockedSend({
+          phone: body.phone || '',
+          personName: body.pitched_by_name || '',
+          blockCode: error.code,
+          prospectId: error.existing?.id || null,
+          actorAccount: actorOf(req),
+          source: 'manual_log'
+        }).catch(() => null);
+      }
       if (error.status) {
         return res.status(error.status).json({
           ok: false,

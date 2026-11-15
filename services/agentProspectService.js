@@ -355,15 +355,14 @@ async function evaluateOutreachSend({ phone = '', videoKind = 'agent' } = {}) {
     error.code = 'invalid_phone';
     throw error;
   }
-  if (await isFoundOnlineListerPhone(db, phone)) {
-    return {
-      ok: false,
-      code: 'found_online',
-      message: 'That number belongs to a found-online listing. We never message those people.'
-    };
-  }
+  // Until 15 Nov 2026 a found-online lister's number was refused here. Arthur,
+  // 15 Nov 2026 16:22: "lets start messaging these listers ... forget my rule".
+  // Staff outreach films may now go to them; the send is tagged so Staff
+  // Performance reports their conversion separately. Moderation messages to
+  // found-online listers are decided elsewhere and are unchanged.
+  const foundOnline = await isFoundOnlineListerPhone(db, phone).catch(() => false);
   const existing = await findProspectByPhone(phone);
-  if (!existing) return { ok: true, existing: null };
+  if (!existing) return { ok: true, existing: null, found_online: foundOnline };
   if (existing.do_not_contact) {
     return {
       ok: false,
@@ -381,7 +380,7 @@ async function evaluateOutreachSend({ phone = '', videoKind = 'agent' } = {}) {
       message: formatAlreadyContactedMessage(existing)
     };
   }
-  return { ok: true, existing };
+  return { ok: true, existing, found_online: foundOnline };
 }
 
 /**
@@ -416,6 +415,10 @@ async function recordProspectPitch({
       error.existing = decision.existing;
       throw error;
     }
+  }
+  // A film to a found-online lister is tagged, so its conversion is reported apart.
+  if (await isFoundOnlineListerPhone(db, phone).catch(() => false)) {
+    metadata = { ...(metadata && typeof metadata === 'object' ? metadata : {}), lead_source: 'found_online' };
   }
   const storedName = nameForStorage({
     pitchedBy,

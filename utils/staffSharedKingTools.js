@@ -21,6 +21,12 @@ function isStaffSharedKingTool(path, method = 'GET') {
 
   if (p === '/outreach-tracker' || p.startsWith('/outreach-tracker/')) return true;
   if (p === '/agent-prospects' && m === 'GET') return true;
+  // Staff Performance: everyone reads it, calls, logs outcomes and adds list
+  // numbers. Targets, points and the paid rate (PUT …/settings) are King-only.
+  if (p === '/staff-performance' && m === 'GET') return true;
+  if (/^\/staff-performance\/prospects\/[^/]+\/(call|outcome)$/.test(p) && m === 'POST') return true;
+  if (p === '/staff-performance/lists' && m === 'POST') return true;
+  if (/^\/staff-performance\/lists\/[^/]+\/number$/.test(p) && m === 'POST') return true;
   if (p.startsWith('/agent-manager/')) return true;
   if (p === '/featured-rotation' && m === 'GET') return true;
   if (p === '/featured-rotation/run-once' && m === 'POST') return true;

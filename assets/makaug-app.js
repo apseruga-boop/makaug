@@ -22680,6 +22680,7 @@ function adminRunCommandSearch() {
     { terms: ["field", "payout", "pin", "territory"], tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
     { terms: ["agent account", "account", "password", "user", "student", "people"], tab: "accounts", selector: "#admin-accounts-control", label: "Accounts" },
     { terms: ["outreach", "pitch", "joining film", "prospect", "agent 007"], tab: "outreach", selector: "#admin-outreach-control", label: "Outreach" },
+    { terms: ["staff performance", "performance", "road to 1000", "targets", "leaderboard"], tab: "performance", selector: "#admin-staff-performance-control", label: "Staff Performance" },
     { terms: ["listing", "property", "delete", "hide", "approve", "pending", "live"], tab: "listings", selector: "#admin-listings-control", label: "All Listings" },
     { terms: ["review", "queue", "moderate"], tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" }
   ];
@@ -22944,6 +22945,7 @@ async function refreshSharedKingToolsUi() {
     if (tab === "agents") return adminAgentManagerLoad({ force: true });
     if (tab === "public") return adminPublicManagerLoad();
     if (tab === "outreach") return staffOutreachLoad("staff");
+    if (tab === "performance") return staffPerfLoad("staff");
     return Promise.resolve();
   }
   return renderAdminDashboard();
@@ -23467,7 +23469,7 @@ function adminVerificationBadge(status) {
 }
 
 function setStaffToolsTab(tab = "accounts") {
-  const allowed = ["accounts", "outreach", "agents", "public", "live"];
+  const allowed = ["accounts", "outreach", "performance", "agents", "public", "live"];
   const next = allowed.includes(String(tab)) ? String(tab) : "accounts";
   const root = document.getElementById("staff-king-tools");
   if (!root) return;
@@ -23483,6 +23485,7 @@ function setStaffToolsTab(tab = "accounts") {
   });
   if (next === "accounts") staffPeopleEnsureLoaded("staff");
   if (next === "outreach") staffOutreachEnsureLoaded("staff");
+  if (next === "performance") staffPerfEnsureLoaded("staff");
   if (next === "agents") adminAgentManagerEnsureLoaded();
   if (next === "public") adminPublicManagerEnsureLoaded();
   if (next === "live") loadStaffLiveFeatured().catch((error) => console.warn(error?.message || error));
@@ -23682,6 +23685,7 @@ function staffOutreachRender(scope) {
         if (row.can_mark_registered) nextActions.push(`<button type="button" class="rounded-lg bg-teal-700 text-white px-3 py-1.5 text-xs font-bold" onclick="staffOutreachMarkDone('${scope}', '${id}', 'registered')">Registered</button>`);
         else if (row.registered_at) nextActions.push(`<span class="rounded-lg bg-teal-100 text-teal-900 px-3 py-1.5 text-xs font-bold">Registered</span>`);
         if (row.can_recontact) nextActions.push(`<button type="button" class="rounded-lg bg-amber-700 text-white px-3 py-1.5 text-xs font-bold" onclick="staffOutreachRecontact('${scope}', '${id}')">Recontact</button>`);
+        if (!row.do_not_contact) nextActions.unshift(staffPerfCallButtonHtml(row.id, `outreach:${scope}`));
         return `<article class="rounded-xl border ${chrome.border} p-3" data-outreach-row data-loop-state="${adminAttr(row.loop_state || "")}" data-sender="${adminAttr(row.sender_key || "")}">
           <div class="flex items-start justify-between gap-3 flex-wrap">
             <div class="min-w-0 flex-1">
@@ -23693,6 +23697,7 @@ function staffOutreachRender(scope) {
               <p class="text-xs text-gray-600 mt-1">${adminEscape(row.video_label || "Joining film")} · ${adminEscape(dayText(sentAgo))}</p>
               ${recontactBit}
               ${doneBits.length ? `<p class="text-xs text-gray-700 mt-1">${adminEscape(doneBits.join(" · "))}</p>` : ""}
+              ${row.last_outcome ? `<p class="text-xs text-gray-800 mt-1"><strong>Last outcome:</strong> ${adminEscape(row.last_outcome.label || row.last_outcome.outcome)}${row.last_outcome.follow_up_on ? ` · follow up ${adminEscape(row.last_outcome.follow_up_on)}` : ""}</p>` : ""}
               <p class="text-sm text-gray-900 mt-2 font-semibold leading-snug">${adminEscape(row.next_step || "")}</p>
               ${row.activity?.last_reply_at ? `<p class="text-xs text-gray-500 mt-1">Last WhatsApp reply: ${adminEscape(whenText(row.activity.last_reply_at))}</p>` : ""}
               ${row.activity?.signed_up ? `<p class="text-xs text-emerald-800 mt-1">They have signed up${row.agent_status ? ` (${adminEscape(row.agent_status)})` : ""}.</p>` : ""}
@@ -23816,9 +23821,441 @@ async function staffOutreachRecontact(scope, id) {
   }
 }
 
+// ---- Staff Performance · Road to 1000 (15 Nov 2026) ----------------------
+// Arthur: one tab, between Outreach and Agents, that everyone sees. Daily
+// film targets per person with the missed ones carried over, what came back
+// from each film (replies, calls, sign-ups, payments), each person's own list
+// of numbers, points, streaks, and who did what each day. Phones are shown as
+// the last three digits; the full number is only fetched when Call or Copy is
+// tapped, and that tap is logged.
+
+const STAFF_PERF_COLORS = ["#047857", "#2563eb", "#d97706", "#7c3aed", "#db2777", "#0891b2", "#4b5563"];
+
+function staffPerfState(scope) {
+  window.__makaugPerf = window.__makaugPerf || {};
+  if (!window.__makaugPerf[scope]) {
+    window.__makaugPerf[scope] = { loadedAt: 0, loading: false, data: null, error: "", period: "campaign", stream: "", day: "", lastPaste: null };
+  }
+  return window.__makaugPerf[scope];
+}
+
+function staffPerfRoot(scope) {
+  return document.querySelector(`[data-perf-root="${scope}"]`);
+}
+
+function staffPerfMe() {
+  try { return localStorage.getItem("makaug.perf.me") || ""; } catch (_) { return ""; }
+}
+
+function staffPerfSetMe(scope, key) {
+  try { localStorage.setItem("makaug.perf.me", String(key || "")); } catch (_) {}
+  staffPerfRender(scope);
+}
+
+function staffPerfEnsureLoaded(scope) {
+  const state = staffPerfState(scope);
+  if (state.loading) return;
+  if (state.loadedAt && Date.now() - state.loadedAt < 30 * 1000) {
+    if (staffPerfRoot(scope) && !staffPerfRoot(scope).dataset.ready) staffPerfRender(scope);
+    return;
+  }
+  staffPerfLoad(scope);
+}
+
+async function staffPerfLoad(scope) {
+  const root = staffPerfRoot(scope);
+  const state = staffPerfState(scope);
+  if (!root) return;
+  state.loading = true;
+  if (!root.dataset.ready) root.innerHTML = `<p class="text-sm text-gray-500">Loading Staff Performance…</p>`;
+  try {
+    const res = await apiRequest("/api/admin/staff-performance", { headers: adminAuthHeaders() });
+    state.data = res?.data || null;
+    state.error = "";
+    state.loadedAt = Date.now();
+    staffPerfRender(scope);
+  } catch (error) {
+    state.error = error?.message || "Could not load Staff Performance.";
+    root.innerHTML = `<p class="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">${adminEscape(state.error)}</p>`;
+  } finally {
+    state.loading = false;
+  }
+}
+
+function staffPerfColor(data, key) {
+  const idx = (data?.people || []).findIndex((p) => p.key === key);
+  return STAFF_PERF_COLORS[(idx < 0 ? 6 : idx) % STAFF_PERF_COLORS.length];
+}
+
+function staffPerfName(data, key) {
+  return (data?.people || []).find((p) => p.key === key)?.name || (key ? key[0].toUpperCase() + key.slice(1) : "—");
+}
+
+function staffPerfDayLabel(day) {
+  if (!day) return "";
+  const d = new Date(`${day}T12:00:00Z`);
+  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+}
+
+function staffPerfPct(value) {
+  const n = Number(value) || 0;
+  return `${Math.round(n * 1000) / 10}%`;
+}
+
+function staffPerfPieSvg(slices) {
+  const total = slices.reduce((a, s) => a + s.value, 0);
+  if (!total) return `<div class="h-40 flex items-center justify-center text-xs text-gray-500">No films sent yet</div>`;
+  let angle = -Math.PI / 2;
+  const r = 70;
+  const parts = slices.filter((s) => s.value > 0).map((s) => {
+    const frac = s.value / total;
+    if (frac >= 0.9999) return `<circle cx="80" cy="80" r="${r}" fill="${s.color}"></circle>`;
+    const a2 = angle + frac * Math.PI * 2;
+    const large = frac > 0.5 ? 1 : 0;
+    const d = `M80 80 L${80 + r * Math.cos(angle)} ${80 + r * Math.sin(angle)} A${r} ${r} 0 ${large} 1 ${80 + r * Math.cos(a2)} ${80 + r * Math.sin(a2)} Z`;
+    angle = a2;
+    return `<path d="${d}" fill="${s.color}" stroke="#fff" stroke-width="2"></path>`;
+  }).join("");
+  return `<svg viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="Share of films sent">${parts}<circle cx="80" cy="80" r="38" fill="#fff"></circle><text x="80" y="78" text-anchor="middle" font-size="20" font-weight="800" fill="#111827">${total}</text><text x="80" y="96" text-anchor="middle" font-size="10" fill="#6b7280">films</text></svg>`;
+}
+
+function staffPerfBarsSvg(person, color) {
+  const rows = person.ledger || [];
+  if (!rows.length) return `<p class="text-xs text-gray-500">Starts Monday 16 Nov.</p>`;
+  const max = Math.max(1, ...rows.map((r) => Math.max(r.due, r.sent)));
+  const w = 300; const h = 120; const pad = 18;
+  const bw = (w - 10) / rows.length;
+  const bars = rows.map((r, i) => {
+    const x = 5 + i * bw;
+    const th = Math.round((r.due / max) * (h - pad - 14));
+    const sh = Math.round((r.sent / max) * (h - pad - 14));
+    const short = r.sent < r.due;
+    return `<g><rect x="${x + 2}" y="${h - pad - th}" width="${bw - 4}" height="${th}" fill="none" stroke="#9ca3af" stroke-dasharray="3 2"></rect>
+      <rect x="${x + bw * 0.22}" y="${h - pad - sh}" width="${bw * 0.56}" height="${sh}" fill="${short ? "#dc2626" : color}" rx="2"></rect>
+      <text x="${x + bw / 2}" y="${h - pad - Math.max(th, sh) - 3}" text-anchor="middle" font-size="9" fill="#374151">${r.sent}</text>
+      <text x="${x + bw / 2}" y="${h - 4}" text-anchor="middle" font-size="8" fill="#6b7280">${adminEscape(String(r.day).slice(8))}</text></g>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" role="img" aria-label="Daily target and films sent">${bars}</svg>`;
+}
+
+function staffPerfFunnelHtml(f, color) {
+  const steps = [
+    ["Films sent", f.sent, ""],
+    ["Replied", f.replied, `${f.reply_rate}% reply`],
+    ["Spoke / called", f.spoke, `${f.spoke_rate}%`],
+    ["Signed up", f.signed_up, `${f.signup_rate}% sign up`],
+    ["Paid", f.paid, `${f.paid_rate}% of sign-ups`]
+  ];
+  const top = Math.max(1, f.sent);
+  return steps.map(([label, n, rate]) => `<div class="flex items-center gap-2 text-xs mb-1">
+      <span class="w-24 shrink-0 text-gray-700 font-semibold">${label}</span>
+      <span class="flex-1 bg-gray-100 rounded h-5 relative overflow-hidden"><span class="absolute left-0 top-0 h-5 rounded" style="width:${Math.max(n ? 3 : 0, Math.round((n / top) * 100))}%;background:${color}"></span><span class="absolute left-2 top-0 leading-5 font-bold ${n / top > 0.25 ? "text-white" : "text-gray-900"}">${n}</span></span>
+      <span class="w-28 shrink-0 text-right text-gray-500">${rate}</span></div>`).join("") + (f.paid_claimed ? `<p class="text-[11px] text-amber-800 mt-1">${f.paid_claimed} marked Paid but no payment on the books yet.</p>` : "");
+}
+
+function staffPerfRender(scope) {
+  const root = staffPerfRoot(scope);
+  const state = staffPerfState(scope);
+  const data = state.data;
+  if (!root || !data) return;
+  root.dataset.ready = "1";
+  const me = staffPerfMe();
+  const people = data.people || [];
+  const road = data.road || {};
+  const rates = data.rates || {};
+  const isKing = typeof canUseLiveAdminApi === "function" && canUseLiveAdminApi() && !(typeof deskPageIsStaff === "function" && deskPageIsStaff());
+  const period = state.period === "all" ? "all" : "campaign";
+  const funnelKey = period === "all" ? "funnel_all_time" : "funnel_campaign";
+  const pieKey = period === "all" ? "sent_all_time" : "sent_campaign";
+  const leaders = people.slice().sort((a, b) => b.points_campaign - a.points_campaign || b.sent_campaign - a.sent_campaign);
+  const medal = (i) => (i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}`);
+  const filmsPerPaid = rates.send_to_paid > 0 ? Math.round(1 / rates.send_to_paid) : null;
+  const pace = road.required_films_per_day;
+  const teamTarget = data.team_target_today || 0;
+  const streamKey = state.stream || me || (people[0] && people[0].key) || "";
+  const streamPerson = people.find((p) => p.key === streamKey) || people[0];
+  const dayRows = data.activity || [];
+  const day = state.day && dayRows.some((d) => d.day === state.day) ? state.day : (dayRows[0] && dayRows[0].day);
+  const dayRow = dayRows.find((d) => d.day === day);
+  const chip = (on, label, onclick) => `<button type="button" onclick="${onclick}" class="rounded-full px-3 py-1 text-xs font-bold ${on ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700"}">${label}</button>`;
+
+  root.innerHTML = `
+  <div class="space-y-4" data-perf-ready>
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div class="min-w-0">
+        <h3 class="text-xl font-black text-gray-900">Staff Performance · ${adminEscape(data.campaign?.name || "Road to 1000")}</h3>
+        <p class="text-xs text-gray-500 mt-1">${adminEscape(String(data.campaign?.goal || 1000))} paying agents by ${adminEscape(staffPerfDayLabel(data.campaign?.ends_on))} 2026. Tracking from ${adminEscape(staffPerfDayLabel(data.campaign?.starts_on))}. Missed films are carried to the next day.</p>
+      </div>
+      <button type="button" onclick="staffPerfLoad('${scope}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh</button>
+    </div>
+    <div class="flex flex-wrap items-center gap-2" data-perf-me>
+      <span class="text-xs font-semibold text-gray-500">I am</span>
+      ${people.map((p) => chip(me === p.key, adminEscape(p.name), `staffPerfSetMe('${scope}', '${adminAttr(p.key)}')`)).join(" ")}
+      ${me ? "" : `<span class="text-xs text-amber-800 font-semibold">Pick your name so your calls are counted as yours.</span>`}
+    </div>
+
+    <section class="rounded-2xl p-4 text-white" style="background:linear-gradient(135deg,#064e3b,#047857)" data-perf-road>
+      <div class="flex items-end justify-between gap-3 flex-wrap">
+        <div><p class="text-xs font-bold uppercase tracking-wide opacity-80">Road to 1000 · paying agents</p>
+          <p class="text-4xl font-black leading-none mt-1">${road.paying_now ?? 0}<span class="text-lg font-bold opacity-80"> / ${road.goal ?? 1000}</span></p></div>
+        <div class="text-right"><p class="text-3xl font-black leading-none">${road.days_left ?? "—"}</p><p class="text-xs opacity-80">days left</p></div>
+      </div>
+      <div class="mt-3 h-4 rounded-full bg-white/20 overflow-hidden"><div class="h-4 rounded-full bg-amber-300" style="width:${Math.max(road.paying_now ? 1 : 0, road.percent || 0)}%"></div></div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 text-center">
+        <div class="rounded-xl bg-white/10 p-2"><p class="text-xl font-black">${road.required_paying_per_day ?? "—"}</p><p class="text-[11px] opacity-80">paying agents needed a day</p></div>
+        <div class="rounded-xl bg-white/10 p-2"><p class="text-xl font-black">${road.actual_paying_per_day ?? 0}</p><p class="text-[11px] opacity-80">paying agents a day so far</p></div>
+        <div class="rounded-xl bg-white/10 p-2"><p class="text-xl font-black">${pace ?? "—"}</p><p class="text-[11px] opacity-80">films needed a day</p></div>
+        <div class="rounded-xl p-2 ${teamTarget < (pace || 0) ? "bg-red-600" : "bg-white/10"}"><p class="text-xl font-black">${teamTarget}</p><p class="text-[11px] opacity-90">team target today · ${road.actual_films_per_day ?? 0} a day so far</p></div>
+      </div>
+      <p class="text-[11px] mt-3 opacity-90 leading-relaxed">The maths: ${staffPerfPct(rates.send_to_signup)} of films sign up (${rates.measured_from?.signed_up ?? 0} of ${rates.measured_from?.sent ?? 0}) × ${staffPerfPct(rates.signup_to_paid)} of sign-ups pay (${rates.signup_to_paid_source === "measured" ? "measured" : "assumed until 10 sign-ups have paid"}) = 1 paying agent per ${filmsPerPaid ?? "—"} films. ${road.remaining ?? "—"} to go ÷ ${road.days_left ?? "—"} days = ${pace ?? "—"} films a day.</p>
+    </section>
+
+    <section class="rounded-2xl border border-gray-200 p-3" data-perf-leaderboard>
+      <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
+        <h4 class="font-black text-gray-900">Leaderboard</h4>
+        ${data.top_today ? `<span class="rounded-full bg-amber-100 text-amber-900 px-3 py-1 text-xs font-black">🏆 Today’s #1: ${adminEscape(data.top_today.name)} · ${data.top_today.points} pts</span>` : `<span class="text-xs text-gray-500">No points yet today</span>`}
+      </div>
+      <div class="overflow-x-auto"><table class="w-full text-xs">
+        <thead><tr class="text-left text-gray-500"><th class="py-1 pr-2">#</th><th class="pr-2">Who</th><th class="pr-2">Today</th><th class="pr-2">Owed</th><th class="pr-2">Week</th><th class="pr-2">Total</th><th class="pr-2">Streak</th><th>Points</th></tr></thead>
+        <tbody>${leaders.map((p, i) => `<tr class="border-t border-gray-100 ${p.behind ? "bg-red-50" : ""}">
+          <td class="py-2 pr-2 text-base">${medal(i)}</td>
+          <td class="pr-2 font-black" style="color:${staffPerfColor(data, p.key)}">${adminEscape(p.name)}</td>
+          <td class="pr-2 font-bold ${p.behind ? "text-red-700" : "text-emerald-700"}">${p.sent_today} / ${p.due_today}</td>
+          <td class="pr-2 font-black ${p.owed > 0 ? "text-red-700" : "text-gray-400"}">${p.owed > 0 ? `+${p.owed}` : "0"}</td>
+          <td class="pr-2">${p.sent_week}</td><td class="pr-2">${p.sent_campaign}</td>
+          <td class="pr-2">${p.streak ? `🔥 ${p.streak}` : "—"}</td>
+          <td class="font-black">${p.points_campaign}</td></tr>`).join("")}</tbody>
+      </table></div>
+      <p class="text-[11px] text-gray-500 mt-2">Points: film ${data.campaign?.points?.send ?? 1} · reply ${data.campaign?.points?.reply ?? 3} · signed up ${data.campaign?.points?.signed_up ?? 10} · paid ${data.campaign?.points?.paid ?? 25}. Today = sent / due (target + owed). A streak is days in a row on target.</p>
+    </section>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+      <section class="rounded-2xl border border-gray-200 p-3 lg:col-span-2" data-perf-daily>
+        <h4 class="font-black text-gray-900">Daily target vs films sent</h4>
+        <p class="text-[11px] text-gray-500 mb-2">Dashed box = due that day (target + owed). Bar = films sent; red when short.</p>
+        <div class="grid grid-cols-1 md:grid-cols-${Math.min(3, Math.max(1, people.length))} gap-3">
+          ${people.map((p) => `<div><p class="text-xs font-black" style="color:${staffPerfColor(data, p.key)}">${adminEscape(p.name)} <span class="font-semibold text-gray-500">· target ${p.target_today}/day</span></p>${staffPerfBarsSvg(p, staffPerfColor(data, p.key))}</div>`).join("")}
+        </div>
+      </section>
+      <section class="rounded-2xl border border-gray-200 p-3" data-perf-pie>
+        <div class="flex items-center justify-between"><h4 class="font-black text-gray-900">Share of films</h4>
+          <div class="flex gap-1">${chip(period === "campaign", "Road to 1000", `staffPerfPeriod('${scope}','campaign')`)}${chip(period === "all", "All time", `staffPerfPeriod('${scope}','all')`)}</div></div>
+        <div class="flex items-center gap-3 mt-2">${staffPerfPieSvg(people.map((p) => ({ value: p[pieKey], color: staffPerfColor(data, p.key) })))}
+          <ul class="text-xs space-y-1">${people.map((p) => `<li><span class="inline-block w-3 h-3 rounded-sm align-middle mr-1" style="background:${staffPerfColor(data, p.key)}"></span>${adminEscape(p.name)} <strong>${p[pieKey]}</strong></li>`).join("")}</ul></div>
+      </section>
+    </div>
+
+    <section class="rounded-2xl border border-gray-200 p-3" data-perf-funnel>
+      <h4 class="font-black text-gray-900">Funnel · ${period === "all" ? "all time" : "Road to 1000"}</h4>
+      <p class="text-[11px] text-gray-500 mb-2">Sign-ups and payments are matched to the film automatically by phone and credited to whoever sent it. Spoke / called comes from the outcome taps.</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div><p class="text-xs font-black text-gray-900 mb-1">Everyone</p>${staffPerfFunnelHtml(data[funnelKey] || {}, "#111827")}</div>
+        ${people.map((p) => `<div><p class="text-xs font-black mb-1" style="color:${staffPerfColor(data, p.key)}">${adminEscape(p.name)}</p>${staffPerfFunnelHtml(p[funnelKey] || {}, staffPerfColor(data, p.key))}</div>`).join("")}
+        <div data-perf-funnel-found-online><p class="text-xs font-black text-orange-800 mb-1">Found-online listers <span class="font-semibold text-gray-500">(allowed since 15 Nov)</span></p>${staffPerfFunnelHtml(data[period === "all" ? "funnel_found_online_all_time" : "funnel_found_online_campaign"] || {}, "#c2410c")}</div>
+      </div>
+    </section>
+
+    <section class="rounded-2xl border border-amber-200 bg-amber-50 p-3" data-perf-followups>
+      <h4 class="font-black text-gray-900">My follow-ups today <span class="text-xs font-bold text-amber-800">(${(data.follow_ups || []).length})</span></h4>
+      <p class="text-[11px] text-gray-600 mb-2">Oldest first. Tap Call: it dials and asks what happened. One tap logs it.</p>
+      <div class="space-y-2">${(data.follow_ups || []).slice(0, state.allFollowUps ? 150 : 8).map((f) => `<article class="rounded-xl bg-white border ${f.overdue_days > 0 ? "border-red-300" : "border-gray-200"} p-3 flex items-center justify-between gap-2" data-perf-followup>
+          <div class="min-w-0"><p class="font-black text-gray-900 text-sm">${adminEscape(f.full_name)} <span class="text-xs font-semibold text-gray-500">${adminEscape(f.phone_masked)}</span></p>
+            <p class="text-xs text-gray-700">${adminEscape(f.reason)}</p>
+            <p class="text-[11px] ${f.overdue_days > 0 ? "text-red-700 font-bold" : "text-gray-500"}">${f.overdue_days > 0 ? `${f.overdue_days} day${f.overdue_days === 1 ? "" : "s"} overdue` : "Due today"} · film by ${adminEscape(f.sender_name || "—")}${f.last_outcome_label ? ` · last: ${adminEscape(f.last_outcome_label)}` : ""}${f.calls ? ` · ${f.calls} call${f.calls === 1 ? "" : "s"}` : ""}</p></div>
+          <div class="flex flex-col gap-1 shrink-0">${staffPerfCallButtonHtml(f.id, `perf:${scope}`)}<button type="button" onclick="staffPerfOpenOutcome('${adminAttr(f.id)}', '${adminAttr(f.full_name)}', 'perf:${scope}')" class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-bold">Log</button></div>
+        </article>`).join("") || `<p class="text-xs text-gray-600">Nothing due. Well done.</p>`}</div>
+      ${(data.follow_ups || []).length > 8 ? `<button type="button" onclick="staffPerfAllFollowUps('${scope}')" class="mt-2 text-xs font-bold text-amber-900 underline">${state.allFollowUps ? "Show the first 8" : `Show all ${(data.follow_ups || []).length}`}</button>` : ""}
+    </section>
+
+    <section class="rounded-2xl border border-gray-200 p-3" data-perf-streams>
+      <h4 class="font-black text-gray-900">Today’s numbers · one list each</h4>
+      <p class="text-[11px] text-gray-500 mb-2">A number goes to one person only. Numbers already sent a film, already agents, on another list or marked do-not-contact are refused and kept with the reason. Found-online listers are allowed and tagged. Unsent numbers roll over to the next day.</p>
+      <div class="flex flex-wrap gap-2 mb-2">${people.map((p) => chip(p.key === streamPerson?.key, `${adminEscape(p.name)} · ${p.stream.waiting} waiting${p.stream.carried ? ` (${p.stream.carried} carried)` : ""}`, `staffPerfStream('${scope}','${adminAttr(p.key)}')`)).join("")}</div>
+      ${streamPerson ? `<div class="space-y-1 max-h-80 overflow-y-auto" data-perf-stream-list>${streamPerson.stream.items.map((n) => `<div class="flex items-center justify-between gap-2 rounded-lg border ${n.status === "assigned" ? (n.carried_days ? "border-red-200 bg-red-50" : "border-gray-200") : "border-emerald-200 bg-emerald-50"} px-2 py-1.5 text-xs">
+          <span class="min-w-0 truncate"><strong>${adminEscape(n.full_name || "No name")}</strong> ${adminEscape(n.phone_masked)} ${n.found_online ? `<span class="rounded bg-orange-100 text-orange-900 px-1 font-bold">found online</span> ` : ""}<span class="text-gray-500">· ${n.status === "assigned" ? (n.carried_days ? `carried ${n.carried_days} day${n.carried_days === 1 ? "" : "s"}` : "today") : adminEscape(n.status.replace("_", " "))}${n.sent_by && n.status !== "assigned" ? ` by ${adminEscape(n.sent_by)}` : ""}</span></span>
+          ${n.status === "assigned" ? `<button type="button" onclick="staffPerfCopyNumber('${adminAttr(n.id)}', '${adminAttr(n.full_name || "")}')" class="shrink-0 rounded-lg bg-gray-900 text-white px-2 py-1 font-bold">Copy for Agent 007</button>` : `<span class="shrink-0 font-bold text-emerald-800">✓</span>`}
+        </div>`).join("") || `<p class="text-xs text-gray-500">No numbers on ${adminEscape(streamPerson.name)}’s list yet.</p>`}</div>` : ""}
+      <form class="mt-3 rounded-xl bg-gray-50 border border-gray-200 p-3 grid grid-cols-1 md:grid-cols-3 gap-2" onsubmit="staffPerfAddList(event, '${scope}')" data-perf-paste>
+        <label class="text-xs font-semibold">For<select name="person_key" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm">${people.map((p) => `<option value="${adminAttr(p.key)}" ${p.key === streamPerson?.key ? "selected" : ""}>${adminEscape(p.name)}</option>`).join("")}</select></label>
+        <label class="text-xs font-semibold">Day<input name="list_day" type="date" value="${adminAttr(data.today)}" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"></label>
+        <div class="flex items-end"><button type="submit" class="w-full rounded-lg bg-emerald-700 text-white px-4 py-2 text-xs font-bold">Add to list</button></div>
+        <label class="text-xs font-semibold md:col-span-3">Paste numbers, one a line (name optional)<textarea name="text" rows="3" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="Kato Brian, 0772 …&#10;0701 …"></textarea></label>
+        ${state.lastPaste ? `<div class="md:col-span-3 text-xs" data-perf-paste-result><p class="font-bold">${state.lastPaste.summary.accepted} added to ${adminEscape(staffPerfName(data, state.lastPaste.person_key))}’s list${Object.keys(state.lastPaste.summary.refused).length ? `, ${Object.values(state.lastPaste.summary.refused).reduce((a, b) => a + b, 0)} refused` : ""}.</p>${state.lastPaste.lines.filter((l) => !l.accepted).map((l) => `<p class="text-red-800">✗ ${adminEscape(l.name || "")} ${adminEscape(l.phone_masked)} — ${adminEscape(l.refused)}</p>`).join("")}</div>` : ""}
+      </form>
+    </section>
+
+    <section class="rounded-2xl border border-gray-200 p-3" data-perf-activity>
+      <h4 class="font-black text-gray-900">Who did what</h4>
+      <div class="flex gap-1 overflow-x-auto pb-1 my-2">${dayRows.map((d) => chip(d.day === day, adminEscape(staffPerfDayLabel(d.day)), `staffPerfDay('${scope}','${d.day}')`)).join("")}</div>
+      ${dayRow ? `<div class="overflow-x-auto"><table class="w-full text-xs"><thead><tr class="text-left text-gray-500"><th class="py-1 pr-2">Who</th><th class="pr-2">Films</th><th class="pr-2">Target</th><th class="pr-2">Calls</th><th class="pr-2">Spoke</th><th class="pr-2">Signed up</th><th class="pr-2">Paid</th><th class="pr-2">Numbers added</th><th>Blocked</th></tr></thead>
+        <tbody>${dayRow.people.map((r) => { const p = people.find((x) => x.key === r.key); const led = (p?.ledger || []).find((l) => l.day === day); return `<tr class="border-t border-gray-100"><td class="py-2 pr-2 font-black" style="color:${staffPerfColor(data, r.key)}">${adminEscape(staffPerfName(data, r.key))}</td><td class="pr-2 font-bold">${r.sent}</td><td class="pr-2">${led ? `${led.sent >= led.due ? "✅" : "❌"} ${led.due}` : "—"}</td><td class="pr-2">${r.calls}</td><td class="pr-2">${r.spoke}</td><td class="pr-2">${r.signed_up}</td><td class="pr-2">${r.paid}</td><td class="pr-2">${r.numbers_added}</td><td class="${r.blocked ? "text-red-700 font-bold" : ""}">${r.blocked}</td></tr>`; }).join("")}</tbody></table></div>` : ""}
+      <details class="mt-2"><summary class="text-xs font-bold text-gray-700 cursor-pointer">Every tap, newest first (audit)</summary>
+        <ul class="mt-2 space-y-1 text-[11px] text-gray-700">${(data.log || []).map((e) => `<li>${adminEscape(new Date(e.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Kampala" }))} · <strong>${adminEscape(staffPerfName(data, e.person_key))}</strong> · ${adminEscape(e.kind === "outcome" ? e.outcome_label : e.kind === "call_started" ? "Call started" : e.kind === "blocked" ? `Blocked (${e.block_code})` : "Replied on WhatsApp")} · ${adminEscape(e.phone_masked)}${e.note ? ` · “${adminEscape(e.note)}”` : ""} <span class="text-gray-400">(${adminEscape(e.by_account || e.source)})</span></li>`).join("") || "<li>Nothing logged yet.</li>"}</ul></details>
+    </section>
+
+    <section class="rounded-2xl border border-gray-200 p-3" data-perf-wasted>
+      <h4 class="font-black text-gray-900">Wasted numbers</h4>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">${people.map((p) => `<div class="rounded-xl bg-gray-50 p-2 text-xs"><p class="font-black" style="color:${staffPerfColor(data, p.key)}">${adminEscape(p.name)}</p>
+        <p>Duplicates: <strong class="${p.wasted.duplicate ? "text-red-700" : ""}">${p.wasted.duplicate}</strong> · Already agents: <strong>${p.wasted.existing_agent}</strong> · Do not contact: <strong>${p.wasted.do_not_contact}</strong> · Not a number: <strong>${p.wasted.invalid}</strong>${p.wasted.found_online_old_rule ? ` · Found-online blocked before 15 Nov: <strong>${p.wasted.found_online_old_rule}</strong>` : ""}</p></div>`).join("")}</div>
+    </section>
+
+    ${isKing ? `<section class="rounded-2xl border border-gray-900 p-3" data-perf-settings>
+      <h4 class="font-black text-gray-900">King · targets and points</h4>
+      <p class="text-[11px] text-gray-500 mb-2">A change applies from today; past days keep the target they had.</p>
+      <form class="grid grid-cols-2 md:grid-cols-4 gap-2" onsubmit="staffPerfSaveSettings(event, '${scope}')">
+        ${people.map((p) => `<label class="text-xs font-semibold">${adminEscape(p.name)} films/day<input name="target_${adminAttr(p.key)}" data-person="${adminAttr(p.key)}" type="number" min="0" max="5000" value="${p.target_today}" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"></label>`).join("")}
+        <label class="text-xs font-semibold">Sign-ups that pay (%)<input name="assumed_paid_rate" type="number" min="1" max="100" value="${Math.round((data.campaign?.assumed_paid_rate || 0.5) * 100)}" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"></label>
+        ${["send", "reply", "signed_up", "paid"].map((k) => `<label class="text-xs font-semibold">Points: ${k.replace("_", " ")}<input name="points_${k}" type="number" min="0" max="1000" value="${data.campaign?.points?.[k] ?? 0}" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"></label>`).join("")}
+        <div class="col-span-2 md:col-span-4"><button type="submit" class="rounded-lg bg-gray-900 text-white px-4 py-2 text-xs font-bold">Save targets and points</button></div>
+      </form>
+    </section>` : ""}
+  </div>`;
+}
+
+function staffPerfAllFollowUps(scope) {
+  const state = staffPerfState(scope);
+  state.allFollowUps = !state.allFollowUps;
+  staffPerfRender(scope);
+}
+
+function staffPerfPeriod(scope, period) {
+  staffPerfState(scope).period = period;
+  staffPerfRender(scope);
+}
+
+function staffPerfStream(scope, key) {
+  staffPerfState(scope).stream = key;
+  staffPerfRender(scope);
+}
+
+function staffPerfDay(scope, day) {
+  staffPerfState(scope).day = day;
+  staffPerfRender(scope);
+}
+
+function staffPerfCallButtonHtml(id, reload) {
+  return `<button type="button" onclick="staffPerfCall('${adminAttr(id)}', '${adminAttr(reload || "")}')" class="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-xs font-bold" data-perf-call>📞 Call</button>`;
+}
+
+async function staffPerfCall(id, reload) {
+  let me = staffPerfMe();
+  try {
+    const res = await apiRequest(`/api/admin/staff-performance/prospects/${encodeURIComponent(id)}/call`, {
+      method: "POST", headers: adminAuthHeaders(), body: { person_key: me }
+    });
+    const name = document.querySelector(`[data-perf-call][onclick*="${id}"]`)?.closest("article")?.querySelector("p")?.textContent || "";
+    staffPerfOpenOutcome(id, name.trim(), reload);
+    if (res?.data?.tel) window.location.href = `tel:${res.data.tel}`;
+  } catch (error) {
+    alert(error?.message || "Could not start the call.");
+  }
+}
+
+function staffPerfOpenOutcome(id, name, reload) {
+  document.getElementById("perf-outcome-sheet")?.remove();
+  const outcomes = [
+    ["no_answer", "No answer", "bg-gray-200 text-gray-900"],
+    ["replied", "Replied / chatting", "bg-sky-600 text-white"],
+    ["interested", "Interested", "bg-emerald-600 text-white"],
+    ["signed_up", "Signed up", "bg-teal-700 text-white"],
+    ["paid", "Paid", "bg-amber-500 text-gray-900"],
+    ["not_interested", "Not interested", "bg-slate-600 text-white"],
+    ["wrong_number", "Wrong number", "bg-red-600 text-white"]
+  ];
+  const sheet = document.createElement("div");
+  sheet.id = "perf-outcome-sheet";
+  sheet.className = "fixed inset-0 z-50 flex items-end md:items-center justify-center";
+  sheet.style.background = "rgba(17,24,39,.55)";
+  sheet.innerHTML = `<form class="w-full md:max-w-md bg-white rounded-t-2xl md:rounded-2xl p-4 space-y-3" onsubmit="staffPerfSaveOutcome(event, '${adminAttr(id)}', '${adminAttr(reload || "")}')" data-perf-outcome-picker>
+      <div class="flex items-start justify-between gap-2"><div><p class="text-xs font-bold text-gray-500 uppercase">What happened?</p><p class="font-black text-gray-900">${adminEscape(String(name || "").replace(/\s+/g, " ").slice(0, 60))}</p></div>
+        <button type="button" onclick="document.getElementById('perf-outcome-sheet').remove()" class="text-gray-500 text-xl leading-none">×</button></div>
+      <input type="hidden" name="outcome" value="">
+      <div class="grid grid-cols-2 gap-2">${outcomes.map(([k, label, cls]) => `<button type="button" data-outcome="${k}" onclick="staffPerfPickOutcome(this)" class="${cls} rounded-xl px-3 py-3 text-sm font-black">${label}</button>`).join("")}</div>
+      <label class="block text-xs font-semibold">Note (optional)<input name="note" maxlength="300" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="e.g. call back after 5pm"></label>
+      <label class="block text-xs font-semibold">Next follow-up (optional)<input name="follow_up_on" type="date" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"></label>
+      <button type="submit" class="w-full rounded-xl bg-gray-900 text-white px-4 py-3 text-sm font-black">Save</button>
+    </form>`;
+  document.body.appendChild(sheet);
+}
+
+function staffPerfPickOutcome(button) {
+  const form = button.closest("form");
+  form.querySelectorAll("[data-outcome]").forEach((b) => b.classList.toggle("ring-4", b === button));
+  form.querySelectorAll("[data-outcome]").forEach((b) => b.classList.toggle("ring-gray-900", b === button));
+  form.querySelector('input[name="outcome"]').value = button.getAttribute("data-outcome");
+}
+
+async function staffPerfReloadAfter(reload) {
+  const [kind, scope] = String(reload || "").split(":");
+  if (kind === "perf" && scope) return staffPerfLoad(scope);
+  if (kind === "outreach" && scope) return staffOutreachLoad(scope);
+  return null;
+}
+
+async function staffPerfSaveOutcome(event, id, reload) {
+  event.preventDefault();
+  const data = Object.fromEntries(new FormData(event.target).entries());
+  if (!data.outcome) { alert("Tap what happened first."); return; }
+  try {
+    await apiRequest(`/api/admin/staff-performance/prospects/${encodeURIComponent(id)}/outcome`, {
+      method: "POST", headers: adminAuthHeaders(),
+      body: { outcome: data.outcome, note: data.note || "", follow_up_on: data.follow_up_on || "", person_key: staffPerfMe() }
+    });
+    document.getElementById("perf-outcome-sheet")?.remove();
+    await staffPerfReloadAfter(reload);
+  } catch (error) {
+    alert(error?.message || "Could not save that.");
+  }
+}
+
+async function staffPerfAddList(event, scope) {
+  event.preventDefault();
+  const form = event.target;
+  const data = Object.fromEntries(new FormData(form).entries());
+  try {
+    const res = await apiRequest("/api/admin/staff-performance/lists", {
+      method: "POST", headers: adminAuthHeaders(),
+      body: { person_key: data.person_key, list_day: data.list_day, text: data.text, added_by_person: staffPerfMe() }
+    });
+    const state = staffPerfState(scope);
+    state.lastPaste = res?.data || null;
+    state.stream = data.person_key;
+    await staffPerfLoad(scope);
+  } catch (error) {
+    alert(error?.message || "Could not add those numbers.");
+  }
+}
+
+async function staffPerfCopyNumber(id, name) {
+  try {
+    const res = await apiRequest(`/api/admin/staff-performance/lists/${encodeURIComponent(id)}/number`, { method: "POST", headers: adminAuthHeaders(), body: {} });
+    const text = `${name ? `${name} ` : ""}${res?.data?.phone || ""}`.trim();
+    await navigator.clipboard.writeText(text);
+    alert("Copied. Paste it into Agent 007 option 3.");
+  } catch (error) {
+    alert(error?.message || "Could not copy the number.");
+  }
+}
+
+async function staffPerfSaveSettings(event, scope) {
+  event.preventDefault();
+  const form = event.target;
+  const targets = [...form.querySelectorAll("[data-person]")].map((input) => ({ person_key: input.getAttribute("data-person"), daily_target: Number(input.value) }));
+  const val = (n) => Number(form.querySelector(`[name="${n}"]`)?.value);
+  try {
+    await apiRequest("/api/admin/staff-performance/settings", {
+      method: "PUT", headers: adminAuthHeaders(),
+      body: { targets, assumed_paid_rate: val("assumed_paid_rate") / 100, points: { send: val("points_send"), reply: val("points_reply"), signed_up: val("points_signed_up"), paid: val("points_paid") } }
+    });
+    await staffPerfLoad(scope);
+  } catch (error) {
+    alert(error?.message || "Could not save.");
+  }
+}
+
 
 function setAdminWorkflowTab(tab = "review") {
-  const allowed = ["review", "youtube-sweep", "revenue", "live", "accounts", "outreach", "agents", "public", "field-agents", "staff", "whatsapp", "agent-reports", "notifications", "listings"];
+  const allowed = ["review", "youtube-sweep", "revenue", "live", "accounts", "outreach", "performance", "agents", "public", "field-agents", "staff", "whatsapp", "agent-reports", "notifications", "listings"];
   const previousTab = activeAdminWorkflowTab;
   // Tabs removed in the Oct 2026 King slim-down open where their content now lives.
   const moved = { "student-sweep": "review", actioned: "listings", ads: "revenue" };
@@ -23840,6 +24277,7 @@ function setAdminWorkflowTab(tab = "review") {
   if (activeAdminWorkflowTab === "revenue" && previousTab !== "revenue") loadAdminRevenue();
   if (activeAdminWorkflowTab === "accounts") staffPeopleEnsureLoaded("admin");
   if (activeAdminWorkflowTab === "outreach") staffOutreachEnsureLoaded("admin");
+  if (activeAdminWorkflowTab === "performance") staffPerfEnsureLoaded("admin");
   if (activeAdminWorkflowTab === "agents") adminAgentManagerEnsureLoaded();
   if (activeAdminWorkflowTab === "public") adminPublicManagerEnsureLoaded();
 }
@@ -58495,6 +58933,7 @@ const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
   "/admin/field-agent-notices": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-notice-control", label: "Field Agent Notice Board" },
   "/admin/accounts": { page: "admin-dashboard", tab: "accounts", selector: "#admin-accounts-control", label: "Accounts" },
   "/admin/outreach": { page: "admin-dashboard", tab: "outreach", selector: "#admin-outreach-control", label: "Outreach" },
+  "/admin/staff-performance": { page: "admin-dashboard", tab: "performance", selector: "#admin-staff-performance-control", label: "Staff Performance" },
   "/admin/users": { page: "admin-dashboard", tab: "accounts", selector: "#admin-accounts-control", label: "Users" },
   "/admin/contracts": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard", moved: "Field Agent Control was retired from King (Oct 2026). Field agent records are kept." },
   "/admin/fraud": { page: "staff-dashboard", staffDesk: "reports", label: "Reports & claims (staff desk)" },

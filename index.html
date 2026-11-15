@@ -8611,13 +8611,14 @@
         <section id="staff-king-tools" class="bg-white border border-gray-200 rounded-2xl p-4 md:p-5 scroll-mt-28">
           <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
             <div>
-              <h3 class="text-lg font-black text-gray-900">Accounts, Outreach, Agents, Public, Live &amp; Featured</h3>
+              <h3 class="text-lg font-black text-gray-900">Accounts, Outreach, Staff Performance, Agents, Public, Live &amp; Featured</h3>
               <p class="text-xs text-gray-500 mt-1">The same desk tools as the King dashboard, so Ronald can add and approve agents, edit featured listings, and track every outreach video.</p>
             </div>
           </div>
           <div class="flex gap-2 overflow-x-auto pb-2 mb-3" data-staff-tools-tabs>
             <button type="button" data-staff-tools-tab="accounts" onclick="setStaffToolsTab('accounts')" class="shrink-0 px-4 py-2 rounded-xl text-sm font-bold bg-gray-900 text-white">Accounts</button>
             <button type="button" data-staff-tools-tab="outreach" onclick="setStaffToolsTab('outreach')" class="shrink-0 px-4 py-2 rounded-xl text-sm font-bold bg-gray-100 text-gray-700">Outreach</button>
+            <button type="button" data-staff-tools-tab="performance" onclick="setStaffToolsTab('performance')" class="shrink-0 px-4 py-2 rounded-xl text-sm font-bold bg-gray-100 text-gray-700">Staff Performance</button>
             <button type="button" data-staff-tools-tab="agents" onclick="setStaffToolsTab('agents')" class="shrink-0 px-4 py-2 rounded-xl text-sm font-bold bg-gray-100 text-gray-700">Agents</button>
             <button type="button" data-staff-tools-tab="public" onclick="setStaffToolsTab('public')" class="shrink-0 px-4 py-2 rounded-xl text-sm font-bold bg-gray-100 text-gray-700">Public</button>
             <button type="button" data-staff-tools-tab="live" onclick="setStaffToolsTab('live')" class="shrink-0 px-4 py-2 rounded-xl text-sm font-bold bg-gray-100 text-gray-700">Live &amp; Featured</button>
@@ -8627,6 +8628,9 @@
           </div>
           <div data-outreach-root="staff" data-staff-tools-panel="outreach" class="hidden">
             <p class="text-xs text-gray-500">Loading outreach…</p>
+          </div>
+          <div id="staff-performance-panel" data-perf-root="staff" data-staff-tools-panel="performance" class="hidden">
+            <p class="text-xs text-gray-500">Loading Staff Performance…</p>
           </div>
           <div data-staff-tools-panel="agents" class="hidden">
             <div id="staff-agent-manager" data-agent-manager-root><p class="text-sm text-gray-500">Open Agents to load the list.</p></div>
@@ -8919,6 +8923,7 @@
             <button type="button" data-admin-tab-button="live" onclick="setAdminWorkflowTab('live')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Live & Featured</button>
             <button type="button" data-admin-tab-button="accounts" onclick="setAdminWorkflowTab('accounts')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Accounts</button>
             <button type="button" data-admin-tab-button="outreach" onclick="setAdminWorkflowTab('outreach')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Outreach</button>
+            <button type="button" data-admin-tab-button="performance" onclick="setAdminWorkflowTab('performance')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Staff Performance</button>
             <button type="button" data-admin-tab-button="agents" onclick="setAdminWorkflowTab('agents')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Agents</button>
             <button type="button" data-admin-tab-button="public" onclick="setAdminWorkflowTab('public')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Public</button>
             <button type="button" data-admin-tab-button="field-agents" onclick="setAdminWorkflowTab('field-agents')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Field Agent Control Centre</button>
@@ -9079,6 +9084,13 @@
           <div data-outreach-root="admin">
             <h3 class="text-xl font-bold text-gray-800">Outreach</h3>
             <p class="text-xs text-gray-500 mt-1">Loading outreach…</p>
+          </div>
+        </div>
+
+        <div id="admin-staff-performance-control" data-admin-tab-panel="performance" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-4 md:p-5">
+          <div data-perf-root="admin">
+            <h3 class="text-xl font-bold text-gray-800">Staff Performance</h3>
+            <p class="text-xs text-gray-500 mt-1">Loading Staff Performance…</p>
           </div>
         </div>
 
