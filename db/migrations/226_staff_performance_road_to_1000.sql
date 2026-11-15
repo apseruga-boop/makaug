@@ -60,12 +60,12 @@ CREATE TABLE IF NOT EXISTS staff_performance_targets (
 CREATE INDEX IF NOT EXISTS idx_staff_performance_targets_person
   ON staff_performance_targets (campaign_key, person_key, effective_from DESC);
 
--- The proposed starting targets (King changes them in the tab).
+-- Starting targets Arthur approved on 15 Nov 2026 (King changes them in the tab).
 INSERT INTO staff_performance_targets (campaign_key, person_key, person_name, daily_target, effective_from, set_by)
 VALUES
-  ('road_to_1000', 'ronald', 'Ronald', 250, DATE '2026-11-16', 'migration 226 (proposal)'),
-  ('road_to_1000', 'sharon', 'Sharon', 100, DATE '2026-11-16', 'migration 226 (proposal)'),
-  ('road_to_1000', 'arthur', 'Arthur', 60, DATE '2026-11-16', 'migration 226 (proposal)')
+  ('road_to_1000', 'ronald', 'Ronald', 250, DATE '2026-11-16', 'Arthur, 15 Nov 2026'),
+  ('road_to_1000', 'sharon', 'Sharon', 100, DATE '2026-11-16', 'Arthur, 15 Nov 2026'),
+  ('road_to_1000', 'arthur', 'Arthur', 60, DATE '2026-11-16', 'Arthur, 15 Nov 2026')
 ON CONFLICT (campaign_key, person_key, effective_from) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS outreach_events (
