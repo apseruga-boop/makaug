@@ -155,7 +155,9 @@ test('a photo or video with the advert on it is an advert of its own when staff 
 });
 
 test('a film prospect who says something else hears that it was passed on', () => {
-  const said = film.prospectFollowUpKind('Good evening brother It is a weekend Any program');
+  // That greeting has had an answer of its own since 15 Nov (whatsapp-chats-1115).
+  assert.strictEqual(film.prospectFollowUpKind('Good evening brother It is a weekend Any program'), 'smalltalk');
+  const said = film.prospectFollowUpKind('I will look at it and get back to you');
   assert.strictEqual(said, 'note');
   assert.strictEqual(
     film.prospectFollowUpReply({ kind: said, interested: false, helpName: 'Ronald', passedOn: true, sentBy: 'Arthur' }),

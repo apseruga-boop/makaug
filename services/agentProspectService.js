@@ -94,9 +94,40 @@ function isOwnerFilm(row = {}) {
   return String(row.video_kind || 'agent') === 'owner';
 }
 
-function followUpLabel(row = {}) {
+/**
+ * What they wrote back after the film, when it was neither the word the film
+ * asks for nor a no. Until 15 Nov 2026 the desk said "No reply yet" for
+ * anyone still at "pitched": a prospect who answered the film with a greeting
+ * the next evening sat under "No reply yet" for two days, and nobody called.
+ */
+function replyAfterPitch(row = {}, activity = {}) {
+  const meta = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+  const candidates = [
+    { at: activity.last_reply_at, text: activity.last_reply },
+    { at: meta.last_reply_at, text: meta.last_reply },
+    { at: row.replied_at, text: '' }
+  ].map((item) => ({ at: item.at ? new Date(item.at) : null, text: String(item.text || '').replace(/\s+/g, ' ').trim() }))
+    .filter((item) => item.at && !Number.isNaN(item.at.getTime()));
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => b.at.getTime() - a.at.getTime());
+  const latest = candidates[0];
+  const pitchedAt = row.pitched_at ? new Date(row.pitched_at).getTime() : 0;
+  if (pitchedAt && latest.at.getTime() < pitchedAt) return null;
+  const text = latest.text || (candidates.find((item) => item.text) || {}).text || '';
+  return { at: latest.at.toISOString(), text: text.slice(0, 160) };
+}
+
+function wroteBackWithoutTheWord(row = {}, activity = {}) {
+  if (row.do_not_contact || String(row.status || '') !== 'pitched') return null;
+  return replyAfterPitch(row, activity);
+}
+
+function followUpLabel(row = {}, activity = {}) {
   if (row.do_not_contact) return 'Do not contact again';
   const labels = isOwnerFilm(row) ? OWNER_FOLLOW_UP_LABELS : FOLLOW_UP_LABELS;
+  if (wroteBackWithoutTheWord(row, activity)) {
+    return isOwnerFilm(row) ? 'Replied — has not said LIST yet' : 'Replied — has not said AGENT yet';
+  }
   return labels[row.status] || 'No reply yet';
 }
 
@@ -147,7 +178,7 @@ function canMarkRegistered(row = {}) {
   return status === 'interested' || status === 'signed_up';
 }
 
-function loopState(row = {}) {
+function loopState(row = {}, activity = {}) {
   if (row.do_not_contact) return 'closed_dnc';
   const status = String(row.status || '');
   if (status === 'declined') return 'closed_no';
@@ -155,7 +186,7 @@ function loopState(row = {}) {
   if (status === 'signed_up' || row.registered_at || row.agent_id) return 'register_done';
   if (status === 'interested' && row.called_at) return 'called';
   if (status === 'interested') return 'yes';
-  if (status === 'pitched') return 'no_reply';
+  if (status === 'pitched') return wroteBackWithoutTheWord(row, activity) ? 'replied' : 'no_reply';
   return 'open';
 }
 
@@ -180,12 +211,25 @@ function formatAlreadyContactedMessage(row = {}) {
  * The next thing a human has to do, in words. This is what makes the list a
  * worklist rather than a log.
  */
-function prospectNextStep(row = {}) {
+function kampalaDayWords(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('en-GB', { timeZone: 'Africa/Kampala', weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+function prospectNextStep(row = {}, activity = {}) {
   if (row.do_not_contact) {
     return 'Closed — do not contact this person again. The same joining film stays blocked, and recontact is not offered.';
   }
   const days = Number(row.days_since_last_touch ?? row.days_since_pitch ?? daysSince(lastTouchAt(row)) ?? 0);
   const dayBit = days === 0 ? 'today' : days === 1 ? '1 day ago' : `${days} days ago`;
+  const wrote = wroteBackWithoutTheWord(row, activity);
+  if (wrote) {
+    const when = kampalaDayWords(wrote.at);
+    const said = wrote.text ? `: “${wrote.text}”` : '';
+    const word = isOwnerFilm(row) ? 'LIST' : 'AGENT';
+    return `They wrote back${when ? ` on ${when}` : ''}${said}. They have not said ${word} yet, so call them — a call usually settles it. Do not send the same ${isOwnerFilm(row) ? 'film' : 'joining film'} again.`;
+  }
   if (isOwnerFilm(row)) {
     switch (row.status) {
       case 'pitched':
@@ -247,7 +291,7 @@ function publicProspect(row = {}, activity = {}, known) {
     video_kind: row.video_kind || 'agent',
     video_label: videoLabel(row),
     status: row.status,
-    follow_up: followUpLabel(row),
+    follow_up: followUpLabel(row, activity),
     follow_up_note: row.follow_up_note || row.notes || '',
     pitched_at: row.pitched_at,
     days_ago: days,
@@ -268,12 +312,13 @@ function publicProspect(row = {}, activity = {}, known) {
     recontacted_by: row.recontacted_by || null,
     recontact_count: Number(row.recontact_count || 0),
     recontact_note: row.recontact_note || '',
-    loop_state: loopState(row),
+    loop_state: loopState(row, activity),
     agent_id: row.agent_id || null,
     agent_status: row.agent_status || null,
-    next_step: prospectNextStep(withDays),
+    next_step: prospectNextStep(withDays, activity),
     activity: {
-      last_reply_at: activity.last_reply_at || row.replied_at || null,
+      last_reply_at: (replyAfterPitch(row, activity) || {}).at || null,
+      last_reply: (replyAfterPitch(row, activity) || {}).text || '',
       last_activity_at: activity.last_activity_at || null,
       signed_up: Boolean(row.agent_id || ['signed_up', 'approved'].includes(row.status))
     }
@@ -495,19 +540,26 @@ async function activityForPhoneKeys(keys = []) {
   const map = new Map();
   if (!list.length) return map;
   try {
+    // The newest thing each of them wrote to us. This asked for columns the
+    // table never had (phone, from_phone, sender), failed, and was skipped in
+    // silence, so the desk never showed that anybody had written back.
     const replies = await db.query(
-      `SELECT RIGHT(REGEXP_REPLACE(COALESCE(phone, from_phone, sender, ''), '[^0-9]', '', 'g'), 9) AS phone_key,
-              MAX(COALESCE(created_at, received_at, sent_at)) AS last_reply_at
-         FROM whatsapp_messages
-        WHERE LOWER(COALESCE(direction, '')) IN ('inbound', 'in', 'received')
-          AND RIGHT(REGEXP_REPLACE(COALESCE(phone, from_phone, sender, ''), '[^0-9]', '', 'g'), 9) = ANY($1::text[])
-        GROUP BY 1`,
+      `SELECT DISTINCT ON (phone_key) phone_key, created_at AS last_reply_at,
+              LEFT(COALESCE(NULLIF(payload->>'body', ''), payload->>'effectiveBody', ''), 300) AS last_reply
+         FROM (
+           SELECT RIGHT(REGEXP_REPLACE(COALESCE(user_phone, ''), '[^0-9]', '', 'g'), 9) AS phone_key, created_at, payload
+             FROM whatsapp_messages
+            WHERE direction = 'inbound'
+              AND created_at >= NOW() - INTERVAL '90 days'
+              AND RIGHT(REGEXP_REPLACE(COALESCE(user_phone, ''), '[^0-9]', '', 'g'), 9) = ANY($1::text[])
+         ) m
+        ORDER BY phone_key, created_at DESC`,
       [list]
     );
     for (const row of replies.rows || []) {
-      map.set(row.phone_key, { ...(map.get(row.phone_key) || {}), last_reply_at: row.last_reply_at });
+      map.set(row.phone_key, { ...(map.get(row.phone_key) || {}), last_reply_at: row.last_reply_at, last_reply: row.last_reply || '' });
     }
-  } catch (_) { /* optional table / columns */ }
+  } catch (_) { /* the desk still lists everyone without it */ }
   return map;
 }
 
@@ -764,6 +816,8 @@ module.exports = {
   senderLabel,
   formatAlreadyContactedMessage,
   publicProspect,
+  replyAfterPitch,
+  activityForPhoneKeys,
   evaluateOutreachSend,
   recordProspectPitch,
   logManualOutreach,
