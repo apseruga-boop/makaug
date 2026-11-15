@@ -8,6 +8,7 @@ const logger = require('../config/logger');
 const { requireAdminApiKey, requireStaffOrAdminAccess, loadActiveUserFromToken } = require('../middleware/auth');
 const { isStaffSharedKingTool } = require('../utils/staffSharedKingTools');
 const { registerOutreachTrackerRoutes } = require('./outreachTracker');
+const { registerStaffPerformanceRoutes } = require('./staffPerformance');
 const { grantVerifiedTickIfComplete } = require('../services/agentVerifiedTickService');
 const { registerAgentManagerRoutes, HAS_ID_DOCUMENT_SQL: AGENT_HAS_ID_DOCUMENT_SQL } = require('./adminAgentManager');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
@@ -9008,6 +9009,11 @@ registerAgentManagerRoutes(router, {
 });
 
 registerOutreachTrackerRoutes(router, {
+  writeAudit,
+  actorLabel: (user) => moderationActorLabel(user)
+});
+
+registerStaffPerformanceRoutes(router, {
   writeAudit,
   actorLabel: (user) => moderationActorLabel(user)
 });

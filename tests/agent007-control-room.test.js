@@ -200,7 +200,7 @@ test('the old "4 then 2" for a payment link sends nobody the wrong film', async 
   });
 });
 
-test('the owner film is not sent to an agent, a found-online number, or twice', async () => {
+test('the owner film is not sent to an agent or twice, and may go to a found-online lister (15 Nov 2026)', async () => {
   await withWorld([
     [/FROM agents/i, () => [{ id: 'a1', full_name: 'Kato Brian', status: 'approved' }]]
   ], async ({ queued }) => {
@@ -211,9 +211,10 @@ test('the owner film is not sent to an agent, a found-online number, or twice', 
   await withWorld([
     [/FROM properties p\s+WHERE[\s\S]+found_online/i, () => [{ '?column?': 1 }]]
   ], async ({ queued }) => {
+    // Arthur, 15 Nov 2026 16:22: found-online listers may now be sent the film.
     const found = await staffStep(ARTHUR, 'employee_owner_pitch_contact', 'Some Lister | 0772123456', { employee_role: 'owner_pitch' });
-    assert.match(found.message, /found-online listing\. We never message those people/);
-    assert.strictEqual(queued.length, 0);
+    assert.match(found.message, /Owner film sent to Some Lister/);
+    assert.strictEqual(queued.length, 1);
   });
   await withWorld([
     [/FROM agent_prospects/i, () => [{ full_name: 'Sarah Nakato', video_kind: 'owner', status: 'pitched', pitched_at: daysAgo(2), pitched_by_name: 'Ronald' }]]
