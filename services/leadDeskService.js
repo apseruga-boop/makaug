@@ -1136,8 +1136,8 @@ function kampalaClock(date = new Date()) {
  * answered with houses for sale in Kira, twice. Nobody human saw it until
  * Arthur read the chat the next morning.
  */
-async function alertTeamConversationNeedsPerson(db, { phone = '', contactName = '', summary = '', reason = '', language = '' } = {}) {
-  if (!alertRecipients().length) return { skipped: 'no_recipients' };
+async function alertTeamConversationNeedsPerson(db, { phone = '', contactName = '', summary = '', reason = '', language = '', extraRecipients = [] } = {}) {
+  if (!teamRecipients(extraRecipients).length) return { skipped: 'no_recipients' };
   const digits = String(phone || '').replace(/\D+/g, '');
   const body = [
     `🙋 *WhatsApp message that needs a person*`,
@@ -1147,7 +1147,7 @@ async function alertTeamConversationNeedsPerson(db, { phone = '', contactName = 
     'The assistant has stopped replying to them until someone takes over.',
     digits ? `Reply: https://wa.me/${digits} · ${siteUrl()}/admin (WhatsApp inbox)` : `${siteUrl()}/admin (WhatsApp inbox)`
   ].filter(Boolean).join('\n');
-  return holdOrSendToTeam(db, { conversationPhone: digits, body, type: 'whatsapp_needs_person', kind: 'needs_person' });
+  return holdOrSendToTeam(db, { conversationPhone: digits, body, type: 'whatsapp_needs_person', kind: 'needs_person', extraRecipients });
 }
 
 /**

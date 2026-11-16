@@ -10,6 +10,7 @@ const {
   formatWhatsappPropertyPrice,
   propertyIdFromWhatsappReply,
   propertyIdsFromWhatsappReply,
+  shortCodesFromWhatsappReply,
   whatsappPropertyImageUrl
 } = require('../services/whatsappPropertyCardService');
 
@@ -107,12 +108,14 @@ const searchReply = buildWhatsappPropertySearchReply(searchRows, {
   searchType: 'land',
   searchResultsUrl: filteredLandUrl
 });
-assert(searchReply.includes('66 matching land listings found in Wakiso'), 'search reply must state the real total');
-assert(searchReply.includes('Showing the newest 3'), 'search reply must keep WhatsApp previews concise');
-assert(searchReply.includes(filteredLandUrl), 'search reply must link to the filtered live inventory');
-assert(searchReply.includes(searchRows[2].id), 'third preview must be visible');
-assert(!searchReply.includes(searchRows[3].id), 'fourth result must remain behind the filtered view-all link');
-assert.deepStrictEqual(propertyIdsFromWhatsappReply(searchReply), searchRows.slice(0, 3).map((row) => row.id));
+// 16 Nov 2026: the total, a short list with short links, and a number to reply.
+assert(searchReply.startsWith('🔎 *66 plots and land in Wakiso*'), 'search reply must state the real total');
+assert(searchReply.includes('Reply *1*, *2* or *3* to see one, *MORE* for more.'), 'search reply must keep WhatsApp previews concise');
+assert(searchReply.includes(`See all 66: ${filteredLandUrl.replace(/^https:\/\//, '')}`), 'search reply must link to the filtered live inventory');
+assert(searchReply.includes('makaug.com/p/33333333'), 'third preview must be visible');
+assert(!searchReply.includes('makaug.com/p/44444444'), 'fourth result waits for MORE');
+assert.deepStrictEqual(shortCodesFromWhatsappReply(searchReply), ['11111111', '22222222', '33333333']);
+assert.deepStrictEqual(propertyIdsFromWhatsappReply(searchReply), [], 'no long links in a list');
 
 const repoRoot = path.join(__dirname, '..');
 const whatsappRoute = fs.readFileSync(path.join(repoRoot, 'routes', 'whatsapp.js'), 'utf8');

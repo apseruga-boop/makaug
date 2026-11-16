@@ -1971,6 +1971,30 @@ async function movedShortStaySlugForProperty(rawId) {
   return result.rows[0]?.slug || null;
 }
 
+// makaug.com/p/74234ea2: a property's short link, the first part of its id.
+// WhatsApp results carry these instead of the full id (16 Nov 2026). It opens
+// the property page; a code that matches nothing live opens the home page.
+app.get('/p/:code', async (req, res, next) => {
+  const code = String(req.params.code || '').trim().toLowerCase();
+  if (!/^[0-9a-f]{8}$/.test(code)) return next();
+  try {
+    const result = await db.query(
+      `SELECT id::text AS id
+         FROM properties
+        WHERE id::text LIKE $1
+        ORDER BY (status = 'approved') DESC, updated_at DESC NULLS LAST
+        LIMIT 1`,
+      [`${code}%`]
+    );
+    const id = result.rows[0]?.id;
+    res.set('Cache-Control', 'public, max-age=300');
+    if (!id) return res.redirect(302, '/');
+    return res.redirect(301, `/property/${encodeURIComponent(id)}`);
+  } catch (error) {
+    return next(error);
+  }
+});
+
 app.get('/property/:id', async (req, res, next) => {
   try {
     const movedSlug = await movedShortStaySlugForProperty(req.params.id).catch((error) => {
