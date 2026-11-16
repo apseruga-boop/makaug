@@ -120,3 +120,12 @@ test('a waiting list stored with no send times is put in order by when each one 
   const settle = src.slice(src.indexOf('async function settleAgentWaitingAdverts'), src.indexOf('function agentWaitingAdvertsReport'));
   assert.match(settle, /await saveCompleteOnes\(\);\n  const retired = retireStaleAgentSubmissions\(data\);\n  if \(retired\) \{[\s\S]*?await saveCompleteOnes\(\);/, 'what comes to the front after a stale one is retired is settled too');
 });
+
+test('complete adverts already on makaug leave the waiting list instead of being listed as not saved', () => {
+  // Three were saved while the live list still held them; the next summary
+  // would have listed them as "needs: nothing — it will save shortly".
+  const src = fs.readFileSync(path.join(__dirname, '../routes/whatsapp.js'), 'utf8');
+  const settle = src.slice(src.indexOf('async function settleAgentWaitingAdverts'), src.indexOf('function agentWaitingAdvertsReport'));
+  assert.match(settle, /for \(const entry of queue\) \{[\s\S]*?await findEmployeeDuplicateProperty\(\{ caption: entry\.caption, facts, sessionData: data \}\)\) \{\n\s*alreadySaved \+= 1;\n\s*continue;/);
+  assert.match(settle, /if \(remaining\.length !== queue\.length\) \{/);
+});
