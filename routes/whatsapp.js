@@ -9172,6 +9172,93 @@ async function saveReadyKeptSubmissions({ phone, currentStep = 'employee_propert
 }
 
 /**
+ * What an agent has waiting, settled. A caption that waited for a district we
+ * now know is complete: it is saved. One that is already saved leaves the
+ * list. One still missing something after three days stops being raised.
+ * On 16 Nov 2026 an agent's list was led by a house from 11 Nov that the new
+ * spelling rule had made complete, and "Why" would have told him it "will save
+ * shortly" with nothing to save it. Nothing is sent from here.
+ */
+async function settleAgentWaitingAdverts({ phone = '', currentStep = 'employee_property_media', data = {} } = {}) {
+  const saved = [];
+  let alreadySaved = 0;
+  if (data.whatsapp_agent_self_intake !== true) return { saved, alreadySaved, retired: 0 };
+  let changed = false;
+  for (let guard = 0; guard < 30; guard += 1) {
+    const caption = normalizeInput(data.pending_property_caption || '');
+    const media = employeePendingStoredMedia(data);
+    if (!caption || !media.length) break;
+    const facts = employeePropertyFacts(caption, data);
+    if (employeePropertyMissing(facts).length) break;
+    const existing = await findEmployeeDuplicateProperty({ caption, facts, sessionData: data });
+    if (existing) {
+      alreadySaved += 1;
+    } else {
+      const propertyId = await createEmployeeReviewProperty({
+        phone,
+        inboundMessageId: data.pending_property_media_message_id || '',
+        caption,
+        facts,
+        storedMedia: media,
+        sessionData: data
+      });
+      if (!propertyId) break;
+      noteEmployeePropertyCreated(data, propertyId, media, caption);
+      data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
+      data.total_media_count = Number(data.total_media_count || 0) + media.length;
+      alertTeamAgentPropertySubmitted({ agent: data.agent || {}, propertyId, facts, caption });
+      saved.push({ propertyId, caption, facts, storedMedia: media });
+    }
+    delete data.pending_property_caption;
+    clearEmployeePendingMedia(data);
+    promoteEmployeeQueuedSubmission(data);
+    changed = true;
+  }
+  const kept = await saveReadyKeptSubmissions({ phone: '', currentStep, data });
+  if (kept.length) {
+    saved.push(...kept);
+    changed = true;
+  }
+  const retired = retireStaleAgentSubmissions(data);
+  if (retired) changed = true;
+  if (changed && phone) await replaceEmployeeSession(phone, currentStep, data);
+  return { saved, alreadySaved, retired };
+}
+
+/** What an agent has waiting, one line each, for staff. */
+function agentWaitingAdvertsReport(data = {}) {
+  const items = [];
+  const pendingCaption = normalizeInput(data.pending_property_caption || '');
+  const pendingMedia = employeePendingStoredMedia(data);
+  if (pendingCaption || pendingMedia.length) items.push({ caption: pendingCaption, media: pendingMedia, storedAt: data.pending_property_media_stored_at || null });
+  for (const entry of employeePendingSubmissionQueue(data)) items.push({ caption: normalizeInput(entry.caption || ''), media: entry.media || [], storedAt: entry.storedAt || null });
+  return items.map((item) => {
+    const missing = !item.caption
+      ? ['a caption']
+      : (!item.media.length ? ['its photos or video'] : employeePropertyMissing(employeePropertyFacts(item.caption, data)));
+    return { label: item.caption ? employeeCaptionLabel(item.caption) : 'media with no caption', media: item.media.length, stored_at: item.storedAt, missing };
+  });
+}
+
+/** Staff: settle one agent's waiting adverts now. Nothing is sent. */
+async function settleAgentWaitingAdvertsForPhone(phone = '', { dryRun = false } = {}) {
+  const result = await db.query('SELECT phone, current_step, session_data FROM whatsapp_sessions WHERE phone = $1', [phone]);
+  const session = result.rows[0];
+  const data = session?.session_data && typeof session.session_data === 'object' ? session.session_data : null;
+  if (!data || data.whatsapp_agent_self_intake !== true) return { found: false };
+  const before = agentWaitingAdvertsReport(data);
+  if (dryRun) return { found: true, dry_run: true, waiting: before };
+  const settled = await settleAgentWaitingAdverts({ phone, currentStep: session.current_step || 'employee_property_media', data });
+  return {
+    found: true,
+    saved: settled.saved.map((item) => item.propertyId),
+    already_saved: settled.alreadySaved,
+    retired: settled.retired,
+    waiting: agentWaitingAdvertsReport(data)
+  };
+}
+
+/**
  * The note an agent gets when what they sent cannot be saved yet: photos with
  * no words, words with no photos, or a caption that is missing something.
  * Built from the session alone, so it can be sent straight away for a text
@@ -9300,13 +9387,19 @@ function agentWhyReply(data = {}) {
   const pendingCaption = normalizeInput(data.pending_property_caption || '');
   if (pendingMedia.length || pendingCaption) items.push({ caption: pendingCaption, media: pendingMedia });
   for (const entry of employeePendingSubmissionQueue(data)) items.push({ caption: normalizeInput(entry.caption || ''), media: entry.media || [] });
-  if (!items.length) return '';
+  const needing = items.map((item) => {
+    let needs;
+    if (!item.caption) needs = 'what it is, rent or sale, the area and district, and the price';
+    else if (!item.media.length) needs = 'its photos or a short video';
+    else needs = agentMissingPhrases(employeePropertyMissing(employeePropertyFacts(item.caption, data))).join('; ');
+    return { ...item, needs };
+  }).filter((item) => item.needs);
+  if (!needing.length) return '';
+  items.length = 0;
+  items.push(...needing);
   const first = items[0];
   const label = first.caption ? employeeCaptionLabel(first.caption) : 'the photos you sent with no description';
-  let needs;
-  if (!first.caption) needs = 'what it is, rent or sale, the area and district, and the price';
-  else if (!first.media.length) needs = 'its photos or a short video';
-  else needs = agentMissingPhrases(employeePropertyMissing(employeePropertyFacts(first.caption, data))).join('; ') || 'nothing more: it will save shortly';
+  const needs = first.needs;
   const helper = agentHelpContact();
   return [
     items.length === 1
@@ -12686,8 +12779,24 @@ async function handleEmployeeWhatsappIntake({
         return { handled: true, nextStep: currentStep, message: 'No usable media bytes reached makaug. Please resend the photo, video or document.' };
       }
       if (data.whatsapp_agent_self_intake === true && AGENT_WHY.test(cleanBody)) {
+        const settled = await settleAgentWaitingAdverts({ phone, currentStep, data }).catch((error) => {
+          logger.warn('Agent waiting adverts could not be settled:', error.message || String(error));
+          return { saved: [] };
+        });
+        const savedList = settled.saved.length
+          ? await agentHeldSavedSummary(settled.saved.map((item) => item.propertyId)).catch(() => '')
+          : '';
         const why = agentWhyReply(data);
-        if (why) return { handled: true, nextStep: currentStep, message: why };
+        if (savedList || why) {
+          return {
+            handled: true,
+            nextStep: currentStep,
+            message: [
+              savedList,
+              why || 'As soon as each one is approved it goes live under your name and I will send you the link.'
+            ].filter(Boolean).join('\n\n')
+          };
+        }
       }
       const existingBatchProperties = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
       const pendingStoredMedia = employeePendingStoredMedia(data);
@@ -16176,7 +16285,13 @@ async function buildEmployeeBatchSummary(phone, since) {
   // with its photos and nothing missing, is saved rather than left waiting.
   let keptSaved = [];
   try {
-    keptSaved = await saveReadyKeptSubmissions({ phone, data });
+    if (data.whatsapp_agent_self_intake === true) {
+      // An agent's waiting adverts, settled: the one at the front too, when it
+      // has become complete (16 Nov 2026).
+      keptSaved = (await settleAgentWaitingAdverts({ phone, data })).saved;
+    } else {
+      keptSaved = await saveReadyKeptSubmissions({ phone, data });
+    }
   } catch (error) {
     logger.warn('A kept property could not be saved at the summary:', error.message || String(error));
   }
@@ -16281,7 +16396,12 @@ async function buildEmployeeBatchSummary(phone, since) {
     // Saved in a burst: confirmed here, in one list, rather than one long
     // message each (16 Nov 2026). Saved on its own: he has already been told.
     // A property saved just now, by this summary, has not been confirmed yet.
-    const heldIds = Array.isArray(data.agent_held_saved_ids) ? data.agent_held_saved_ids : [];
+    const heldBefore = (Array.isArray(data.agent_held_saved_ids) ? data.agent_held_saved_ids : []).map(String);
+    // Several saved at once go in the one list too.
+    const listKept = heldBefore.length > 0 || keptSaved.length > 1;
+    const heldIds = listKept
+      ? [...new Set([...heldBefore, ...keptSaved.map((item) => String(item.propertyId))])]
+      : heldBefore;
     let heldSummary = '';
     if (heldIds.length) {
       heldSummary = await agentHeldSavedSummary(heldIds).catch((error) => {
@@ -16302,7 +16422,7 @@ async function buildEmployeeBatchSummary(phone, since) {
         logger.warn('Stale agent submissions could not be retired:', error.message || String(error));
       });
     }
-    const confirmations = keptSaved.map((item, index) => (index === 0 && !heldSummary
+    const confirmations = (listKept && heldSummary ? [] : keptSaved).map((item, index) => (index === 0 && !heldSummary
       ? agentSelfIntakeSavedReply({ data, facts: item.facts, storedMedia: item.storedMedia, caption: item.caption })
       : agentAlsoSavedReply(item)));
     const pending = notSaved.length ? agentPendingNotice(data) : '';
@@ -25827,6 +25947,7 @@ async function importForwardedAdvert({ phone, agent, group, inboundMessageId }) 
 }
 
 module.exports.groupForwardedAdverts = groupForwardedAdverts;
+module.exports.settleAgentWaitingAdvertsForPhone = settleAgentWaitingAdvertsForPhone;
 // King's Remove agent: stop treating the number as an agent at once, not in five minutes.
 module.exports.forgetAgentPhone = (phone) => { try { agentByPhoneCache.delete(agentPhoneKey(phone)); } catch (_e) { /* best effort */ } };
 module.exports.pairForwardedAlbums = pairForwardedAlbums;
@@ -25834,6 +25955,8 @@ module.exports.forwardedAdvertMimeType = forwardedAdvertMimeType;
 module.exports.importForwardedAdvert = importForwardedAdvert;
 
 module.exports.__test = {
+  settleAgentWaitingAdverts,
+  agentWaitingAdvertsReport,
   agentAdvertBurst,
   agentHeldSavedSummary,
   agentSummaryLabel,

@@ -191,6 +191,19 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     aliases: ['Kitiko', 'Mutungo Kitiko'],
     source: 'makindye_ssabagabo_verified_marketplace_override'
   },
+  {
+    // The village on Kigo Road (OSM node 9651787410). Plain "Mutungo" is the
+    // hill in Nakawa, Kampala: "Apartment block for sale in Mutungo Hill" was
+    // filed under Wakiso, and staff could not move it (16 Nov 2026).
+    name: 'Mutungo', district: 'Wakiso', town: 'Wakiso', level: 'area',
+    aliases: ['Mutungo', 'Mutungo Kigo', 'Mutungo Kigo Road', 'Kigo Mutungo', 'Mutungo Wakiso'],
+    source: 'makaug_verified_location_override'
+  },
+  {
+    name: 'Mutungo', district: 'Kampala', town: 'Nakawa', level: 'area',
+    aliases: ['Mutungo', 'Mutungo Hill', 'Mutungo Nakawa', 'Mutungo Kampala'],
+    source: 'makaug_verified_location_override'
+  },
 
   ...rows([
     'Najjanankumbi', 'Mutundwe', 'Bukasa', 'Kitintale', 'Mbuya', 'Luzira',
@@ -203,7 +216,7 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
 
   ...rows([
     'Ssabagabo', 'Maganjo', 'Kawanda', 'Namulonge', 'Bunamwaya', 'Kiwenda',
-    'Ssisa', 'Mutungo', 'Sentema', 'Kirinya', 'Katalemwa',
+    'Ssisa', 'Sentema', 'Kirinya', 'Katalemwa',
     'Kabojja', 'Kawuku', 'Nkumba', 'Nyanama', 'Wampewo', 'Kitala', 'Bulenga',
     'Buwambo', 'Kabubbu', 'Busabala', 'Namulanda', 'Busukuma', 'Masajja',
     'Kigungu', 'Nakawuka', 'Bwerenga', 'Nsamizi'

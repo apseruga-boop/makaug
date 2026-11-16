@@ -10483,6 +10483,34 @@ router.post('/agents/:id/temporary-password', async (req, res, next) => {
 });
 
 /**
+ * An agent's waiting adverts, settled now: what has become complete is saved
+ * for review, what is already saved leaves the list, and what has waited more
+ * than three days for a detail stops being raised. dry_run lists what is
+ * waiting and what each one needs. Nothing is sent to anyone.
+ */
+router.post('/whatsapp/conversations/:phone/settle-waiting-adverts', async (req, res, next) => {
+  try {
+    const whatsapp = require('./whatsapp');
+    const phone = String(req.params.phone || '').replace(/\D/g, '');
+    if (phone.length < 9) return res.status(400).json({ ok: false, error: 'Invalid phone' });
+    const dryRun = parseBooleanLike(req.body?.dry_run, true);
+    const result = await whatsapp.settleAgentWaitingAdvertsForPhone(phone, { dryRun });
+    if (!result.found) return res.status(404).json({ ok: false, error: 'No agent listing session for that number' });
+    if (!dryRun) {
+      await writeAudit('whatsapp_agent_waiting_adverts_settled', {
+        phone_suffix: phone.slice(-3),
+        saved: result.saved,
+        already_saved: result.already_saved,
+        retired: result.retired
+      }, adminActorId(req)).catch(() => null);
+    }
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+/**
  * Import the adverts a broker forwarded into a WhatsApp chat as listings for
  * staff review, under an approved agent. dry_run returns the groups so the
  * pairing of captions and photos can be checked first; `groups` lets staff
