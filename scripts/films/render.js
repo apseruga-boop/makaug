@@ -20,7 +20,7 @@ const FILMS = {
   'agent-intro': { out: 'makaug-agent-intro-v5.mp4', key: 0, seed: 7 },
   'owner-intro': { out: 'makaug-owner-intro-v1.mp4', key: 5, seed: 11 },
   'agent-howto': { out: 'makaug-agent-how-to-post-v3.mp4', key: 2, seed: 13 },
-  'owner-howto': { out: 'makaug-owner-how-to-list-v4.mp4', key: -3, seed: 17 }
+  'owner-howto': { out: 'makaug-owner-how-to-list-v5.mp4', key: -3, seed: 17 }
 };
 const FPS = 30;
 const ROOT = path.join(__dirname, '..', '..');
@@ -67,7 +67,10 @@ async function renderScene(page, scene, file) {
   fs.mkdirSync(build, { recursive: true });
 
   const browser = await browserType().launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
-  const page = await browser.newPage({ viewport: { width: 720, height: 1280 }, deviceScaleFactor: 1 });
+  // FILM_SCALE=1.5 draws the same film at 1080x1920 (full HD), sharper on the
+  // phone; 1 (the default) is 720x1280.
+  const scale = Number(process.env.FILM_SCALE) > 0 ? Number(process.env.FILM_SCALE) : 1;
+  const page = await browser.newPage({ viewport: { width: 720, height: 1280 }, deviceScaleFactor: scale });
   page.on('pageerror', (error) => { console.error('page error:', error.message); process.exitCode = 1; });
   await page.goto(`file://${path.join(__dirname, 'film.html')}?film=${name}${lang ? `&lang=${lang}` : ''}`);
   await page.evaluate(() => window.READY);

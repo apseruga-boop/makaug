@@ -163,6 +163,7 @@ window.L = {
   "List your property <span class=\"a\">on WhatsApp.</span>": "Langa ennyumba oba ettaka lyo <span class=\"a\">ku WhatsApp.</span>",
   "About 5 minutes. Every step, in order.": "Eddakiika nga 5. Buli mutendera, gumu ku gumu.",
   "Say LIST.<br>Choose what it is.": "Wandiika LIST.<br>Londa kye ki.",
+  "Say Hi, reply 1.<br>Choose what it is.": "Wandiika Hi, ddamu 1.<br>Londa kye ki.",
   "A title<br>and your price.": "Omutwe<br>n’omuwendo gwo.",
   "At least 2<br>clear photos.": "Waakiri ebifaananyi 2<br>ebirabika obulungi.",
   "Your name and<br>number for buyers.": "Erinnya lyo n’ennamba<br>abaguzi gye bakubirako.",

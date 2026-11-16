@@ -307,7 +307,7 @@ test('LIST starts their listing, sends the how-to once, and tells Arthur and Ron
     assert.match(text(), /Owner wants to list — started on WhatsApp/);
     assert.match(text(), /Sarah Nakato · \+256772123456/);
     assert.match(text(), /from Arthur/);
-    assert.match(text(), /makaug-owner-how-to-list-v4\.mp4/, 'the how-to video goes with it');
+    assert.match(text(), /makaug-owner-how-to-list-v5\.mp4/, 'the how-to video goes with it');
     for (const staff of ['447757773202', '256709402189']) assert.ok(text().includes(staff), `${staff} is told`);
   });
 });
@@ -478,7 +478,7 @@ test('5 asks who the how-to is for, and each gets their own film', async () => {
     const sent = await staffStep(RONALD, 'employee_howto_contact', 'Sarah Nakato | 0772123456', { employee_role: 'how_to', howto_kind: 'owner' });
     assert.strictEqual(sent.howToSent, 'owner');
     assert.strictEqual(queued.length, 1);
-    assert.match(text(), /makaug-owner-how-to-list-v4\.mp4/);
+    assert.match(text(), /makaug-owner-how-to-list-v5\.mp4/);
     assert.match(text(), /Reply \*LIST\* here to start/);
   });
 });

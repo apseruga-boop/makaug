@@ -242,8 +242,8 @@ test('an owner who got the film in Luganda and says LIST gets the how-to in Luga
     const reply = await route.handleOwnerFilmReply({ phone: OWNER, body: 'List', step: 'main_menu', lang: 'en', contactName: 'Sarah N' });
     assert.strictEqual(reply.startListing, true, 'the listing starts as it does for anyone');
     await settle();
-    assert.match(text(), /makaug-owner-how-to-list-v4-lg\.mp4/, 'the Luganda how-to');
-    assert.ok(!/makaug-owner-how-to-list-v4\.mp4/.test(text()), 'and not the English one as well');
+    assert.match(text(), /makaug-owner-how-to-list-v5-lg\.mp4/, 'the Luganda how-to');
+    assert.ok(!/makaug-owner-how-to-list-v5\.mp4/.test(text()), 'and not the English one as well');
     assert.match(text(), /Engeri y’okulanga/, 'with its Luganda caption');
     assert.match(text(), /UGX 20,000 buli mwezi ku buli kirango/);
   });
@@ -253,7 +253,7 @@ test('an owner who got the English film and says LIST gets the English how-to, a
   await withOwnerWhoGotTheFilm('', async ({ text }) => {
     await route.handleOwnerFilmReply({ phone: OWNER, body: 'List', step: 'main_menu', lang: 'en', contactName: 'Sarah N' });
     await settle();
-    assert.match(text(), /makaug-owner-how-to-list-v4\.mp4/);
+    assert.match(text(), /makaug-owner-how-to-list-v5\.mp4/);
     assert.match(text(), /How to list your property on makaug/);
     assert.ok(!/-lg\.mp4|-sw\.mp4/.test(text()));
   });

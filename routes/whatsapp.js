@@ -20423,7 +20423,7 @@ async function handleReplyPlaybook({ phone, body = '', step = '', conversationCo
 //   agent_howto  how to post, for an agent  Agent 007 → 5, and the welcome pack
 // The agent caption still leaves the fee to the film and the terms they sign.
 const EXPLAINER_VIDEOS = {
-  lister: { path: '/assets/marketing/makaug-owner-how-to-list-v4.mp4', caption: '🎬 *How to list your property on makaug* — step by step, about 5 minutes: answer a few short questions, send your photos, confirm it\'s you and agree to the terms. Our team checks it and you get the link when it is live. UGX 20,000 a month per property — we send you how to pay, nothing is charged automatically.' },
+  lister: { path: '/assets/marketing/makaug-owner-how-to-list-v5.mp4', caption: '🎬 *How to list your property on makaug* — step by step, about 5 minutes: answer a few short questions, send your photos, confirm it\'s you and agree to the terms. Our team checks it and you get the link when it is live. UGX 20,000 a month per property — we send you how to pay, nothing is charged automatically.' },
   agent: { path: '/assets/marketing/makaug-agent-intro-v5.mp4', caption: '🎬 *makaug for agents* — what you get, who sees your listings (Ugandans at home and abroad) and how to join.' },
   owner: { path: '/assets/marketing/makaug-owner-intro-v1.mp4', caption: '🎬 *Selling or renting out your own property?* This short film shows how makaug works for owners.' },
   agent_howto: { path: '/assets/marketing/makaug-agent-how-to-post-v3.mp4', caption: '🎬 *How to post a property on makaug, right here on WhatsApp* — one property from start to finish, in about a minute.' }

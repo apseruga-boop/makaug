@@ -138,7 +138,7 @@ test('the agent terms PDF no longer says "Your first 0 days are free"', () => {
 test('the WhatsApp films are the new cuts, and their captions and the menu offer no free days', () => {
   const route = read('routes/whatsapp.js');
   // The 14 Nov 2026 films: an intro and a how-to each, for agents and for owners.
-  for (const film of ['makaug-owner-how-to-list-v4.mp4', 'makaug-agent-intro-v5.mp4', 'makaug-owner-intro-v1.mp4', 'makaug-agent-how-to-post-v3.mp4']) {
+  for (const film of ['makaug-owner-how-to-list-v5.mp4', 'makaug-agent-intro-v5.mp4', 'makaug-owner-intro-v1.mp4', 'makaug-agent-how-to-post-v3.mp4']) {
     assert.ok(route.includes(`/assets/marketing/${film}`), film);
     assert.ok(fs.existsSync(path.join(root, 'assets/marketing', film)), `${film} is in the repository`);
   }
