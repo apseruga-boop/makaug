@@ -1,6 +1,7 @@
 'use strict';
 
 const perf = require('../services/staffPerformance');
+const commission = require('../services/staffCommission');
 
 /**
  * Staff Performance (Road to 1000). Everyone on the desk can read it, call,
@@ -95,6 +96,73 @@ function registerStaffPerformanceRoutes(router, { writeAudit, actorLabel } = {})
         actor: actorOf(req)
       });
       await audit(req, 'staff_performance_settings_saved', { targets: req.body?.targets, assumed_paid_rate: req.body?.assumed_paid_rate, points: req.body?.points, effective_from: out.effective_from });
+      return res.json({ ok: true, data: out });
+    } catch (error) {
+      return fail(res, next, error);
+    }
+  });
+
+  // Commission (16 Nov 2026). Admin only: none of these paths is in
+  // utils/staffSharedKingTools.js, so staff accounts get 403 from the admin check.
+  router.post('/staff-performance/commission/payouts', async (req, res, next) => {
+    try {
+      const out = await commission.createPayout({
+        payday: req.body?.payday, accept: req.body?.accept, sends: await perf.loadSends(), actor: actorOf(req), actorId: actorId(req)
+      });
+      await audit(req, 'commission_payout_created', { payout_id: out.id, payday: out.payday, total_ugx: out.total_ugx, items: out.items });
+      return res.status(201).json({ ok: true, data: out });
+    } catch (error) {
+      return fail(res, next, error);
+    }
+  });
+
+  router.post('/staff-performance/commission/payouts/:id/review', async (req, res, next) => {
+    try {
+      const out = await commission.reviewPayout(req.params.id, { note: req.body?.note, sends: await perf.loadSends(), actor: actorOf(req), actorId: actorId(req) });
+      await audit(req, 'commission_payout_reviewed', { payout_id: req.params.id, total_ugx: out.total_ugx, dropped: out.dropped.length });
+      return res.json({ ok: true, data: out });
+    } catch (error) {
+      return fail(res, next, error);
+    }
+  });
+
+  router.post('/staff-performance/commission/payouts/:id/paid', async (req, res, next) => {
+    try {
+      const out = await commission.markPayoutPaid(req.params.id, { reference: req.body?.reference, actor: actorOf(req), actorId: actorId(req) });
+      await audit(req, 'commission_payout_paid', { payout_id: req.params.id, total_ugx: out.total_ugx, items: out.items });
+      return res.json({ ok: true, data: out });
+    } catch (error) {
+      return fail(res, next, error);
+    }
+  });
+
+  router.post('/staff-performance/commission/payouts/:id/cancel', async (req, res, next) => {
+    try {
+      const out = await commission.cancelPayout(req.params.id, { reason: req.body?.reason, actor: actorOf(req), actorId: actorId(req) });
+      await audit(req, 'commission_payout_cancelled', { payout_id: req.params.id });
+      return res.json({ ok: true, data: out });
+    } catch (error) {
+      return fail(res, next, error);
+    }
+  });
+
+  router.post('/staff-performance/commission/recruits', async (req, res, next) => {
+    try {
+      const out = await commission.addRecruit({ name: req.body?.name, ratePct: req.body?.rate_pct, phone: req.body?.phone, actor: actorOf(req), actorId: actorId(req) });
+      await audit(req, 'commission_recruit_added', { person: out.person_key, rate_pct: out.rate_pct });
+      return res.status(201).json({ ok: true, data: out });
+    } catch (error) {
+      return fail(res, next, error);
+    }
+  });
+
+  router.put('/staff-performance/commission/settings', async (req, res, next) => {
+    try {
+      const out = await commission.saveCommissionSettings({
+        paysOn: req.body?.pays_on, holdDays: req.body?.hold_days, cutoffDay: req.body?.cutoff_day,
+        defaultRatePct: req.body?.default_rate_pct, staff: req.body?.staff, actor: actorOf(req), actorId: actorId(req)
+      });
+      await audit(req, 'commission_settings_saved', { pays_on: out.pays_on, hold_days: out.hold_days });
       return res.json({ ok: true, data: out });
     } catch (error) {
       return fail(res, next, error);

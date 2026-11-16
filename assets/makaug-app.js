@@ -23984,7 +23984,7 @@ function staffPerfRender(scope) {
     <div class="flex items-start justify-between gap-3 flex-wrap">
       <div class="min-w-0">
         <h3 class="text-xl font-black text-gray-900">Staff Performance · ${adminEscape(data.campaign?.name || "Road to 1000")}</h3>
-        <p class="text-xs text-gray-500 mt-1">${adminEscape(String(data.campaign?.goal || 1000))} paying agents by ${adminEscape(staffPerfDayLabel(data.campaign?.ends_on))} 2026. Tracking from ${adminEscape(staffPerfDayLabel(data.campaign?.starts_on))}. Missed films are carried to the next day.</p>
+        <p class="text-xs text-gray-500 mt-1">${adminEscape(String(data.campaign?.goal || 1000))} paying agents by ${adminEscape(staffPerfDayLabel(data.campaign?.ends_on))} 2026. Tracking from ${adminEscape(staffPerfDayLabel(data.campaign?.starts_on))}. Since 16 Nov we track agents closed and commission, not messages sent.</p>
       </div>
       <button type="button" onclick="staffPerfLoad('${scope}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh</button>
     </div>
@@ -23994,6 +23994,10 @@ function staffPerfRender(scope) {
       ${me ? "" : `<span class="text-xs text-amber-800 font-semibold">Pick your name so your calls are counted as yours.</span>`}
     </div>
 
+    ${staffPerfCommissionHtml(data, scope, isKing)}
+
+    <details class="rounded-2xl border border-gray-200 p-3 space-y-4" data-perf-secondary ${state.secondaryOpen ? "open" : ""} ontoggle="staffPerfState('${scope}').secondaryOpen = this.open">
+    <summary class="font-black text-gray-900 cursor-pointer">Films, daily targets and averages <span class="text-xs font-semibold text-gray-500">(secondary since 16 Nov: we no longer judge on messages sent)</span></summary>
     <section class="rounded-2xl p-4 text-white" style="background:linear-gradient(135deg,#064e3b,#047857)" data-perf-road>
       <div class="flex items-end justify-between gap-3 flex-wrap">
         <div><p class="text-xs font-bold uppercase tracking-wide opacity-80">Road to 1000 · paying agents</p>
@@ -24099,6 +24103,8 @@ function staffPerfRender(scope) {
         <p>Duplicates: <strong class="${p.wasted.duplicate ? "text-red-700" : ""}">${p.wasted.duplicate}</strong> · Already agents: <strong>${p.wasted.existing_agent}</strong> · Do not contact: <strong>${p.wasted.do_not_contact}</strong> · Not a number: <strong>${p.wasted.invalid}</strong>${p.wasted.found_online_old_rule ? ` · Found-online blocked before 15 Nov: <strong>${p.wasted.found_online_old_rule}</strong>` : ""}</p></div>`).join("")}</div>
     </section>
 
+    </details>
+
     ${isKing ? `<section class="rounded-2xl border border-gray-900 p-3" data-perf-settings>
       <h4 class="font-black text-gray-900">King · targets and points</h4>
       <p class="text-[11px] text-gray-500 mb-2">A change applies from today; past days keep the target they had.</p>
@@ -24110,6 +24116,8 @@ function staffPerfRender(scope) {
       </form>
     </section>` : ""}
   </div>`;
+  staffPerfCountdownTick();
+  if (!window.__staffPerfCountdown) window.__staffPerfCountdown = setInterval(staffPerfCountdownTick, 30000);
 }
 
 function staffPerfAllFollowUps(scope) {
@@ -24235,6 +24243,198 @@ async function staffPerfCopyNumber(id, name) {
   } catch (error) {
     alert(error?.message || "Could not copy the number.");
   }
+}
+
+function staffPerfUgx(n) {
+  const v = Number(n) || 0;
+  return `UGX ${v < 0 ? "−" : ""}${Math.abs(v).toLocaleString("en-GB")}`;
+}
+
+function staffPerfCountdownText(at) {
+  const left = Math.max(0, new Date(at).getTime() - Date.now());
+  const d = Math.floor(left / 86400000);
+  const h = Math.floor((left % 86400000) / 3600000);
+  const m = Math.floor((left % 3600000) / 60000);
+  return `${d}d ${h}h ${String(m).padStart(2, "0")}m`;
+}
+
+function staffPerfCountdownTick() {
+  document.querySelectorAll("[data-payday-countdown]").forEach((el) => { el.textContent = staffPerfCountdownText(el.getAttribute("data-payday-countdown")); });
+}
+
+const STAFF_PERF_STATUS_STYLE = {
+  contacted: "bg-gray-100 text-gray-700", signed_up: "bg-sky-100 text-sky-800", pending: "bg-amber-100 text-amber-900",
+  needs_review: "bg-orange-200 text-orange-900", on_hold: "bg-indigo-100 text-indigo-800", eligible: "bg-emerald-100 text-emerald-800",
+  in_batch: "bg-emerald-200 text-emerald-900", paid_out: "bg-emerald-700 text-white", clawback_due: "bg-red-600 text-white", not_eligible: "bg-gray-200 text-gray-600"
+};
+
+function staffPerfCommissionHtml(data, scope, isKing) {
+  const c = data.commission || {};
+  if (!c.totals) return `<section class="rounded-2xl border border-red-200 bg-red-50 p-3 text-xs text-red-800" data-perf-commission>Commission could not load${c.error ? `: ${adminEscape(c.error)}` : ""}.</section>`;
+  const state = staffPerfState(scope);
+  const s = c.settings || {};
+  const closers = (c.staff || []).filter((p) => p.active);
+  const inactive = (c.staff || []).filter((p) => !p.active);
+  const t = (k) => c.totals.people?.[k] || {};
+  const team = c.totals.team || {};
+  const paydayLabel = staffPerfDayLabel(c.next_payday);
+  const rule = s.pays_on === "every_payment" ? "every confirmed payment" : "the first confirmed payment";
+  const filter = state.commissionFilter || "all";
+  const who = state.commissionPerson || "all";
+  const rows = [...(c.agents || []), ...(c.contacted || [])]
+    .filter((r) => who === "all" || r.person_key === who)
+    .filter((r) => filter === "all" || r.status === filter || (filter === "pending" && ["pending", "signed_up", "on_hold", "needs_review"].includes(r.status)));
+  const shown = state.commissionAll ? rows : rows.slice(0, 25);
+  const road = c.road || {};
+  const roadPct = Math.min(100, ((road.paying_now || 0) / (road.goal || 1000)) * 100);
+  const chip = (on, label, onclick) => `<button type="button" onclick="${onclick}" class="rounded-full px-3 py-1 text-xs font-bold ${on ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700"}">${label}</button>`;
+  const stat = (n, label, strong) => `<div class="rounded-xl ${strong ? "bg-emerald-50 border border-emerald-200" : "bg-gray-50"} p-2 text-center"><p class="text-lg md:text-xl font-black text-gray-900">${n}</p><p class="text-[11px] text-gray-600 leading-tight">${label}</p></div>`;
+  const card = (p) => {
+    const x = t(p.key || p.person_key);
+    return `<div class="rounded-2xl border border-gray-200 p-3" data-commission-person="${adminAttr(p.person_key)}">
+      <div class="flex items-center justify-between gap-2 flex-wrap"><p class="font-black text-gray-900">${adminEscape(p.name)} <span class="text-xs font-semibold text-gray-500">· ${adminEscape(p.role === "commission_only" ? "commission-only" : "closer")} · ${Number(p.rate_pct)}% of each payment</span></p>
+        <p class="text-xs font-bold text-emerald-800">Due ${adminEscape(paydayLabel)}: <span class="text-base font-black">${staffPerfUgx(x.due_next_payday_ugx)}</span></p></div>
+      <div class="grid grid-cols-3 md:grid-cols-6 gap-2 mt-2">
+        ${stat(x.contacted ?? 0, `reached out to<br>(${x.contacted_since_start ?? 0} since ${adminEscape(staffPerfDayLabel(s.scheme_starts_on))})`)}
+        ${stat(x.signed_up ?? 0, "signed up")}
+        ${stat(x.paid ?? 0, "paid")}
+        ${stat(x.listed ?? 0, "listed a property")}
+        ${stat(x.eligible ?? 0, "earn commission", true)}
+        ${stat((x.on_hold ?? 0) + (x.needs_review ?? 0), "on hold / review")}
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2 text-xs">
+        <p class="rounded-lg bg-gray-50 px-2 py-1">Earned: <strong>${staffPerfUgx(x.earned_ugx)}</strong></p>
+        <p class="rounded-lg bg-gray-50 px-2 py-1">Waiting (hold): <strong>${staffPerfUgx(x.pending_ugx)}</strong></p>
+        <p class="rounded-lg bg-gray-50 px-2 py-1">Paid to date: <strong>${staffPerfUgx(x.paid_to_date_ugx)}</strong></p>
+        <p class="rounded-lg ${x.clawback_ugx ? "bg-red-50 text-red-800" : "bg-gray-50"} px-2 py-1">Clawback: <strong>${staffPerfUgx(x.clawback_ugx)}</strong></p>
+      </div></div>`;
+  };
+  const payouts = c.payouts || [];
+  const openPayout = payouts.find((p) => p.status === "draft" || p.status === "reviewed");
+  const reviewRows = (c.agents || []).filter((r) => r.status === "needs_review");
+  return `
+  <section class="rounded-2xl p-4 text-white" style="background:linear-gradient(135deg,#064e3b,#047857)" data-perf-commission>
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div><p class="text-xs font-bold uppercase tracking-wide opacity-80">Next commission payday</p>
+        <p class="text-2xl md:text-3xl font-black leading-tight mt-1">${adminEscape(paydayLabel)} · <span data-payday-countdown="${adminAttr(c.next_payday_at)}">${c.countdown ? `${c.countdown.days}d ${c.countdown.hours}h` : "—"}</span></p>
+        <p class="text-[11px] opacity-90 mt-1">Commission that clears its ${s.hold_days}-day hold by ${adminEscape(staffPerfDayLabel(c.cutoff))} is paid on ${adminEscape(paydayLabel)}; later than that goes to the next 25th.</p></div>
+      <div class="text-right"><p class="text-xs opacity-80">Team due on ${adminEscape(paydayLabel)}</p><p class="text-3xl font-black leading-none">${staffPerfUgx(team.due_next_payday_ugx)}</p>
+        <p class="text-[11px] opacity-80 mt-1">${team.eligible ?? 0} agents earning · ${staffPerfUgx(team.paid_to_date_ugx)} paid to date</p></div>
+    </div>
+    <div class="mt-3"><div class="flex justify-between text-[11px] font-bold opacity-90"><span>Road to 1000 · paying agents</span><span>${road.paying_now ?? 0} / ${road.goal ?? 1000} by 31 Dec</span></div>
+      <div class="mt-1 h-3 rounded-full bg-white/20 overflow-hidden"><div class="h-3 rounded-full bg-amber-300" style="width:${Math.max(road.paying_now ? 1 : 0, roadPct)}%"></div></div></div>
+    <p class="text-[11px] mt-3 opacity-95 leading-relaxed"><strong>How commission works:</strong> ${Number(closers[0]?.rate_pct ?? s.default_rate_pct ?? 20)}% of ${rule} (UGX 10,000 on the UGX 50,000 agent plan), for each agent you pitched first. It counts only when the agent has <strong>paid</strong> (matched to the MoMo SMS) <strong>and</strong> has a new property <strong>live</strong> on makaug.com. Paid on the 25th.</p>
+  </section>
+
+  <div class="space-y-3" data-perf-commission-people>
+    ${closers.map(card).join("") || `<p class="text-sm text-gray-500">Nobody is on commission yet.</p>`}
+    ${inactive.length ? `<p class="text-[11px] text-gray-500">Not closing (history kept): ${inactive.map((p) => adminEscape(p.name)).join(", ")}.</p>` : ""}
+  </div>
+
+  <section class="rounded-2xl border border-gray-200 p-3" data-perf-commission-agents>
+    <div class="flex items-center justify-between gap-2 flex-wrap"><h4 class="font-black text-gray-900">Every agent and where they are</h4>
+      <div class="flex gap-1 flex-wrap">${chip(who === "all", "Everyone", `staffPerfCommissionPerson('${scope}','all')`)}${(c.staff || []).filter((p) => p.active).map((p) => chip(who === p.person_key, adminEscape(p.name), `staffPerfCommissionPerson('${scope}','${adminAttr(p.person_key)}')`)).join("")}</div></div>
+    <div class="flex gap-1 flex-wrap mt-2">${[["all", "All"], ["contacted", "Contacted"], ["pending", "Pending"], ["eligible", "Eligible"], ["in_batch", "In payout"], ["paid_out", "Paid out"], ["not_eligible", "No commission"]].map(([k, l]) => chip(filter === k, l, `staffPerfCommissionFilter('${scope}','${k}')`)).join("")}</div>
+    <div class="mt-2 divide-y divide-gray-100">
+      ${shown.map((r) => {
+        const line = (r.lines || []).find((l) => l.is_first) || (r.lines || [])[0];
+        const steps = r.status === "contacted" ? "" : `<span class="text-[11px] text-gray-500">${r.paid ? "✅ paid" : "⬜ paid"} · ${r.listed ? "✅ listed" : "⬜ listed"}</span>`;
+        return `<div class="py-2 flex items-start justify-between gap-2" data-commission-agent="${adminAttr(r.agent_id || r.phone_masked)}">
+          <div class="min-w-0"><p class="text-sm font-bold text-gray-900 truncate">${adminEscape(r.name)} <span class="text-xs font-semibold text-gray-500">${adminEscape(r.phone_masked || "")} · ${adminEscape(r.person_name || "")}</span></p>
+            <p class="text-[11px] text-gray-600">${steps}${(r.reasons || []).length ? ` · ${adminEscape(r.reasons.join(" · "))}` : ""}</p>
+            ${(r.flags || []).length ? `<p class="text-[11px] font-semibold text-orange-800">⚠ ${adminEscape(r.flags.join(" · "))}</p>` : ""}</div>
+          <div class="text-right shrink-0"><span class="inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${STAFF_PERF_STATUS_STYLE[r.status] || "bg-gray-100"}">${adminEscape(r.status_label || "Contacted")}</span>
+            ${line ? `<p class="text-xs font-black mt-1">${staffPerfUgx(line.amount_ugx)}</p><p class="text-[10px] text-gray-500">${line.status === "paid_out" ? "paid" : `due ${adminEscape(staffPerfDayLabel(line.due_payday))}`}</p>` : ""}</div></div>`;
+      }).join("") || `<p class="py-3 text-sm text-gray-500">No agents here yet.</p>`}
+    </div>
+    ${rows.length > 25 ? `<button type="button" onclick="staffPerfCommissionAll('${scope}')" class="mt-2 text-xs font-bold underline">${state.commissionAll ? "Show the first 25" : `Show all ${rows.length}`}</button>` : ""}
+  </section>
+
+  <section class="rounded-2xl border border-gray-200 p-3" data-perf-payouts>
+    <h4 class="font-black text-gray-900">Payouts</h4>
+    <ul class="mt-1 text-xs space-y-1">${payouts.map((p) => `<li data-payout="${adminAttr(p.id)}"><strong>${adminEscape(staffPerfDayLabel(p.payday))}</strong> · ${staffPerfUgx(p.total_ugx)} · ${p.items} agents · <span class="font-bold">${adminEscape(p.status)}</span>${p.reviewed_by ? ` · reviewed by ${adminEscape(p.reviewed_by)}` : ""}${p.paid_by ? ` · paid by ${adminEscape(p.paid_by)} (${adminEscape(p.paid_reference || "")})` : ""}</li>`).join("") || "<li class=\"text-gray-500\">No payouts yet.</li>"}</ul>
+    ${isKing ? `<div class="mt-3 rounded-xl bg-gray-50 border border-gray-200 p-3 space-y-2" data-perf-payout-admin>
+      <p class="text-xs font-black">King · payout steps: 1. Build → 2. Review (re-checks every agent) → 3. Mark paid with the MoMo reference</p>
+      ${openPayout ? `<div class="flex flex-wrap gap-2">
+          ${openPayout.status === "draft" ? `<button type="button" onclick="staffPerfReviewPayout('${scope}','${adminAttr(openPayout.id)}')" class="rounded-lg bg-gray-900 text-white px-3 py-1.5 text-xs font-bold">2. Review ${adminEscape(staffPerfDayLabel(openPayout.payday))} payout</button>` : ""}
+          ${openPayout.status === "reviewed" ? `<button type="button" onclick="staffPerfPayoutPaid('${scope}','${adminAttr(openPayout.id)}')" class="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-xs font-bold">3. Mark ${staffPerfUgx(openPayout.total_ugx)} paid</button>` : ""}
+          <button type="button" onclick="staffPerfCancelPayout('${scope}','${adminAttr(openPayout.id)}')" class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-bold">Cancel batch</button></div>`
+        : `<button type="button" onclick="staffPerfCreatePayout('${scope}')" class="rounded-lg bg-gray-900 text-white px-3 py-1.5 text-xs font-bold">1. Build the ${adminEscape(paydayLabel)} payout (${staffPerfUgx(team.due_next_payday_ugx)})</button>
+          ${reviewRows.length ? `<p class="text-[11px] text-orange-800">${reviewRows.length} flagged agent(s) are left out unless you tick them and say why:</p>${reviewRows.map((r) => `<label class="flex items-center gap-2 text-[11px]"><input type="checkbox" data-accept-agent="${adminAttr(r.agent_id)}"> ${adminEscape(r.name)} — ${adminEscape((r.flags || []).join("; "))} <input data-accept-note="${adminAttr(r.agent_id)}" placeholder="Why it is fine" class="flex-1 rounded border border-gray-200 px-2 py-0.5"></label>`).join("")}` : ""}`}
+    </div>
+    <form class="mt-3 rounded-xl bg-gray-50 border border-gray-200 p-3 grid grid-cols-1 md:grid-cols-4 gap-2" onsubmit="staffPerfAddRecruit(event, '${scope}')" data-perf-add-recruit>
+      <p class="md:col-span-4 text-xs font-black">King · add a commission-only recruit</p>
+      <input name="name" required placeholder="Name" class="rounded-xl border border-gray-200 px-3 py-2 text-sm">
+      <label class="text-xs font-semibold flex items-center gap-1">Rate % <input name="rate_pct" type="number" min="0" max="100" step="0.5" value="${Number(s.default_rate_pct ?? 20)}" class="w-20 rounded-xl border border-gray-200 px-2 py-2 text-sm"></label>
+      <input name="phone" placeholder="Their phone (stops self-referral)" class="rounded-xl border border-gray-200 px-3 py-2 text-sm">
+      <button type="submit" class="rounded-lg bg-gray-900 text-white px-3 py-2 text-xs font-bold">Add recruit</button>
+      <p class="md:col-span-4 text-[11px] text-gray-500">To send films from the desk they also need adding to Agent 007 staff in Sales &amp; Revenue › Settings, as today.</p>
+    </form>
+    <form class="mt-3 rounded-xl bg-gray-50 border border-gray-200 p-3 flex flex-wrap items-end gap-2" onsubmit="staffPerfSaveCommission(event, '${scope}')" data-perf-commission-settings>
+      <p class="w-full text-xs font-black">King · commission rules</p>
+      <label class="text-xs font-semibold">Commission on<select name="pays_on" class="block mt-1 rounded-xl border border-gray-200 px-2 py-2 text-sm"><option value="first_payment" ${s.pays_on !== "every_payment" ? "selected" : ""}>First payment only</option><option value="every_payment" ${s.pays_on === "every_payment" ? "selected" : ""}>Every payment (renewals too)</option></select></label>
+      <label class="text-xs font-semibold">Hold days<input name="hold_days" type="number" min="0" max="90" value="${s.hold_days}" class="block mt-1 w-20 rounded-xl border border-gray-200 px-2 py-2 text-sm"></label>
+      <label class="text-xs font-semibold">Cut-off day<input name="cutoff_day" type="number" min="1" max="25" value="${s.cutoff_day}" class="block mt-1 w-20 rounded-xl border border-gray-200 px-2 py-2 text-sm"></label>
+      ${(c.staff || []).map((p) => `<label class="text-xs font-semibold">${adminEscape(p.name)} %<input data-rate-person="${adminAttr(p.person_key)}" data-active="${p.active ? "1" : "0"}" type="number" min="0" max="100" step="0.5" value="${Number(p.rate_pct)}" class="block mt-1 w-20 rounded-xl border border-gray-200 px-2 py-2 text-sm"></label>`).join("")}
+      <button type="submit" class="rounded-lg bg-gray-900 text-white px-3 py-2 text-xs font-bold">Save rules</button>
+    </form>` : ""}
+    <details class="mt-3"><summary class="text-xs font-bold cursor-pointer">Commission audit trail</summary>
+      <ul class="mt-2 space-y-1 text-[11px] text-gray-700">${(c.audit || []).map((a) => `<li>${adminEscape(new Date(a.created_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Kampala" }))} · <strong>${adminEscape(a.actor || "")}</strong> · ${adminEscape(String(a.action).replace(/_/g, " "))}${a.details?.total_ugx !== undefined ? ` · ${staffPerfUgx(a.details.total_ugx)}` : ""}${a.details?.reference ? ` · ref ${adminEscape(a.details.reference)}` : ""}${a.details?.name ? ` · ${adminEscape(a.details.name)} at ${adminEscape(String(a.details.rate_pct))}%` : ""}</li>`).join("") || "<li>Nothing yet.</li>"}</ul></details>
+  </section>`;
+}
+
+function staffPerfCommissionFilter(scope, f) { staffPerfState(scope).commissionFilter = f; staffPerfRender(scope); }
+function staffPerfCommissionPerson(scope, k) { staffPerfState(scope).commissionPerson = k; staffPerfRender(scope); }
+function staffPerfCommissionAll(scope) { const st = staffPerfState(scope); st.commissionAll = !st.commissionAll; staffPerfRender(scope); }
+
+async function staffPerfCommissionCall(scope, path, method, body, confirmText) {
+  if (confirmText && !confirm(confirmText)) return;
+  try {
+    await apiRequest(`/api/admin/staff-performance/commission/${path}`, { method, headers: adminAuthHeaders(), body });
+    await staffPerfLoad(scope);
+  } catch (error) {
+    alert(error?.message || "Could not do that.");
+  }
+}
+
+function staffPerfCreatePayout(scope) {
+  const root = staffPerfRoot(scope);
+  const accept = [...root.querySelectorAll("[data-accept-agent]")].filter((b) => b.checked).map((b) => {
+    const id = b.getAttribute("data-accept-agent");
+    return { agent_id: id, note: root.querySelector(`[data-accept-note="${id}"]`)?.value || "" };
+  });
+  return staffPerfCommissionCall(scope, "payouts", "POST", { accept }, "Build this payday's payout from the agents who qualify now?");
+}
+
+function staffPerfReviewPayout(scope, id) {
+  const note = prompt("Review note (every agent is re-checked now; any that no longer qualify are dropped):", "Checked");
+  if (note === null) return;
+  return staffPerfCommissionCall(scope, `payouts/${encodeURIComponent(id)}/review`, "POST", { note });
+}
+
+function staffPerfPayoutPaid(scope, id) {
+  const reference = prompt("MoMo or bank reference for the commission payment:");
+  if (!reference) return;
+  return staffPerfCommissionCall(scope, `payouts/${encodeURIComponent(id)}/paid`, "POST", { reference });
+}
+
+function staffPerfCancelPayout(scope, id) {
+  const reason = prompt("Why cancel this batch?");
+  if (!reason) return;
+  return staffPerfCommissionCall(scope, `payouts/${encodeURIComponent(id)}/cancel`, "POST", { reason });
+}
+
+function staffPerfAddRecruit(event, scope) {
+  event.preventDefault();
+  const f = event.target;
+  return staffPerfCommissionCall(scope, "recruits", "POST", { name: f.name.value, rate_pct: Number(f.rate_pct.value), phone: f.phone.value });
+}
+
+function staffPerfSaveCommission(event, scope) {
+  event.preventDefault();
+  const f = event.target;
+  const staff = [...f.querySelectorAll("[data-rate-person]")].map((i) => ({ person_key: i.getAttribute("data-rate-person"), rate_pct: Number(i.value), active: i.getAttribute("data-active") === "1" }));
+  return staffPerfCommissionCall(scope, "settings", "PUT", { pays_on: f.pays_on.value, hold_days: Number(f.hold_days.value), cutoff_day: Number(f.cutoff_day.value), staff });
 }
 
 async function staffPerfSaveSettings(event, scope) {
