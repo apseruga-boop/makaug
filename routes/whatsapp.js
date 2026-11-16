@@ -9225,6 +9225,25 @@ async function settleAgentWaitingAdverts({ phone = '', currentStep = 'employee_p
       saved.push(...kept);
       changed = true;
     }
+    // Complete ones that are already on makaug leave the list. Three adverts
+    // saved while the list still held them were about to be listed again as
+    // "not saved yet" (16 Nov 2026).
+    const queue = employeePendingSubmissionQueue(data);
+    const remaining = [];
+    for (const entry of queue) {
+      const facts = entry.caption && entry.media.length ? employeePropertyFacts(entry.caption, data) : null;
+      if (facts && !employeePropertyMissing(facts).length
+        && await findEmployeeDuplicateProperty({ caption: entry.caption, facts, sessionData: data })) {
+        alreadySaved += 1;
+        continue;
+      }
+      remaining.push(entry);
+    }
+    if (remaining.length !== queue.length) {
+      if (remaining.length) data.pending_property_queue = remaining;
+      else delete data.pending_property_queue;
+      changed = true;
+    }
   };
   await saveCompleteOnes();
   const retired = retireStaleAgentSubmissions(data);
