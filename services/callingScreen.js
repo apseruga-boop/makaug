@@ -397,7 +397,8 @@ async function openSession(id) {
 
 // Everything the screen reports: leaving it, breaks (lunch:45 = a 45-minute lunch),
 // idle (idle_end detail = idle ms), open/close and every button pressed.
-const EVENT_KINDS = new Set(['inbound_start', 'fs_exit', 'fs_enter', 'hidden', 'visible', 'break_start', 'break_end', 'kit_send', 'screen_open', 'screen_close', 'idle_start', 'idle_end', 'action', 'work_on', 'work_off', 'meeting_join']);
+const IN_MEETING = 'in meeting';
+const EVENT_KINDS = new Set(['inbound_start', 'fs_exit', 'fs_enter', 'hidden', 'visible', 'break_start', 'break_end', 'kit_send', 'screen_open', 'screen_close', 'idle_start', 'idle_end', 'action', 'work_on', 'work_off', 'meeting_join', 'meeting_end']);
 
 /**
  * Heartbeat from the screen: running totals (ms) and the events since the last
@@ -412,7 +413,8 @@ async function heartbeat(id, { totals = {}, events = [], now = new Date() } = {}
     const at = e.at && !Number.isNaN(new Date(e.at).getTime()) ? new Date(Math.min(now.getTime(), Math.max(new Date(s.started_at).getTime(), new Date(e.at).getTime()))) : now;
     await db.query('INSERT INTO call_session_events (session_id, kind, detail, at) VALUES ($1, $2, $3, $4)', [id, e.kind, String(e.detail || '').slice(0, 200), at]);
   }
-  const exits = list.filter((e) => e.kind === 'fs_exit' || e.kind === 'hidden').length;
+  // Switching to the Meet pop-up during a team meeting is work, not leaving the screen.
+  const exits = list.filter((e) => (e.kind === 'fs_exit' || e.kind === 'hidden') && e.detail !== IN_MEETING).length;
   const breaks = list.filter((e) => e.kind === 'break_start').length;
   const out = (await rows(
     `UPDATE call_sessions SET last_heartbeat_at = $2,

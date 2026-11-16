@@ -346,11 +346,13 @@
     }, function (e) { toast(e.message, 'bad'); if (document.fullscreenElement) document.exitFullscreen().catch(function () {}); });
   }
   function ev(kind, detail) { if (S) S.events.push({ kind: kind, detail: detail || '', at: new Date().toISOString() }); }
-  function onVis() { if (!S) return; ev(document.hidden ? 'hidden' : 'visible', S.phase === 'calling' ? 'on a call' : ''); if (!document.hidden) { beat(); refreshPay(); } }
+  function inMeeting() { if (!S || !S.meeting) return false; var w = S.meeting.win; if (w && w.closed) { endMeeting(); return false; } return true; }
+  function endMeeting() { if (!S || !S.meeting) return; ev('meeting_end', String(Math.round((Date.now() - S.meeting.since) / 1000)) + 's'); clearInterval(S.meeting.poll); S.meeting = null; renderTop(); }
+  function onVis() { if (!S) return; ev(document.hidden ? 'hidden' : 'visible', inMeeting() ? 'in meeting' : (S.phase === 'calling' ? 'on a call' : '')); if (!document.hidden) { beat(); refreshPay(); } }
   function onFs() {
-    if (!S) return; ev(document.fullscreenElement ? 'fs_enter' : 'fs_exit');
-    // Leaving full screen ends work mode: downtime until he turns it back on.
-    if (!document.fullscreenElement && S.work && fsAvailable()) { setWork(false, 'left full screen'); return; }
+    if (!S) return; ev(document.fullscreenElement ? 'fs_enter' : 'fs_exit', inMeeting() ? 'in meeting' : '');
+    // Leaving full screen ends work mode: downtime until he turns it back on (not while in the team meeting).
+    if (!document.fullscreenElement && S.work && fsAvailable() && !inMeeting()) { setWork(false, 'left full screen'); return; }
     renderTop();
   }
   function fsAvailable() { return !!(document.documentElement.requestFullscreen) && !isPhone(); }
@@ -380,7 +382,7 @@
     S.lastInput = now;
   }
   function checkIdle(now) {
-    if (!S || S.idleSince || S.onBreak || S.phase === 'calling') return;
+    if (!S || S.idleSince || S.onBreak || S.phase === 'calling' || inMeeting()) return;
     if (now - (S.lastInput || now) >= IDLE_MS) { S.idleSince = S.lastInput; ev('idle_start', ''); }
   }
   // Every button pressed on the screen is logged by name (no personal data).
@@ -397,6 +399,7 @@
     if (S.onBreak) t.break_ms += d;
     else if (!S.work) t.down_ms = (t.down_ms || 0) + d;
     else if (away && S.phase === 'calling') t.oncall_hidden_ms += d;
+    else if (away && inMeeting()) { t.focus_ms += d; t.meeting_ms = (t.meeting_ms || 0) + d; }
     else if (away) t.away_ms += d;
     else t.focus_ms += d;
     var wt = q('[data-mkc-worktime]'); if (wt) wt.textContent = clock(t.focus_ms + t.oncall_hidden_ms);
@@ -1700,6 +1703,13 @@
   function meetPopup(url) {
     var w = window.open(url, 'makaugMeet', 'popup=yes,width=1040,height=720,left=40,top=40');
     if (!w) { toast('Your browser blocked the pop-up. Allow pop-ups for makaug.com, or use the link.', 'bad'); return false; }
+    // While Meet is open the meeting is work time: not away, idle or downtime.
+    if (S) {
+      if (S.meeting) clearInterval(S.meeting.poll);
+      if (!S.work) setWork(true, 'team meeting');
+      if (S.idleSince) { ev('idle_end', String(Date.now() - S.idleSince)); S.idleSince = null; }
+      S.meeting = { win: w, since: Date.now(), poll: setInterval(inMeeting, 3000) };
+    }
     return true;
   }
   function checkMeeting(first) {
