@@ -73,7 +73,7 @@ test('no real side effects from the practice account', { skip: !DB && 'set CALLI
   await assert.rejects(meeting.saveNotes('arthurtest', { actions: [{ text: 'Call him', phone: '0772 123 456' }] }), /Practice account/);
   await assert.rejects(c.startInbound(s.id, { phone: '0772 123 456' }), /TEST practice number/);
   await c.tap(id, { sessionId: s.id }); await c.endCall(id, { sessionId: s.id });
-  await c.wrapUp(id, { sessionId: s.id, outcome: 'call_back', note: 'practice', callbackAt: new Date(Date.now() + 3600e3).toISOString(), nextStep: 'Call back' });
+  await c.wrapUp(id, { sessionId: s.id, outcome: 'call_back', note: 'practice', callbackAt: new Date(Date.now() + 25 * 3600e3).toISOString(), nextStep: 'Call back' });
   assert.deepEqual(await count(), before, 'no claim, payment, revenue, video, proof, number, WhatsApp, pipeline or cash row was made');
   // Left out of every team total, and real callers never get TEST numbers.
   const act = await day.activity({ period: 'day' });

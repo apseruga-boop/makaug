@@ -22,6 +22,8 @@
 
 const db = require('../config/database');
 const scripts = require('./callingScripts');
+const callRoutes = require('./callingRoutes');
+const CALLBACK_MIN_HOURS = 24;
 const perf = require('./staffPerformance');
 const { staffSenderChoices, maskPhoneLast3 } = require('./outreachSenderName');
 const sandbox = require('./callingSandbox');
@@ -831,6 +833,8 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   if (text.length < 3) throw httpError(400, 'Write a short note about the call (or tap one of the quick notes).');
   const cb = parseCallback(callbackAt, now);
   if (def.date === 'required' && !cb) throw httpError(400, 'Pick the date and time to call back.');
+  // Call backs are at least 24 hours away (Arthur, 16 Nov 2026). Ten minutes of slack for slow saves.
+  if (cb && cb.getTime() < now.getTime() + CALLBACK_MIN_HOURS * 3600000 - 10 * 60000) throw httpError(400, `Call backs are at least ${CALLBACK_MIN_HOURS} hours away. Pick tomorrow or later.`);
   // Every call ends with a close, a final no, or a next step.
   let next = String(nextStep || '').trim().slice(0, 300);
   if (!next && def.key === 'no_answer') next = 'Try again next working day';
@@ -1395,7 +1399,8 @@ async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
     callers: callers.map((p) => ({ key: p.key, name: p.name, sandbox: Boolean(p.sandbox) || undefined })),
     locked_person: me ? me.key : null,
     sandbox: Boolean(me && me.sandbox),
-    scripts: { variants: scripts.VARIANTS, objections: scripts.OBJECTIONS, greetings: scripts.GREETINGS, luganda_status: 'Ronald to check' },
+    scripts: { variants: scripts.VARIANTS, objections: scripts.OBJECTIONS, greetings: scripts.GREETINGS, luganda_status: 'Ronald to check', routes: callRoutes.ROUTES, pickup: callRoutes.PICKUP },
+    callback_min_hours: CALLBACK_MIN_HOURS,
     templates: scripts.TEMPLATES,
     template_rules: scripts.TEMPLATE_RULES,
     sales_kit: scripts.salesKit(),

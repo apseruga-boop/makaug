@@ -40,6 +40,8 @@ function isStaffSharedKingTool(path, method = 'GET') {
   if (p === '/calling/meeting/notes' && m === 'POST') return true;
   if (/^\/calling\/sms-proofs\/[^/]+\/image$/.test(p) && m === 'GET') return true;
   if (['/calling/search', '/calling/my-money', '/calling/lookup', '/calling/live'].includes(p) && m === 'GET') return true;
+  if (['/calling/day-split', '/calling/housekeeping'].includes(p) && m === 'GET') return true;
+  if (p === '/calling/housekeeping/done' && m === 'POST') return true;
   if (/^\/calling\/attempts\/[^/]+\/(tap|end|wrapup|skip|pay|paid-claim)$/.test(p) && m === 'POST') return true;
   if (/^\/calling\/attempts\/[^/]+\/payment$/.test(p) && m === 'GET') return true;
   if (['/calling/plan', '/calling/cash'].includes(p) && (m === 'GET' || m === 'POST')) return true;
