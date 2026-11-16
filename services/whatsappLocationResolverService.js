@@ -38,6 +38,34 @@ function publicCandidate(candidate = {}) {
   };
 }
 
+// The letters of a place name the way Luganda spellings agree on them: r and
+// l are one sound, and a doubled letter is the same as a single one.
+// Zilobwe/Zirobwe, Mpereerwe/Mpererwe, Najera/Najjera, Kileka/Kireka.
+function placeSkeleton(value = '') {
+  return String(value || '').toLowerCase().replace(/[^a-z]/g, '').replace(/r/g, 'l').replace(/(.)\1+/g, '$1');
+}
+
+// One registry place with the same letters, in one district, or nothing.
+function spellingVariantMatch(query = '') {
+  const words = cleanText(query).split(' ');
+  if (!query || words.length > 3 || placeSkeleton(query).length < 4) return null;
+  const skeleton = placeSkeleton(query);
+  const same = canonicalLocationSuggestions(query, new Map(), 8)
+    .filter((item) => placeSkeleton(item.location || item.name || item.area || '') === skeleton);
+  const keys = new Set(same.map((item) => item.canonical_key || item.key));
+  if (keys.size !== 1) return null;
+  const item = same[0];
+  return {
+    key: item.canonical_key || item.key,
+    name: item.location || item.name || item.area,
+    district: item.district,
+    town: item.town || null,
+    level: item.level || 'area',
+    lat: item.latitude ?? null,
+    lng: item.longitude ?? null
+  };
+}
+
 function resolveWhatsappLocation(value = '', { district = '', allowText = false } = {}) {
   const query = cleanText(value);
   const suppliedDistrict = cleanText(district);
@@ -63,6 +91,22 @@ function resolveWhatsappLocation(value = '', { district = '', allowText = false 
     const textResolution = resolveCanonicalUgandaLocationFromText(query, suppliedDistrict);
     if (textResolution.status === 'matched' || resolution.status === 'unmatched') {
       resolution = textResolution;
+    }
+  }
+
+  if (resolution.status === 'unmatched' && !IS_SOUTH_AFRICA) {
+    const variant = spellingVariantMatch(query);
+    if (variant && (!suppliedDistrict || variant.district === suppliedDistrict)) {
+      return {
+        status: 'matched',
+        query,
+        match: publicCandidate(variant),
+        candidates: [publicCandidate(variant)],
+        suggestions: [],
+        approval_blocked: false,
+        match_type: 'spelling_variant',
+        confidence: 0.9
+      };
     }
   }
 
@@ -182,6 +226,7 @@ function canonicalizeWhatsappSearchFilters(filters = {}, originalText = '') {
 }
 
 module.exports = {
+  placeSkeleton,
   canonicalizeWhatsappSearchFilters,
   canonicalWhatsappLocationPatch,
   whatsappResolvedLocationLabel,

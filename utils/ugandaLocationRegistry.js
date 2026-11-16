@@ -436,6 +436,20 @@ function aliasAppearsInValue(aliasKey, valueKey) {
   return (` ${valueKey} `).includes(` ${aliasKey} `);
 }
 
+const ROAD_WORDS = new Set(['road', 'rd', 'highway', 'hwy', 'street', 'avenue', 'ave', 'bypass', 'expressway']);
+
+// The place appears at least once as itself, not as the name of a road.
+function aliasNamesPlaceNotRoad(aliasKey, valueKey) {
+  const words = ` ${valueKey} `;
+  let at = words.indexOf(` ${aliasKey} `);
+  while (at >= 0) {
+    const after = words.slice(at + aliasKey.length + 2).split(' ')[0];
+    if (!ROAD_WORDS.has(after)) return true;
+    at = words.indexOf(` ${aliasKey} `, at + 1);
+  }
+  return false;
+}
+
 const LOCATION_LEVEL_PRIORITY = Object.freeze({
   city: 90,
   town: 80,
@@ -696,7 +710,14 @@ function resolveCanonicalUgandaLocationFromText(value = '', suppliedDistrict = '
   const bestTokenCount = Math.max(...found.map((row) => row.tokenCount));
   const tokenMatches = found.filter((row) => row.tokenCount === bestTokenCount);
   const bestLevelPriority = Math.max(...tokenMatches.map((row) => row.levelPriority));
-  let bestMatches = tokenMatches.filter((row) => row.levelPriority === bestLevelPriority);
+  // "19 acres of land in Gayaza" (16 Nov 2026) was asked which of six other
+  // districts it is in: the census has villages called Gayaza in each, and the
+  // most specific level first dropped the Gayaza everybody means, the town in
+  // Wakiso. A known major place stays in the running, where the caption names
+  // the place itself: "Nakasaja Gayaza Road" is on the road, not in Gayaza.
+  let bestMatches = tokenMatches.filter((row) => row.levelPriority === bestLevelPriority
+    || (KNOWN_MAJOR_LOCALITY_BY_ALIAS.get(row.aliasKey) === row.entry.key
+      && aliasNamesPlaceNotRoad(row.aliasKey, valueKey)));
   const bestAliasLength = Math.max(...bestMatches.map((row) => row.aliasKey.length));
   bestMatches = bestMatches.filter((row) => row.aliasKey.length === bestAliasLength);
 
