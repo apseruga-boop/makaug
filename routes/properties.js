@@ -24,6 +24,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 
 const db = require('../config/database');
+const { readReferralFromRequest } = require('../services/referralTracking');
 const logger = require('../config/logger');
 const { sendPhoneOtp } = require('../services/phoneOtpDeliveryService');
 const {
@@ -4748,14 +4749,15 @@ router.post('/', async (req, res, next) => {
         moderation_stage,
         owner_edit_token_hash,
         owner_edit_token_expires_at,
-        expires_at
+        expires_at,
+        referral_code
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
         $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
         $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
         $31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
         $41,$42,$43,$44,$45,$46,$47,$48,$49,$50,
-        $51,$52,$53,$54,$55
+        $51,$52,$53,$54,$55,$56
       ) RETURNING id, created_at`,
       [
         listingType,
@@ -4812,7 +4814,8 @@ router.post('/', async (req, res, next) => {
         'submitted',
         ownerEditTokenHash,
         ownerEditTokenExpiresAt,
-        body.expires_at ? new Date(body.expires_at) : null
+        body.expires_at ? new Date(body.expires_at) : null,
+        readReferralFromRequest(req, body)
       ]
     );
 

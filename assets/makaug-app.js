@@ -8195,7 +8195,7 @@ function applyListingWizardLanguageUI() {
     ["lp-location-guide-copy", "Search for the nearest place, road, landmark, or area, then place the map pin where the property is located."],
     ["lp-alt-label", "Altitude (m)"],
     ["lp-step2-title", "Photos & Media"],
-    ["lp-upload-label", "Upload Photos (min 5, max 20) *"],
+    ["lp-upload-label", "Upload Photos (min 2, max 20) *"],
     ["lp-step3-title", "Contact & Verification"],
     ["lp-verify-name-label", "Full Name"],
     ["lp-public-name-label", "Display Name on Website (optional)"],
@@ -12252,6 +12252,7 @@ function renderOwnedListingCard(item) {
       ${listing.moderation_reason ? `<div class="mt-3 rounded-xl bg-amber-50 border border-amber-100 p-2 text-xs text-amber-900">${adminEscape(listing.moderation_reason)}</div>` : ""}
       <div class="mt-4 flex flex-wrap gap-2">
         ${String(listing.status).toLowerCase() === "approved" ? `<button type="button" onclick="openPropertyCardDetail(event, ${idArg})" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg px-3 py-2 text-xs font-bold">${adminEscape(dashboardText("ownedView"))}</button>` : ""}
+        ${String(listing.status).toLowerCase() === "approved" ? `<a href="${adminAttr(ownerWhatsAppShareHref(listing))}" target="_blank" rel="noopener noreferrer" onclick="return shareOwnedListingOnWhatsApp(${idArg})" class="bg-green-600 hover:bg-green-500 text-white rounded-lg px-3 py-2 text-xs font-bold">Share on WhatsApp</a>` : ""}
         <button type="button" onclick="openOwnedListingEditor(${idArg})" class="border border-green-700 text-green-700 hover:bg-green-50 rounded-lg px-3 py-2 text-xs font-bold">${adminEscape(dashboardText("ownedEdit"))}</button>
         <button type="button" onclick="deleteOwnedListing(${idArg})" class="border border-red-200 text-red-600 hover:bg-red-50 rounded-lg px-3 py-2 text-xs font-bold">${adminEscape(dashboardText("ownedDelete"))}</button>
       </div>
@@ -12990,12 +12991,11 @@ function buildBrokerDashboardShareText(broker = {}, stats = {}) {
     : (broker.area || "Uganda");
   const url = brokerDashboardProfileUrl(broker);
   return [
-    `makaug.com broker card: ${broker.name || "makaug broker"}`,
+    `See my listings on makaug.com: ${broker.name || "makaug.com broker"}`,
     broker.company || "Independent broker",
     `Areas: ${areas}`,
-    `Active listings: ${brokerMetric(stats.active_listings || broker.live_listings || 0)}`,
+    `Live listings: ${brokerMetric(stats.active_listings || broker.live_listings || 0)}`,
     phone ? `WhatsApp ${phone}` : "",
-    whatsapp ? `WhatsApp: https://wa.me/${whatsapp}` : "",
     url
   ].filter(Boolean).join("\n");
 }
@@ -13093,6 +13093,7 @@ function renderBrokerDashboardListingCard(p) {
         <button onclick="openPropertyCardDetail(event, ${propertyIdArg(p.id)})" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-bold">Preview</button>
         <button onclick="editBrokerListing(${propertyIdArg(p.id)})" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-bold">Edit</button>
         <button onclick="shareBrokerListing(${propertyIdArg(p.id)})" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-bold">Share</button>
+        ${isLiveListing ? `<a href="${adminAttr(ownerWhatsAppShareHref(p))}" target="_blank" rel="noopener noreferrer" onclick="return shareOwnedListingOnWhatsApp(${propertyIdArg(p.id)})" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Share on WhatsApp</a>` : ""}
         ${isLiveListing
           ? `<button onclick="openBrokerBoostPlanner(${propertyIdArg(p.id)})" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-bold">Boost</button>`
           : `<button type="button" onclick="toast('This listing can be boosted after makaug approves it.')" class="border border-gray-200 text-gray-400 bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-bold cursor-not-allowed">Boost after approval</button>`}
@@ -13118,7 +13119,11 @@ function renderBrokerProfilePreview(broker = {}, listings = [], stats = {}) {
         <div class="text-xs font-black uppercase tracking-wide text-green-700">Public broker card preview</div>
         <h2 class="text-xl font-black text-gray-900 mt-1">What property seekers see</h2>
       </div>
-      <button onclick="shareBrokerCard()" class="border border-green-200 text-green-800 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-bold">Share public card</button>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" onclick="copyBrokerProfileLink()" class="border border-green-200 text-green-800 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-bold">Copy my link</button>
+        <button onclick="shareBrokerCard()" class="border border-green-200 text-green-800 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-bold">Share public card</button>
+        <button type="button" onclick="shareBrokerCard('whatsapp')" class="bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg text-xs font-bold">Share on WhatsApp</button>
+      </div>
     </div>
     <div class="mt-4 border border-green-100 rounded-2xl p-4 bg-gradient-to-br from-white to-green-50">
       <div class="grid sm:grid-cols-[120px_1fr] gap-4">
@@ -24268,6 +24273,71 @@ const STAFF_PERF_STATUS_STYLE = {
   in_batch: "bg-emerald-200 text-emerald-900", paid_out: "bg-emerald-700 text-white", clawback_due: "bg-red-600 text-white", not_eligible: "bg-gray-200 text-gray-600"
 };
 
+
+function staffPerfReferralsHtml(ref = {}, scope, isKing) {
+  const counts = Array.isArray(ref.counts) ? ref.counts : [];
+  const codes = Array.isArray(ref.codes) ? ref.codes : [];
+  const totals = ref.totals || {};
+  const rows = counts.map((row) => {
+    const known = codes.find((c) => c.code === row.code);
+    const kind = row.kind === "unknown" ? "unknown code" : (row.kind || "");
+    return `<tr class="border-t border-gray-100">
+      <td class="py-1 pr-3 font-bold">${adminEscape(row.code)}</td>
+      <td class="py-1 pr-3">${adminEscape(row.label || row.code)}${known ? "" : " <span class=\"text-gray-400\">(unknown)</span>"}</td>
+      <td class="py-1 pr-3 text-gray-500">${adminEscape(kind)}</td>
+      <td class="py-1 pr-3 text-right">${row.agent_signups || 0}</td>
+      <td class="py-1 pr-3 text-right">${row.account_signups || 0}</td>
+      <td class="py-1 pr-3 text-right">${row.listings || 0}</td>
+      <td class="py-1 text-right font-bold">${row.total || 0}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="7" class="py-2 text-gray-500">No referral sign-ups or listings yet.</td></tr>`;
+  const codeList = codes.map((c) => `<li><code class="font-bold">${adminEscape(c.code)}</code> · ${adminEscape(c.label)}${c.person_key ? ` (${adminEscape(c.person_key)})` : ""} · ${adminEscape(c.kind)}</li>`).join("");
+  return `
+  <section class="rounded-2xl border border-gray-200 p-3" data-perf-referrals>
+    <h4 class="font-black text-gray-900">Sign-ups and listings by ref</h4>
+    <p class="text-[11px] text-gray-500 mt-1">First-touch ?ref= codes kept for about 30 days. A ref is supporting evidence only — it never on its own makes someone eligible for commission.</p>
+    <p class="text-xs text-gray-700 mt-2">${totals.agent_signups || 0} agent sign-ups · ${totals.account_signups || 0} account sign-ups · ${totals.listings || 0} listings · ${totals.short_stays || 0} short stays</p>
+    <div class="mt-2 overflow-x-auto">
+      <table class="w-full text-xs text-left">
+        <thead><tr class="text-gray-500"><th class="py-1 pr-3">Code</th><th class="py-1 pr-3">Name</th><th class="py-1 pr-3">Type</th><th class="py-1 pr-3 text-right">Agent sign-ups</th><th class="py-1 pr-3 text-right">Accounts</th><th class="py-1 pr-3 text-right">Listings</th><th class="py-1 text-right">Total</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <details class="mt-2"><summary class="text-xs font-bold cursor-pointer">Staff ref-code mapping</summary>
+      <ul class="mt-1 text-xs text-gray-700 space-y-0.5">${codeList || "<li>No codes yet.</li>"}</ul>
+      <p class="text-[11px] text-gray-500 mt-1">Share links: https://makaug.com/?ref=ronald · https://makaug.com/?ref=sharon · https://makaug.com/?ref=arthur</p>
+    </details>
+    ${isKing ? `<form class="mt-3 rounded-xl bg-gray-50 border border-gray-200 p-3 grid grid-cols-1 md:grid-cols-4 gap-2" onsubmit="staffPerfAddReferralCode(event, '${scope}')">
+      <p class="md:col-span-4 text-xs font-black">King · add a ref code</p>
+      <input name="code" required placeholder="Code (e.g. harriet)" class="rounded-xl border border-gray-200 px-3 py-2 text-sm">
+      <input name="label" placeholder="Name" class="rounded-xl border border-gray-200 px-3 py-2 text-sm">
+      <input name="person_key" placeholder="Staff key (optional)" class="rounded-xl border border-gray-200 px-3 py-2 text-sm">
+      <button type="submit" class="rounded-lg bg-gray-900 text-white px-3 py-2 text-xs font-bold">Add code</button>
+    </form>` : ""}
+  </section>`;
+}
+
+async function staffPerfAddReferralCode(event, scope) {
+  event.preventDefault();
+  const form = event.target;
+  try {
+    await apiRequest("/api/admin/staff-performance/referrals/codes", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {
+        code: form.code?.value,
+        label: form.label?.value,
+        person_key: form.person_key?.value
+      }
+    });
+    toast("Referral code saved.");
+    form.reset();
+    await staffPerfLoad(scope);
+  } catch (error) {
+    toast(error.message || "Could not add the referral code.");
+  }
+}
+
 function staffPerfCommissionHtml(data, scope, isKing) {
   const c = data.commission || {};
   if (!c.totals) return `<section class="rounded-2xl border border-red-200 bg-red-50 p-3 text-xs text-red-800" data-perf-commission>Commission could not load${c.error ? `: ${adminEscape(c.error)}` : ""}.</section>`;
@@ -24331,6 +24401,8 @@ function staffPerfCommissionHtml(data, scope, isKing) {
     ${inactive.length ? `<p class="text-[11px] text-gray-500">Not closing (history kept): ${inactive.map((p) => adminEscape(p.name)).join(", ")}.</p>` : ""}
   </div>
 
+  ${staffPerfReferralsHtml(data.referrals || {}, scope, isKing)}
+
   <section class="rounded-2xl border border-gray-200 p-3" data-perf-commission-agents>
     <div class="flex items-center justify-between gap-2 flex-wrap"><h4 class="font-black text-gray-900">Every agent and where they are</h4>
       <div class="flex gap-1 flex-wrap">${chip(who === "all", "Everyone", `staffPerfCommissionPerson('${scope}','all')`)}${(c.staff || []).filter((p) => p.active).map((p) => chip(who === p.person_key, adminEscape(p.name), `staffPerfCommissionPerson('${scope}','${adminAttr(p.person_key)}')`)).join("")}</div></div>
@@ -24342,7 +24414,8 @@ function staffPerfCommissionHtml(data, scope, isKing) {
         return `<div class="py-2 flex items-start justify-between gap-2" data-commission-agent="${adminAttr(r.agent_id || r.phone_masked)}">
           <div class="min-w-0"><p class="text-sm font-bold text-gray-900 truncate">${adminEscape(r.name)} <span class="text-xs font-semibold text-gray-500">${adminEscape(r.phone_masked || "")} · ${adminEscape(r.person_name || "")}</span></p>
             <p class="text-[11px] text-gray-600">${steps}${(r.reasons || []).length ? ` · ${adminEscape(r.reasons.join(" · "))}` : ""}</p>
-            ${(r.flags || []).length ? `<p class="text-[11px] font-semibold text-orange-800">⚠ ${adminEscape(r.flags.join(" · "))}</p>` : ""}</div>
+            ${(r.flags || []).length ? `<p class="text-[11px] font-semibold text-orange-800">⚠ ${adminEscape(r.flags.join(" · "))}</p>` : ""}
+            ${r.first_touch_ref ? `<p class="text-[11px] text-gray-500">First-touch ref: ${adminEscape(r.first_touch_ref)}${(r.evidence || []).length ? ` · ${adminEscape(r.evidence.join(" · "))}` : ""}</p>` : ""}</div>
           <div class="text-right shrink-0"><span class="inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${STAFF_PERF_STATUS_STYLE[r.status] || "bg-gray-100"}">${adminEscape(r.status_label || "Contacted")}</span>
             ${line ? `<p class="text-xs font-black mt-1">${staffPerfUgx(line.amount_ugx)}</p><p class="text-[10px] text-gray-500">${line.status === "paid_out" ? "paid" : `due ${adminEscape(staffPerfDayLabel(line.due_payday))}`}</p>` : ""}</div></div>`;
       }).join("") || `<p class="py-3 text-sm text-gray-500">No agents here yet.</p>`}
@@ -39694,7 +39767,8 @@ async function submitAuthSignUp() {
         preferred_language: preferredLanguage,
         profile_data: profileData,
         registration_status: authSignUpAudience === "agent" ? registrationStatus : undefined,
-        area_licence_number: authSignUpAudience === "agent" ? areaLicenceNumber : undefined
+        area_licence_number: authSignUpAudience === "agent" ? areaLicenceNumber : undefined,
+        referral_code: capturedReferralCode() || undefined
       }
     });
 
@@ -43030,6 +43104,7 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
     amenities: getLpAmenities(),
     listed_via: "website",
     source: "website",
+    referral_code: capturedReferralCode() || null,
     status: "pending",
     lister_name: lpVal("lp-verify-name") || null,
     lister_display_name: publicDisplayName || null,
@@ -44226,7 +44301,8 @@ async function submitAgentApplication() {
           type: "image/jpeg",
           size: Math.round((agentIdentityPhotoDataUrl || "").length * 0.75),
           data_url: agentIdentityPhotoDataUrl
-        }
+        },
+        referral_code: capturedReferralCode() || undefined
       }
     });
     await trackEvent("agent_register_submit", { district_scope: districtsCovered });
@@ -47418,7 +47494,8 @@ async function submitAccountAccessCreate() {
         marketing_opt_in: whatsappConsent,
         preferred_language: preferredLanguage,
         preferred_contact_channel: profileData.preferred_contact_channel || "whatsapp",
-        profile_data: profileData
+        profile_data: profileData,
+        referral_code: capturedReferralCode() || undefined
       }
     });
     accountAccessPendingOtp = null;
@@ -54019,6 +54096,63 @@ function sharePropertyListingFromEvent(event, id, channel = "copy") {
   }
   sharePropertyListing(id, channel);
   return false;
+}
+
+function capturedReferralCode() {
+  try {
+    if (window.makaugReferral && typeof window.makaugReferral.code === "function") {
+      return String(window.makaugReferral.code() || "").trim();
+    }
+  } catch (_error) {}
+  return "";
+}
+
+function ownerShareListingUrl(property) {
+  try {
+    const url = new URL(getPropertyShareUrl(property), window.location.origin || "https://makaug.com");
+    url.searchParams.set("ref", "owner-share");
+    return url.toString();
+  } catch (_error) {
+    const base = getPropertyShareUrl(property);
+    return base + (base.includes("?") ? "&" : "?") + "ref=owner-share";
+  }
+}
+
+function ownerWhatsAppShareText(property = {}) {
+  const shareUrl = ownerShareListingUrl(property);
+  const title = String(property?.title || "my listing").trim();
+  return `My listing is live on makaug.com: ${title}\nHave a look: ${shareUrl}`;
+}
+
+function ownerWhatsAppShareHref(property = {}) {
+  return `https://wa.me/?text=${encodeURIComponent(ownerWhatsAppShareText(property))}`;
+}
+
+function shareOwnedListingOnWhatsApp(id) {
+  const listing = (typeof finderOwnedListingsCache !== "undefined" && Array.isArray(finderOwnedListingsCache))
+    ? finderOwnedListingsCache.find((item) => String(item.id) === String(id))
+    : null;
+  const fromBroker = brokerDashboardCache?.listings?.find((item) => String(item.id) === String(id));
+  const property = listing || fromBroker || (typeof getPublicListings === "function" ? getPublicListings().find((p) => String(p.id) === String(id) || String(p.backend_id || "") === String(id)) : null);
+  if (!property) {
+    toast("Listing details are still loading.");
+    return false;
+  }
+  const href = ownerWhatsAppShareHref(property);
+  window.open(href, "_blank", "noopener,noreferrer");
+  return false;
+}
+
+function copyBrokerProfileLink() {
+  const broker = brokerDashboardCache?.broker;
+  if (!broker) {
+    toast("Broker profile is still loading.");
+    return;
+  }
+  const shareUrl = brokerDashboardProfileUrl(broker);
+  copyTextToClipboard(shareUrl).then((ok) => {
+    toast(ok ? "Your makaug.com link is copied." : "Unable to copy your link right now.");
+  }).catch(() => toast("Unable to copy your link right now."));
 }
 
 function getBrokerShareUrl(broker) {
@@ -63527,8 +63661,8 @@ const LISTING_LABEL_I18N = {
     "Photos & Media": "Bifaananyi & Media",
     "Upload clear photos. Exactly 5 photos are required, covering key spaces. Better quality images increase trust and enquiries.": "Teeka bifaananyi ebirungi. Bifaananyi 5 byonna byetaagisa era birina okulaga ebifo ebikulu. Omutindo omulungi gwongera obwesige n'okubuuza.",
     "Upload clear photos. At least 2 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Teeka bifaananyi ebirungi. Bifaananyi 2 oba okusingawo byetaagisa, era osobola okuteeka okutuuka ku 20. Omutindo omulungi gwongera obwesige n'okubuuza.",
-    "Upload Photos (exactly 5 required) *": "Teeka Bifaananyi (5 byokka) *",
-    "Upload Photos (min 5, max 20) *": "Teeka Bifaananyi (5 okusinga, 20 obusinga) *",
+    "Upload Photos (min 2, max 20) *": "Teeka Bifaananyi (2 okusinga, 20 obusinga) *",
+    "Upload Photos (min 2, max 20) *": "Teeka Bifaananyi (2 okusinga, 20 obusinga) *",
     "Verify Identity": "Kakasa Endagamuntu",
     "Review & Submit": "Kebera era Oweze",
     "Full Name *": "Erinnya Lyo Lyonna *",
@@ -63923,8 +64057,8 @@ const LISTING_LABEL_I18N = {
     "Photos & Media": "Picha na Media",
     "Upload clear photos. Exactly 5 photos are required, covering key spaces. Better quality images increase trust and enquiries.": "Pakia picha zilizo wazi. Picha 5 kamili zinahitajika na zifunike maeneo muhimu. Ubora mzuri huongeza uaminifu na maulizo.",
     "Upload clear photos. At least 2 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Pakia picha zilizo wazi. Angalau picha 2 zinahitajika, na unaweza kupakia hadi 20. Ubora mzuri huongeza uaminifu na maulizo.",
-    "Upload Photos (exactly 5 required) *": "Pakia Picha (picha 5 kamili) *",
-    "Upload Photos (min 5, max 20) *": "Pakia Picha (angalau 5, hadi 20) *",
+    "Upload Photos (min 2, max 20) *": "Pakia Picha (angalau 2, hadi 20) *",
+    "Upload Photos (min 2, max 20) *": "Pakia Picha (angalau 2, hadi 20) *",
     "Verify Identity": "Thibitisha Utambulisho",
     "Review & Submit": "Kagua na Tuma",
     "Full Name *": "Majina Kamili *",
@@ -64311,8 +64445,8 @@ const LISTING_LABEL_I18N = {
     "Photos & Media": "Cal ki Media",
     "Upload clear photos. Exactly 5 photos are required, covering key spaces. Better quality images increase trust and enquiries.": "Ket cal ma wang. Cal 5 atir mite pi kabedo mapire tek. Quality maber medo geno ki penyo.",
     "Upload clear photos. At least 2 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Ket cal ma wang. Cal 2 onyo makato mite, i twero ket nyaka 20. Quality maber medo geno ki penyo.",
-    "Upload Photos (exactly 5 required) *": "Ket Cal (cal 5 atir) *",
-    "Upload Photos (min 5, max 20) *": "Ket Cal (matidi 5, madit 20) *",
+    "Upload Photos (min 2, max 20) *": "Ket Cal (matidi 2, madit 20) *",
+    "Upload Photos (min 2, max 20) *": "Ket Cal (matidi 2, madit 20) *",
     "Verify Identity": "Cik nying",
     "Review & Submit": "Nen doki ci ket",
     "Full Name *": "Nying weng *",
@@ -64386,8 +64520,8 @@ const LISTING_LABEL_I18N = {
     "Photos & Media": "Bifaananyi na Media",
     "Upload clear photos. Exactly 5 photos are required, covering key spaces. Better quality images increase trust and enquiries.": "Taho bifaananyi ebirungi. Bifaananyi 5 byonka nibyetagisa kandi birikukwata aha bice bikuru. Quality erungi eyerera obwesige n'okubuuza.",
     "Upload clear photos. At least 2 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Taho bifaananyi ebirungi. Bifaananyi 2 noba okukira nibyetagisa, kandi noobaasa kutaho kugera aha 20. Quality erungi eyerera obwesige n'okubuuza.",
-    "Upload Photos (exactly 5 required) *": "Taho Bifaananyi (5 byonka) *",
-    "Upload Photos (min 5, max 20) *": "Taho Bifaananyi (5 min, 20 max) *",
+    "Upload Photos (min 2, max 20) *": "Taho Bifaananyi (2 min, 20 max) *",
+    "Upload Photos (min 2, max 20) *": "Taho Bifaananyi (2 min, 20 max) *",
     "Verify Identity": "Kakasa Endangamuntu",
     "Review & Submit": "Reeba kandi Ohereze",
     "Full Name *": "Eriinya ryona *",
@@ -64461,8 +64595,8 @@ const LISTING_LABEL_I18N = {
     "Photos & Media": "Bifaananyi na Media",
     "Upload clear photos. Exactly 5 photos are required, covering key spaces. Better quality images increase trust and enquiries.": "Taho bifaananyi ebirungi. Bifaananyi 5 byonka nibyetagisa kandi birikukwata aha bice bikuru. Omutindo murungi guta obwesige n'okubuuza.",
     "Upload clear photos. At least 2 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Taho bifaananyi ebirungi. Bifaananyi 2 noba okukira nibyetagisa kandi nooshobora kutaho kugera aha 20. Omutindo murungi guta obwesige n'okubuuza.",
-    "Upload Photos (exactly 5 required) *": "Taho Bifaananyi (5 byonka) *",
-    "Upload Photos (min 5, max 20) *": "Taho Bifaananyi (5 min, 20 max) *",
+    "Upload Photos (min 2, max 20) *": "Taho Bifaananyi (2 min, 20 max) *",
+    "Upload Photos (min 2, max 20) *": "Taho Bifaananyi (2 min, 20 max) *",
     "Verify Identity": "Kakasa Endangamuntu",
     "Review & Submit": "Reeba kandi Ohereze",
     "Full Name *": "Eriinya ryona *",
@@ -64536,8 +64670,8 @@ const LISTING_LABEL_I18N = {
     "Photos & Media": "Bifaananyi & Media",
     "Upload clear photos. Exactly 5 photos are required, covering key spaces. Better quality images increase trust and enquiries.": "Teeka bifaananyi ebirungi. Bifaananyi 5 byokka byetaagisa era birage ebifo ebikulu. Omutindo omulungi gwongera obwesige n'okubuuza.",
     "Upload clear photos. At least 2 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Teeka bifaananyi ebirungi. Bifaananyi 2 oba okusinga byetaagisa, era osobola okutuusa ku 20. Omutindo omulungi gwongera obwesige n'okubuuza.",
-    "Upload Photos (exactly 5 required) *": "Teeka Bifaananyi (5 byokka) *",
-    "Upload Photos (min 5, max 20) *": "Teeka Bifaananyi (5 min, 20 max) *",
+    "Upload Photos (min 2, max 20) *": "Teeka Bifaananyi (2 okusinga, 20 obusinga) *",
+    "Upload Photos (min 2, max 20) *": "Teeka Bifaananyi (2 min, 20 max) *",
     "Verify Identity": "Kakasa Endagamuntu",
     "Review & Submit": "Kebera era Oweze",
     "Full Name *": "Erinnya Lyo Lyonna *",

@@ -708,10 +708,12 @@ async function getDashboard({ now = new Date() } = {}) {
   const commission = await require('./staffCommission').summary({
     sends: rawSends, now, roadPayingNow: paying.now, goal: Number(campaign.goal_paying_agents) || 1000
   }).catch((error) => ({ error: error.message }));
+  const referrals = await require('./referralTracking').summary().catch((error) => ({ error: error.message, codes: [], counts: [], totals: {} }));
 
   return {
     today,
     commission,
+    referrals,
     campaign: {
       key: campaign.key,
       name: campaign.name,

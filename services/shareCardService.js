@@ -583,6 +583,12 @@ async function agentSvg(agent, lang) {
   const family = fontFamily(lang);
   const name = clip(agent.name || 'Property agent', 32);
   const districts = clip(agent.districts || '', 52);
+  const listingCount = Number(agent.approvedListingCount ?? agent.approved_listing_count ?? agent.listings ?? 0);
+  const listingLabel = listingCount === 1
+    ? shareCardText(lang, '1 live listing on makaug.com')
+    : listingCount > 0
+      ? shareCardText(lang, `${listingCount} live listings on makaug.com`)
+      : shareCardText(lang, 'My listings on makaug.com');
   const range = formatPriceRange(agent.minPrice, agent.maxPrice);
   const rangeLabel = range
     ? `${shareCardText(lang, 'Price range')} ${range}`
@@ -625,7 +631,8 @@ async function agentSvg(agent, lang) {
   ${bio}
   <rect x="430" y="448" width="${rangeWidth}" height="52" rx="16" fill="#f0fdf4"/>
   ${textEl(450, 481, clip(rangeLabel, 42), { size: 20, weight: 700, fill: '#14532d', family })}
-  ${textEl(430, 548, shareCardText(lang, 'View profile on makaug.com'), { size: 22, weight: 700, fill: '#15803d', family })}
+  ${textEl(430, 532, listingLabel, { size: 20, weight: 700, fill: '#14532d', family })}
+  ${textEl(430, 564, shareCardText(lang, 'View profile on makaug.com'), { size: 18, weight: 700, fill: '#15803d', family })}
 </svg>`;
 }
 

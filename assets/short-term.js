@@ -3462,8 +3462,15 @@
   // storage from then on.
   function captureReferralCode() {
     try {
+      var firstTouch = '';
+      try {
+        if (window.makaugReferral && typeof window.makaugReferral.code === 'function') {
+          firstTouch = window.makaugReferral.code() || '';
+        }
+      } catch (_ignored) {}
       var fromUrl = (new URLSearchParams(window.location.search || '').get('ref') || '').trim();
-      if (fromUrl) window.sessionStorage.setItem('makaug.short-term.ref', fromUrl.slice(0, 40));
+      var code = firstTouch || fromUrl.slice(0, 40);
+      if (code) window.sessionStorage.setItem('makaug.short-term.ref', code);
     } catch (_error) {
       // Session storage blocked. The listing still submits, just without a
       // referral code attached.
@@ -3472,7 +3479,16 @@
   captureReferralCode();
 
   function referralCode() {
-    try { return window.sessionStorage.getItem('makaug.short-term.ref') || ''; } catch (_error) { return ''; }
+    try {
+      var stored = window.sessionStorage.getItem('makaug.short-term.ref') || '';
+      if (stored) return stored;
+    } catch (_error) {}
+    try {
+      if (window.makaugReferral && typeof window.makaugReferral.code === 'function') {
+        return window.makaugReferral.code() || '';
+      }
+    } catch (_error2) {}
+    return '';
   }
 
   // ---------------------------------------------------------------- photos

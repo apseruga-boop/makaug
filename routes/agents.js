@@ -4,6 +4,7 @@ const { cleanListingTitle, buildThirdPartyPublicTitle, isFoundOnlinePublicRow } 
 const jwt = require('jsonwebtoken');
 
 const db = require('../config/database');
+const { readReferralFromRequest } = require('../services/referralTracking');
 const { asArray, cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { createLeadFormLimiter, leadHoneypot } = require('../middleware/leadGuard');
 const { createLead } = require('../services/leadService');
@@ -1758,8 +1759,9 @@ router.post('/register', async (req, res, next) => {
         data_retention_notice_at,
         profile_photo_url,
         bio,
-        status
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),$16,$17,NOW(),$18,NOW(),$19,$20,'pending')
+        status,
+        referral_code
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),$16,$17,NOW(),$18,NOW(),$19,$20,'pending',$21)
       RETURNING id, status, registration_status, created_at`,
       [
         fullName,
@@ -1781,7 +1783,8 @@ router.post('/register', async (req, res, next) => {
         privacyConsentAccepted,
         dataRetentionNoticeAccepted,
         cleanText(body.profile_photo_url) || null,
-        cleanText(body.bio) || null
+        cleanText(body.bio) || null,
+        readReferralFromRequest(req, body)
       ]
     );
     // New sign-ups are pending, so this is normally a no-op; it keeps the rule in one place.
