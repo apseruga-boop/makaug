@@ -171,7 +171,10 @@ function buildListingEnquiryReply(property, {
   propertyUrl = '',
   reference = '',
   // True once the lister has actually been sent this person's number.
-  listerNotified = false
+  listerNotified = false,
+  // An approved makaug agent's profile page, for "who is this?" (16 Nov 2026).
+  agentProfileUrl = '',
+  termsUrl = ''
 } = {}) {
   const facts = listingSourceFacts(property);
   const location = [cleanText(property.area), cleanText(property.district)]
@@ -198,7 +201,7 @@ function buildListingEnquiryReply(property, {
   if (facts.foundOnline) {
     // We did not take this listing in from anyone, so there is nobody here to
     // ask. Saying so plainly is the whole answer.
-    lines.push('🔎 *We found this one published online* — it was not sent to us by the lister, so we cannot confirm whether it is still available, what the real price is, or who is holding it.');
+    lines.push('🔎 *We found this one published online* — it was not posted by makaug or sent to us by the lister, so we cannot confirm whether it is still available, what the real price is, or who is holding it.');
     lines.push('');
     const postedBy = facts.posterName
       ? `It was posted by *${facts.posterName}*${facts.platform ? ` on ${facts.platform}` : ''}.`
@@ -226,6 +229,7 @@ function buildListingEnquiryReply(property, {
     lines.push('');
     lines.push(`💬 Message ${facts.posterName || 'the lister'} on WhatsApp: ${chatLink}`);
     lines.push(`📞 Or call ${facts.phone}`);
+    if (agentProfileUrl) lines.push(`👤 Their makaug agent profile: ${agentProfileUrl}`);
     if (listerNotified) {
       lines.push('');
       lines.push('We have also sent them your number and this listing, so they can reach you too.');
@@ -241,6 +245,10 @@ function buildListingEnquiryReply(property, {
   lines.push('');
   lines.push('🛡️ *Before you pay anyone, anything:*');
   listingSafetySteps().forEach((step) => lines.push(step));
+  if (termsUrl) {
+    lines.push('');
+    lines.push(`📜 makaug.com helps you find properties. We do not own, rent out or manage them, and any agreement is between you and whoever holds the property. Our terms: ${termsUrl}`);
+  }
   lines.push('');
   lines.push('Want to see others like it? Reply *SEARCH* and tell me the area and budget.');
 
