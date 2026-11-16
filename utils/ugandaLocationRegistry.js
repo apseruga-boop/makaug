@@ -487,6 +487,7 @@ const KNOWN_MAJOR_LOCALITY_BY_ALIAS = new Map(Object.entries({
   nsambya: 'kampala:nsambya',
   wandegeya: 'kampala:wandegeya',
   bunga: 'kampala:bunga',
+  mutungo: 'kampala:mutungo',
   kasubi: 'kampala:kasubi',
   bukesa: 'kampala:bukesa',
   kabowa: 'kampala:kabowa',
@@ -579,6 +580,11 @@ function selectProminentCandidate(candidates = [], aliasKey = '', counts = new M
     && first.listingCount >= Math.max(second.listingCount + 3, second.listingCount * 2);
   if (listingLeadIsClear) return first.entry;
   if (first.knownMajor > second.knownMajor) return first.entry;
+  // The place everybody means, when the listings do not clearly say otherwise:
+  // one listing filed under the other Mutungo must not make the name
+  // ambiguous again (16 Nov 2026).
+  const majors = ranked.filter((row) => row.knownMajor && row.level === first.level);
+  if (majors.length === 1) return majors[0].entry;
   return null;
 }
 

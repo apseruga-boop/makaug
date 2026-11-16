@@ -633,12 +633,23 @@ function staffLocationEvidenceText(row = {}) {
   ].map((value) => stripRoadNamePhrases(cleanText(value))).filter(Boolean).join(' | ');
 }
 
+// A place of that name in the district staff chose too: Mutungo is a hill in
+// Kampala and a village in Wakiso. Moving the hill's listing to Kampala was
+// refused with "Mutungo belongs to Wakiso, not Kampala" (16 Nov 2026).
+function placeAlsoInDistrict(place = '', district = '') {
+  const name = cleanText(place);
+  const chosen = normalizeDistrict(district) || cleanText(district);
+  if (!name || !chosen) return false;
+  const node = canonicalizeUgandaLocation(name, chosen);
+  return Boolean(node && node.district === chosen && !['district', 'region'].includes(node.level));
+}
+
 function staffLocationWarnings(row = {}) {
   const warnings = [];
   const area = cleanText(row.area);
   const district = cleanText(row.district);
   const knownDistrict = districtForKnownArea(area);
-  if (knownDistrict && knownDistrict !== district) warnings.push(`${area} belongs to ${knownDistrict}, not ${district}`);
+  if (knownDistrict && knownDistrict !== district && !placeAlsoInDistrict(area, district)) warnings.push(`${area} belongs to ${knownDistrict}, not ${district}`);
   const extra = safeJsonObject(row.extra_fields, {});
   const evidenceText = staffLocationEvidenceText(row);
   const identityTerms = [
@@ -2766,7 +2777,10 @@ function normalizeStaffListingPatch(existing = {}, patch = {}) {
   const knownAreaDistrict = districtForKnownArea(base.area) || districtForKnownArea(base.neighborhood) || districtForKnownArea(base.city);
   const callerSuppliedDistrict = Object.prototype.hasOwnProperty.call(normalized, 'district');
   const errors = [];
-  if (knownAreaDistrict && base.district && base.district !== knownAreaDistrict && callerSuppliedDistrict) {
+  if (knownAreaDistrict && base.district && base.district !== knownAreaDistrict
+    && placeAlsoInDistrict(base.area || base.neighborhood || base.city, base.district)) {
+    // The same name in the chosen district: keep the district.
+  } else if (knownAreaDistrict && base.district && base.district !== knownAreaDistrict && callerSuppliedDistrict) {
     errors.push(`${base.area || base.neighborhood || base.city} belongs to ${knownAreaDistrict}, not ${base.district}`);
   } else if (knownAreaDistrict && (!base.district || base.district !== knownAreaDistrict)) {
     normalized.district = knownAreaDistrict;
