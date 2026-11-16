@@ -50,3 +50,39 @@ test('staff-shared calling paths; King-only stays King-only', () => {
   for (const [m, p] of [['GET', '/calling/bootstrap'], ['GET', '/calling/whatsapp'], ['GET', '/calling/whatsapp/abc'], ['GET', '/calling/leads'], ['GET', '/calling/summary'], ['GET', '/calling/timeline'], ['POST', '/calling/sessions/5/claim']]) assert.equal(isStaffSharedKingTool(p, m), true, p);
   for (const [m, p] of [['GET', '/calling/pipeline'], ['POST', '/calling/pipeline/123'], ['GET', '/calling/logins'], ['POST', '/calling/logins/1/link'], ['GET', '/calling/summaries'], ['PUT', '/calling/targets']]) assert.equal(isStaffSharedKingTool(p, m), false, p);
 });
+
+test('v2: skip reasons, money-first order, source labels', () => {
+  assert.equal(c.skipCodeOf('Wrong number'), 'wrong_number');
+  assert.equal(c.skipCodeOf('Busy: call at 4'), 'busy');
+  assert.equal(c.skipCodeOf('Other: something'), 'other');
+  assert.equal(c.eligibility([{ status: 'skipped', skip_reason: 'Wrong number', task_key: 'new_agents', shown_at: '2026-11-01T09:00:00Z' }], task, { now }).why, 'do_not_contact');
+  assert.equal(c.eligibility([{ status: 'skipped', skip_reason: 'Busy', task_key: 'new_agents', shown_at: '2026-11-16T08:00:00Z' }], task, { now }).why, 'skipped_today');
+  assert.equal(c.eligibility([{ status: 'skipped', skip_reason: 'Busy', task_key: 'new_agents', shown_at: '2026-11-10T08:00:00Z' }], task, { now }).ok, true);
+  assert.equal(c.eligibility([{ status: 'skipped', skip_reason: 'Already an agent', task_key: 'new_agents', shown_at: '2026-11-10T08:00:00Z' }], { ...task, queue_kind: 'new_agents' }, { now }).ok, false);
+  assert.ok(c.moneyScore({ source_kind: 'agent', reason: 'Signed up 2026-11-01, not paid yet · 3 live' }) > c.moneyScore({ source_kind: 'agent', reason: 'Renewal overdue since 2026-11-10' }));
+  assert.ok(c.moneyScore({ source_kind: 'lead' }) > c.moneyScore({ source_kind: 'list' }));
+  assert.equal(c.sourceKindLabel({ source_kind: 'list', source_label: 'Your list 2026-11-16 · found online' }), 'Found online');
+});
+
+test('v2: "Hello on WhatsApp" is a must in every script and every close checklist', () => {
+  for (const [k, v] of Object.entries(scripts.VARIANTS)) for (const lang of ['en', 'lg']) assert.ok(v[lang].some((st) => st[2] === 'hello'), `${k} ${lang}`);
+  for (const k of ['new_agents', 'payments', 'retention']) assert.ok(scripts.CLOSE_CHECKS[k].some((t) => /Hello/.test(t)), k);
+});
+
+test('v2: caller logins are limited to the calling screen on every staff route', () => {
+  const { isCallerOnly } = require('../middleware/auth');
+  assert.equal(isCallerOnly({ role: 'moderator', profile_data: { staff_scope: 'caller' } }), true);
+  assert.equal(isCallerOnly({ role: 'moderator', profile_data: {} }), false);
+  assert.equal(isCallerOnly({ role: 'admin', profile_data: { staff_scope: 'caller' } }), false);
+});
+
+test('v2: no answer 3 times parks the number for 7 days; best time from answered calls', () => {
+  const miss = (d) => ({ status: 'done', task_key: 'new_agents', outcome: 'no_answer', wrapped_at: d });
+  const three = [miss('2026-11-14T09:00:00Z'), miss('2026-11-13T09:00:00Z'), miss('2026-11-12T09:00:00Z')];
+  assert.equal(c.eligibility(three, task, { now }).why, 'parked_no_answer');
+  assert.equal(c.eligibility(three.slice(0, 2), task, { now }).kind, 'retry');
+  assert.equal(c.eligibility(three, task, { now: new Date('2026-11-22T09:00:00Z') }).kind, 'retry');
+  const bt = c.bestTimeFrom([{ tapped_at: '2026-11-10T07:20:00Z', spoke: true }, { tapped_at: '2026-11-11T07:40:00Z', spoke: true }, { tapped_at: '2026-11-12T13:00:00Z', spoke: false }]);
+  assert.equal(bt.hour, 10); assert.equal(bt.answered, 2); assert.equal(bt.tries, 3);
+  assert.equal(c.bestTimeFrom([]), null);
+});

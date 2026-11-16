@@ -85,7 +85,8 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
     return res.json({ ok: true, data: out });
   }));
 
-  router.post('/calling/attempts/:id/skip', wrap(async (req, res) => res.json({ ok: true, data: await calling.skip(req.params.id, { sessionId: sid(req), reason: req.body?.reason }) })));
+  router.get('/calling/counts', wrap(async (req, res) => res.json({ ok: true, data: await calling.queueCounts(req.query?.person_key) })));
+  router.post('/calling/attempts/:id/skip', wrap(async (req, res) => res.json({ ok: true, data: await calling.skip(req.params.id, { sessionId: sid(req), reason: req.body?.reason, reasonCode: req.body?.reason_code, note: req.body?.note }) })));
 
   router.post('/calling/numbers', wrap(async (req, res) => {
     const out = await calling.submitNumber({ personKey: req.body?.person_key, name: req.body?.name, phone: req.body?.phone, note: req.body?.note, addedBy: actorOf(req) });

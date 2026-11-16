@@ -35,7 +35,7 @@ function isStaffSharedKingTool(path, method = 'GET') {
   if (/^\/calling\/sessions\/[^/]+\/(heartbeat|task|next|end|claim)$/.test(p) && m === 'POST') return true;
   if (/^\/calling\/attempts\/[^/]+\/(tap|end|wrapup|skip)$/.test(p) && m === 'POST') return true;
   if (p === '/calling/numbers' && m === 'POST') return true;
-  if (['/calling/stats', '/calling/feed', '/calling/report', '/calling/summary', '/calling/whatsapp', '/calling/leads', '/calling/timeline'].includes(p) && m === 'GET') return true;
+  if (['/calling/stats', '/calling/counts', '/calling/feed', '/calling/report', '/calling/summary', '/calling/whatsapp', '/calling/leads', '/calling/timeline'].includes(p) && m === 'GET') return true;
   // Read-only WhatsApp conversation view (no sending anywhere on the calling screen).
   if (/^\/calling\/whatsapp\/[^/]+$/.test(p) && m === 'GET') return true;
   if (p.startsWith('/agent-manager/')) return true;

@@ -242,6 +242,17 @@ async function requireAuthenticatedUser(req, res, next) {
   }
 }
 
+// A 'caller' staff login (set in profile_data.staff_scope) may use the
+// calling screen only: /api/admin/calling/*. Every other staff route says no.
+const CALLER_ALLOWED = /^\/api\/admin\/calling(\/|\?|$)/;
+function isCallerOnly(user) {
+  return Boolean(user && user.role === 'moderator' && user.profile_data && user.profile_data.staff_scope === 'caller');
+}
+function callerBlocked(req, user) {
+  return isCallerOnly(user) && !CALLER_ALLOWED.test(String(req.originalUrl || req.url || ''));
+}
+const CALLER_ONLY_ERROR = 'Your login is for the calling screen only.';
+
 function isStaffRole(role = '') {
   return ['moderator', 'admin', 'super_admin'].includes(String(role || '').toLowerCase());
 }
@@ -252,6 +263,7 @@ async function requireStaffAccess(req, res, next) {
     if (!user || !isStaffRole(user.role)) {
       return res.status(403).json({ ok: false, error: 'Staff access required' });
     }
+    if (callerBlocked(req, user)) return res.status(403).json({ ok: false, error: CALLER_ONLY_ERROR });
     req.userAuth = user;
     req.staffAuth = { userId: user.id, role: user.role };
     return next();
@@ -272,6 +284,7 @@ async function requireListingModerationAccess(req, res, next) {
     if (!user || user.role !== 'moderator') {
       return res.status(401).json({ ok: false, error: 'Unauthorized' });
     }
+    if (callerBlocked(req, user)) return res.status(403).json({ ok: false, error: CALLER_ONLY_ERROR });
     req.userAuth = user;
     req.adminAuth = { type: 'moderator', userId: user.id, role: user.role };
     return next();
@@ -284,7 +297,12 @@ async function requireListingModerationAccess(req, res, next) {
 
 async function requireStaffOrAdminAccess(req, res, next) {
   try {
-    if (await hasStaffOrAdminAccess(req)) return next();
+    if (await hasStaffOrAdminAccess(req)) {
+      if (!req.adminAuth?.type || req.adminAuth.type === 'moderator') {
+        if (callerBlocked(req, req.userAuth)) return res.status(403).json({ ok: false, error: CALLER_ONLY_ERROR });
+      }
+      return next();
+    }
     return res.status(401).json({ ok: false, error: 'Unauthorized' });
   } catch (error) {
     if (isAuthBackendUnavailable(error)) return sendAuthUnavailable(res);
@@ -294,6 +312,7 @@ async function requireStaffOrAdminAccess(req, res, next) {
 }
 
 module.exports = {
+  isCallerOnly,
   isTransientDbError,
   hasAdminAccess,
   hasStaffOrAdminAccess,

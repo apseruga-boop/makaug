@@ -238,6 +238,28 @@
     '.mkc-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin:8px 0;font-size:11px;color:#64748b;text-align:center}.mkc-kpis b{display:block;font-size:16px;color:#111827}.mkc-kpis .mkc-good b{color:#047857}',
     '.mkc-targets{display:grid;grid-template-columns:1fr 90px 90px;gap:6px;align-items:center}.mkc-targets input{width:100%;box-sizing:border-box}',
     '.mkc-spark{display:inline-flex;gap:2px;align-items:flex-end;height:22px}.mkc-spark i{width:5px;background:#10b981;border-radius:2px;display:block}',
+    '.mkc-modes{display:flex;gap:6px;flex-wrap:wrap}.mkc-mode{border:2px solid #334155;background:#1e293b;color:#e2e8f0;border-radius:12px;padding:6px 12px;font:inherit;font-weight:900;font-size:14px;cursor:pointer;display:flex;gap:8px;align-items:center}',
+    '.mkc-mode.on{background:#10b981;border-color:#34d399;color:#04241a}.mkc-mode i{font-style:normal;background:#0f172a;color:#fbbf24;border-radius:999px;padding:1px 8px;font-size:12px}.mkc-mode.on i{background:#064e3b;color:#fff}',
+    '.mkc-dash{display:flex;gap:10px;align-items:stretch;padding:10px 14px 0;max-width:1500px;margin:0 auto;overflow-x:auto}',
+    '.mkc-dcard{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:8px 12px;display:flex;gap:10px;align-items:center;min-width:max-content}',
+    '.mkc-dcard b{font-size:20px;font-weight:900;display:block;line-height:1.1}.mkc-dcard span{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.04em}',
+    '.mkc-ring{position:relative;width:62px;height:62px}.mkc-ring svg{transform:rotate(-90deg)}.mkc-ring em{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:900;font-size:14px}',
+    '.mkc-money b{color:#047857}.mkc-badges{display:flex;gap:4px;flex-wrap:wrap;max-width:260px}.mkc-badge{font-size:11px;font-weight:800;border-radius:999px;padding:2px 8px;background:#fef3c7;color:#92400e}.mkc-badge.off{background:#f1f5f9;color:#94a3b8}',
+    '.mkc-hours{display:flex;gap:3px;align-items:flex-end;height:40px}.mkc-hours i{width:9px;background:#10b981;border-radius:3px 3px 0 0;display:block;position:relative}.mkc-hours i.now{background:#f59e0b}',
+    '.mkc-ctx{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;margin:8px 0}.mkc-ctx .tag{display:inline-block;font-weight:900;font-size:12px;border-radius:999px;padding:3px 10px;background:#1e293b;color:#fff;margin:0 4px 4px 0}',
+    '.mkc-ctx .tag.hot{background:#b91c1c}.mkc-ctx .tag.warm{background:#d97706}.mkc-ctx .tag.hello{background:#047857}.mkc-ctx .tag.nohello{background:#e2e8f0;color:#475569}',
+    '.mkc-ctx ol{margin:6px 0 0;padding-left:18px;max-height:180px;overflow:auto;font-size:13px}.mkc-ctx li{margin-bottom:4px}',
+    '.mkc-calling{font-size:22px;font-weight:900;color:#047857;text-align:center;margin-top:6px}.mkc-calling .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444;margin-right:6px;animation:mkcblink 1s infinite}',
+    '@keyframes mkcblink{50%{opacity:.2}}',
+    '.mkc-stages{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}.mkc-stage{border:1px solid #cbd5e1;background:#fff;border-radius:999px;padding:4px 10px;font:inherit;font-size:12px;font-weight:800;cursor:pointer;color:#475569}.mkc-stage.on{background:#0f172a;color:#fff;border-color:#0f172a}.mkc-stage.auto{box-shadow:0 0 0 2px #10b981}',
+    '.mkc-outs.big{grid-template-columns:1fr 1fr}.mkc-outs.big .mkc-out{min-height:58px;font-size:17px}',
+    '.mkc-chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.mkc-chip{border:1px solid #cbd5e1;background:#fff;border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}.mkc-chip.on{background:#dcfce7;border-color:#22c55e;color:#065f46}',
+    '.mkc-hello{display:flex;align-items:center;gap:10px;width:100%;border:2px dashed #f59e0b;background:#fffbeb;border-radius:12px;padding:10px 12px;font:inherit;font-weight:900;font-size:15px;cursor:pointer;margin-top:10px;text-align:left}.mkc-hello.on{border-style:solid;border-color:#10b981;background:#ecfdf5;color:#065f46}',
+    '.mkc-rec{border:2px solid #ef4444;color:#b91c1c;background:#fff}.mkc-rec.on{background:#ef4444;color:#fff}',
+    '.mkc-confetti{position:fixed;inset:0;pointer-events:none;z-index:8;overflow:hidden}.mkc-confetti i{position:absolute;top:-12px;width:9px;height:14px;border-radius:2px;animation:mkcfall 2.2s ease-in forwards}',
+    '@keyframes mkcfall{to{transform:translateY(105vh) rotate(540deg);opacity:.8}}',
+    '.mkc-skipgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.mkc-skipgrid button{min-height:52px;font-size:15px}',
+    '@media (max-width:720px){.mkc-top{position:static}.mkc-mode{font-size:12px;padding:5px 8px}.mkc-dash{padding:8px 10px 0;gap:8px}.mkc-dcard{padding:6px 10px}.mkc-badges{max-width:200px}}',
     '@media (max-width:1100px){.mkc-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.mkc-side{grid-column:1/-1}}',
     '@media (max-width:720px){.mkc-grid{grid-template-columns:1fr;padding:10px;gap:10px}.mkc-phone{font-size:32px}.mkc-top{padding:8px 10px;gap:8px}.mkc-stat{min-width:52px;padding:4px 7px}.mkc-stat b{font-size:15px}.mkc-top .sp{display:none}.mkc-road{min-width:100%;order:9}.mkc-hide-sm{display:none}}'
   ].join('\n');
@@ -370,7 +392,7 @@
     var o = document.createElement('div');
     o.id = 'mkc-overlay';
     o.setAttribute('role', 'dialog'); o.setAttribute('aria-label', 'Calling screen');
-    o.innerHTML = '<div class="mkc-top" data-mkc-top></div>'
+    o.innerHTML = '<div class="mkc-top" data-mkc-top></div><div class="mkc-dash" data-mkc-dash></div>'
       + '<div class="mkc-grid"><div class="mkc-panel mkc-num" data-mkc-num></div>'
       + '<div class="mkc-panel" data-mkc-script></div>'
       + '<div class="mkc-side" data-mkc-side></div></div><div data-mkc-break></div>';
@@ -385,26 +407,54 @@
     var opts = boot.tasks.map(function (t) { return '<option value="' + esc(t.key) + '"' + (t.key === S.task ? ' selected' : '') + '>' + esc(t.name) + '</option>'; }).join('');
     var fsLink = (document.fullscreenElement || !document.documentElement.requestFullscreen) ? '' : ' · <a href="#" data-mkc-fs style="color:#fbbf24">full screen</a>';
     el.innerHTML = '<div class="who">' + esc(personName(S.person)) + '<small>Work time <span data-mkc-worktime>' + clock(S.totals.open_ms) + '</span>' + fsLink + '</small></div>'
-      + '<select data-mkc-switch aria-label="Task">' + opts + '</select>'
+      + '<div class="mkc-modes" role="tablist" aria-label="Mode">' + boot.tasks.map(function (t) { var n = S.counts && S.counts[t.key]; return '<button type="button" role="tab" class="mkc-mode' + (t.key === S.task ? ' on' : '') + '" data-mkc-mode="' + esc(t.key) + '">' + esc(MODE_LABEL[t.key] || t.name) + '<i title="numbers waiting">' + (n == null ? '…' : n) + '</i></button>'; }).join('') + '</div>'
       + '<select data-mkc-lang-ui aria-label="Language"><option value="en"' + (S.lang === 'en' ? ' selected' : '') + '>English</option><option value="lg"' + (S.lang === 'lg' ? ' selected' : '') + '>Luganda</option></select>'
       + '<span class="mkc-net" data-mkc-net style="' + (net.offline ? '' : 'display:none') + '">' + esc(T('offline')) + '</span>'
-      + '<div class="mkc-stat' + (st.calls_hit ? ' hit' : '') + '"><b>' + (st.calls || 0) + '/' + tg.calls_per_day + '</b><span>' + esc(T('calls')) + '</span></div>'
-      + '<div class="mkc-stat' + (st.closes_hit ? ' hit' : '') + '"><b>' + (st.closes || 0) + '/' + tg.closes_per_day + '</b><span>' + esc(T('closes')) + '</span></div>'
-      + '<div class="mkc-stat"><b>' + (st.queue_left == null ? '–' : st.queue_left) + '</b><span>' + esc(T('left')) + '</span></div>'
-      + '<div class="mkc-stat mkc-hide-sm"><b>' + (st.streak_days || 0) + '</b><span>Day streak</span></div>'
       + '<div class="mkc-road"><div style="font-size:11px;color:#94a3b8">Road to 1000 · <b style="color:#fff">' + road.paying_now + '</b> paying</div><div class="bar"><i style="width:' + Math.max(1, Math.min(100, road.percent || 0)) + '%"></i></div></div>'
       + '<div class="sp"></div>'
       + '<button type="button" class="mkc-btn sm ghost" style="color:#fff;border-color:#475569" data-mkc-add>' + esc(T('add')) + '</button>'
       + '<button type="button" class="mkc-btn sm ghost" style="color:#fff;border-color:#475569" data-mkc-rep>' + esc(T('report')) + '</button>'
       + '<button type="button" class="mkc-btn sm amber" data-mkc-brk>' + esc(T('brk')) + '</button>'
       + '<button type="button" class="mkc-btn sm red" data-mkc-exit>' + esc(T('exit')) + '</button>';
-    q('[data-mkc-switch]', el).onchange = function (e) { switchTask(e.target.value); };
+    qa('[data-mkc-mode]', el).forEach(function (b) { b.onclick = function () { var k = b.getAttribute('data-mkc-mode'); if (k !== S.task) switchTask(k); }; });
+    renderDash();
     q('[data-mkc-lang-ui]', el).onchange = function (e) { setLang(e.target.value); };
     q('[data-mkc-add]', el).onclick = openAddNumber;
     q('[data-mkc-rep]', el).onclick = function () { openReport(S.person); };
     q('[data-mkc-brk]', el).onclick = toggleBreak;
     q('[data-mkc-exit]', el).onclick = exitSession;
     var fs = q('[data-mkc-fs]', el); if (fs) fs.onclick = function (e) { e.preventDefault(); document.documentElement.requestFullscreen().catch(function () {}); };
+  }
+  var MODE_LABEL = { new_agents: 'Get new agents', payments: 'Get payments in', retention: 'Keep clients' };
+  function ugx(n) { return 'UGX ' + Number(n || 0).toLocaleString('en-GB'); }
+  function ring(v, max, color, label) {
+    var r = 26, c = 2 * Math.PI * r, pct = Math.max(0, Math.min(1, max ? v / max : 0));
+    return '<div class="mkc-ring" title="' + esc(label) + '"><svg width="62" height="62"><circle cx="31" cy="31" r="' + r + '" fill="none" stroke="#e2e8f0" stroke-width="7"/><circle cx="31" cy="31" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="7" stroke-linecap="round" stroke-dasharray="' + (c * pct).toFixed(1) + ' ' + c.toFixed(1) + '"/></svg><em>' + v + '/' + max + '</em></div>';
+  }
+  function badgesFor(st, tg) {
+    var calls = st.calls || 0, closes = st.closes || 0;
+    return [
+      ['First call', calls >= 1], ['10 calls', calls >= 10], ['20 calls', calls >= 20], ['Target ' + tg.calls_per_day, calls >= tg.calls_per_day],
+      ['First close', closes >= 1], [tg.closes_per_day + ' closes', closes >= tg.closes_per_day], ['Hot hour 8+', (st.this_hour || 0) >= 8], ['3-day streak', (st.streak_days || 0) >= 3]
+    ];
+  }
+  function renderDash() {
+    var el = q('[data-mkc-dash]'); if (!el || !S) return;
+    var st = S.stats || {}; var tg = st.targets || { calls_per_day: 40, closes_per_day: 2 };
+    var money = st.money || {};
+    var toGo = Math.max(0, tg.calls_per_day - (st.calls || 0));
+    var hours = []; for (var h = 8; h <= 19; h++) hours.push(h);
+    var byH = st.by_hour || {}; var maxH = Math.max.apply(null, hours.map(function (x) { return byH[x] || 0; }).concat([4]));
+    var nowH = Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Africa/Kampala' }).format(new Date())) % 24;
+    var badges = badgesFor(st, tg);
+    var got = badges.filter(function (b) { return b[1]; });
+    var nextB = badges.filter(function (b) { return !b[1]; })[0];
+    el.innerHTML = '<div class="mkc-dcard">' + ring(st.calls || 0, tg.calls_per_day, (st.calls_hit ? '#10b981' : '#0ea5e9'), 'Calls vs target') + '<div><b>' + (toGo ? toGo + ' to go' : 'Target hit!') + '</b><span>calls today</span></div></div>'
+      + '<div class="mkc-dcard">' + ring(st.closes || 0, tg.closes_per_day, '#f59e0b', 'Closes vs target') + '<div><b>' + (st.closes || 0) + ' closed</b><span>target ' + tg.closes_per_day + '</span></div></div>'
+      + '<div class="mkc-dcard mkc-money"><div><b>' + (money.on_commission ? ugx(money.earned_ugx) : ugx((money.payments_closed || 0) * 50000)) + '</b><span>' + (money.on_commission ? 'earned today (est. ' + money.rate_pct + '%)' : 'payments in today') + '</span></div><div><b style="color:#b45309">' + (money.on_commission ? ugx(money.at_stake_ugx) : (money.payments_pending || 0) + ' to pay') + '</b><span>at stake: sign-ups / promises</span></div></div>'
+      + '<div class="mkc-dcard"><div><b>' + hm((st.talk_s || 0) * 1000) + '</b><span>time on calls</span></div><div><b>' + (st.streak_days || 0) + '🔥</b><span>day streak</span></div><div><b>' + (st.queue_left == null ? '–' : st.queue_left) + '</b><span>' + esc(T('left')) + '</span></div></div>'
+      + '<div class="mkc-dcard"><div class="mkc-hours" title="Calls per hour today (Kampala)">' + hours.map(function (x) { return '<i class="' + (x === nowH ? 'now' : '') + '" style="height:' + Math.max(3, Math.round(40 * (byH[x] || 0) / maxH)) + 'px" title="' + x + ':00 · ' + (byH[x] || 0) + ' calls"></i>'; }).join('') + '</div><div><b>' + (st.this_hour || 0) + '</b><span>this hour</span></div></div>'
+      + '<div class="mkc-dcard"><div class="mkc-badges">' + got.map(function (b) { return '<span class="mkc-badge">🏅 ' + esc(b[0]) + '</span>'; }).join('') + (nextB ? '<span class="mkc-badge off">Next: ' + esc(nextB[0]) + '</span>' : '') + '</div></div>';
   }
   function renderBreak() {
     var el = q('[data-mkc-break]'); if (!el || !S) return;
@@ -422,7 +472,7 @@
   function next() {
     if (!S) return;
     S.phase = 'loading'; S.cur = null; S.wrap = { outcome: '', checklist: {}, note: '', callback: '' }; S.callStart = null; S.callEnd = null; S.error = '';
-    S.coach = { answered: null, step: 0, hi: null };
+    S.coach = { answered: null, step: 0, hi: null }; S.stageManual = null; S.rec = null; REC = null;
     if (outbox().length) { S.phase = 'offline_wait'; renderNum(); flush(); return; }
     renderNum();
     api('/sessions/' + S.id + '/next', { method: 'POST', body: {} }).then(function (d) {
@@ -452,14 +502,14 @@
       q('[data-mkc-retry]', el).onclick = next; bindLastDone(el); return;
     }
     var d = S.cur; var a = d.attempt;
-    var hist = (d.history || []).slice(0, 5).map(function (h) { return '<div>' + esc(kDayTime(h.at)) + ' · ' + esc(personName(h.by)) + ' · <b>' + esc(h.what) + '</b>' + (h.note ? ' – ' + esc(h.note) : '') + '</div>'; }).join('');
     var head = lastDoneHtml()
-      + '<h4>' + esc(task.name) + (d.resumed ? ' · picked up where you left off' : '') + '</h4>'
+      + '<h4>' + esc(MODE_LABEL[task.key] || task.name) + (d.resumed ? ' · picked up where you left off' : '') + '</h4>'
       + (S.phase === 'shown' ? '<div class="mkc-muted" style="font-weight:800;color:#047857">' + esc(T('next', { name: a.name || prettyPhone(a.phone) })) + '</div>' : '')
       + '<div class="name">' + esc(a.name || 'Name not known') + '</div>'
       + '<div class="src">' + esc(a.reason && String(a.source_label || '').indexOf(a.reason) >= 0 ? String(a.source_label).replace(' · ' + a.reason, '') : (a.source_label || '')) + '</div>'
       + (a.reason ? '<span class="mkc-reason' + (a.source_kind === 'callback' ? ' mkc-cb' : '') + '">' + esc(a.reason) + '</span>' : '')
-      + '<div class="mkc-phone">' + esc(prettyPhone(a.phone)) + '</div>';
+      + '<div class="mkc-phone">' + esc(prettyPhone(a.phone)) + '</div>'
+      + contextHtml(d, S.phase === 'shown');
     var body = coachBar();
     var steps = scriptSteps(task);
     if (S.phase === 'shown') {
@@ -468,12 +518,14 @@
         + '<div class="mkc-row" style="margin-top:10px;justify-content:center"><button type="button" class="mkc-btn ghost sm" data-mkc-skip>' + esc(T('skip')) + '</button><button type="button" class="mkc-btn ghost sm" data-mkc-tree>History tree</button></div>';
     } else if (S.phase === 'calling') {
       var c = S.coach;
-      body += '<div class="mkc-timer" data-mkc-calltimer>' + clock(Date.now() - (S.callStart || Date.now())) + '</div>';
+      body += '<div class="mkc-calling"><span class="dot"></span>Calling… <span data-mkc-calltimer>' + clock(Date.now() - (S.callStart || Date.now())) + '</span></div>' + recHtml();
       if (c.answered === null) {
+        var g0 = (boot.scripts.variants[currentVariant(task).key] || { en: [] }); g0 = (g0[S.lang] || g0.en || [])[0];
+        if (g0) body += '<div class="mkc-coach-q" style="text-align:left"><span class="mkc-muted">When they pick up, say:</span><p style="margin:4px 0 0;font-size:17px;line-height:1.45">' + esc(stepText(g0, 0, scriptCtx())) + '</p></div>';
         body += '<div class="mkc-coach-q"><b>' + esc(T('answered')) + '</b><div class="mkc-row" style="justify-content:center;margin-top:8px"><button type="button" class="mkc-btn go" data-mkc-ans="yes">' + esc(T('yes')) + '</button><button type="button" class="mkc-btn" data-mkc-ans="no">' + esc(T('no')) + '</button></div></div>';
       } else if (c.step < steps.length) {
         var st = steps[c.step];
-        body += '<div class="mkc-coach-q"><span class="mkc-muted">' + esc(T('script', { n: c.step + 1, total: steps.length })) + '</span><b style="display:block;margin:4px 0;color:#047857">' + esc(st[0]) + '</b><p style="margin:0;font-size:17px;line-height:1.45">' + esc(fillTemplate(st[1], scriptCtx())) + '</p>'
+        body += '<div class="mkc-coach-q"><span class="mkc-muted">' + esc(T('script', { n: c.step + 1, total: steps.length })) + '</span><b style="display:block;margin:4px 0;color:#047857">' + esc(st[0]) + '</b><p style="margin:0;font-size:17px;line-height:1.45">' + esc(stepText(st, c.step + 1, scriptCtx())) + '</p>'
           + '<div class="mkc-row" style="justify-content:center;margin-top:10px">' + (c.step > 0 ? '<button type="button" class="mkc-btn sm" data-mkc-prev>‹</button>' : '') + '<button type="button" class="mkc-btn go" data-mkc-step>' + esc(T('next_step')) + ' ›</button></div></div>';
       } else if (c.hi === null) {
         body += '<div class="mkc-coach-q" style="background:#fef9c3;border-color:#fde047"><b>' + esc(T('hi', { wa: boot.whatsapp_display })) + '</b><p class="mkc-muted" style="margin:4px 0 0">' + esc(T('hi_why')) + '</p>'
@@ -483,7 +535,8 @@
     } else if (S.phase === 'wrapup') {
       body += '<div class="mkc-timer" style="font-size:28px;color:#334155">Call ' + clock((S.callEnd || Date.now()) - (S.callStart || Date.now())) + '</div><p class="mkc-must">' + esc(T('must')) + '</p>' + wrapHtml(task);
     }
-    el.innerHTML = head + body + (hist ? '<div class="mkc-hist"><b>Before</b>' + hist + '</div>' : '<div class="mkc-hist">No earlier calls to this number.</div>');
+    el.innerHTML = head + body;
+    bindRec(el);
     bindLastDone(el);
     var tapEl = q('[data-mkc-tap]', el);
     if (tapEl) tapEl.onclick = function () {
@@ -492,6 +545,7 @@
       op('/attempts/' + a.id + '/tap', { session_id: S.id }).catch(function (e) { toast(e.message, 'bad'); });
     };
     var endIt = function () {
+      stopRec();
       S.callEnd = Date.now(); S.phase = 'wrapup'; renderNum(); renderScript();
       op('/attempts/' + a.id + '/end', { session_id: S.id }).catch(function (e) { toast(e.message, 'bad'); });
     };
@@ -506,18 +560,117 @@
     });
     var stepEl = q('[data-mkc-step]', el); if (stepEl) stepEl.onclick = function () { S.coach.step += 1; renderNum(); renderScript(); };
     var prevEl = q('[data-mkc-prev]', el); if (prevEl) prevEl.onclick = function () { S.coach.step = Math.max(0, S.coach.step - 1); renderNum(); renderScript(); };
-    qa('[data-mkc-hi]', el).forEach(function (b3) { b3.onclick = function () { S.coach.hi = b3.getAttribute('data-mkc-hi') === 'yes'; S.wrap.checklist.wa_hi = S.coach.hi; renderNum(); }; });
+    qa('[data-mkc-hi]', el).forEach(function (b3) { b3.onclick = function () { S.coach.hi = b3.getAttribute('data-mkc-hi') === 'yes'; S.wrap.checklist.wa_hi = S.coach.hi; S.wrap.checklist.asked_hello = S.coach.hi; renderNum(); }; });
     var skipEl = q('[data-mkc-skip]', el);
     if (skipEl) skipEl.onclick = function () { openSkip(a); };
     var treeEl = q('[data-mkc-tree]', el);
     if (treeEl) treeEl.onclick = function () { openTimeline({ attempt_id: a.id }); };
     if (S.phase === 'wrapup') bindWrap(el, task, a);
   }
+  // Everything we know about the number, shown BEFORE he dials.
+  function contextHtml(d, full) {
+    var c = d.context || {}; var h = d.history || [];
+    var tags = '<span class="tag">' + esc(c.source_kind_label || 'Number') + '</span>'
+      + (c.money ? '<span class="tag ' + (c.money === 'Likely to pay' ? 'hot' : c.money === 'Warm' ? 'warm' : '') + '">' + esc(c.money) + '</span>' : '')
+      + (c.said_hello ? '<span class="tag hello">Said Hello ✓</span>' : '<span class="tag nohello">No Hello yet</span>')
+      + '<span class="tag nohello">' + (c.calls_before ? 'Called ' + c.calls_before + '× before' : 'First call') + '</span>'
+      + (c.skips_before ? '<span class="tag nohello">Skipped ' + c.skips_before + '×</span>' : '');
+    if (!full) return '<div class="mkc-ctx" style="padding:6px 10px">' + tags + '</div>';
+    var list = h.map(function (x) {
+      return '<li><b>' + esc(kDayTime(x.at)) + '</b> · ' + esc(personName(x.by)) + ' · <b>' + esc(x.skipped ? 'skipped' : x.what) + '</b>' + (x.note ? ' – ' + esc(x.note) : '') + (x.next_step ? ' <span class="mkc-good">→ next: call ' + esc(kDayTime(x.next_step)) + '</span>' : '') + '</li>';
+    }).join('');
+    return '<div class="mkc-ctx">' + tags
+      + '<div style="font-size:13px;margin-top:2px"><b>Where from:</b> ' + esc(c.source_label || '–') + (c.reason ? ' · <b>Why now:</b> ' + esc(c.reason) : '') + '</div>'
+      + (c.last_call ? '<div style="font-size:14px;margin-top:4px;background:#fff7ed;border-radius:8px;padding:6px 8px"><b>Last call:</b> ' + esc(kDayTime(c.last_call.at)) + ' · ' + esc(c.last_call.by === S.person ? 'you' : personName(c.last_call.by)) + ' · <b>' + esc(String(c.last_call.outcome || '').replace(/_/g, ' ')) + '</b>' + (c.last_call.note ? ' – ' + esc(c.last_call.note) : '') + '</div>' : '')
+      + (c.best_time ? '<div style="font-size:13px;margin-top:4px">⏰ <b>Best time:</b> ' + (c.best_time.label ? esc(c.best_time.label) + ' · answered ' + c.best_time.answered + ' of ' + c.best_time.tries + ' calls' : 'no answer yet in ' + c.best_time.tries + ' tries (tried at ' + esc(c.best_time.missed_hours.map(function (h) { return pad(h) + ':00'; }).join(', ')) + ') – try another time of day') + '</div>' : '')
+      + (c.said_hello ? '<div class="mkc-good" style="font-size:13px">Sent us Hello on WhatsApp ' + esc(kDayTime(c.said_hello.at)) + '</div>' : '')
+      + (list ? '<div style="font-size:12px;font-weight:900;margin-top:6px;color:#334155">HISTORY (newest first)</div><ol>' + list + '</ol>' : '<div class="mkc-muted" style="font-size:13px;margin-top:4px">No earlier calls to this number. First time.</div>')
+      + '</div>';
+  }
+  // Optional recording on the laptop (call on speaker), only after they agree.
+  var REC = null;
+  function recSupported() { return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder) && !isPhone(); }
+  function recHtml() {
+    if (!recSupported()) return '';
+    if (S.rec === 'ask') return '<div class="mkc-coach-q" style="background:#fef2f2;border-color:#fecaca"><b>Ask first: “Is it OK if I record this call so we get your details right?”</b>'
+      + '<div class="mkc-row" style="justify-content:center;margin-top:8px"><button type="button" class="mkc-btn red" data-mkc-rec="yes">They said yes – record</button><button type="button" class="mkc-btn" data-mkc-rec="no">No – don\'t record</button></div>'
+      + '<p class="mkc-muted" style="margin:6px 0 0;font-size:12px">Records the laptop microphone with the phone on speaker. Audio stays on this laptop. Live notes use Chrome\'s built-in speech-to-text if it is available.</p></div>';
+    if (S.rec === 'on') return '<div style="text-align:center;margin-top:6px"><button type="button" class="mkc-btn sm mkc-rec on" data-mkc-rec="stop">■ Recording – stop</button></div>';
+    if (S.rec === 'declined') return '<p class="mkc-muted" style="text-align:center;margin:6px 0 0">Not recording (they said no).</p>';
+    if (S.rec === 'done') return '<p class="mkc-muted" style="text-align:center;margin:6px 0 0">Recording stopped.</p>';
+    return '<div style="text-align:center;margin-top:6px"><button type="button" class="mkc-btn sm mkc-rec" data-mkc-rec="ask">● Record (on speaker)</button></div>';
+  }
+  function bindRec(el) {
+    qa('[data-mkc-rec]', el).forEach(function (b) {
+      b.onclick = function () {
+        var k = b.getAttribute('data-mkc-rec');
+        if (k === 'ask') { S.rec = 'ask'; renderNum(); renderScript(); }
+        else if (k === 'no') { S.rec = 'declined'; S.wrap.checklist.recorded = 'declined'; ev('record_declined'); renderNum(); renderScript(); }
+        else if (k === 'yes') startRec();
+        else if (k === 'stop') { stopRec(); renderNum(); }
+      };
+    });
+  }
+  function startRec() {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      var mr = new MediaRecorder(stream); var chunks = [];
+      REC = { mr: mr, stream: stream, start: Date.now(), text: '', stopped: false };
+      mr.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+      mr.onstop = function () {
+        var blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
+        if (REC) { REC.url = URL.createObjectURL(blob); REC.size = blob.size; REC.ready = true; }
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        if (S && S.phase === 'wrapup') renderNum();
+      };
+      mr.start(1000);
+      var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SR) {
+        try {
+          var r = new SR(); r.continuous = true; r.interimResults = false; r.lang = 'en-UG';
+          r.onresult = function (e) { for (var i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal && REC) REC.text += e.results[i][0].transcript + '. '; };
+          r.onerror = function () {}; r.onend = function () { if (REC && !REC.stopped) { try { r.start(); } catch (x) { /* ignore */ } } };
+          r.start(); REC.sr = r;
+        } catch (x) { /* no live notes */ }
+      }
+      S.rec = 'on'; S.wrap.checklist.recorded = 'consented'; ev('record_start', 'consent given'); renderNum(); renderScript();
+    }, function (e) { toast('Microphone blocked: ' + e.message, 'bad'); S.rec = null; renderNum(); });
+  }
+  function stopRec() {
+    if (!REC || REC.stopped) return;
+    REC.stopped = true; REC.secs = Math.round((Date.now() - REC.start) / 1000);
+    try { REC.mr.stop(); } catch (x) { /* ignore */ }
+    if (REC.sr) { try { REC.sr.stop(); } catch (x) { /* ignore */ } }
+    S.rec = 'done'; ev('record_stop', REC.secs + 's');
+  }
+  // Free summary: simple rules over the live notes. No paid AI.
+  function recSummary(text) {
+    var t = String(text || '').toLowerCase(); var pts = []; var nextStep = '';
+    if (/momo|merchant|pay|paid|money/.test(t)) pts.push('Talked about payment');
+    if (/how much|price|expensive|50,?000|cost/.test(t)) pts.push('Asked about the price');
+    if (/hello|whatsapp/.test(t)) pts.push('WhatsApp Hello mentioned');
+    var m = t.match(/(\d+)\s+(houses|places|plots|rentals|listings|properties)/); if (m) pts.push(m[1] + ' ' + m[2]);
+    if (/not interested|no thank|don'?t want/.test(t)) pts.push('Sounded not interested');
+    var when = t.match(/\b(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|evening|morning|afternoon)\b/);
+    if (/call (me )?(back|later)|busy/.test(t) || when) nextStep = 'Call back' + (when ? ' ' + when[1] : '');
+    else if (/sign (me )?up|register|join/.test(t)) nextStep = 'Send the sign-up link and get payment';
+    return { points: pts, next: nextStep };
+  }
+  function recResultHtml() {
+    if (!REC || !REC.stopped) return '';
+    var sm = recSummary(REC.text);
+    var fname = 'call-' + String((S.cur && S.cur.attempt && S.cur.attempt.phone_masked) || '').replace(/\D/g, '') + '-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '') + '.webm';
+    return '<div class="mkc-tpl" style="background:#fef2f2;border-color:#fecaca;margin-top:8px"><b>Recording ' + clock((REC.secs || 0) * 1000) + '</b> '
+      + (REC.ready ? '<a class="mkc-btn sm" download="' + esc(fname) + '" href="' + esc(REC.url) + '">Save to laptop</a>' : '<span class="mkc-muted">finishing…</span>')
+      + (REC.text ? '<div style="margin-top:6px;font-size:13px"><b>Summary:</b> ' + esc(sm.points.join(' · ') || 'nothing picked up') + (sm.next ? ' · <b>Next:</b> ' + esc(sm.next) : '') + '</div><details><summary class="mkc-muted">Live notes</summary><div style="font-size:12px">' + esc(REC.text.slice(0, 1500)) + '</div></details><button type="button" class="mkc-btn sm" style="margin-top:6px" data-mkc-usesum>Use summary as note</button>'
+        : '<div class="mkc-muted" style="font-size:12px">No live notes (speech-to-text not available here). Write the note yourself.</div>')
+      + '</div>';
+  }
+
   // The coach strip: where he is in the call, one step at a time.
   function coachBar() {
     var c = S.coach || {};
     var at = S.phase === 'shown' ? 0 : S.phase === 'calling' ? (c.answered === null ? 1 : (c.hi === null ? 2 : 3)) : 4;
-    var labels = [T('dial'), T('answered'), T('script', { n: '', total: '' }).replace(/[:：].*$/, ''), 'WhatsApp "hi"', T('confirm')];
+    var labels = [T('dial'), T('answered'), T('script', { n: '', total: '' }).replace(/[:：].*$/, ''), 'WhatsApp "Hello"', T('confirm')];
     return '<div class="mkc-coach">' + labels.map(function (l, i) { return '<span class="' + (i < at ? 'done' : i === at ? 'now' : '') + '">' + (i + 1) + '. ' + esc(l) + '</span>'; }).join('') + '</div>';
   }
   function currentVariant(task) {
@@ -530,59 +683,92 @@
     var V = boot.scripts.variants[v] || { en: [] };
     return (V[S.lang] || V.en || []).slice(1); // the greeting is said before "did they answer"
   }
+  var NOTE_CHIPS = {
+    interested: ['Wants the film first', 'Will sign up this week', 'Sending places on WhatsApp', 'Asked about price'],
+    call_back: ['Busy, call later', 'Driving', 'Asked to call tomorrow', 'In a meeting'],
+    rejected: ['Not interested', 'Price too high', 'Uses another site', 'Not an agent'],
+    signed_up: ['Signed up, paying by MoMo today', 'Signed up, will pay tomorrow'],
+    promised: ['Will pay today', 'Will pay tomorrow', 'Waiting for money'],
+    paid: ['Paid, sending the MoMo ref on WhatsApp'],
+    renewed: ['Renewed by MoMo'],
+    _: ['Spoke, will follow up', 'Asked for details on WhatsApp', 'Will send new places']
+  };
   function wrapHtml(task) {
     var w = S.wrap;
     var outs = task.outcomes.map(function (o) { return '<button type="button" class="mkc-out' + (o.close ? ' close' : '') + (w.outcome === o.key ? ' on' : '') + '" data-mkc-out="' + esc(o.key) + '">' + esc(o.label) + '</button>'; }).join('');
     var o = task.outcomes.filter(function (x) { return x.key === w.outcome; })[0];
-    var spoke = o && o.spoke;
-    var checks = spoke ? '<h4 style="margin-top:12px">Steps (<span class="mkc-req">*</span> must be done)</h4>' + task.checklist.map(function (c) {
-      return '<label class="mkc-check"><input type="checkbox" data-mkc-chk="' + esc(c.key) + '"' + (w.checklist[c.key] ? ' checked' : '') + '><span>' + esc(c.label) + (c.required ? ' <span class="mkc-req">*</span>' : '') + '</span></label>';
-    }).join('') : '';
-    var closes = o && o.close ? '<div class="mkc-closebox"><h4 style="margin:0 0 6px;color:#065f46">' + esc(T('close_title')) + ' <span class="mkc-req">*</span></h4>' + (boot.close_checks[task.key] || []).map(function (c, i) {
-      return '<label class="mkc-check"><input type="checkbox" data-mkc-chk="close_' + i + '"' + (w.checklist['close_' + i] ? ' checked' : '') + '><span>' + esc(c) + '</span></label>';
-    }).join('') + '</div>' : '';
-    var date = o && o.date ? '<h4 style="margin-top:12px">' + (o.date === 'required' ? 'When to call back <span class="mkc-req">*</span>' : 'Follow-up date (recommended)') + '</h4>'
-      + '<div class="mkc-row"><input type="datetime-local" class="mkc-input" data-mkc-when value="' + esc(w.callback) + '">'
-      + '<button type="button" class="mkc-btn sm" data-mkc-quick="2h">In 2 hours</button><button type="button" class="mkc-btn sm" data-mkc-quick="tom">Tomorrow 10:00</button><button type="button" class="mkc-btn sm" data-mkc-quick="mon">Next Monday</button></div>' : '';
-    return '<h4 style="margin-top:12px">' + esc(T('what')) + '</h4><div class="mkc-outs">' + outs + '</div>' + closes + checks + date
-      + '<h4 style="margin-top:12px">' + esc(T('note')) + ' <span class="mkc-req">*</span></h4><textarea class="mkc-ta" data-mkc-note placeholder="What did they say? One line is enough.">' + esc(w.note) + '</textarea>'
-      + '<div data-mkc-wraperr></div><button type="button" class="mkc-btn go mkc-call" style="margin-top:10px;font-size:18px" data-mkc-save>' + esc(T('save')) + '</button>';
+    var html = '<h4 style="margin-top:12px">' + esc(T('what')) + '</h4><div class="mkc-outs big">' + outs + '</div>';
+    if (!o) return html + '<div data-mkc-wraperr></div>' + recResultHtml();
+    if (o.spoke || o.close) {
+      html += '<button type="button" class="mkc-hello' + (w.checklist.asked_hello ? ' on' : '') + '" data-mkc-hello>' + (w.checklist.asked_hello ? '✓' : '☐') + ' Asked them to say “Hello” on WhatsApp to ' + esc(boot.whatsapp_display) + '</button>';
+    }
+    if (o.close) {
+      html += '<div class="mkc-closebox"><h4 style="margin:0 0 6px;color:#065f46">' + esc(T('close_title')) + ' <span class="mkc-req">*</span></h4>'
+        + (boot.close_checks[task.key] || []).map(function (c, i) { return '<label class="mkc-check"><input type="checkbox" data-mkc-chk="close_' + i + '"' + (w.checklist['close_' + i] ? ' checked' : '') + '><span>' + esc(c) + '</span></label>'; }).join('')
+        + task.checklist.filter(function (c) { return c.required; }).map(function (c) { return '<label class="mkc-check"><input type="checkbox" data-mkc-chk="' + esc(c.key) + '"' + (w.checklist[c.key] ? ' checked' : '') + '><span>' + esc(c.label) + '</span></label>'; }).join('')
+        + '</div>';
+    }
+    if (o.date) {
+      html += '<h4 style="margin-top:12px">' + (o.date === 'required' ? 'When to call back' : 'Follow-up') + '</h4><div class="mkc-chips">'
+        + [['1h', 'In 1 hour'], ['eve', 'Today 18:00'], ['tom', 'Tomorrow 10:00'], ['mon', 'Next Monday']].concat(bestChip()).map(function (x) { return '<button type="button" class="mkc-chip' + (w.quick === x[0] ? ' on' : '') + '" data-mkc-quick="' + x[0] + '">' + x[1] + '</button>'; }).join('')
+        + '<input type="datetime-local" class="mkc-input" data-mkc-when value="' + esc(w.callback) + '" style="font-size:13px"></div>';
+    }
+    if (o.spoke) {
+      var chips = NOTE_CHIPS[o.key] || NOTE_CHIPS._;
+      html += '<h4 style="margin-top:12px">Quick note <span class="mkc-req">*</span></h4><div class="mkc-chips">' + chips.map(function (c) { return '<button type="button" class="mkc-chip' + (w.note.indexOf(c) >= 0 ? ' on' : '') + '" data-mkc-chip="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>'
+        + '<textarea class="mkc-ta" rows="2" data-mkc-note placeholder="Or one line: what did they say?">' + esc(w.note) + '</textarea>';
+    } else {
+      html += '<textarea class="mkc-ta" rows="1" data-mkc-note placeholder="Note (optional)" style="margin-top:10px">' + esc(w.note) + '</textarea>';
+    }
+    return html + recResultHtml() + '<div data-mkc-wraperr></div><button type="button" class="mkc-btn go mkc-call" style="margin-top:10px;font-size:20px" data-mkc-save>' + esc(T('save')) + ' ›</button>';
   }
   function localInput(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function quickDate(k) {
+    var d = new Date();
+    if (k === '1h') d = new Date(Date.now() + 3600000);
+    else if (k === '2h') d = new Date(Date.now() + 2 * 3600000);
+    else if (k === 'eve') { d.setHours(18, 0, 0, 0); if (d.getTime() < Date.now() + 15 * 60000) d.setDate(d.getDate() + 1); }
+    else if (k === 'best') { var bt = S.cur && S.cur.context && S.cur.context.best_time; d.setDate(d.getDate() + 1); d.setHours(bt && bt.hour != null ? bt.hour : 10, 0, 0, 0); }
+    else if (k === 'tom') { d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); }
+    else { d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7)); d.setHours(10, 0, 0, 0); }
+    return localInput(d);
+  }
+  function bestChip() { var bt = S.cur && S.cur.context && S.cur.context.best_time; return bt && bt.hour != null ? [['best', 'Tomorrow ' + pad(bt.hour) + ':00 (best time)']] : []; }
   function bindWrap(el, task, a) {
     var w = S.wrap;
+    var save;
     qa('[data-mkc-out]', el).forEach(function (b) {
       b.onclick = function () {
         saveWrapInputs(el); w.outcome = b.getAttribute('data-mkc-out');
-        if (!w.note.trim() && (w.outcome === 'no_answer' || w.outcome === 'wrong_number')) w.note = w.outcome === 'no_answer' ? 'No answer' : 'Wrong number';
+        var o = task.outcomes.filter(function (x) { return x.key === w.outcome; })[0] || {};
+        if (o.date === 'required' && !w.callback) { w.quick = 'tom'; w.callback = quickDate('tom'); }
+        // No answer: one tap saves and brings the next number.
+        if (!o.spoke && !o.close && !o.date && w.outcome === 'no_answer') { renderNum(); save(); return; }
         renderNum();
       };
     });
-    if (!w.note.trim() && w.outcome === 'no_answer') { w.note = 'No answer'; var nn = q('[data-mkc-note]', el); if (nn) nn.value = w.note; }
-    qa('[data-mkc-quick]', el).forEach(function (b) {
+    qa('[data-mkc-quick]', el).forEach(function (b) { b.onclick = function () { saveWrapInputs(el); w.quick = b.getAttribute('data-mkc-quick'); w.callback = quickDate(w.quick); renderNum(); }; });
+    qa('[data-mkc-chip]', el).forEach(function (b) {
       b.onclick = function () {
-        var d = new Date(); var k = b.getAttribute('data-mkc-quick');
-        if (k === '2h') d = new Date(Date.now() + 2 * 3600000);
-        else if (k === 'tom') { d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); }
-        else { d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7)); d.setHours(10, 0, 0, 0); }
-        saveWrapInputs(el); w.callback = localInput(d); renderNum();
+        saveWrapInputs(el); var c = b.getAttribute('data-mkc-chip');
+        w.note = w.note.indexOf(c) >= 0 ? w.note.replace(c, '').replace(/^[\s.;]+|[\s.;]+$/g, '').replace(/\s*;\s*;/g, ';') : (w.note.trim() ? w.note.trim() + '; ' + c : c);
+        renderNum();
       };
     });
-    q('[data-mkc-save]', el).onclick = function () {
+    var hb = q('[data-mkc-hello]', el); if (hb) hb.onclick = function () { saveWrapInputs(el); w.checklist.asked_hello = !w.checklist.asked_hello; renderNum(); };
+    var us = q('[data-mkc-usesum]', el); if (us) us.onclick = function () { saveWrapInputs(el); var sm = recSummary(REC && REC.text); w.note = ((w.note ? w.note + '; ' : '') + sm.points.join('; ') + (sm.next ? '; Next: ' + sm.next : '')).trim(); renderNum(); };
+    save = function () {
       saveWrapInputs(el);
       var o = task.outcomes.filter(function (x) { return x.key === w.outcome; })[0];
-      var err = !o ? 'Pick what happened.' : (w.note.trim().length < 3 ? 'Write a short note.' : (o.date === 'required' && !w.callback ? 'Pick the date and time to call back.' : ''));
-      if (!err && o.spoke) {
-        var miss = task.checklist.filter(function (c) { return c.required && !w.checklist[c.key]; });
-        if (miss.length) err = 'Tick the required steps: ' + miss.map(function (c) { return c.label; }).join('; ');
-      }
+      var err = !o ? 'Tap what happened.' : (o.spoke && w.note.trim().length < 3 ? 'Tap a quick note or write one line.' : (o.date === 'required' && !w.callback ? 'Pick when to call back.' : ''));
       if (!err && o.close) {
-        var missClose = (boot.close_checks[task.key] || []).filter(function (_c, i) { return !w.checklist['close_' + i]; });
-        if (missClose.length) err = T('close_title') + ': ' + missClose.join('; ');
+        var miss = task.checklist.filter(function (c) { return c.required && !w.checklist[c.key]; }).map(function (c) { return c.label; })
+          .concat((boot.close_checks[task.key] || []).filter(function (_c, i) { return !w.checklist['close_' + i]; }));
+        if (miss.length) err = T('close_title') + ': ' + miss.join('; ');
       }
-      var box = q('[data-mkc-wraperr]', el);
-      if (err) { box.innerHTML = '<div class="mkc-err">' + esc(err) + '</div>'; return; }
-      var btn = q('[data-mkc-save]', el); btn.disabled = true; btn.textContent = 'Saving…';
+      var box = q('[data-mkc-wraperr]');
+      if (err) { if (box) box.innerHTML = '<div class="mkc-err">' + esc(err) + '</div>'; return; }
+      var btn = q('[data-mkc-save]'); if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
       var cbIso = w.callback ? new Date(w.callback).toISOString() : null;
       op('/attempts/' + a.id + '/wrapup', { session_id: S.id, outcome: w.outcome, note: w.note, checklist: w.checklist, callback_at: cbIso })
         .then(function (done) {
@@ -590,8 +776,9 @@
           if (done.queued) toast(T('offline'));
           if (o.close) celebrate();
           next(); refreshSide();
-        }, function (e) { btn.disabled = false; btn.textContent = 'Save and call next'; box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+        }, function (e) { if (btn) { btn.disabled = false; btn.textContent = T('save'); } if (box) box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
     };
+    var sb = q('[data-mkc-save]', el); if (sb) sb.onclick = save;
   }
   function saveWrapInputs(el) {
     var w = S.wrap;
@@ -599,25 +786,29 @@
     var d = q('[data-mkc-when]', el); if (d) w.callback = d.value;
     qa('[data-mkc-chk]', el).forEach(function (c) { w.checklist[c.getAttribute('data-mkc-chk')] = c.checked; });
   }
+  var SKIP = [['wrong_number', 'Wrong number'], ['no_answer', 'No answer'], ['busy', 'Busy'], ['already_agent', 'Already an agent'], ['not_interested', 'Not interested'], ['other', 'Other…']];
   function openSkip(a) {
-    var reasons = ['Not a Ugandan mobile', 'Already spoke today on another phone', 'Duplicate of someone I know', 'Bad time to call this area'];
-    modal('<h3 style="margin:0 0 6px;font-weight:900">Skip this number?</h3><p class="mkc-muted">Skips are logged. Say why.</p>'
-      + '<div class="mkc-row" style="margin:8px 0">' + reasons.map(function (r) { return '<button type="button" class="mkc-btn sm" data-r="' + esc(r) + '">' + esc(r) + '</button>'; }).join('') + '</div>'
-      + '<input class="mkc-input" style="width:100%;box-sizing:border-box" data-reason placeholder="Reason"><div data-e></div><div class="mkc-row" style="margin-top:10px;justify-content:flex-end"><button class="mkc-btn" data-x>Cancel</button><button class="mkc-btn dark" data-ok>Skip</button></div>', function (m, close) {
-      qa('[data-r]', m).forEach(function (b) { b.onclick = function () { q('[data-reason]', m).value = b.getAttribute('data-r'); }; });
-      q('[data-x]', m).onclick = close;
-      q('[data-ok]', m).onclick = function () {
-        var r = q('[data-reason]', m).value.trim();
-        if (r.length < 3) { q('[data-e]', m).innerHTML = '<div class="mkc-err">Say why you are skipping.</div>'; return; }
-        op('/attempts/' + a.id + '/skip', { session_id: S.id, reason: r }).then(function () { close(); next(); refreshSide(); }, function (e) { q('[data-e]', m).innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+    modal('<h3 style="margin:0 0 4px;font-weight:900">Why skip ' + esc(a.name || a.phone_masked || 'this number') + '?</h3><p class="mkc-muted" style="margin:0">One tap. It goes in the number\'s history tree and King sees every skip.</p>'
+      + '<div class="mkc-skipgrid">' + SKIP.map(function (r) { return '<button type="button" class="mkc-btn' + (r[0] === 'wrong_number' ? ' red' : '') + '" data-r="' + r[0] + '">' + esc(r[1]) + '</button>'; }).join('') + '</div>'
+      + '<div data-other style="display:none"><input class="mkc-input" style="width:100%;box-sizing:border-box" data-reason placeholder="Why? (a few words)"><button class="mkc-btn dark" style="margin-top:8px" data-ok>Skip</button></div>'
+      + '<div data-e></div><div class="mkc-row" style="margin-top:10px;justify-content:flex-end"><button class="mkc-btn ghost" data-x>Cancel – call them</button></div>', function (m, close) {
+      var send = function (code, note) {
+        op('/attempts/' + a.id + '/skip', { session_id: S.id, reason_code: code, note: note || '' }).then(function () { close(); toast('Skipped: ' + (SKIP.filter(function (x) { return x[0] === code; })[0] || [0, code])[1].replace('…', '')); next(); refreshSide(); }, function (e) { q('[data-e]', m).innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
       };
+      qa('[data-r]', m).forEach(function (b) { b.onclick = function () { var c = b.getAttribute('data-r'); if (c === 'other') { q('[data-other]', m).style.display = ''; q('[data-reason]', m).focus(); return; } send(c); }; });
+      q('[data-ok]', m).onclick = function () { var r = q('[data-reason]', m).value.trim(); if (r.length < 3) { q('[data-e]', m).innerHTML = '<div class="mkc-err">Write why you are skipping.</div>'; return; } send('other', r); };
+      q('[data-x]', m).onclick = close;
     });
   }
   function celebrate() {
     var c = document.createElement('div'); c.className = 'mkc-yay';
     var n = ((S.stats && S.stats.closes) || 0) + 1;
-    c.innerHTML = '<div>🎉 Closed!<br><span style="font-size:16px">' + n + ' today. Well done.</span></div>';
-    (q('#mkc-overlay') || document.body).appendChild(c); setTimeout(function () { c.remove(); }, 2500);
+    c.innerHTML = '<div>🎉 Well done, ' + esc(personName(S.person)) + '!<br><span style="font-size:16px">' + n + ' close' + (n === 1 ? '' : 's') + ' today' + (S.stats && S.stats.money && S.stats.money.on_commission ? ' · +' + esc(ugx(S.stats.money.per_payment_ugx)) + ' when they pay' : '') + '</span></div>';
+    var cf = document.createElement('div'); cf.className = 'mkc-confetti';
+    var colors = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#a855f7', '#fde047'];
+    for (var i = 0; i < 70; i++) cf.innerHTML += '<i style="left:' + Math.round(Math.random() * 100) + '%;background:' + colors[i % colors.length] + ';animation-delay:' + (Math.random() * 0.6).toFixed(2) + 's"></i>';
+    var host = q('#mkc-overlay') || document.body;
+    host.appendChild(cf); host.appendChild(c); setTimeout(function () { c.remove(); cf.remove(); }, 2800);
   }
 
   // ------------------------------------------- after-call text templates --
@@ -657,13 +848,43 @@
       greeting: (boot.scripts.greetings[S.lang] || boot.scripts.greetings.en)[partOfDay()],
       name: a ? firstName(a.name) : '', caller: personName(S.person),
       source: a ? (a.source_label || 'online') : '', history: hist ? (hist.what + (hist.note ? ' (' + hist.note + ')' : '')) : 'we have not spoken before',
-      reason: a ? (a.reason || '') : '', momo: boot.momo_code
+      reason: a ? (a.reason || '') : '', momo: boot.momo_code,
+      opener: openerLine()
     };
+  }
+  // History-aware opening line: who called last, when, about what.
+  function openerLine() {
+    var c = S && S.cur && S.cur.context; var L = c && c.last_call; if (!L) return '';
+    var day = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Kampala' }).format(new Date(L.at));
+    var topic = L.note && L.note.length < 80 ? L.note.replace(/[.]+$/, '') : String(L.outcome || '').replace(/_/g, ' ');
+    var mine = L.by === S.person;
+    if (S.lang === 'lg') return mine ? 'Nakukubira ku ' + day + ' ku nsonga ya: ' + topic + '.' : 'Munnange ' + personName(L.by) + ' yakukubira ku ' + day + ' ku nsonga ya: ' + topic + '.';
+    return mine ? 'I called you on ' + day + ' about: ' + topic + '.' : 'My colleague ' + personName(L.by) + ' called you on ' + day + ' about: ' + topic + '.';
+  }
+  function stepText(st, i, ctx) {
+    var t = fillTemplate(st[1], ctx);
+    return i === 0 && ctx.opener ? t + ' ' + ctx.opener : t;
+  }
+  var GOAL = {
+    new_agents: 'Goal: sign them up (UGX 50,000 a month) and get “Hello” on WhatsApp. Close = money.',
+    payments: 'Goal: UGX 50,000 paid TODAY by MoMo 27248497, and the reference sent on WhatsApp.',
+    retention: 'Goal: keep them paying: renewal by MoMo 27248497, plus new places to list.'
+  };
+  function autoStage(steps) {
+    if (!S || S.phase === 'shown' || S.phase === 'loading') return 'before';
+    if (S.phase === 'wrapup') return 'close';
+    if (S.phase !== 'calling') return 'before';
+    var c = S.coach || {};
+    if (c.answered === null) return 'greeting';
+    var idx = c.step + 1; var st = steps[idx]; // the coach starts after the greeting
+    if (!st || idx >= steps.length - 1 || st[2] === 'hello' || /hello/i.test(st[0])) return 'close';
+    return 'pitch';
   }
   function renderScript() {
     var el = q('[data-mkc-script]'); if (!el || !S) return;
     var task = taskOf(S.task);
-    var tabs = [['script', 'Script'], ['objections', 'Objections'], ['texts', 'Texts'], ['kit', 'Sales kit']];
+    if (S.tab === 'objections') { S.tab = 'script'; S.stageManual = 'objections'; }
+    var tabs = [['script', 'Script'], ['texts', 'Texts'], ['kit', 'Sales kit']];
     var html = '<div class="mkc-tabs">' + tabs.map(function (t) { return '<button type="button" class="mkc-tab' + (S.tab === t[0] ? ' on' : '') + '" data-mkc-tabk="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
     var a = S.cur && S.cur.attempt;
     var ctx = scriptCtx();
@@ -673,13 +894,36 @@
       var v = cv.key;
       var hiStep = S.phase === 'calling' && S.coach && S.coach.answered ? S.coach.step + 1 : (S.phase === 'shown' || (S.phase === 'calling' && S.coach && S.coach.answered === null) ? 0 : -1);
       var V = boot.scripts.variants[v] || { en: [], lg: [] };
-      html += '<div class="mkc-tabs">' + vars.map(function (k) { return '<button type="button" class="mkc-tab' + (k === v ? ' on' : '') + '" data-mkc-var="' + esc(k) + '">' + esc((boot.scripts.variants[k] || {}).label || k) + '</button>'; }).join('') + '</div>'
-        + '<div class="mkc-row" style="margin-bottom:6px"><button type="button" class="mkc-tab' + (S.lang === 'en' ? ' on' : '') + '" data-mkc-lang="en">English</button><button type="button" class="mkc-tab' + (S.lang === 'lg' ? ' on' : '') + '" data-mkc-lang="lg">Luganda</button>'
-        + (S.lang === 'lg' ? '<span class="mkc-check-lg">Luganda: ' + esc(boot.scripts.luganda_status) + '</span>' : '') + '</div>'
-        + (V[S.lang] || V.en).map(function (s, i) { return '<div class="mkc-step' + (i === hiStep ? ' now' : '') + '"><b>' + (i + 1) + '. ' + esc(s[0]) + '</b><p>' + esc(fillTemplate(s[1], ctx)) + '</p></div>'; }).join('')
-        + (task.key === 'payments' || task.key === 'retention' ? '<div class="mkc-nudge" style="margin-top:10px">MoMo merchant code: <span style="font-size:18px">' + esc(boot.momo_code) + '</span></div>' : '');
-    } else if (S.tab === 'objections') {
-      html += ((boot.scripts.objections || {})[task.key] || []).map(function (o) { return '<div class="mkc-obj"><b>“' + esc(o[0]) + '”</b>' + esc(fillTemplate(o[1], ctx)) + '</div>'; }).join('') || '<p class="mkc-muted">No objections written for this task yet.</p>';
+      var steps = V[S.lang] || V.en;
+      var auto = autoStage(steps);
+      if (S.lastAuto !== auto) { S.lastAuto = auto; S.stageManual = null; }
+      var stage = S.stageManual || auto;
+      var STAGES = [['before', 'Before the call'], ['greeting', 'Greeting'], ['pitch', 'Pitch'], ['objections', 'Objections'], ['close', 'Close']];
+      var stepHtml = function (st, i) { return '<div class="mkc-step' + (i === hiStep ? ' now' : '') + '"><b>' + (i + 1) + '. ' + esc(st[0]) + '</b><p>' + esc(stepText(st, i, ctx)) + '</p></div>'; };
+      var objs = ((boot.scripts.objections || {})[task.key] || []);
+      var objHtml = function (list) { return list.map(function (o) { return '<div class="mkc-obj"><b>“' + esc(o[0]) + '”</b>' + esc(fillTemplate(o[1], ctx)) + '</div>'; }).join(''); };
+      var helloIdx = -1; steps.forEach(function (st, i) { if (st[2] === 'hello' || /hello/i.test(st[0])) helloIdx = i; });
+      html += '<div class="mkc-stages">' + STAGES.map(function (x) { return '<button type="button" class="mkc-stage' + (x[0] === stage ? ' on' : '') + (x[0] === auto ? ' auto' : '') + '" data-mkc-stage="' + x[0] + '">' + esc(x[1]) + '</button>'; }).join('') + '</div>'
+        + '<div class="mkc-tabs">' + vars.map(function (k2) { return '<button type="button" class="mkc-tab' + (k2 === v ? ' on' : '') + '" data-mkc-var="' + esc(k2) + '">' + esc((boot.scripts.variants[k2] || {}).label || k2) + '</button>'; }).join('')
+        + '<button type="button" class="mkc-tab' + (S.lang === 'en' ? ' on' : '') + '" data-mkc-lang="en">English</button><button type="button" class="mkc-tab' + (S.lang === 'lg' ? ' on' : '') + '" data-mkc-lang="lg">Luganda</button></div>'
+        + (S.lang === 'lg' ? '<span class="mkc-check-lg">Luganda: ' + esc(boot.scripts.luganda_status) + '</span>' : '');
+      if (stage === 'before') {
+        var c0 = (S.cur && S.cur.context) || {};
+        html += '<div class="mkc-nudge" style="font-size:15px">' + esc(GOAL[task.key] || 'Goal: a close or a payment.') + '</div>'
+          + '<div class="mkc-tpl"><b>Know before you dial</b><div>' + esc(c0.source_kind_label || '') + (c0.reason ? ' · ' + esc(c0.reason) : '') + '</div><div>' + (c0.last ? 'Last time: ' + esc(c0.last.what) + (c0.last.note ? ' – ' + esc(c0.last.note) : '') : 'First call to this number.') + '</div><div>' + (c0.said_hello ? '<span class="mkc-good">They already said Hello on WhatsApp ✓</span>' : 'Must ask them to WhatsApp “Hello” to ' + esc(boot.whatsapp_display) + '.') + '</div></div>'
+          + '<div class="mkc-muted" style="font-size:12px;margin:6px 0 2px">THE CALL IN ' + steps.length + ' STEPS</div>' + steps.map(function (st, i) { return '<div class="mkc-muted" style="font-size:13px">' + (i + 1) + '. ' + esc(st[0]) + '</div>'; }).join('');
+      } else if (stage === 'greeting') {
+        html += (steps[0] ? stepHtml(steps[0], 0) : '') + (S.rec === 'ask' || S.rec === 'on' ? '<div class="mkc-obj"><b>Recording</b>“Is it OK if I record this call so we get your details right?” Only record if they say yes.</div>' : '');
+      } else if (stage === 'pitch') {
+        html += steps.map(function (st, i) { return i > 0 && i !== helloIdx && i < steps.length - 1 ? stepHtml(st, i) : ''; }).join('')
+          + (objs.length ? '<div class="mkc-muted" style="font-size:12px;margin:8px 0 2px">IF THEY SAY…</div>' + objHtml(objs.slice(0, 3)) : '');
+      } else if (stage === 'objections') {
+        html += objHtml(objs) || '<p class="mkc-muted">No objections written for this mode yet.</p>';
+      } else {
+        html += (helloIdx >= 0 ? stepHtml(steps[helloIdx], helloIdx) : '') + (steps.length ? stepHtml(steps[steps.length - 1], steps.length - 1) : '')
+          + '<div class="mkc-closebox"><h4 style="margin:0 0 6px;color:#065f46">' + esc(T('close_title')) + '</h4>' + (boot.close_checks[task.key] || []).map(function (c) { return '<div style="font-size:13px">• ' + esc(c) + '</div>'; }).join('') + '</div>';
+      }
+      html += (task.key === 'payments' || task.key === 'retention' ? '<div class="mkc-nudge" style="margin-top:10px">MoMo merchant code: <span style="font-size:18px">' + esc(boot.momo_code) + '</span></div>' : '');
     } else if (S.tab === 'texts') {
       html += '<p class="mkc-muted">' + esc(boot.template_rules) + '</p>' + Object.keys(boot.templates).map(function (k) {
         var t = fillTemplate(boot.templates[k], ctx);
@@ -695,6 +939,7 @@
     el.innerHTML = html;
     qa('[data-mkc-tabk]', el).forEach(function (b) { b.onclick = function () { S.tab = b.getAttribute('data-mkc-tabk'); renderScript(); }; });
     qa('[data-mkc-var]', el).forEach(function (b) { b.onclick = function () { S.variant = b.getAttribute('data-mkc-var'); renderScript(); }; });
+    qa('[data-mkc-stage]', el).forEach(function (b) { b.onclick = function () { S.stageManual = b.getAttribute('data-mkc-stage'); renderScript(); }; });
     qa('[data-mkc-lang]', el).forEach(function (b) { b.onclick = function () { S.lang = b.getAttribute('data-mkc-lang'); renderScript(); }; });
     qa('[data-mkc-copy]', el).forEach(function (b) { b.onclick = function () { copy(fillTemplate(boot.templates[b.getAttribute('data-mkc-copy')], ctx)); }; });
     qa('[data-mkc-kit]', el).forEach(function (b) { b.addEventListener('click', function () { ev('kit_send', b.getAttribute('data-mkc-kit')); }); });
@@ -714,9 +959,11 @@
       api('/stats?person_key=' + encodeURIComponent(p) + '&session_id=' + encodeURIComponent(S.id)).catch(function () { return null; }),
       api('/feed?person_key=' + encodeURIComponent(p)).catch(function () { return null; }),
       api('/whatsapp').catch(function () { return null; }),
-      api('/leads').catch(function () { return null; })
+      api('/leads').catch(function () { return null; }),
+      api('/counts?person_key=' + encodeURIComponent(p)).catch(function () { return null; })
     ]).then(function (r) {
       if (!S) return;
+      if (r[4]) S.counts = r[4];
       if (r[0]) S.stats = r[0];
       if (r[1]) S.feed = r[1];
       if (r[2]) { notifyNew('wa', r[2].items, 'New WhatsApp'); S.wa = r[2].items; }
@@ -738,7 +985,7 @@
       html += '<div class="mkc-feed">' + (items || '<div class="mkc-muted">Nothing new in the last day.</div>') + '</div>';
     } else if (S.side === 'wa') {
       html += '<p class="mkc-muted" style="margin:0 0 6px">Read only. Reply from the company phone; copy a suggested reply from the conversation.</p>'
-        + ((S.wa || []).map(function (m) { return '<div class="mkc-wa" data-mkc-wa="' + esc(m.ref) + '"><b>' + esc(m.name || m.phone) + ' <span class="mkc-muted" style="font-weight:600">' + esc(m.name ? m.phone : '') + ' · ' + esc(kDayTime(m.at)) + '</span></b>' + esc(m.text) + (m.called ? '<div class="mkc-muted" style="font-size:11px">Called by ' + esc(personName(m.called.by)) + ': ' + esc(String(m.called.outcome).replace(/_/g, ' ')) + '</div>' : '') + '</div>'; }).join('') || '<div class="mkc-muted">No WhatsApp messages in the last 14 days.</div>');
+        + ((S.wa || []).map(function (m) { return '<div class="mkc-wa" data-mkc-wa="' + esc(m.ref) + '"><b>' + esc(m.name || m.phone) + ' <span class="mkc-muted" style="font-weight:600">' + esc(m.name ? m.phone : '') + ' · ' + esc(kDayTime(m.at)) + '</span></b>' + esc(m.text) + (m.called ? '<div class="mkc-muted" style="font-size:11px"><span class="mkc-good">Said Hello ✓</span> · called by ' + esc(personName(m.called.by)) + ': ' + esc(String(m.called.outcome).replace(/_/g, ' ')) + '</div>' : '') + '</div>'; }).join('') || '<div class="mkc-muted">No WhatsApp messages in the last 14 days.</div>');
     } else if (S.side === 'leads') {
       html += ((S.leads || []).map(function (l) {
         return '<div class="mkc-wa" style="cursor:default"><b>' + esc(l.name || l.phone) + ' <span class="mkc-muted" style="font-weight:600">' + esc(l.phone) + ' · ' + esc(kDayTime(l.at)) + '</span></b><span class="mkc-muted">' + esc(l.source) + '</span> ' + esc(l.text)
@@ -824,6 +1071,8 @@
       modal('<div class="mkc-row" style="justify-content:space-between"><h3 style="margin:0;font-weight:900">History tree · ' + esc(t.name || '') + ' ' + esc(t.phone_key_masked) + '</h3><button class="mkc-btn sm" data-x>Close</button></div>'
         + '<div class="mkc-nudge" style="margin-top:8px">Pick up here: ' + esc(t.pick_up) + '</div>'
         + (t.decision && (t.decision.decision || t.decision.next_action) ? '<div class="mkc-tpl"><b>King\'s decision:</b> ' + esc(t.decision.decision || '') + (t.decision.next_action ? ' · next: ' + esc(t.decision.next_action) : '') + (t.decision.due ? ' by ' + esc(String(t.decision.due).slice(0, 10)) : '') + '</div>' : '')
+        + (t.said_hello ? '<div class="mkc-good" style="font-weight:900">Said Hello ✓ on WhatsApp ' + esc(kDayTime(t.said_hello.at)) + ' (registered as a client)</div>' : '<div class="mkc-muted">Has not said Hello on WhatsApp yet.</div>')
+        + ((t.skips || []).length ? '<div class="mkc-muted">Skipped ' + t.skips.length + '×: ' + t.skips.map(function (k) { return esc(kDayTime(k.at)) + ' ' + esc(personName(k.by)) + ' – ' + esc(k.reason || ''); }).join(' · ') + '</div>' : '')
         + (wa ? '<div class="mkc-muted">' + esc(wa) + '</div>' : '') + outreach
         + '<div class="mkc-tree" style="margin-top:8px">' + (draw('root') || '<p class="mkc-muted">No calls yet.</p>') + '</div>', function (m, close) { q('[data-x]', m).onclick = close; });
     }, function (e) { toast(e.message, 'bad'); });
@@ -902,7 +1151,7 @@
       + '<div class="mkc-kpis"><div class="' + (p.calls_hit ? 'mkc-good' : '') + '"><b>' + p.calls + '/' + tg.calls_per_day + '</b>calls</div><div class="' + (p.closes_hit ? 'mkc-good' : '') + '"><b>' + p.closes + '/' + tg.closes_per_day + '</b>closes</div><div><b>' + p.connected + '</b>spoke</div><div><b>' + (p.avg_talk_s || 0) + ' s</b>avg call</div><div><b>' + (p.callbacks_due || 0) + (p.callbacks_overdue ? '<span class="mkc-bad"> +' + p.callbacks_overdue + ' late</span>' : '') + '</b>callbacks</div></div>'
       + '<div style="margin:4px 0">' + tasks + '</div>'
       + '<div class="mkc-muted" style="font-size:12px">Work ' + hm(w.open_ms) + ' · focused ' + hm(w.focus_ms) + ' · away ' + hm(w.away_ms) + ' · ' + (w.exits || 0) + ' exits · ' + (w.breaks || 0) + ' breaks</div>'
-      + '<div style="margin:4px 0">' + (flags || '<span class="mkc-pill live">No flags</span>') + '</div>'
+      + '<div style="margin:4px 0">' + (flags || '<span class="mkc-pill live">No flags</span>') + (p.skipped ? '<span class="mkc-pill warn" title="Skips today by reason">Skipped ' + p.skipped + ': ' + esc(Object.keys(p.skip_reasons || {}).map(function (k) { return k.replace(/_/g, ' ') + ' ' + p.skip_reasons[k]; }).join(', ')) + '</span>' : '') + '</div>'
       + '<div class="mkc-row" style="justify-content:space-between">' + spark + '<span><button type="button" class="mkc-btn sm" data-k-ev="' + esc(p.person_key) + '">Evidence</button> <button type="button" class="mkc-btn sm ghost" data-k-rep="' + esc(p.person_key) + '">Report</button></span></div></div>';
   }
   function drawKing(host) {
@@ -993,7 +1242,7 @@
       + (it ? '<div class="mkc-panel" style="margin-top:12px">'
         + '<div class="mkc-row" style="justify-content:space-between"><span class="mkc-muted">' + (M.i + 1) + ' of ' + list.length + '</span><span class="mkc-pill' + (it.overdue ? ' flag' : '') + '">' + (it.due ? (it.overdue ? 'Overdue since ' : 'Due ') + esc(it.due) : 'No date') + '</span></div>'
         + '<div style="font-size:24px;font-weight:900;margin-top:4px">' + esc(it.name || 'No name') + ' <span class="mkc-muted" style="font-size:15px">' + esc(it.phone) + '</span></div>'
-        + '<div class="mkc-row" style="margin:6px 0"><span class="mkc-pill">' + esc(it.stage) + '</span><span class="mkc-pill warn">' + esc(it.payment) + '</span><span class="mkc-pill">' + it.calls + ' calls</span>' + (it.owner ? '<span class="mkc-pill">Owner: ' + esc(personName(it.owner)) + '</span>' : '') + '</div>'
+        + '<div class="mkc-row" style="margin:6px 0"><span class="mkc-pill">' + esc(it.stage) + '</span><span class="mkc-pill warn">' + esc(it.payment) + '</span><span class="mkc-pill">' + it.calls + ' calls</span>' + (it.skips ? '<span class="mkc-pill flag" title="' + esc(it.last_skip || '') + '">Skipped ' + it.skips + '×</span>' : '') + (it.said_hello ? '<span class="mkc-pill live">Said Hello ✓</span>' : '<span class="mkc-pill">No Hello yet</span>') + (it.owner ? '<span class="mkc-pill">Owner: ' + esc(personName(it.owner)) + '</span>' : '') + '</div>'
         + '<div class="mkc-tpl"><b>Last thing they said</b><div>' + (it.last_said ? esc(kDayTime(it.last_said.at)) + ' · ' + esc(personName(it.last_said.by)) + ': ' + esc(it.last_said.text) : 'Nothing recorded yet.') + '</div></div>'
         + '<div class="mkc-tpl"><b>Next action</b><div>' + esc(it.next_action) + (it.due ? ' · by ' + esc(it.due) : '') + '</div>' + (it.decision ? '<div class="mkc-muted">Decision: ' + esc(it.decision) + '</div>' : '') + '</div>'
         + ((it.history || []).length ? '<details><summary class="mkc-muted">Earlier decisions (' + it.history.length + ')</summary>' + it.history.map(function (h) { return '<div class="mkc-muted" style="font-size:12px">' + esc(kDayTime(h.at)) + ' · ' + esc(h.by) + ': ' + esc([h.decision, h.next_action && ('next: ' + h.next_action), h.due && ('by ' + h.due), h.archived && ('archived: ' + h.archived)].filter(Boolean).join(' · ')) + '</div>'; }).join('') + '</details>' : '')

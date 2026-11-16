@@ -39,13 +39,13 @@ const VARIANTS = Object.freeze({
     en: [
       ['Greeting', '{greeting} {name}, my name is {caller} from makaug.com. You contacted us about a place. Is now a good time?'],
       ['Questions', 'What are you looking for? Which area, and what budget? When do you need it?'],
-      ['Help', 'I will send you places that match on WhatsApp. Please send "hi" to 0780 863 394 so I can reach you there.'],
+      ['Help', 'I will send you places that match on WhatsApp. Please send "Hello" to 0780 863 394 so I can reach you there.'],
       ['Close', 'Thank you. I will follow up on WhatsApp today.']
     ],
     lg: [
       ['Okulamusa', '{greeting} {name}, nze {caller} okuva ku makaug.com. Watukubidde oba watuwandiikidde. Kati kiseera kirungi?'],
       ['Ebibuuzo', 'Onoonya ki? Kitundu ki, era ssente meka? Okyetaaga ddi?'],
-      ['Okuyamba', 'Nja kukuweereza ebifo ebituukana ku WhatsApp. Wandiika "hi" ku 0780 863 394 nsobole okukutuukako eyo.'],
+      ['Okuyamba', 'Nja kukuweereza ebifo ebituukana ku WhatsApp. Wandiika "Hello" ku 0780 863 394 nsobole okukutuukako eyo.'],
       ['Okumaliriza', 'Weebale. Nja kukukomawo.']
     ]
   },
@@ -188,26 +188,42 @@ const SALES_KIT = Object.freeze([
 ]);
 
 // Our WhatsApp line (the number on the site header). WhatsApp limits us from
-// messaging first, so the caller asks people to send "hi" here before anything.
+// messaging first, so the caller asks people to send "Hello" here before anything.
 const WHATSAPP_NUMBER = '+256780863394';
 const WHATSAPP_DISPLAY = '0780 863 394';
 
 // Before a caller can mark a close, every one of these must be ticked.
+// Mandatory in every mode: the caller asks them to WhatsApp "Hello" to makaug.
+// That registers them as a client and makes their number known (WhatsApp only
+// lets us message people who wrote to us first).
+const HELLO_EN = 'One important thing: to be registered as a client and have your number known to us, please send "Hello" on WhatsApp to makaug on ' + WHATSAPP_DISPLAY + '. Can you do it now while we talk?';
+const HELLO_LG = 'Ekintu ekikulu: okuwandiisibwa nga kasitoma n\'ennamba yo okumanyika gye tuli, wandiika "Hello" ku WhatsApp eri makaug ku ' + WHATSAPP_DISPLAY + '. Osobola okukikola kati nga twogera?';
+const HELLO_CHECK = 'Asked them to WhatsApp "Hello" to makaug on ' + WHATSAPP_DISPLAY + ' (registers them as a client)';
+for (const v of Object.values(VARIANTS)) {
+  for (const [lang, line] of [['en', HELLO_EN], ['lg', HELLO_LG]]) {
+    const steps = v[lang];
+    if (!Array.isArray(steps) || steps.some((st) => st[2] === 'hello')) continue;
+    steps.splice(Math.max(0, steps.length - 1), 0, [lang === 'en' ? 'Say "Hello" on WhatsApp (must)' : 'Hello ku WhatsApp (kyetaagisa)', line, 'hello']);
+  }
+}
+
 const CLOSE_CHECKS = Object.freeze({
   new_agents: [
     'Told the price: UGX 50,000 a month (owners UGX 20,000), no free trial',
     'Gave the MoMo merchant code 27248497',
-    'They will send "hi" on WhatsApp to ' + WHATSAPP_DISPLAY + ' (or already did)',
+    HELLO_CHECK,
     'Agreed when they send their first places (photos, price, area)',
     'Told them we confirm their payment and account on WhatsApp'
   ],
   payments: [
+    HELLO_CHECK,
     'Confirmed the amount: UGX 50,000',
     'Gave the MoMo merchant code 27248497',
     'Asked them to send the MoMo reference on WhatsApp to ' + WHATSAPP_DISPLAY,
     'Told them their places stay live once it is confirmed'
   ],
   retention: [
+    HELLO_CHECK,
     'Confirmed the renewal: UGX 50,000 by MoMo merchant code 27248497',
     'Asked them to send the MoMo reference on WhatsApp to ' + WHATSAPP_DISPLAY,
     'Asked for new places or photos to put up',
@@ -219,16 +235,16 @@ const CLOSE_CHECKS = Object.freeze({
 const COACH = Object.freeze({
   en: {
     next: 'Next call: {name}', dial: 'Dial the number', answered: 'Did they answer?', yes: 'Yes, they answered', no: 'No answer',
-    script: 'Follow the script: step {n} of {total}', next_step: 'Next step', hi: 'Ask them to send "hi" on WhatsApp to {wa} first',
-    hi_why: 'WhatsApp stops us messaging first. Once they say hi, we can send the film and link.', hi_done: 'They will (or did)', hi_no: 'They would not',
+    script: 'Follow the script: step {n} of {total}', next_step: 'Next step', hi: 'Did you ask them to WhatsApp "Hello" to makaug on {wa}?',
+    hi_why: 'A must on every call: it registers them as a client and makes their number known, so we can send the film, link and payment details.', hi_done: 'Asked them to say Hello', hi_no: 'They refused',
     end: 'End call', confirm: 'Confirm what happened', save: 'Save and call next', must: 'You must finish this wrap-up before the next call.',
     close_title: 'Key things to remember to close', offline: 'Offline: saving locally', synced: 'Back online: saved', calls: 'Calls', closes: 'Closes', left: 'Left',
     brk: 'Break', exit: 'Exit', add: '+ Add number', report: 'My report', note: 'Note', what: 'What happened?', skip: 'Skip this number', call_next: 'Call next'
   },
   lg: {
     next: 'Essimu eddako: {name}', dial: 'Kuba ennamba', answered: 'Bakwatidde?', yes: 'Yee, bakwatidde', no: 'Tebakwatidde',
-    script: 'Goberera ekiwandiiko: omutendera {n} ku {total}', next_step: 'Omutendera oguddako', hi: 'Basabe basooke bawandiike "hi" ku WhatsApp ku {wa}',
-    hi_why: 'WhatsApp tetukkiriza kusooka kubawandiikira. Bwe bagamba hi, tusobola okubaweereza film ne link.', hi_done: 'Bajja kukikola (oba bakikoze)', hi_no: 'Bagaanye',
+    script: 'Goberera ekiwandiiko: omutendera {n} ku {total}', next_step: 'Omutendera oguddako', hi: 'Obasabye okuwandiika "Hello" ku WhatsApp eri makaug ku {wa}?',
+    hi_why: 'WhatsApp tetukkiriza kusooka kubawandiikira. Bwe bagamba hi, tusobola okubaweereza film ne link.', hi_done: 'Mbasabye okugamba Hello', hi_no: 'Bagaanye',
     end: 'Malako essimu', confirm: 'Kakasa ekibaddewo', save: 'Tereka oyite essimu eddako', must: 'Olina okumaliriza kino nga tonnaba kukuba ssimu ndala.',
     close_title: 'By\'olina okujjukira okuggalawo', offline: 'Tewali yintaneeti: tuterekera wano', synced: 'Yintaneeti ezze: biterekeddwa', calls: 'Essimu', closes: 'Abakkirizza', left: 'Basigadde',
     brk: 'Wummula', exit: 'Fuluma', add: '+ Yongerako ennamba', report: 'Lipoota yange', note: 'Ebiwandiiko', what: 'Kiki ekibaddewo?', skip: 'Buuka ennamba eno', call_next: 'Kuba essimu eddako'
@@ -265,6 +281,7 @@ module.exports = {
   WHATSAPP_NUMBER,
   WHATSAPP_DISPLAY,
   CLOSE_CHECKS,
+  HELLO_CHECK,
   COACH,
   suggestReplies,
   GREETINGS,

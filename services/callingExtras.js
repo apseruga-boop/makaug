@@ -294,6 +294,12 @@ async function pipeline({ includeArchived = false, now = new Date() } = {}) {
     safeRows(`SELECT phone_key, outcome, note, created_at, person_key FROM outreach_events WHERE kind = 'outcome' ORDER BY created_at DESC LIMIT 2000`),
     safeRows(`SELECT agent_id, MAX(paid_at) AS paid_at, SUM(amount_ugx)::bigint AS total FROM revenue_entries WHERE direction = 'in' AND kind = 'agent_subscription' AND voided_at IS NULL GROUP BY agent_id`)
   ]);
+  const [skipRows, helloRows] = await Promise.all([
+    rows(`SELECT phone_key, COUNT(*)::int AS n, (array_agg(skip_reason ORDER BY shown_at DESC))[1] AS last FROM call_attempts WHERE status = 'skipped' GROUP BY phone_key`),
+    safeRows(`SELECT RIGHT(regexp_replace(user_phone, '\\D', '', 'g'), 9) AS phone_key, MIN(created_at) AS first_at FROM whatsapp_messages WHERE direction = 'inbound' GROUP BY 1`)
+  ]);
+  const skipsBy = new Map(skipRows.map((r) => [r.phone_key, r]));
+  const helloBy = new Map(helloRows.map((r) => [r.phone_key, r.first_at]));
   const byKey = new Map();
   const put = (key, base) => { if (!key) return null; const cur = byKey.get(key) || { phone_key: key }; byKey.set(key, { ...base, ...cur, ...Object.fromEntries(Object.entries(base).filter(([, v]) => v != null && v !== '')) }); return byKey.get(key); };
   for (const p of prospects) {
@@ -327,6 +333,8 @@ async function pipeline({ includeArchived = false, now = new Date() } = {}) {
       phone_key: key, phone: maskPhoneLast3(it.phone), name: it.name || '', kind: it.kind, stage: it.stage,
       payment: it.payment || (it.kind === 'agent' ? 'Not paid' : 'Not an agent yet'),
       last_said: said, calls: mine.length,
+      skips: skipsBy.get(key)?.n || 0, last_skip: skipsBy.get(key)?.last || null,
+      said_hello: helloBy.has(key) ? { at: helloBy.get(key) } : null,
       next_action: item?.next_action || (last && last.callback_at ? `Call back (${last.outcome.replace(/_/g, ' ')})` : (last ? 'Call again' : 'First call')),
       due, overdue: Boolean(due && due < today), decision: item?.decision || '', owner: item?.owner_key || (last ? last.person_key : ''),
       archived: item?.archived_at ? { at: item.archived_at, reason: item.archive_reason } : null,
@@ -377,7 +385,7 @@ async function timeline({ attemptId = '', phoneKey = '' } = {}) {
             FROM call_attempts WHERE phone_key = $1 AND status IN ('done', 'skipped', 'shown', 'calling') ORDER BY shown_at`, [key]),
     safeRows(`SELECT kind, outcome, note, person_key, created_at FROM outreach_events WHERE phone_key = $1 ORDER BY created_at`, [key]),
     rows('SELECT * FROM pipeline_items WHERE phone_key = $1', [key]),
-    safeRows(`SELECT direction, COUNT(*)::int AS n, MAX(created_at) AS last FROM whatsapp_messages WHERE RIGHT(regexp_replace(user_phone, '\\D', '', 'g'), 9) = $1 GROUP BY direction`, [key])
+    safeRows(`SELECT direction, COUNT(*)::int AS n, MIN(created_at) AS first, MAX(created_at) AS last FROM whatsapp_messages WHERE RIGHT(regexp_replace(user_phone, '\\D', '', 'g'), 9) = $1 GROUP BY direction`, [key])
   ]);
   const nodes = [];
   let prevCall = null;
@@ -402,6 +410,8 @@ async function timeline({ attemptId = '', phoneKey = '' } = {}) {
     nodes,
     outreach: evs.map((e) => ({ at: e.created_at, kind: e.kind, outcome: e.outcome, note: e.note, by: e.person_key })),
     whatsapp: wa,
+    said_hello: (() => { const i = wa.find((w) => w.direction === 'inbound'); return i ? { at: i.first, messages: i.n } : null; })(),
+    skips: atts.filter((a) => a.status === 'skipped').map((a) => ({ at: a.wrapped_at || a.shown_at, by: a.person_key, reason: a.skip_reason })),
     decision: item[0] ? { decision: item[0].decision, next_action: item[0].next_action, due: item[0].next_action_due, archived_at: item[0].archived_at, reason: item[0].archive_reason, history: item[0].history } : null,
     pick_up: last ? (last.callback_at ? `Call back ${new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: TZ }).format(new Date(last.callback_at))} · last: ${last.outcome.replace(/_/g, ' ')}${last.note ? ` – ${last.note}` : ''}` : `Last: ${last.outcome.replace(/_/g, ' ')}${last.note ? ` – ${last.note}` : ''}`) : 'Not called yet'
   };

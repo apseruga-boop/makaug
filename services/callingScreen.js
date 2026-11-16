@@ -98,6 +98,14 @@ function eligibility(history = [], task = {}, { now = new Date(), tasks = [] } =
   if (open) return { ok: false, why: 'open_elsewhere' };
   const defOf = (a) => outcomeDef(tasks.find((t) => t.key === a.task_key) || task, a.outcome) || {};
   if (done.some((a) => a.outcome === 'do_not_contact' || a.outcome === 'wrong_number')) return { ok: false, why: 'do_not_contact' };
+  // Skips: the reason decides what happens next. Wrong number never again;
+  // already an agent / not interested leave the new-agents queue; any skip
+  // keeps the number off everyone's screen for the rest of the day.
+  const skips = history.filter((a) => a.status === 'skipped');
+  const skipCode = (a) => skipCodeOf(a.skip_reason);
+  if (skips.some((a) => skipCode(a) === 'wrong_number')) return { ok: false, why: 'do_not_contact' };
+  if (task.queue_kind === 'new_agents' && skips.some((a) => ['already_agent', 'not_interested'].includes(skipCode(a)))) return { ok: false, why: 'closed' };
+  if (skips.some((a) => kampalaDay(a.wrapped_at || a.shown_at) === today)) return { ok: false, why: 'skipped_today' };
   if (done.some((a) => kampalaDay(a.wrapped_at || a.shown_at) === today)) {
     const latestToday = done[0];
     const due = latestToday?.callback_at && new Date(latestToday.callback_at).getTime() <= now.getTime() + CALLBACK_EARLY_MIN * 60000;
@@ -119,7 +127,11 @@ function eligibility(history = [], task = {}, { now = new Date(), tasks = [] } =
   if (last.outcome === 'no_answer' && last.task_key === task.key) {
     const misses = [];
     for (const a of mine) { if (a.outcome !== 'no_answer') break; misses.push(a); }
-    if (misses.length >= Number(cfg.max_no_answer || 3)) return { ok: false, why: 'too_many_no_answer' };
+    // No answer 3 times in a row: park the number for 7 days, then try again.
+    if (misses.length >= Number(cfg.max_no_answer || 3)) {
+      const parkDays = Number(cfg.park_days || 7);
+      if (addDays(kampalaDay(misses[0].wrapped_at || misses[0].shown_at), parkDays) > today) return { ok: false, why: 'parked_no_answer' };
+    }
     return { ok: true, kind: 'retry' };
   }
   const cooldown = cfg.cooldown_days;
@@ -132,6 +144,42 @@ function eligibility(history = [], task = {}, { now = new Date(), tasks = [] } =
   const lastMine = mine[0];
   if (lastMine && addDays(kampalaDay(lastMine.wrapped_at || lastMine.shown_at), Number(cooldown)) > today) return { ok: false, why: 'cooldown' };
   return { ok: true, kind: lastMine ? 'retry' : 'fresh' };
+}
+
+// One-tap skip reasons. Stored as the label (plus a note for "Other").
+const SKIP_REASONS = Object.freeze([
+  ['wrong_number', 'Wrong number'],
+  ['no_answer', 'No answer'],
+  ['busy', 'Busy'],
+  ['already_agent', 'Already an agent'],
+  ['not_interested', 'Not interested'],
+  ['other', 'Other']
+]);
+function skipCodeOf(reason = '') {
+  const r = String(reason || '').toLowerCase();
+  const hit = SKIP_REASONS.find(([, label]) => r === label.toLowerCase() || r.startsWith(`${label.toLowerCase()}:`));
+  return hit ? hit[0] : 'other';
+}
+
+/**
+ * How likely this number is to turn into money, for the queue order.
+ * Payments: unpaid sign-ups first, then overdue renewals. Retention: renewals
+ * due soon, then lapsed, then idle. New agents: fresh leads and WhatsApp first,
+ * then people we already pitched, then found-online listers, then the list.
+ */
+function moneyScore(c = {}) {
+  const r = String(c.reason || '');
+  if (c.source_kind === 'agent') {
+    if (/^Signed up/.test(r)) return 90 + Math.min(9, Number((r.match(/(\d+) live/) || [])[1] || 0));
+    if (/^Renewal overdue/.test(r)) return 80;
+    if (/^Renews/.test(r)) return 70;
+    if (/^Payment lapsed/.test(r)) return 50;
+    return 40;
+  }
+  if (c.source_kind === 'lead' || c.source_kind === 'whatsapp') return 85;
+  if (c.source_kind === 'prospect') return c.prospect_pitched ? 75 : 60;
+  if (c.found_online) return 65;
+  return 50;
 }
 
 function variantFor(task = {}, candidate = {}, history = []) {
@@ -168,6 +216,7 @@ function summarize(attempts = [], tasks = []) {
     connected: done.filter((a) => a.spoke).length,
     closes: done.filter((a) => a.is_close).length,
     skipped: attempts.filter((a) => a.status === 'skipped').length,
+    skip_reasons: attempts.filter((a) => a.status === 'skipped').reduce((m, a) => { const k = skipCodeOf(a.skip_reason); m[k] = (m[k] || 0) + 1; return m; }, {}),
     abandoned: attempts.filter((a) => a.status === 'abandoned').length,
     talk_s: done.reduce((s, a) => s + (Number(a.talk_s) || 0), 0),
     wrapup_s: done.reduce((s, a) => s + (Number(a.wrapup_s) || 0), 0),
@@ -387,9 +436,9 @@ async function attemptsFor(keys = []) {
   const map = new Map();
   const grouped = await rows(
     `SELECT phone_key, json_agg(json_build_object('id', id, 'task_key', task_key, 'person_key', person_key, 'status', status,
-        'outcome', outcome, 'callback_at', callback_at, 'shown_at', shown_at, 'wrapped_at', wrapped_at, 'spoke', spoke, 'note', note)
+        'outcome', outcome, 'callback_at', callback_at, 'shown_at', shown_at, 'wrapped_at', wrapped_at, 'spoke', spoke, 'note', note, 'skip_reason', skip_reason)
         ORDER BY COALESCE(wrapped_at, shown_at) DESC) AS h
-       FROM call_attempts WHERE phone_key = ANY($1::text[]) AND status IN ('shown', 'calling', 'done') GROUP BY phone_key`,
+       FROM call_attempts WHERE phone_key = ANY($1::text[]) AND status IN ('shown', 'calling', 'done', 'skipped') GROUP BY phone_key`,
     [keys]
   );
   for (const g of grouped) map.set(g.phone_key, g.h || []);
@@ -496,14 +545,14 @@ async function eligibleQueue(task, personKey, { now = new Date(), tasks = null, 
     queue.push({ ...c, kind: e.kind, history: h });
   }
   const rank = { callback: 0, retry: 2, fresh: 1 };
-  queue.sort((a, b) => rank[a.kind] - rank[b.kind]);
+  queue.sort((a, b) => rank[a.kind] - rank[b.kind] || moneyScore(b) - moneyScore(a));
   return queue;
 }
 
 async function historyFor(phoneKey) {
   const list = await rows(
-    `SELECT shown_at, wrapped_at, person_key, task_key, outcome, note, callback_at, talk_s FROM call_attempts
-      WHERE phone_key = $1 AND status = 'done' ORDER BY wrapped_at DESC LIMIT 6`,
+    `SELECT shown_at, wrapped_at, person_key, task_key, status, outcome, note, skip_reason, callback_at, talk_s FROM call_attempts
+      WHERE phone_key = $1 AND status IN ('done', 'skipped') ORDER BY COALESCE(wrapped_at, shown_at) DESC LIMIT 30`,
     [phoneKey]
   );
   const events = await safeRows(
@@ -511,13 +560,69 @@ async function historyFor(phoneKey) {
     [phoneKey]
   );
   return [
-    ...list.map((a) => ({ at: a.wrapped_at, by: a.person_key, what: `${a.outcome.replace(/_/g, ' ')}${a.talk_s != null ? ` · ${a.talk_s}s` : ''}`, note: a.note || '', task: a.task_key })),
+    ...list.map((a) => (a.status === 'skipped'
+      ? { at: a.wrapped_at || a.shown_at, by: a.person_key, what: 'skipped', note: a.skip_reason || '', task: a.task_key, skipped: true }
+      : { at: a.wrapped_at, by: a.person_key, what: `${a.outcome.replace(/_/g, ' ')}${a.talk_s != null ? ` · ${a.talk_s}s` : ''}`, outcome: a.outcome, note: a.note || '', task: a.task_key, next_step: a.callback_at || null })),
     ...events.map((e) => ({ at: e.created_at, by: e.person_key || '', what: `Outreach: ${String(e.outcome || '').replace(/_/g, ' ')}`, note: e.note || '', task: 'outreach' }))
-  ].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 6);
+  ].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 30);
 }
 
-function present(attempt, task, history = [], { callerName = '', withPhone = true } = {}) {
+/**
+ * Best time to call, from past calls to this number that were answered
+ * (spoke). Returns e.g. { label: 'around 10:00–11:00', answered: 2, tries: 3 }.
+ */
+function bestTimeFrom(attempts = []) {
+  const hourOf = (t) => Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: TZ }).format(new Date(t))) % 24;
+  const tried = attempts.filter((a) => a.tapped_at);
+  const answered = tried.filter((a) => a.spoke);
+  if (!answered.length) return tried.length ? { label: '', answered: 0, tries: tried.length, missed_hours: [...new Set(tried.map((a) => hourOf(a.tapped_at)))] } : null;
+  const counts = {};
+  for (const a of answered) { const h = hourOf(a.tapped_at); counts[h] = (counts[h] || 0) + 1; }
+  const best = Number(Object.keys(counts).sort((x, y) => counts[y] - counts[x] || x - y)[0]);
+  const part = best < 12 ? 'morning' : best < 17 ? 'afternoon' : 'evening';
+  return { hour: best, label: `around ${String(best).padStart(2, '0')}:00–${String(best + 1).padStart(2, '0')}:00 (${part})`, answered: answered.length, tries: tried.length };
+}
+async function bestTimeFor(phoneKey) {
+  return bestTimeFrom(await rows("SELECT tapped_at, spoke FROM call_attempts WHERE phone_key = $1 AND status = 'done' ORDER BY tapped_at DESC LIMIT 30", [phoneKey]));
+}
+
+/** Has this number sent us anything on WhatsApp ("said Hello")? Read only. */
+async function helloFor(phoneKey) {
+  const r = (await safeRows(
+    `SELECT MIN(created_at) AS first_at, COUNT(*)::int AS n FROM whatsapp_messages
+      WHERE direction = 'inbound' AND RIGHT(regexp_replace(user_phone, '\\D', '', 'g'), 9) = $1`, [phoneKey]))[0];
+  return r && r.n ? { at: r.first_at, messages: r.n } : null;
+}
+
+const SOURCE_KIND_LABELS = Object.freeze({
+  list: 'Your list', prospect: 'Outreach prospect', agent: 'Signed-up agent', callback: 'Callback',
+  lead: 'Lead (enquiry)', whatsapp: 'WhatsApp message', staff_added: 'Own number'
+});
+function sourceKindLabel(a = {}) {
+  const label = String(a.source_label || '');
+  if (/found online/i.test(label)) return 'Found online';
+  if (/added by you|own number/i.test(label)) return 'Own number';
+  if (/^Agent · Signed up/.test(label)) return 'Signed up, not paid';
+  if (/listing|ref /i.test(label)) return 'Listing enquiry';
+  return SOURCE_KIND_LABELS[a.source_kind] || 'Number';
+}
+
+function present(attempt, task, history = [], { callerName = '', withPhone = true, hello = null, bestTime = null } = {}) {
+  const lastCall = history.find((h) => !h.skipped && h.task !== 'outreach') || null;
+  const calls = history.filter((h) => !h.skipped && h.task !== 'outreach');
   return {
+    context: {
+      source_kind_label: sourceKindLabel(attempt),
+      source_label: attempt.source_label || '',
+      reason: attempt.reason || '',
+      calls_before: calls.length,
+      skips_before: history.filter((h) => h.skipped).length,
+      last: history[0] || null,
+      said_hello: hello,
+      best_time: bestTime,
+      last_call: lastCall ? { at: lastCall.at, by: lastCall.by, outcome: lastCall.outcome || lastCall.what, note: lastCall.note || '', task: lastCall.task } : null,
+      money: moneyScore(attempt) >= 80 ? 'Likely to pay' : moneyScore(attempt) >= 65 ? 'Warm' : 'Cold'
+    },
     attempt: { ...maskedAttempt(attempt), phone: withPhone ? canonicalUgPhone(attempt.phone) : maskPhoneLast3(attempt.phone), phone_masked: maskPhoneLast3(attempt.phone) },
     tel: withPhone ? `tel:${canonicalUgPhone(attempt.phone)}` : null,
     history,
@@ -539,7 +644,7 @@ async function nextNumber(sessionId, { now = new Date() } = {}) {
   const callers = await loadCallers();
   const callerName = callers.find((p) => p.key === s.person_key)?.name || s.person_key;
   const current = (await rows("SELECT * FROM call_attempts WHERE session_id = $1 AND status IN ('shown', 'calling') ORDER BY shown_at DESC LIMIT 1", [sessionId]))[0];
-  if (current) return { ...present(current, task, await historyFor(current.phone_key), { callerName }), resumed: true, left: null };
+  if (current) return { ...present(current, task, await historyFor(current.phone_key), { callerName, hello: await helloFor(current.phone_key), bestTime: await bestTimeFor(current.phone_key) }), resumed: true, left: null };
   await tidy(now);
   const queue = await eligibleQueue(task, s.person_key, { now, tasks });
   for (const c of queue) {
@@ -550,7 +655,7 @@ async function nextNumber(sessionId, { now = new Date() } = {}) {
        ON CONFLICT (phone_key) WHERE status IN ('shown', 'calling') DO NOTHING RETURNING *`,
       [sessionId, s.person_key, task.key, canonicalUgPhone(c.phone), c.phone_key, c.full_name || null, c.source_kind, c.source_label || null, c.reason || null, variant, c.prospect_id || null, c.list_number_id || null, c.agent_id || null, now]
     ))[0];
-    if (row) return { ...present(row, task, await historyFor(row.phone_key), { callerName }), resumed: false, left: queue.length - 1 };
+    if (row) return { ...present(row, task, await historyFor(row.phone_key), { callerName, hello: await helloFor(row.phone_key), bestTime: await bestTimeFor(row.phone_key) }), resumed: false, left: queue.length - 1 };
   }
   return { attempt: null, left: 0, empty_message: emptyMessage(task) };
 }
@@ -643,15 +748,18 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   const task = await loadTask(a.task_key).catch(async () => (await loadTasks({ all: true })).find((t) => t.key === a.task_key));
   const def = outcomeDef(task, outcome);
   if (!def) throw httpError(400, 'Pick what happened on the call.');
-  const text = String(note || '').trim().slice(0, 1000);
-  if (text.length < 3) throw httpError(400, 'Write a short note about the call.');
+  // A note is needed when they spoke; for no answer / wrong number the outcome is the note.
+  let text = String(note || '').trim().slice(0, 1000);
+  if (text.length < 3 && !def.spoke) text = def.label || def.key.replace(/_/g, ' ');
+  if (text.length < 3) throw httpError(400, 'Write a short note about the call (or tap one of the quick notes).');
   const cb = parseCallback(callbackAt, now);
   if (def.date === 'required' && !cb) throw httpError(400, 'Pick the date and time to call back.');
   const ticks = {};
   for (const step of Array.isArray(task.checklist) ? task.checklist : []) ticks[step.key] = Boolean(checklist && checklist[step.key]);
   // Coach answers are kept with the call too: did they answer, did they agree to WhatsApp "hi".
-  for (const extra of ['answered', 'wa_hi']) if (checklist && Object.prototype.hasOwnProperty.call(checklist, extra)) ticks[extra] = checklist[extra] === true ? true : (checklist[extra] === false ? false : String(checklist[extra]).slice(0, 20));
-  if (def.spoke) {
+  for (const extra of ['answered', 'wa_hi', 'asked_hello', 'recorded']) if (checklist && Object.prototype.hasOwnProperty.call(checklist, extra)) ticks[extra] = checklist[extra] === true ? true : (checklist[extra] === false ? false : String(checklist[extra]).slice(0, 20));
+  // Steps are only enforced for a close; every other outcome is one tap + a quick note.
+  if (def.close) {
     const missing = (task.checklist || []).filter((s) => s.required && !ticks[s.key]).map((s) => s.label);
     if (missing.length) throw httpError(400, `Tick the required steps first: ${missing.join('; ')}.`);
   }
@@ -701,11 +809,15 @@ async function mirrorToProspect(a, def) {
   );
 }
 
-async function skip(attemptId, { sessionId, reason = '' } = {}) {
+async function skip(attemptId, { sessionId, reason = '', reasonCode = '', note = '' } = {}) {
   const a = await attemptInSession(attemptId, sessionId);
   if (a.status !== 'shown') throw httpError(409, a.status === 'calling' ? 'You tapped to call, so pick an outcome instead.' : 'This number is already finished.');
-  const why = String(reason || '').trim().slice(0, 200);
-  if (why.length < 3) throw httpError(400, 'Say why you are skipping this number.');
+  const code = String(reasonCode || '').trim();
+  const known = SKIP_REASONS.find(([k]) => k === code);
+  const extra = String(note || '').trim().slice(0, 180);
+  let why = String(reason || '').trim().slice(0, 200);
+  if (known) why = known[0] === 'other' ? (extra.length >= 3 ? `Other: ${extra}` : '') : (extra ? `${known[1]}: ${extra}` : known[1]);
+  if (why.length < 3) throw httpError(400, code === 'other' ? 'Write why you are skipping.' : 'Pick why you are skipping this number.');
   const out = (await rows("UPDATE call_attempts SET status = 'skipped', skip_reason = $2, wrapped_at = NOW() WHERE id = $1 RETURNING *", [a.id, why]))[0];
   return maskedAttempt(out);
 }
@@ -869,9 +981,40 @@ async function stats(personKey, { now = new Date(), sessionId = null } = {}) {
     next_milestone: nextMilestone(sum.calls, sum.closes, targets),
     this_hour: sum.by_hour[Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: TZ }).format(now)) % 24] || 0,
     callbacks_due_now: cbs.filter((c) => c.due_now).length,
+    skipped: sum.skipped,
+    by_hour: sum.by_hour,
+    money: await moneyToday(key, attempts),
     leaderboard: board,
     road_to_1000: road
   };
+}
+
+/**
+ * Commission today, as an estimate the caller can see. Earned: payments and
+ * renewals closed today. At stake: sign-ups and payment promises still to pay.
+ * Uses the person's commission rate; the real payout comes from the
+ * Commission tab once payments are confirmed.
+ */
+const FEE_UGX = 50000;
+async function moneyToday(personKey, attempts = []) {
+  const callers = await loadCallers();
+  const me = callers.find((c) => c.key === personKey) || {};
+  const rate = Number(me.rate_pct || 0);
+  const done = attempts.filter((a) => a.status === 'done');
+  const paid = done.filter((a) => a.is_close && a.task_key !== 'new_agents').length;
+  const pending = done.filter((a) => (a.is_close && a.task_key === 'new_agents') || a.outcome === 'promised').length;
+  const per = Math.round(FEE_UGX * rate / 100);
+  return { rate_pct: rate, on_commission: rate > 0, per_payment_ugx: per, earned_ugx: paid * per, at_stake_ugx: pending * per, payments_closed: paid, payments_pending: pending };
+}
+
+/** Numbers waiting in each mode for this person (for the mode switch). */
+async function queueCounts(personKey, { now = new Date() } = {}) {
+  const key = cleanKey(personKey);
+  const tasks = await loadTasks({ all: true });
+  const active = tasks.filter((t) => t.active !== false);
+  const out = {};
+  for (const t of active) out[t.key] = (await eligibleQueue(t, key, { now, tasks, limit: 300 })).length;
+  return out;
 }
 
 async function feed(personKey, { now = new Date() } = {}) {
@@ -968,7 +1111,7 @@ async function performance({ day = kampalaDay(), now = new Date() } = {}) {
       targets,
       live: liveStatus(latest, mine, events, now),
       calls: sum.calls, closes: sum.closes, connected: sum.connected, talk_s: sum.talk_s, avg_talk_s: sum.avg_talk_s,
-      shown: sum.shown, tapped: sum.tapped, skipped: sum.skipped, median_gap_s: sum.median_gap_s,
+      shown: sum.shown, tapped: sum.tapped, skipped: sum.skipped, skip_reasons: sum.skip_reasons, median_gap_s: sum.median_gap_s,
       callbacks_booked: sum.callbacks_booked, follow_ups_done: sum.follow_ups_done,
       callbacks_due: cbs.filter((c) => c.person_key === key && c.due_now).length,
       callbacks_overdue: cbs.filter((c) => c.person_key === key && c.overdue_days > 0).length,
@@ -1031,6 +1174,14 @@ async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
 }
 
 module.exports = {
+  SKIP_REASONS,
+  skipCodeOf,
+  moneyScore,
+  sourceKindLabel,
+  helloFor,
+  bestTimeFrom,
+  moneyToday,
+  queueCounts,
   DEFAULT_TARGETS,
   FLAG_LABELS,
   flagsFor,
