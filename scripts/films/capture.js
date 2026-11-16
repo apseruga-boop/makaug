@@ -209,7 +209,10 @@ const keep = (key, entry) => { out[key] = { said: entry.in, media: entry.media |
   await freshChat(owner);
   await db.query(`DELETE FROM properties WHERE RIGHT(regexp_replace(COALESCE(lister_phone,''), '\\D', '', 'g'), 9) = $1`, [owner.slice(-9)]).catch(() => null);
   const who = 'Sarah N';
-  keep('owner_list', await say(owner, { body: 'LIST', name: who, quiet: true }));
+  // From the menu, as an owner who writes to the number starts (16 Nov 2026):
+  // "Hi", then 1, List my property. LIST is answered the same way.
+  keep('owner_menu', await say(owner, { body: 'Hi', name: who, quiet: true }));
+  keep('owner_list', await say(owner, { body: '1', name: who, quiet: true }));
   keep('owner_type', await say(owner, { body: '1', name: who, quiet: true }));
   keep('owner_ownership', await say(owner, { body: '1', name: who, quiet: true }));
   keep('owner_title', await say(owner, { body: '2 bedroom house in Seeta', name: who, quiet: true }));

@@ -1,5 +1,5 @@
 /*
- * The makaug assistant's own words, captured on 2026-11-14 by sending these
+ * The makaug assistant's own words, captured on 2026-11-16 by sending these
  * messages through the real WhatsApp inbound route (routes/whatsapp.js) against
  * a scratch database: scripts/films/capture.js. The films print them as they
  * came back. {id}, {agent}, {code}, {ref} and {number} stand for the run's own
@@ -84,13 +84,17 @@ window.T = {
   "said": "1",
   "reply": "✅ *Marked as SOLD* — 3-bed property for sale in Buwaate\n🔗 https://makaug.com/property/{id}\n\nIt stays on makaug with a SOLD badge for 7 days, then comes off the site by itself. I will message you the day it does. Congratulations, Brian! 🎉"
  },
+ "owner_menu": {
+  "said": "Hi",
+  "reply": "🏡 *makaug* · Uganda's property marketplace\nGood afternoon, Sarah 👋 What can I help you with?\n\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Talk to a person\n\nOr just type what you want, like \"2 bedroom house in Kira under 1m\".\n_Reply LANGUAGE for Luganda, Kiswahili and 6 more._"
+ },
  "owner_list": {
-  "said": "LIST",
+  "said": "1",
   "reply": "🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property\n6️⃣ Short stays (by the night)\n\nShort stays (by the night): ordinary listers pay UGX 20,000 a month, with no free days. Approved agents include short stays in the UGX 50,000 a month agent plan.",
   "also": [
    {
     "text": "🎬 *How to list your property on makaug* — step by step, about 5 minutes: answer a few short questions, send your photos, confirm it's you and agree to the terms. Our team checks it and you get the link when it is live. UGX 20,000 a month per property — we send you how to pay, nothing is charged automatically.",
-    "media": "makaug-owner-how-to-list-v4.mp4"
+    "media": "makaug-owner-how-to-list-v5.mp4"
    }
   ]
  },

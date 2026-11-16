@@ -1,7 +1,9 @@
 /*
- * How to list, for an owner (Agent 007, option 5, and sent the moment an owner
- * replies LIST to the owner film): every question the assistant asks, in
- * order, with its own words. README.md says where each line comes from.
+ * How to list, for an owner (Agent 007, option 5, sent the moment an owner
+ * replies LIST to the owner film, and when somebody picks 1, List my property,
+ * on the menu): every question the assistant asks, in order, with its own
+ * words, from "Hi" and the menu (16 Nov 2026). README.md says where each line
+ * comes from.
  */
 (function () {
   const { chat, head, proof, word, convo } = window.K;
@@ -24,8 +26,10 @@
   });
 
   const talk = convo(0.9, [
-    { beat: { kick: 'Step 1', h: 'Say LIST.<br>Choose what it is.' } },
-    { me: 'LIST', typed: true, cps: 7, hold: 0.5 },
+    { beat: { kick: 'Step 1', h: 'Say Hi, reply 1.<br>Choose what it is.' } },
+    { me: 'Hi', typed: true, cps: 6, hold: 0.5 },
+    { bot: T.owner_menu.reply, think: 0.5, hold: 2.4, marks: [['List my property', 0.4]] },
+    { me: '1', hold: 0.4 },
     { bot: T.owner_list.reply, think: 0.5, hold: 2.6 },
     { me: '1', hold: 0.4 },
     { bot: T.owner_type.reply, think: 0.4, hold: 1.8 },
@@ -63,7 +67,7 @@
   ]);
   scenes.push({
     dur: Math.ceil((talk.end + 0.4) * 10) / 10,
-    html: head(talk.beats) + chat({ clock: 11 * 60 + 4, msgs: talk.msgs, type: talk.type })
+    html: head(talk.beats) + chat({ clock: 14 * 60 + 4, msgs: talk.msgs, type: talk.type })
       + proof('The assistant&rsquo;s real questions and replies. The ID is never shown.', 1.4)
   });
 

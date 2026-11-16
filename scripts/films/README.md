@@ -10,7 +10,7 @@ own replies, because people who are asked to pay want to see the thing working.
 | Agent intro | `makaug-agent-intro-v5.mp4` | An agent who has not joined | Agent 007 → 3, or with a prospect's payment link |
 | Owner intro | `makaug-owner-intro-v1.mp4` | Someone selling or letting their own property | Agent 007 → 4 |
 | How to post (agents) | `makaug-agent-how-to-post-v3.mp4` | An approved agent | Agent 007 → 5 → 1 |
-| How to list (owners) | `makaug-owner-how-to-list-v4.mp4` | An owner | Agent 007 → 5 → 2, and by itself when an owner replies LIST to the owner film |
+| How to list (owners) | `makaug-owner-how-to-list-v5.mp4` | An owner | Agent 007 → 5 → 2, by itself when an owner replies LIST to the owner film, and when somebody picks 1, List my property, on the menu |
 
 The paths and captions are in `EXPLAINER_VIDEOS` in `routes/whatsapp.js`. Each has a Luganda
 (`-lg.mp4`) and a Swahili (`-sw.mp4`) twin beside it; see below.
@@ -26,6 +26,9 @@ It needs Node with Playwright (or `playwright-core` and `CHROME_PATH`) and
 ffmpeg. A film takes about two minutes. Each scene is photographed frame by
 frame into its own file under `.build/`, and the files are joined without
 re-encoding. The result is 720x1280, 30 frames a second, H.264, 6 MB or less.
+`FILM_SCALE=1.5` draws the same film at 1080x1920 (full HD, about five
+minutes); the how-to-list film (v5, 16 Nov 2026) is made that way, about
+6 MB.
 
 The films are silent: Arthur asked for that on 14 Nov 2026. They carry an
 empty sound track so every phone treats them as a video. `--music` lays a

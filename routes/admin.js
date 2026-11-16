@@ -11999,6 +11999,44 @@ router.post('/whatsapp/conversations/:phone/suggest-reply', async (req, res, nex
   }
 });
 
+// A message somebody sent while the number was unlinked. WhatsApp kept it on
+// the phone, but makaug never saw it: on 16 Nov 2026 three people had written
+// while the link was down, and two replies staff approved were held because
+// makaug had no record of them writing. Staff record what they sent and when
+// (read from the WhatsApp session), and from then the inbox shows it and the
+// only-to-people-who-wrote rule knows they wrote. Nothing is sent from here.
+router.post('/whatsapp/conversations/:phone/missed-message', async (req, res, next) => {
+  try {
+    const phone = normalizeConversationPhone(req.params.phone);
+    const digits = String(phone || '').replace(/\D/g, '');
+    if (digits.length < 9) return res.status(400).json({ ok: false, error: 'Invalid phone' });
+    const text = String(req.body?.text || '').trim().slice(0, 4000);
+    const at = new Date(req.body?.at || '');
+    const waId = String(req.body?.wa_message_id || '').trim().slice(0, 200);
+    if (!text) return res.status(400).json({ ok: false, error: 'The text they sent is required' });
+    if (Number.isNaN(at.getTime()) || at.getTime() > Date.now() + 60 * 1000 || Date.now() - at.getTime() > 14 * 86400 * 1000) {
+      return res.status(400).json({ ok: false, error: 'When they sent it is required, within the last 14 days' });
+    }
+    const actorId = adminActorId(req);
+    const result = await db.query(
+      `INSERT INTO whatsapp_messages (user_phone, wa_message_id, direction, message_type, payload, created_at)
+       VALUES ($1, NULLIF($2, ''), 'inbound', 'text', $3::jsonb, $4)
+       ON CONFLICT (wa_message_id) DO NOTHING
+       RETURNING id`,
+      [
+        digits,
+        waId ? `missed:${waId}` : '',
+        JSON.stringify({ body: text, source: 'recorded_by_staff', missed_while_unlinked: true, recorded_by: String(actorId || 'admin') }),
+        at.toISOString()
+      ]
+    );
+    await writeAudit('whatsapp_missed_message_recorded', { phone_suffix: digits.slice(-3), at: at.toISOString(), recorded: result.rowCount }, actorId);
+    return res.json({ ok: true, data: { recorded: result.rowCount } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
   try {
     const phone = normalizeConversationPhone(req.params.phone);

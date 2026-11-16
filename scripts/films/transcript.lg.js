@@ -1,5 +1,5 @@
 /*
- * The makaug assistant's own words, captured on 2026-11-14 by sending these
+ * The makaug assistant's own words, captured on 2026-11-16 by sending these
  * messages through the real WhatsApp inbound route (routes/whatsapp.js) against
  * a scratch database: scripts/films/capture.js. The films print them as they
  * came back. {id}, {agent}, {code}, {ref} and {number} stand for the run's own
@@ -84,59 +84,63 @@ window.T = {
   "said": "1",
   "reply": "✅ *Marked as SOLD* — 3-bed property for sale in Buwaate\n🔗 https://makaug.com/property/{id}\n\nIt stays on makaug with a SOLD badge for 7 days, then comes off the site by itself. I will message you the day it does. Congratulations, Brian! 🎉"
  },
+ "owner_menu": {
+  "said": "Hi",
+  "reply": "🏡 *makaug* · Uganda's property marketplace\nGood afternoon, Sarah 👋 What can I help you with?\n\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Talk to a person\n\nOr just type what you want, like \"2 bedroom house in Kira under 1m\".\n_Reply LANGUAGE for Luganda, Kiswahili and 6 more._"
+ },
  "owner_list": {
-  "said": "LIST",
-  "reply": "🏠 Kyoyetaagadde okutereka kya ki?\n1️⃣ Enju/Ensi okutunda\n2️⃣ Enju okusasula\n3️⃣ Ttaka\n4️⃣ Eby'okulala by'abayizi\n5️⃣ Ensi ez'ebikolwa\n6️⃣ Short stays (okusula okumpi)\n\nShort stays (okusula okumpi): abatali ba agent basasula UGX 20,000 buli mwezi, tewali nnaku za bwereere. Ba agent abakkirizibwa bafuna short stays mu pulani ya UGX 50,000 buli mwezi.",
+  "said": "1",
+  "reply": "🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property\n6️⃣ Short stays (by the night)\n\nShort stays (by the night): ordinary listers pay UGX 20,000 a month, with no free days. Approved agents include short stays in the UGX 50,000 a month agent plan.",
   "also": [
    {
     "text": "🎬 *How to list your property on makaug* — step by step, about 5 minutes: answer a few short questions, send your photos, confirm it's you and agree to the terms. Our team checks it and you get the link when it is live. UGX 20,000 a month per property — we send you how to pay, nothing is charged automatically.",
-    "media": "makaug-owner-how-to-list-v4.mp4"
+    "media": "makaug-owner-how-to-list-v5.mp4"
    }
   ]
  },
  "owner_type": {
   "said": "1",
-  "reply": "✅ Ggwe nnyini ensi ono oba agent?\n1️⃣ Nze nnyini\n2️⃣ Nze agent"
+  "reply": "✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent"
  },
  "owner_ownership": {
   "said": "1",
-  "reply": "✅ Saved\n\nNext: ✏️ Nyumba yoyo ejjiire etya? (e.g. \"Enyumba esatu Ntinda Kampala\"):"
+  "reply": "✅ Saved\n\nNext: ✏️ Give your property a short title (e.g. \"3-bedroom house in Ntinda Kampala\"):"
  },
  "owner_title": {
   "said": "2 bedroom house in Seeta",
-  "reply": "✅ Saved: title | Seeta, Mukono | 2 bedrooms\n\nNext: 💰 Ebbeeyi yayo mu Shillingi za Uganda bwoba nyo? (ennamba zokka)"
+  "reply": "✅ Saved: title | Seeta, Mukono | 2 bedrooms\n\nNext: 💰 What is your asking price in Uganda Shillings? You can type 250000000, 250m, or 500000000 and above."
  },
  "owner_price": {
   "said": "155m",
-  "reply": "✅ Saved: USh 155,000,000\n\n📸 Weereza waakiri ebifaananyi 2 ebitegeerekeka eby'ennyumba (okutuuka ku 10). Osobola okubisindika kimu ku kimu oba wamu. Ebisinga obulungi: front/outside, sitting room, bedroom, kitchen ne bathroom. Screenshot, document oba ekifaananyi ekiddiddwa tekibalibwa.\n\nTandika n'ekifaananyi kya *front/outside*."
+  "reply": "✅ Saved: USh 155,000,000\n\n📸 Please send at least 2 clear photos of the property (up to 10). One at a time or all together is fine.\nThe best ones to send: front/outside, sitting room, bedroom, kitchen, bathroom — more photos get more enquiries.\n\nScreenshots, documents and repeated photos do not count.\n\nStart with the *front/outside* photo."
  },
  "owner_photo1": {
   "said": "",
-  "reply": "✅ Ekifaananyi 1 kikkiriziddwa. Ebifaananyi ebikulu 1 bisigadde.\n📸 Ekiddako: weereza ekifaananyi kya *sitting room oba ekisenge ekikulu*."
+  "reply": "✅ Photo 1 accepted. 1 key photo remaining.\n📸 Next: please send the *sitting room or main room* photo."
  },
  "owner_photo2": {
   "said": "",
-  "reply": "✅ Ekifaananyi 2 kikkiriziddwa — bimala okuteeka listing.\n📸 Weereza ebirala bw'oba obirina (okutuuka ku 8), oba wandiika *DONE* okugenda mu maaso."
+  "reply": "✅ Photo 2 accepted — that's enough to list it.\n📸 Send more photos if you have them (up to 8 more), or reply *DONE* to continue."
  },
  "owner_photo3": {
   "said": "",
-  "reply": "✅ Ekifaananyi 3 kikkiriziddwa — bimala okuteeka listing.\n📸 Weereza ebirala bw'oba obirina (okutuuka ku 7), oba wandiika *DONE* okugenda mu maaso."
+  "reply": "✅ Photo 3 accepted — that's enough to list it.\n📸 Send more photos if you have them (up to 7 more), or reply *DONE* to continue."
  },
  "owner_done": {
   "said": "DONE",
-  "reply": "📸 Ebifaananyi 3 bifuniddwa — weebale.\n\n👤 What public contact name should appear on the listing? (For example: Amina, Amina Properties, or Private Owner)"
+  "reply": "📸 3 photos received — thank you.\n\n👤 What public contact name should appear on the listing? (For example: Amina, Amina Properties, or Private Owner)"
  },
  "owner_name": {
   "said": "Sarah Nakato",
-  "reply": "Abalabi bakukubire ku *{number}*, ennamba ya WhatsApp gy'okozesa kati? Ddamu *YES* oba *NO*."
+  "reply": "Should viewers contact you on *{number}*, the WhatsApp number you are using now? Reply *YES* or *NO*."
  },
  "owner_contact": {
   "said": "YES",
-  "reply": "🤳 Weereza ekifaananyi kyo ekirabika obulungi ng'okutte National ID yo. Tosindika PDF oba document file; kyetaagisa kubeera kifaananyi.\n\n🔒 ID yo ya kukakasa kwokka — tegirabikira ku makaug era tegiweebwa muntu yenna."
+  "reply": "🪪 Please send a clear photo of your National ID (a photo, not a PDF).\n\n🔒 Don't worry — this is only for verification, to protect buyers and tenants from fraud. Your ID is never shown on makaug or shared with anyone; only the makaug review team sees it."
  },
  "owner_id_photo": {
   "said": "",
-  "reply": "🪪 Kwa nteekateeka, tukeetaaga NIN yo (National ID Number).\n\n🔒 Kino kya kukakasa nti ggwe nnannyini yennyini — tekirabikira ku makaug era tekiweebwa muntu yenna."
+  "reply": "🪪 Now type your National ID Number (NIN) here.\n\n🔒 This is only to check that you are the real owner. It is never shown on makaug and never shared with anyone who enquires."
  },
  "owner_nin": {
   "said": "(their NIN)",
@@ -150,7 +154,7 @@ window.T = {
  },
  "owner_agree": {
   "said": "AGREE",
-  "reply": "🎉 *Ensi yo eterekedwa!*\n\nTeemu yaffe eya kulabirira era ejja kuterekebwa mu saawa 24.\n\nReference: MK-{ref}\n\n✅ Edirirra: teekawo profile yo olabe views, saves n'ebibuuza ku listing yo.\n\nWebale okozesa makaug! 🏠🇺🇬\n\nOnce approved: https://makaug.com/property/{id}\nTo remove it later, reply *REMOVE MK-{ref}* from this WhatsApp number.\n\n✅ Thank you for agreeing to the terms.\n🗓️ Once our team approves it, your property goes live and I send you the payment link: *UGX 20,000 a month* keeps it live. Nothing is charged automatically."
+  "reply": "🎉 *Sent for review, Sarah.*\n\n🏠 *2 Bedroom House In Seeta*\n📍 Seeta, Mukono · 💰 USh 155M\nReference: MK-{ref}\n\n*What happens next*\n1️⃣ Our team checks it, usually within 24 hours.\n2️⃣ I send you the link the moment it is live.\n3️⃣ With the link comes how to pay: *UGX 20,000 a month* keeps it live. Nothing is charged automatically.\n\nBuyers and tenants then call or WhatsApp you directly. makaug takes no commission.\n\nReply *STATUS* to check on it, or *REMOVE* to take it off, any time."
  },
  "owner_status_pending": {
   "said": "STATUS",
