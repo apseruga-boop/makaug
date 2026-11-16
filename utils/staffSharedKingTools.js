@@ -27,6 +27,22 @@ function isStaffSharedKingTool(path, method = 'GET') {
   if (/^\/staff-performance\/prospects\/[^/]+\/(call|outcome)$/.test(p) && m === 'POST') return true;
   if (p === '/staff-performance/lists' && m === 'POST') return true;
   if (/^\/staff-performance\/lists\/[^/]+\/number$/.test(p) && m === 'POST') return true;
+  // Calling screen: staff run their own sessions, calls, wrap-ups, added
+  // numbers, feed, stats and day report. The team view, evidence trail,
+  // targets and number review stay King-only.
+  if (p === '/calling/bootstrap' && m === 'GET') return true;
+  if (p === '/calling/sessions' && m === 'POST') return true;
+  if (/^\/calling\/sessions\/[^/]+\/(heartbeat|task|next|end|claim|inbound)$/.test(p) && m === 'POST') return true;
+  if (/^\/calling\/attempts\/[^/]+\/contact$/.test(p) && m === 'GET') return true;
+  if (/^\/calling\/attempts\/[^/]+\/(sms|video-request)$/.test(p) && m === 'POST') return true;
+  if (['/calling/search', '/calling/my-money', '/calling/lookup', '/calling/live'].includes(p) && m === 'GET') return true;
+  if (/^\/calling\/attempts\/[^/]+\/(tap|end|wrapup|skip|pay|paid-claim)$/.test(p) && m === 'POST') return true;
+  if (/^\/calling\/attempts\/[^/]+\/payment$/.test(p) && m === 'GET') return true;
+  if (['/calling/plan', '/calling/cash'].includes(p) && (m === 'GET' || m === 'POST')) return true;
+  if (p === '/calling/numbers' && m === 'POST') return true;
+  if (['/calling/stats', '/calling/counts', '/calling/feed', '/calling/report', '/calling/summary', '/calling/whatsapp', '/calling/leads', '/calling/timeline'].includes(p) && m === 'GET') return true;
+  // Read-only WhatsApp conversation view (no sending anywhere on the calling screen).
+  if (/^\/calling\/whatsapp\/[^/]+$/.test(p) && m === 'GET') return true;
   if (p.startsWith('/agent-manager/')) return true;
   if (p === '/featured-rotation' && m === 'GET') return true;
   if (p === '/featured-rotation/run-once' && m === 'POST') return true;

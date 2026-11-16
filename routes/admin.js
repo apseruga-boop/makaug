@@ -9,6 +9,7 @@ const { requireAdminApiKey, requireStaffOrAdminAccess, loadActiveUserFromToken }
 const { isStaffSharedKingTool } = require('../utils/staffSharedKingTools');
 const { registerOutreachTrackerRoutes } = require('./outreachTracker');
 const { registerStaffPerformanceRoutes } = require('./staffPerformance');
+const { registerCallingRoutes } = require('./calling');
 const { grantVerifiedTickIfComplete } = require('../services/agentVerifiedTickService');
 const { registerAgentManagerRoutes, HAS_ID_DOCUMENT_SQL: AGENT_HAS_ID_DOCUMENT_SQL } = require('./adminAgentManager');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
@@ -280,7 +281,13 @@ const router = express.Router();
 // routes stay behind requireAdminApiKey.
 router.use((req, res, next) => {
   if (isStaffSharedKingTool(req.path, req.method)) {
-    return requireStaffOrAdminAccess(req, res, next);
+    // A 'caller' login (Ronald) only gets the calling screen of the shared tools.
+    return requireStaffOrAdminAccess(req, res, (err) => {
+      if (err) return next(err);
+      const scope = req.staffAuth && req.userAuth && req.userAuth.profile_data && req.userAuth.profile_data.staff_scope;
+      if (scope === 'caller' && !/^\/calling(\/|$)/.test(req.path)) return res.status(403).json({ ok: false, error: 'Your login is for the calling screen only.' });
+      return next();
+    });
   }
   return requireAdminApiKey(req, res, next);
 });
@@ -9014,6 +9021,11 @@ registerOutreachTrackerRoutes(router, {
 });
 
 registerStaffPerformanceRoutes(router, {
+  writeAudit,
+  actorLabel: (user) => moderationActorLabel(user)
+});
+
+registerCallingRoutes(router, {
   writeAudit,
   actorLabel: (user) => moderationActorLabel(user)
 });
