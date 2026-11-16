@@ -9,7 +9,7 @@
  * but only when the agent has BOTH paid AND has a genuinely new property live.
  * First payment only by default; commission_settings.pays_on = 'every_payment'
  * makes renewals earn too. Commission is paid on the 25th; anything whose
- * 7-day hold ends after the 20th waits for the next 25th.
+ * 7-day hold ends after the 23rd waits for the next 25th.
  *
  * Nothing here is typed in by hand: who pitched, who signed up, who paid and
  * what is listed all come from agent_prospects, agents, revenue_entries and
@@ -51,7 +51,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   pays_on: 'first_payment',
   min_payment_ugx: 50000,
   hold_days: 7,
-  cutoff_day: 20,
+  cutoff_day: 23,
   payday_day: 25,
   scheme_starts_on: '2026-11-16'
 });

@@ -192,7 +192,7 @@ test('G7: 7-day hold; refund in the hold stops it; refund after payout is clawed
   assert.equal(row(early, h.a).status, 'on_hold');
   assert.equal(early.totals.people.ronald.due_next_payday_ugx, 0);
   assert.equal(early.totals.people.ronald.pending_ugx, 10000);
-  // Qualified 18 Nov 12:00 UTC: the 7-day hold ends 25 Nov (after the 20 Nov cut-off) → paid 25 Dec.
+  // Qualified 18 Nov 12:00 UTC: the 7-day hold ends 25 Nov (after the 23 Nov cut-off) → paid 25 Dec.
   assert.equal(row(early, h.a).lines[0].hold_until, '2026-11-25T12:00:00.000Z');
   assert.equal(row(early, h.a).lines[0].due_payday, '2026-12-25');
   assert.equal(c.DEFAULT_SETTINGS.hold_days, 7);
@@ -305,8 +305,21 @@ test('paydays: 25th, cut-off on the 20th, countdown in days and hours', () => {
   assert.equal(c.nextPayday(new Date('2026-11-16T12:00:00Z'), s), '2026-11-25');
   assert.equal(c.nextPayday(new Date('2026-11-26T12:00:00Z'), s), '2026-12-25');
   assert.equal(c.nextPayday(new Date('2026-12-26T12:00:00Z'), s), '2027-01-25');
-  assert.equal(c.paydayForDay('2026-11-20', s), '2026-11-25');
-  assert.equal(c.paydayForDay('2026-11-21', s), '2026-12-25');
+  // Cut-off on the 23rd (Arthur, 16 Nov 13:37): cleared by the 23rd → this 25th.
+  assert.equal(s.cutoff_day, 23);
+  assert.equal(c.paydayForDay('2026-11-23', s), '2026-11-25');
+  assert.equal(c.paydayForDay('2026-11-24', s), '2026-12-25');
+  assert.equal(c.cutoffFor('2026-11-25', s), '2026-11-23');
+  // A first payment on 16 Nov with a live listing clears the 7-day hold on 23 Nov → paid 25 Nov.
+  const a = agent(90, '2026-11-15T10:00:00Z');
+  const ev = c.evaluateCommission(world({ sends: [send(90, 'ronald', '2026-11-15T08:00:00Z')], agents: [a],
+    payments: [pay(a, '2026-11-16T06:00:00Z')], listings: [listing(a, '2026-11-16T06:00:00Z')], now: new Date('2026-11-23T20:00:00Z') }));
+  assert.equal(row(ev, a).status, 'eligible');
+  assert.equal(row(ev, a).lines[0].due_payday, '2026-11-25');
+  const mig = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '228_commission_cutoff_23rd.sql'), 'utf8');
+  assert.match(mig, /commission_settings_backup_228/);
+  assert.match(mig, /SET cutoff_day = 23[\s\S]*WHERE key = 'default' AND cutoff_day = 20/);
+  assert.match(mig, /Rollback:/);
   assert.deepEqual(c.countdown(new Date('2026-11-16T12:37:00Z'), '2026-11-25'), { days: 8, hours: 17, ms: c.countdown(new Date('2026-11-16T12:37:00Z'), '2026-11-25').ms });
 });
 
