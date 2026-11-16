@@ -167,6 +167,17 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
   router.get('/calling/meeting/history', wrap(async (req, res) => res.json({ ok: true, data: await meeting.history({ personKey: req.query?.person_key || '', limit: req.query?.limit }) })));
   router.get('/calling/meeting/settings', wrap(async (req, res) => res.json({ ok: true, data: await meeting.getSettings() })));
   router.post('/calling/meeting/settings', wrap(async (req, res) => res.json({ ok: true, data: await meeting.saveSettings(req.body || {}, actorName(req)) })));
+  // v5: day split (King sets it) and housekeeping follow-ups.
+  const planner = require('../services/callingPlanner');
+  router.get('/calling/day-split', wrap(async (req, res) => res.json({ ok: true, data: req.query?.person_key ? await planner.dayPlan(req.query.person_key) : await planner.getSplit() })));
+  router.put('/calling/day-split', wrap(async (req, res) => {
+    if (!isKing(req)) return res.status(403).json({ ok: false, error: 'Only King can change the day split.' });
+    const out = await planner.saveSplit(req.body || {}, 'King');
+    await audit(req, 'calling_day_split_saved', { blocks: out.blocks.length, reset: Boolean(req.body?.reset) });
+    return res.json({ ok: true, data: out });
+  }));
+  router.get('/calling/housekeeping', wrap(async (req, res) => res.json({ ok: true, data: await planner.housekeeping(req.query?.person_key) })));
+  router.post('/calling/housekeeping/done', wrap(async (req, res) => res.json({ ok: true, data: await planner.markHousekeeping(req.body?.person_key, { key: req.body?.key, note: req.body?.note, status: req.body?.status }) })));
   router.get('/calling/my-money', wrap(async (req, res) => res.json({ ok: true, data: await day.myMoney(req.query?.person_key) })));
   // Money on the number on screen: send the pay link / MoMo code, mark "they paid".
   router.get('/calling/attempts/:id/payment', wrap(async (req, res) => {

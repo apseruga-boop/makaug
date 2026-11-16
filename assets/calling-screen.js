@@ -66,7 +66,8 @@
     var m = d.match(/^\+?256(\d{3})(\d{3})(\d{3})$/);
     return m ? '+256 ' + m[1] + ' ' + m[2] + ' ' + m[3] : d;
   }
-  function firstName(n) { return String(n || '').replace(/\(.*?\)/g, '').trim().split(/\s+/)[0] || ''; }
+  function sameText(a, b) { var k = function (t) { return String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }; return k(a) === k(b); }
+  function firstName(n) { return String(n || '').replace(/\(.*?\)/g, '').replace(/^TEST\s*[–-]\s*/, '').trim().split(/\s+/)[0] || ''; }
   function isPhone() { return window.matchMedia && window.matchMedia('(pointer: coarse)').matches; }
   function toast(msg, kind) {
     var t = document.createElement('div');
@@ -94,7 +95,7 @@
     document.addEventListener('click', function (e) {
       var a = e.target && e.target.closest ? e.target.closest('a[href^="tel:"],a[href^="sms:"],a[href*="wa.me/"],a[href*="whatsapp.com/"]') : null;
       if (!a) return;
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault(); // the screen still logs the tap; only the dialler / SMS / WhatsApp app is not opened
       b.style.opacity = '0'; clearTimeout(b._t); b._t = setTimeout(function () { b.style.opacity = ''; }, 4500);
       toast('Practice: TEST number – not dialled, nothing sent. In real calls this opens ' + (/^tel:/.test(a.getAttribute('href')) ? 'Phone Link to ring' : /^sms:/.test(a.getAttribute('href')) ? 'Messages with the text' : 'WhatsApp') + '.');
     }, true);
@@ -194,6 +195,42 @@
     '.mkc-top .sp{flex:1}',
     '.mkc-road{min-width:140px}.mkc-road .bar{height:6px;background:#334155;border-radius:9px;overflow:hidden;margin-top:4px}.mkc-road .bar i{display:block;height:100%;background:#34d399}',
     '.mkc-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) 290px;gap:14px;padding:14px;max-width:1500px;margin:0 auto}',
+    // v5: focus during a call, routing script, compact wrap-up pop-out, commission chip, day split, housekeeping
+    '#mkc-overlay.mkc-focus .mkc-dash,#mkc-overlay.mkc-focus .mkc-side,#mkc-overlay.mkc-focus .mkc-splitbar,#mkc-overlay.mkc-focus .mkc-meetbar{display:none!important}',
+    '#mkc-overlay.mkc-focus .mkc-top>:not(.mkc-work):not(.who):not(.mkc-comm):not(.mkc-net):not(.sp){display:none!important}',
+    '#mkc-overlay.mkc-focus .mkc-grid{grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);max-width:1400px}',
+    '#mkc-overlay.mkc-noscript [data-mkc-script]{display:none}',
+    '#mkc-overlay.mkc-noscript .mkc-grid{grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr)}',
+    '.mkc-comm{background:#14532d;color:#ecfdf5;border:1px solid #22c55e;border-radius:999px;padding:6px 12px;font:inherit;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap}.mkc-comm b{color:#fde047}.mkc-comm small{color:#bbf7d0;font-weight:600}',
+    '.mkc-blockchip{background:#1e293b;border:1px solid #475569;color:#e2e8f0;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:800}',
+    '.mkc-splitbar{max-width:1500px;margin:0 auto;padding:10px 14px 0}.mkc-splitbar:empty{display:none}.mkc-splitt{display:flex;gap:10px;align-items:baseline;font-size:13px;color:#334155;margin-bottom:6px}.mkc-splitt span{color:#475569}',
+    '.mkc-blocks{display:flex;gap:6px;overflow-x:auto}.mkc-blk{flex:1 1 0;min-width:120px;background:#fff;border:1px solid #e2e8f0;border-left:5px solid #94a3b8;border-radius:10px;padding:6px 8px;font-size:12px;color:#334155}.mkc-blk b{display:block;font-size:12px;color:#0f172a}.mkc-blk span{display:block}',
+    '.mkc-blk .bar{height:6px;background:#e2e8f0;border-radius:99px;margin:4px 0 2px;overflow:hidden}.mkc-blk .bar i{display:block;height:100%;background:#10b981}.mkc-blk em{font-style:normal;font-weight:800;font-size:11px}',
+    '.mkc-blk.k-existing{border-left-color:#7c3aed}.mkc-blk.k-new{border-left-color:#0ea5e9}.mkc-blk.k-housekeeping{border-left-color:#f59e0b}.mkc-blk.k-lunch{border-left-color:#cbd5e1;flex:0 0 90px;min-width:90px}.mkc-blk.now{box-shadow:0 0 0 2px #10b981;background:#f0fdf4}.mkc-blk.past{opacity:.7}',
+    '.mkc-say{background:#ecfdf5;border:2px solid #10b981;border-radius:14px;padding:12px 14px;margin:6px 0 10px}.mkc-say span{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#047857}.mkc-say p{margin:4px 0 0;font-size:19px;line-height:1.45;color:#0f172a}',
+    '.mkc-routehead{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#334155;margin:4px 0 6px}',
+    '.mkc-replies{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}.mkc-reply{border:2px solid #cbd5e1;background:#fff;color:#0f172a;border-radius:12px;padding:12px 12px;font:inherit;font-weight:800;font-size:15px;text-align:left;cursor:pointer;min-height:52px}.mkc-reply:hover{border-color:#0ea5e9;background:#f0f9ff}',
+    '.mkc-reply.fin{border-color:#a7f3d0}.mkc-reply.go{background:#047857;border-color:#047857;color:#fff}.mkc-reply.grey{background:#f1f5f9}.mkc-reply.big{font-size:18px;text-align:center;grid-column:1/-1}',
+    '.mkc-crumbs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:12px;margin-bottom:4px}.mkc-crumbs span{background:#e0f2fe;color:#075985;border-radius:99px;padding:2px 8px;font-weight:700}.mkc-crumbs i{color:#64748b;font-style:normal}',
+    '.mkc-routeend{background:#fffbeb;border:2px solid #f59e0b;border-radius:14px;padding:12px 14px;margin:6px 0 10px;color:#1f2937}.mkc-routeend span{font-size:11px;font-weight:900;text-transform:uppercase;color:#92400e}.mkc-routeend b{display:block;font-size:20px;margin:2px 0}',
+    '.mkc-routetools{margin-top:10px}.mkc-extras{margin-top:10px;border:1px solid #e2e8f0;border-radius:12px;padding:6px 10px;background:#f8fafc}.mkc-extras summary{cursor:pointer;font-weight:800;font-size:13px;color:#334155}',
+    '.mkc-wrapmodal{position:fixed;inset:0;z-index:20;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:12px}',
+    '.mkc-wrapcard{background:#fff;border-radius:18px;box-shadow:0 20px 50px rgba(0,0,0,.35);width:min(860px,100%);max-height:calc(100vh - 24px);overflow:auto;padding:14px 16px;box-sizing:border-box;color:#0f172a}',
+    '.mkc-wraphead{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.mkc-wraphead b{font-size:20px}.mkc-wraphead span{color:#475569;font-size:14px}',
+    '.mkc-wrappath{font-size:12px;color:#075985;background:#f0f9ff;border-radius:8px;padding:4px 8px;margin-top:6px}.mkc-wrapsug{font-size:12px;color:#1e3a8a;margin-top:6px;font-weight:700}',
+    '.mkc-outs.wrap{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 8px}.mkc-outs.wrap .mkc-out{padding:8px 12px;font-size:14px;min-height:0}',
+    '.mkc-wrapchecks{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:8px 10px;margin-bottom:8px;font-size:12px}.mkc-wrapchecks b{grid-column:1/-1;color:#065f46;font-size:13px}.mkc-wrapchecks label{display:flex;gap:6px;align-items:flex-start}',
+    '.mkc-wrapgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}.mkc-wrapgrid .f{display:flex;flex-direction:column;gap:4px}.mkc-wrapgrid .f.wide{grid-column:1/-1}.mkc-wrapgrid label{font-size:12px;font-weight:900;color:#334155}.mkc-wrapgrid label small{font-weight:600;color:#475569}.mkc-wrapgrid .mkc-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.mkc-wrapgrid input.mkc-input{font-size:14px}',
+    '.mkc-hello.sm{margin-top:8px;padding:6px 10px;font-size:13px}.mkc-wrapcard .mkc-save{margin-top:10px;font-size:19px}',
+    '.mkc-sidehead{display:flex;gap:8px;align-items:center;margin-bottom:8px}',
+    '.mkc-side.full{position:fixed;inset:16px;z-index:15;background:#f1f5f9;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:auto;padding:16px;max-width:1100px;margin:0 auto}',
+    '.mkc-side.full .mkc-feed div{font-size:15px}.mkc-side.full .mkc-tabs{flex-wrap:wrap}',
+    '.mkc-feed div{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;line-height:1.35}.mkc-feed .t{flex:1 1 160px;color:#1f2937;overflow-wrap:anywhere}.mkc-feed .w{color:#475569;font-size:12px}',
+    '.mkc-feed .k{display:inline-block;background:#f1f5f9;border-radius:99px;padding:1px 7px;color:#334155!important}.mkc-feed .k-payment{background:#dcfce7;color:#166534!important}.mkc-feed .k-signup{background:#dbeafe;color:#1e3a8a!important}.mkc-feed .k-callback{background:#fef3c7;color:#92400e!important}',
+    '.mkc-hk{display:flex;gap:10px;align-items:flex-start;border:1px solid #e2e8f0;border-radius:12px;padding:10px;margin-bottom:8px;background:#fff}.mkc-hk .ic{font-size:22px}.mkc-hk .tx{flex:1;font-size:14px}.mkc-hk .tx b{display:block}.mkc-hk .bt{display:flex;flex-direction:column;gap:6px}.mkc-hknote{gap:6px;margin-top:6px}.mkc-hknote input{flex:1}',
+    '@media (max-width:1100px){#mkc-overlay.mkc-noscript .mkc-grid{grid-template-columns:minmax(0,1fr)}}',
+    '@media (max-width:720px){#mkc-overlay.mkc-focus .mkc-grid{grid-template-columns:1fr}.mkc-wrapgrid,.mkc-wrapchecks{grid-template-columns:1fr}.mkc-comm small{display:none}.mkc-replies{grid-template-columns:1fr}}',
+    '.mkc-splitsum{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.mkc-splitrows{display:flex;flex-direction:column;gap:6px}.mkc-splitrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.mkc-splitrow input[type=time]{width:110px}.mkc-splitrow select{min-width:170px}',
     '.mkc-meetcard{background:#f0fdf4;border:2px solid #16a34a;border-radius:16px;padding:16px;color:#14532d}',
     '.mkc-meetcard h3{margin:0;font-size:19px;font-weight:900;color:#14532d}',
     '.mkc-meetcard .mm-sub{margin:4px 0 14px;color:#166534;font-size:14px;line-height:1.4}',
@@ -379,7 +416,7 @@
       q('#mkc-overlay').addEventListener('click', onAction, true);
       refreshSide();
       openPlan(true);
-      next();
+      loadSplit(next);
     }, function (e) { toast(e.message, 'bad'); if (document.fullscreenElement) document.exitFullscreen().catch(function () {}); });
   }
   function ev(kind, detail) { if (S) S.events.push({ kind: kind, detail: detail || '', at: new Date().toISOString() }); }
@@ -507,14 +544,91 @@
     var o = document.createElement('div');
     o.id = 'mkc-overlay';
     o.setAttribute('role', 'dialog'); o.setAttribute('aria-label', 'Calling screen');
-    o.innerHTML = '<div class="mkc-top" data-mkc-top></div><div class="mkc-dash" data-mkc-dash></div>'
+    o.innerHTML = '<div class="mkc-top" data-mkc-top></div><div class="mkc-splitbar" data-mkc-split></div><div class="mkc-dash" data-mkc-dash></div>'
       + '<div class="mkc-grid"><div class="mkc-panel mkc-num" data-mkc-num></div>'
       + '<div class="mkc-panel" data-mkc-script></div>'
-      + '<div class="mkc-side" data-mkc-side></div></div><div data-mkc-break></div>';
+      + '<div class="mkc-side" data-mkc-side></div></div><div data-mkc-wrapbox></div><div data-mkc-break></div>';
     document.body.appendChild(o);
     renderAll();
   }
-  function renderAll() { renderTop(); renderNum(); renderScript(); renderSide(); renderBreak(); }
+  function renderAll() { renderTop(); renderSplit(); renderNum(); renderScript(); renderSide(); renderBreak(); }
+  // v5 focus: once a call starts, only the call (script + their history) is on screen.
+  // No call, no script.
+  function setFocus() {
+    var o = q('#mkc-overlay'); if (!o || !S) return;
+    var inCall = S.phase === 'calling' || S.phase === 'wrapup';
+    o.classList.toggle('mkc-focus', inCall);
+    o.classList.toggle('mkc-noscript', !inCall);
+    if (inCall && S.sideFull) { S.sideFull = false; renderSide(); }
+  }
+  // ---- commission chip (always on screen, also during a call)
+  function commHtml() {
+    var m = S.my;
+    if (!m) return '<button type="button" class="mkc-comm" data-mkc-comm title="My money">💰 Commission…</button>';
+    var pd = m.next_payday ? new Date(m.next_payday + 'T12:00:00+03:00') : null;
+    var pdl = pd ? new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Africa/Kampala' }).format(pd) : '25th';
+    return '<button type="button" class="mkc-comm" data-mkc-comm title="Commission: confirmed and pending (' + (m.hold_days || 7) + '-day hold). Payday is the 25th; payments confirmed by the 23rd count. Tap for details.">💰 <b data-mkc-earned>' + esc(ugx(m.earned_ugx)) + '</b> earned · <b>' + esc(ugx(m.on_hold_ugx)) + '</b> pending · payday <b data-mkc-payday>' + esc(pdl) + '</b><small> (cut-off 23rd · ' + (m.hold_days || 7) + '-day hold)</small></button>';
+  }
+  // ---- day split: blocks for existing customers, new agents and housekeeping
+  function loadSplit(cb) {
+    if (!S) return cb && cb();
+    api('/day-split?person_key=' + encodeURIComponent(S.person)).then(function (d) { if (S) { S.split = d; renderSplit(); renderTop(); } }, function () {}).then(function () { if (cb) cb(); });
+  }
+  function blockPct(b) { return b.target ? Math.min(100, Math.round(100 * b.done / b.target)) : 0; }
+  function renderSplit() {
+    var el = q('[data-mkc-split]'); if (!el || !S) return;
+    var P = S.split; if (!P || !P.blocks) { el.innerHTML = ''; return; }
+    el.innerHTML = '<div class="mkc-splitt"><b>Today\'s split</b><span>' + Object.keys(P.totals || {}).filter(function (k) { return k !== 'lunch'; }).map(function (k) { var t = P.totals[k]; return esc(t.label) + ' ' + t.done + '/' + t.target; }).join(' · ') + '</span></div><div class="mkc-blocks">'
+      + P.blocks.map(function (b) {
+        return '<div class="mkc-blk k-' + esc(b.kind) + (b.now ? ' now' : '') + (b.past ? ' past' : '') + '" title="' + esc(b.label) + ' ' + esc(b.start) + '–' + esc(b.end) + '"><b>' + esc(b.start) + '–' + esc(b.end) + (b.now ? ' · now' : '') + '</b><span>' + esc(b.label) + '</span>'
+          + (b.kind === 'lunch' ? '<em>🍽</em>' : '<div class="bar"><i style="width:' + blockPct(b) + '%"></i></div><em>' + b.done + '/' + b.target + (b.kind === 'housekeeping' ? ' tasks' : ' calls') + '</em>') + '</div>';
+      }).join('') + '</div>';
+  }
+  // The queue follows the block for the time of day. A manual mode change wins until the next block.
+  function balance() {
+    var P = S.split; var b = P && P.current;
+    if (!b || S.manual === b.id) return false;
+    if (b.kind === 'housekeeping') { S.phase = 'housekeeping'; S.cur = null; loadHk(); renderNum(); renderScript(); return true; }
+    if (!b.tasks || !b.tasks.length || b.tasks.indexOf(S.task) >= 0) return false;
+    var have = function (k) { return (boot.tasks || []).some(function (t) { return t.key === k; }); };
+    var want = b.tasks.filter(function (k) { return have(k) && S.counts && S.counts[k] > 0; })[0] || b.tasks.filter(have)[0];
+    if (!want || want === S.task) return false;
+    toast('⏱ ' + b.start + '–' + b.end + ' is ' + b.label + ' time: switched to ' + (MODE_LABEL[want] || want) + '.');
+    switchTask(want, true); return true;
+  }
+  // ---- housekeeping (read-only list; one tap done / note)
+  function loadHk() {
+    api('/housekeeping?person_key=' + encodeURIComponent(S.person)).then(function (d) { if (!S) return; S.hk = d; if (S.phase === 'housekeeping') renderNum(); }, function (e) { if (S) { S.hk = { items: [], error: e.message }; renderNum(); } });
+  }
+  var HK_ICON = { id: '🪪', listing: '🏠', promise: '💸' };
+  function hkHtml() {
+    var H = S.hk; var b = S.split && S.split.current;
+    var head = '<h4>🧹 Housekeeping' + (b && b.kind === 'housekeeping' ? ' · ' + esc(b.start) + '–' + esc(b.end) + ' · ' + b.done + '/' + b.target + ' done' : '') + '</h4>';
+    if (!H) return head + '<p class="mkc-muted">Loading the follow-ups…</p>';
+    var list = (H.items || []).map(function (i) {
+      return '<div class="mkc-hk" data-mkc-hkitem="' + esc(i.key) + '"><div class="ic">' + (HK_ICON[i.kind] || '•') + '</div><div class="tx"><b>' + esc(i.title) + '</b><div>' + esc(i.detail) + ' <span class="mkc-muted">' + esc(i.phone || '') + '</span></div>' + (i.last_note ? '<div class="mkc-muted">Note: ' + esc(i.last_note) + '</div>' : '') + '<div class="mkc-hknote" style="display:none"><input class="mkc-input" data-mkc-hknotein placeholder="Short note, e.g. asked on WhatsApp"><button type="button" class="mkc-btn sm dark" data-mkc-hknotesave>Save note</button></div></div>'
+        + '<div class="bt"><button type="button" class="mkc-btn sm go" data-mkc-hkdone>✓ Done</button><button type="button" class="mkc-btn sm ghost" data-mkc-hknote>Note</button></div></div>';
+    }).join('');
+    return head + (H.practice ? '<p class="mkc-muted" style="margin:0 0 6px">Practice items (TEST).</p>' : '') + (list || '<div class="mkc-tpl"><b>All housekeeping done.</b> Nothing waiting.</div>')
+      + '<div class="mkc-row" style="margin-top:10px"><button type="button" class="mkc-btn go" data-mkc-hkback>📞 Back to calls</button></div>';
+  }
+  function bindHk(el) {
+    qa('[data-mkc-hkitem]', el).forEach(function (row) {
+      var key = row.getAttribute('data-mkc-hkitem');
+      var send = function (status, note) {
+        api('/housekeeping/done', { method: 'POST', body: { person_key: S.person, key: key, status: status, note: note || '' } }).then(function () {
+          toast(status === 'done' ? 'Done ✓' : 'Note saved');
+          if (status === 'done') { S.hk.items = S.hk.items.filter(function (i) { return i.key !== key; }); }
+          else S.hk.items.forEach(function (i) { if (i.key === key) i.last_note = note; });
+          renderNum(); loadSplit();
+        }, function (e) { toast(e.message, 'bad'); });
+      };
+      q('[data-mkc-hkdone]', row).onclick = function () { send('done'); };
+      q('[data-mkc-hknote]', row).onclick = function () { var n = q('.mkc-hknote', row); n.style.display = n.style.display === 'none' ? 'flex' : 'none'; q('[data-mkc-hknotein]', row).focus(); };
+      q('[data-mkc-hknotesave]', row).onclick = function () { send('note', q('[data-mkc-hknotein]', row).value.trim()); };
+    });
+    var back = q('[data-mkc-hkback]', el); if (back) back.onclick = function () { var b = S.split && S.split.current; S.manual = b ? b.id : 'x'; next(); };
+  }
   function renderTop() {
     var el = q('[data-mkc-top]'); if (!el || !S) return;
     var st = S.stats || {}; var tg = st.targets || { calls_per_day: 40, closes_per_day: 2 };
@@ -523,6 +637,8 @@
     var fsLink = (document.fullscreenElement || !document.documentElement.requestFullscreen) ? '' : ' · <a href="#" data-mkc-fs style="color:#fbbf24">full screen</a>';
     el.innerHTML = '<button type="button" class="mkc-work' + (S.work ? ' on' : '') + '" data-mkc-work aria-pressed="' + (S.work ? 'true' : 'false') + '"><span class="knob"></span><b>' + (S.work ? 'WORK MODE ON' : 'WORK MODE OFF') + '</b><small>' + (S.work ? 'work time counting' : 'downtime <span data-mkc-down>' + clock(S.totals.down_ms || 0) + '</span>') + '</small></button>'
       + '<div class="who">' + esc(personName(S.person)) + '<small>Work time <span data-mkc-worktime>' + clock(S.totals.open_ms) + '</span>' + fsLink + '</small></div>'
+      + commHtml()
+      + (S.split && S.split.current ? '<span class="mkc-blockchip">⏱ ' + esc(S.split.current.label) + ' · ' + S.split.current.done + '/' + S.split.current.target + '</span>' : '')
       + '<div class="mkc-modes" role="tablist" aria-label="Mode">' + boot.tasks.map(function (t) { var n = S.counts && S.counts[t.key]; return '<button type="button" role="tab" class="mkc-mode' + (t.key === S.task ? ' on' : '') + '" data-mkc-mode="' + esc(t.key) + '">' + esc(MODE_LABEL[t.key] || t.name) + '<i title="numbers waiting">' + (n == null ? '…' : n) + '</i></button>'; }).join('') + '</div>'
       + '<select data-mkc-lang-ui aria-label="Language"><option value="en"' + (S.lang === 'en' ? ' selected' : '') + '>English</option><option value="lg"' + (S.lang === 'lg' ? ' selected' : '') + '>Luganda</option></select>'
       + '<span class="mkc-net" data-mkc-net style="' + (net.offline ? '' : 'display:none') + '">' + esc(T('offline')) + '</span>'
@@ -548,6 +664,7 @@
     q('[data-mkc-brk]', el).onclick = toggleBreak;
     q('[data-mkc-plan]', el).onclick = function () { openPlan(false); };
     q('[data-mkc-work]', el).onclick = function () { setWork(!S.work); };
+    q('[data-mkc-comm]', el).onclick = function () { if (S.my) openMoney(); };
     q('[data-mkc-exit]', el).onclick = exitSession;
     var fs = q('[data-mkc-fs]', el); if (fs) fs.onclick = function (e) { e.preventDefault(); document.documentElement.requestFullscreen().catch(function () {}); };
   }
@@ -593,8 +710,9 @@
     el.innerHTML = S.onBreak ? '<div class="mkc-break"><b>' + (S.breakKind === 'lunch' ? '🍽 Lunch' : 'On a break') + (S.breakPlan ? ' · ' + S.breakPlan + ' min' : '') + '</b><div style="font-size:42px;font-weight:900" data-mkc-breaktimer>0:00</div><p class="mkc-muted" style="color:#cbd5e1">Breaks are logged as breaks, not as time away.</p><button type="button" class="mkc-btn go" data-mkc-back style="font-size:18px">Back to calling</button></div>' : '';
     var b = q('[data-mkc-back]', el); if (b) b.onclick = toggleBreak;
   }
-  function switchTask(key) {
+  function switchTask(key, auto) {
     if (S.phase === 'calling' || S.phase === 'wrapup') { toast('Finish the wrap-up for this call first.', 'bad'); renderTop(); return; }
+    if (!auto) { var cb0 = S.split && S.split.current; S.manual = cb0 ? cb0.id : 'manual'; }
     api('/sessions/' + S.id + '/task', { method: 'POST', body: { task_key: key } }).then(function () {
       S.task = key; S.variant = null; S.lastDone = null; next(); refreshSide();
     }, function (e) { toast(e.message, 'bad'); renderTop(); });
@@ -605,6 +723,9 @@
     if (!S) return;
     S.phase = 'loading'; S.cur = null; S.wrap = { outcome: '', checklist: {}, note: '', callback: '' }; S.callStart = null; S.callEnd = null; S.error = '';
     S.coach = { answered: null, step: 0, hi: null }; S.stageManual = null; S.tx = null; TX = null; S.suggest = null;
+    S.route = { node: null, path: [], end: null }; S.fullScript = false; S.endedAt = Date.now();
+    var cbk = S.split && S.split.current; if (cbk && S.manual && S.manual !== cbk.id && S.manual !== 'manual') S.manual = null;
+    if (balance()) { setFocus(); renderSplit(); return; }
     if (outbox().length) { S.phase = 'offline_wait'; renderNum(); flush(); return; }
     renderNum();
     api('/sessions/' + S.id + '/next', { method: 'POST', body: {} }).then(function (d) {
@@ -613,17 +734,21 @@
       if (!S.cur) { S.phase = 'empty'; } else {
         var a = d.attempt;
         S.phase = a.status === 'calling' ? (a.ended_at ? 'wrapup' : 'calling') : 'shown';
-        if (a.direction === 'inbound' && S.phase === 'calling' && S.coach.answered == null) { S.coach.answered = true; S.wrap.checklist.answered = true; S.tx = S.tx || 'ask'; }
+        if (a.direction === 'inbound' && S.phase === 'calling' && S.coach.answered == null) { S.coach.answered = true; S.wrap.checklist.answered = true; S.tx = S.tx || 'ask'; var R0 = routeFor(); if (R0) S.route.node = R0.start; }
         if (a.tapped_at) S.callStart = new Date(a.tapped_at).getTime();
         if (a.ended_at) S.callEnd = new Date(a.ended_at).getTime();
         S.variant = d.script_variant || S.variant;
       }
       renderNum(); renderScript();
+      if (S.loadT0) { S.lastGapMs = Date.now() - S.loadT0; S.loadT0 = null; }
     }, function (e) { if (S) { S.phase = isNetErr(e) ? 'offline_wait' : 'error'; S.error = e.message; if (S.phase === 'offline_wait') setNet(true); renderNum(); } });
   }
   function renderNum() {
     var el = q('[data-mkc-num]'); if (!el || !S) return;
     var task = taskOf(S.task);
+    setFocus();
+    if (S.phase !== 'wrapup') { var wb0 = q('[data-mkc-wrapbox]'); if (wb0) wb0.innerHTML = ''; }
+    if (S.phase === 'housekeeping') { el.innerHTML = hkHtml(); bindHk(el); return; }
     if (S.phase === 'loading') { el.innerHTML = '<p class="mkc-muted">Finding the next number…</p>'; return; }
     if (S.phase === 'offline_wait') {
       el.innerHTML = lastDoneHtml() + '<div class="mkc-offline-card"><b>' + esc(T('offline')) + '</b><p>Your last call is saved on this phone (' + outbox().length + ' to send). The next number comes as soon as the connection is back. Nothing is lost.</p><button class="mkc-btn" data-mkc-retry>Try now</button></div>';
@@ -635,40 +760,25 @@
       q('[data-mkc-retry]', el).onclick = next; bindLastDone(el); return;
     }
     var d = S.cur; var a = d.attempt;
-    var head = lastDoneHtml()
+    var head = (S.phase === 'shown' ? lastDoneHtml() : '')
       + '<h4>' + esc(MODE_LABEL[task.key] || task.name) + (d.resumed ? ' · picked up where you left off' : '') + '</h4>'
-      + (S.phase === 'shown' ? '<div class="mkc-muted" style="font-weight:800;color:#047857">' + esc(T('next', { name: a.name || prettyPhone(a.phone) })) + '</div>' : '')
       + '<div class="name">' + esc(a.name || 'Name not known') + '</div>'
       + '<div class="src">' + esc(a.reason && String(a.source_label || '').indexOf(a.reason) >= 0 ? String(a.source_label).replace(' · ' + a.reason, '') : (a.source_label || '')) + '</div>'
       + (a.reason ? '<span class="mkc-reason' + (a.source_kind === 'callback' ? ' mkc-cb' : '') + '">' + esc(a.reason) + '</span>' : '')
-      + '<div class="mkc-phone">' + esc(prettyPhone(a.phone)) + '</div>'
-      + contextHtml(d, S.phase === 'shown');
-    var body = coachBar();
-    var steps = scriptSteps(task);
+      + '<div class="mkc-phone">' + esc(prettyPhone(a.phone)) + '</div>';
+    var body = '';
     if (S.phase === 'shown') {
-      body += '<a class="mkc-btn go mkc-call" href="' + esc(d.tel) + '" data-mkc-tap><i class="fas fa-phone"></i>&nbsp;' + (isPhone() ? esc(T('call_next')) : 'Call from laptop (Phone Link)') + '</a>'
-        + '<p class="mkc-muted" style="margin:8px 0 0;text-align:center">' + (isPhone() ? 'Opens the phone app. Come back here when the call ends.' : '<b>Calling from laptop via company phone</b> · Phone Link opens and rings out from the company Android. Use loudspeaker or the headset. Phone Link not set up? Dial on the company phone instead.') + '</p>'
-        + '<div class="mkc-row" style="margin-top:10px;justify-content:center"><button type="button" class="mkc-btn ghost sm" data-mkc-skip>' + esc(T('skip')) + '</button><button type="button" class="mkc-btn ghost sm" data-mkc-tree>History tree</button></div>';
+      body = '<a class="mkc-btn go mkc-call" href="' + esc(d.tel) + '" data-mkc-tap title="' + (isPhone() ? 'Opens the phone app' : 'Rings out from the company phone through Phone Link (Bluetooth)') + '"><i class="fas fa-phone"></i>&nbsp;' + (isPhone() ? esc(T('call_next')) : 'Call now') + '</a>'
+        + '<div class="mkc-row" style="margin-top:8px;justify-content:center"><button type="button" class="mkc-btn ghost sm" data-mkc-skip>' + esc(T('skip')) + '</button><button type="button" class="mkc-btn ghost sm" data-mkc-tree>History tree</button></div>';
     } else if (S.phase === 'calling') {
-      var c = S.coach;
-      body += '<div class="mkc-calling"><span class="dot"></span>Calling… <span data-mkc-calltimer>' + clock(Date.now() - (S.callStart || Date.now())) + '</span></div>' + txHtml();
-      if (c.answered === null) {
-        var g0 = (boot.scripts.variants[currentVariant(task).key] || { en: [] }); g0 = (g0[S.lang] || g0.en || [])[0];
-        if (g0) body += '<div class="mkc-coach-q" style="text-align:left"><span class="mkc-muted">When they pick up, say:</span><p style="margin:4px 0 0;font-size:17px;line-height:1.45">' + esc(stepText(g0, 0, scriptCtx())) + '</p></div>';
-        body += '<div class="mkc-coach-q"><b>' + esc(T('answered')) + '</b><div class="mkc-row" style="justify-content:center;margin-top:8px"><button type="button" class="mkc-btn go" data-mkc-ans="yes">' + esc(T('yes')) + '</button><button type="button" class="mkc-btn" data-mkc-ans="no">' + esc(T('no')) + '</button></div></div>';
-      } else if (c.step < steps.length) {
-        var st = steps[c.step];
-        body += '<div class="mkc-coach-q"><span class="mkc-muted">' + esc(T('script', { n: c.step + 1, total: steps.length })) + '</span><b style="display:block;margin:4px 0;color:#047857">' + esc(st[0]) + '</b><p style="margin:0;font-size:17px;line-height:1.45">' + esc(stepText(st, c.step + 1, scriptCtx())) + '</p>'
-          + '<div class="mkc-row" style="justify-content:center;margin-top:10px">' + (c.step > 0 ? '<button type="button" class="mkc-btn sm" data-mkc-prev>‹</button>' : '') + '<button type="button" class="mkc-btn go" data-mkc-step>' + esc(T('next_step')) + ' ›</button></div></div>';
-      } else if (c.hi === null) {
-        body += '<div class="mkc-coach-q" style="background:#fef9c3;border-color:#fde047"><b>' + esc(T('hi', { wa: boot.whatsapp_display })) + '</b><p class="mkc-muted" style="margin:4px 0 0">' + esc(T('hi_why')) + '</p>'
-          + '<div class="mkc-row" style="justify-content:center;margin-top:10px"><button type="button" class="mkc-btn go" data-mkc-hi="yes">' + esc(T('hi_done')) + '</button><button type="button" class="mkc-btn" data-mkc-hi="no">' + esc(T('hi_no')) + '</button></div></div>';
-      }
-      body += '<button type="button" class="mkc-btn red mkc-call" style="margin-top:10px" data-mkc-end>' + esc(T('end')) + '</button>';
+      body = '<div class="mkc-calling"><span class="dot"></span>' + (S.coach.answered ? 'On the call' : 'Ringing…') + ' <span data-mkc-calltimer>' + clock(Date.now() - (S.callStart || Date.now())) + '</span></div>'
+        + '<button type="button" class="mkc-btn red mkc-call" style="margin-top:8px" data-mkc-end>' + esc(T('end')) + '</button>' + txHtml();
     } else if (S.phase === 'wrapup') {
-      body += '<div class="mkc-timer" style="font-size:28px;color:#334155">Call ' + clock((S.callEnd || Date.now()) - (S.callStart || Date.now())) + '</div><p class="mkc-must">' + esc(T('must')) + '</p>' + wrapHtml(task);
+      body = '<div class="mkc-calling" style="background:#f1f5f9;color:#334155"><span class="dot" style="background:#64748b;animation:none"></span>Call ended · ' + clock((S.callEnd || Date.now()) - (S.callStart || Date.now())) + '</div>';
     }
-    el.innerHTML = head + payHtml(a) + contactHtml(a) + body;
+    var tools = payHtml(a) + contactHtml(a);
+    var inCall = S.phase === 'calling' || S.phase === 'wrapup';
+    el.innerHTML = head + body + contextHtml(d, true) + (inCall ? (tools ? '<details class="mkc-extras"><summary>💰 Payment · texts · video</summary>' + tools + '</details>' : '') : tools);
     bindPay(el, a); bindContact(el, a);
     bindTx(el);
     bindLastDone(el);
@@ -679,11 +789,7 @@
       S.callStart = Date.now(); S.phase = 'calling'; S.lastDone = null; renderNum(); renderScript();
       op('/attempts/' + a.id + '/tap', { session_id: S.id }).catch(function (e) { toast(e.message, 'bad'); });
     };
-    var endIt = function () {
-      stopTx();
-      S.callEnd = Date.now(); S.phase = 'wrapup'; autoWrap(task); renderNum(); renderScript();
-      op('/attempts/' + a.id + '/end', { session_id: S.id }).catch(function (e) { toast(e.message, 'bad'); });
-    };
+    var endIt = endCallNow;
     var endEl = q('[data-mkc-end]', el); if (endEl) endEl.onclick = endIt;
     qa('[data-mkc-ans]', el).forEach(function (b2) {
       b2.onclick = function () {
@@ -700,7 +806,19 @@
     if (skipEl) skipEl.onclick = function () { openSkip(a); };
     var treeEl = q('[data-mkc-tree]', el);
     if (treeEl) treeEl.onclick = function () { openTimeline({ attempt_id: a.id }); };
-    if (S.phase === 'wrapup') bindWrap(el, task, a);
+    if (S.phase === 'wrapup') renderWrap(task, a);
+  }
+  function endCallNow() {
+    var a = S && S.cur && S.cur.attempt; if (!a || S.phase !== 'calling') return Promise.resolve();
+    var task = taskOf(S.task);
+    stopTx();
+    S.callEnd = Date.now(); S.phase = 'wrapup'; autoWrap(task); renderNum(); renderScript();
+    return op('/attempts/' + a.id + '/end', { session_id: S.id }).catch(function (e) { toast(e.message, 'bad'); });
+  }
+  function renderWrap(task, a) {
+    var box = q('[data-mkc-wrapbox]'); if (!box) return;
+    box.innerHTML = '<div class="mkc-wrapmodal">' + wrapHtml(task, a) + '</div>';
+    bindWrap(box, task, a);
   }
   // Everything we know about the number, shown BEFORE he dials.
   function contextHtml(d, full) {
@@ -801,22 +919,36 @@
     else if (/not interested|no thank|don'?t (want|need)/.test(t)) out = has('rejected') ? 'rejected' : (has('not_renewing') ? 'not_renewing' : '');
     else if (task.key === 'payments' && /\bi('ve| have)? (already )?(paid|sent)\b/.test(t) && has('paid')) { out = 'paid'; next = 'Check MoMo for UGX 50,000 and confirm on WhatsApp'; }
     else if (task.key === 'retention' && /\b(renewed|i('ve| have) paid)\b/.test(t) && has('renewed')) { out = 'renewed'; next = 'Check MoMo and confirm the renewal'; }
-    else if (/(will|i'?ll|going to|can) (pay|send the money|renew)|pay (today|tomorrow|tonight|on)/.test(t) && (has('promised') || has('call_back'))) { out = has('promised') ? 'promised' : 'call_back'; next = 'Chase payment: check MoMo for UGX 50,000'; when = when || { quick: 'tom', at: quickDate('tom'), label: 'tomorrow 10:00' }; }
+    else if (/(will|i'?ll|going to|can) (pay|send the money|renew)|pay (today|tomorrow|tonight|on)/.test(t) && (has('promised') || has('call_back'))) { out = has('promised') ? 'promised' : 'call_back'; next = 'Chase payment: check MoMo for UGX 50,000'; when = when || { quick: '24h', at: quickDate('24h'), label: 'tomorrow, this time' }; }
     else if (/sign me up|register me|i will join|i'?ll join|let'?s do it|i('m| am) in\b/.test(t) && has('signed_up')) { out = 'signed_up'; next = 'Confirm their first payment by MoMo'; }
-    else if (/call (me )?(back|later)|busy|driving|in a meeting|not a good time/.test(t) || (when && !out)) { out = 'call_back'; next = 'Call back'; when = when || { quick: 'tom', at: quickDate('tom'), label: 'tomorrow 10:00' }; }
-    else if (/send|whatsapp me|video|film|link/.test(t)) { out = has('interested') ? 'interested' : (has('will_list') ? 'will_list' : 'call_back'); next = 'Send the film and link on WhatsApp, then call back'; when = when || { quick: 'tom', at: quickDate('tom'), label: 'tomorrow 10:00' }; }
+    else if (/call (me )?(back|later)|busy|driving|in a meeting|not a good time/.test(t) || (when && !out)) { out = 'call_back'; next = 'Call back'; when = when || { quick: '24h', at: quickDate('24h'), label: 'tomorrow, this time' }; }
+    else if (/send|whatsapp me|video|film|link/.test(t)) { out = has('interested') ? 'interested' : (has('will_list') ? 'will_list' : 'call_back'); next = 'Send the film and link on WhatsApp, then call back'; when = when || { quick: '24h', at: quickDate('24h'), label: 'tomorrow, this time' }; }
     if (out && !has(out)) out = '';
+    if (when && new Date(when.at).getTime() < Date.now() + 24 * 3600000 - 5 * 60000) when = { quick: '24h', at: quickDate('24h'), label: 'tomorrow, this time' };
     var summary = (t ? 'Spoke ' + clock((S.callEnd - S.callStart) || 0) + '. ' : '') + (pts.length ? 'They ' + pts.join(', ') + '. ' : '') + (when ? 'Next contact ' + when.label + '.' : '');
     if (when && next && next.indexOf(when.label) < 0) next += ' (' + when.label + ')';
     return { outcome: out, next: next, summary: summary.trim(), when: when, auto: Boolean(t) };
   }
   function autoWrap(task) {
     var sg = suggestWrap(task); var w = S.wrap;
+    var has = function (k) { return task.outcomes.some(function (o) { return o.key === k; }); };
+    var e = S.route && S.route.end;
+    if (e && has(e.outcome)) {
+      var path = routePath();
+      sg = { outcome: e.outcome, next: e.next || '', summary: e.note + (path ? ' (' + path + ')' : ''), auto: true, route: true, when: e.when ? { quick: e.when, at: quickDate(e.when) } : null };
+      w.note = sg.summary.slice(0, 900);
+      if (e.checks) { (boot.close_checks[task.key] || []).forEach(function (_c, i) { w.checklist['close_' + i] = true; }); task.checklist.forEach(function (c) { if (c.required) w.checklist[c.key] = true; }); }
+      if (e.hello) { w.checklist.asked_hello = true; w.checklist.wa_hi = true; }
+    }
     S.suggest = sg;
     if (sg.outcome) w.outcome = sg.outcome;
     if (sg.next) w.next = sg.next;
     if (sg.when) { w.callback = sg.when.at; w.quick = sg.when.quick; }
     if (sg.summary && !w.note) w.note = sg.summary;
+    if (!sg.route && routePath() && !w.note) w.note = 'Said: ' + routePath();
+    var o = task.outcomes.filter(function (x) { return x.key === w.outcome; })[0];
+    if (o && o.date === 'required' && !w.callback) { w.quick = '24h'; w.callback = quickDate('24h'); }
+    if (o && !w.next) w.next = defaultNext(task, o);
   }
   function txPayload() {
     if (!TX || !TX.text) return null;
@@ -863,108 +995,113 @@
     renewed: ['Renewed by MoMo'],
     _: ['Spoke, will follow up', 'Asked for details on WhatsApp', 'Will send new places']
   };
-  function wrapHtml(task) {
-    var w = S.wrap;
-    var outs = task.outcomes.map(function (o) { return '<button type="button" class="mkc-out' + (o.close ? ' close' : '') + (w.outcome === o.key ? ' on' : '') + '" data-mkc-out="' + esc(o.key) + '">' + esc(o.label) + '</button>'; }).join('');
+  var CB_CHIPS = [['24h', 'Tomorrow, this time'], ['2d', 'In 2 days'], ['3d', 'In 3 days'], ['mon', 'Next Monday 10:00']];
+  function routePath() { return (S.route && S.route.path || []).map(function (x) { return x.label; }).join(' → '); }
+  function defaultNext(task, o) {
+    if (!o || o.close || o.terminal || o.key === 'no_answer') return '';
+    if (o.key === 'promised') return 'Chase payment: check MoMo for UGX 50,000';
+    if (o.key === 'will_list' || o.key === 'needs_help') return 'Help them list new places';
+    if (o.key === 'interested') return 'Send the film and link on WhatsApp, then call back';
+    if (o.date) return 'Call back';
+    return 'King to decide';
+  }
+  function wrapHtml(task, a) {
+    var w = S.wrap; a = a || (S.cur && S.cur.attempt) || {};
     var o = task.outcomes.filter(function (x) { return x.key === w.outcome; })[0];
-    var html = '<h4 style="margin-top:12px">' + esc(T('what')) + '</h4><div class="mkc-outs big">' + outs + '</div>';
-    if (!o) return txResultHtml() + html + '<div data-mkc-wraperr></div>';
-    html = txResultHtml() + html;
-    if (o.spoke || o.close) {
-      html += '<button type="button" class="mkc-hello' + (w.checklist.asked_hello ? ' on' : '') + '" data-mkc-hello>' + (w.checklist.asked_hello ? '✓' : '☐') + ' Asked them to say “Hello” on WhatsApp to ' + esc(boot.whatsapp_display) + '</button>';
-    }
+    var outs = task.outcomes.map(function (x) { return '<button type="button" class="mkc-out' + (x.close ? ' close' : '') + (w.outcome === x.key ? ' on' : '') + '" data-mkc-out="' + esc(x.key) + '">' + esc(x.label) + '</button>'; }).join('');
+    var path = routePath();
+    var html = '<div class="mkc-wrapcard" role="dialog" aria-label="Wrap up the call" data-mkc-wrapcard>'
+      + '<div class="mkc-wraphead"><b>Wrap up</b><span>' + esc(a.name || 'This number') + ' · ' + esc(a.phone_masked || ('•••' + String(a.phone || '').slice(-3))) + ' · call ' + clock((S.callEnd || Date.now()) - (S.callStart || Date.now())) + '</span></div>'
+      + (path ? '<div class="mkc-wrappath">🧭 ' + esc(path) + '</div>' : '')
+      + (S.suggest && S.suggest.outcome && S.suggest.outcome === w.outcome ? '<div class="mkc-wrapsug">✨ Filled in from the call. Check it and save.</div>' : '')
+      + '<div class="mkc-outs wrap">' + outs + '</div>';
+    if (!o) return html + '<div data-mkc-wraperr></div><p class="mkc-muted" style="margin:6px 0 0">Tap what happened. <b>No answer</b> saves straight away.</p></div>';
     if (o.close) {
-      html += '<div class="mkc-closebox"><h4 style="margin:0 0 6px;color:#065f46">' + esc(T('close_title')) + ' <span class="mkc-req">*</span></h4>'
-        + (boot.close_checks[task.key] || []).map(function (c, i) { return '<label class="mkc-check"><input type="checkbox" data-mkc-chk="close_' + i + '"' + (w.checklist['close_' + i] ? ' checked' : '') + '><span>' + esc(c) + '</span></label>'; }).join('')
-        + task.checklist.filter(function (c) { return c.required; }).map(function (c) { return '<label class="mkc-check"><input type="checkbox" data-mkc-chk="' + esc(c.key) + '"' + (w.checklist[c.key] ? ' checked' : '') + '><span>' + esc(c.label) + '</span></label>'; }).join('')
+      html += '<div class="mkc-wrapchecks"><b>' + esc(T('close_title')) + '</b>'
+        + (boot.close_checks[task.key] || []).map(function (c, i) { var same = task.checklist.filter(function (x) { return x.required && sameText(x.label, c); })[0]; return '<label><input type="checkbox" data-mkc-chk="close_' + i + '"' + (same ? ' data-mkc-also="' + esc(same.key) + '"' : '') + (w.checklist['close_' + i] ? ' checked' : '') + '><span>' + esc(c) + '</span></label>'; }).join('')
+        + task.checklist.filter(function (c) { return c.required && !(boot.close_checks[task.key] || []).some(function (x) { return sameText(x, c.label); }); }).map(function (c) { return '<label><input type="checkbox" data-mkc-chk="' + esc(c.key) + '"' + (w.checklist[c.key] ? ' checked' : '') + '><span>' + esc(c.label) + '</span></label>'; }).join('')
         + '</div>';
     }
+    var f = '';
     if (o.date) {
-      html += '<h4 style="margin-top:12px">' + (o.date === 'required' ? 'When to call back' : 'Follow-up') + '</h4><div class="mkc-chips">'
-        + [['1h', 'In 1 hour'], ['eve', 'Today 18:00'], ['tom', 'Tomorrow 10:00'], ['mon', 'Next Monday']].concat(bestChip()).map(function (x) { return '<button type="button" class="mkc-chip' + (w.quick === x[0] ? ' on' : '') + '" data-mkc-quick="' + x[0] + '">' + x[1] + '</button>'; }).join('')
-        + '<input type="datetime-local" class="mkc-input" data-mkc-when value="' + esc(w.callback) + '" style="font-size:13px"></div>';
+      f += '<div class="f wide"><label>' + (o.date === 'required' ? 'Call back' : 'Follow-up') + ' <small>(at least 24 hours away)</small></label><div class="mkc-chips">'
+        + CB_CHIPS.concat(bestChip()).map(function (x) { return '<button type="button" class="mkc-chip' + (w.quick === x[0] ? ' on' : '') + '" data-mkc-quick="' + x[0] + '">' + x[1] + '</button>'; }).join('')
+        + '<input type="datetime-local" class="mkc-input" data-mkc-when min="' + esc(localInput(new Date(Date.now() + 24 * 3600000))) + '" value="' + esc(w.callback) + '"></div></div>';
     }
-    if (o.spoke) {
-      var chips = NOTE_CHIPS[o.key] || NOTE_CHIPS._;
-      html += '<h4 style="margin-top:12px">Quick note <span class="mkc-req">*</span></h4><div class="mkc-chips">' + chips.map(function (c) { return '<button type="button" class="mkc-chip' + (w.note.indexOf(c) >= 0 ? ' on' : '') + '" data-mkc-chip="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>'
-        + '<textarea class="mkc-ta" rows="2" data-mkc-note placeholder="Or one line: what did they say?">' + esc(w.note) + '</textarea>';
-    } else {
-      html += '<textarea class="mkc-ta" rows="1" data-mkc-note placeholder="Note (optional)" style="margin-top:10px">' + esc(w.note) + '</textarea>';
-    }
-    if (o.key !== 'no_answer' && (!(o.close || o.terminal) || o.key === 'signed_up' || o.key === 'paid' || o.key === 'renewed')) {
+    if (o.key !== 'no_answer') f += '<div class="f"><label>Note</label><input class="mkc-input" data-mkc-note placeholder="What did they say?" value="' + esc(w.note) + '"></div>';
+    if (defaultNext(task, o) || w.next) {
       var nx = NEXT_CHIPS[task.key] || NEXT_CHIPS.new_agents;
-      html += '<h4 style="margin-top:12px">Next step' + (o.close || o.terminal ? ' (optional)' : ' <span class="mkc-req">*</span>') + '</h4><div class="mkc-chips">' + nx.map(function (c) { return '<button type="button" class="mkc-chip' + ((w.next || '').indexOf(c) === 0 ? ' on' : '') + '" data-mkc-nextchip="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>'
-        + '<input class="mkc-input" style="width:100%;box-sizing:border-box" data-mkc-next placeholder="What happens next?" value="' + esc(w.next || '') + '">'
-        + (w.callback ? '<div class="mkc-muted" style="font-size:12px;margin-top:4px">It comes back to your queue on ' + esc(kDayTime(new Date(w.callback).toISOString())) + ' with this summary.</div>' : '');
+      f += '<div class="f"><label>Next step</label><input class="mkc-input" data-mkc-next list="mkc-nextlist" value="' + esc(w.next || '') + '"><datalist id="mkc-nextlist">' + nx.map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist></div>';
     }
-    return html + '<div data-mkc-wraperr></div><button type="button" class="mkc-btn go mkc-call" style="margin-top:10px;font-size:20px" data-mkc-save>' + (S.suggest && S.suggest.outcome === w.outcome ? '✓ Confirm and call next ›' : esc(T('save')) + ' ›') + '</button>';
+    html += '<div class="mkc-wrapgrid">' + f + '</div>';
+    if (o.spoke && !o.close) html += '<button type="button" class="mkc-hello sm' + (w.checklist.asked_hello ? ' on' : '') + '" data-mkc-hello>' + (w.checklist.asked_hello ? '✓' : '☐') + ' Asked them to say “Hello” on WhatsApp to ' + esc(boot.whatsapp_display) + '</button>';
+    if (TX && TX.text) html += '<details class="mkc-muted" style="font-size:12px"><summary>Live notes (' + TX.text.split(/\s+/).length + ' words, no audio kept)</summary>' + esc(TX.text.slice(0, 1200)) + '</details>';
+    return html + '<div data-mkc-wraperr></div><button type="button" class="mkc-btn go mkc-call mkc-save" data-mkc-save>✓ Save &amp; call next ›</button></div>';
   }
   function localInput(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
   function quickDate(k) {
-    var d = new Date();
-    if (k === '1h') d = new Date(Date.now() + 3600000);
-    else if (k === '2h') d = new Date(Date.now() + 2 * 3600000);
-    else if (k === 'eve') { d.setHours(18, 0, 0, 0); if (d.getTime() < Date.now() + 15 * 60000) d.setDate(d.getDate() + 1); }
-    else if (k === 'best') { var bt = S.cur && S.cur.context && S.cur.context.best_time; d.setDate(d.getDate() + 1); d.setHours(bt && bt.hour != null ? bt.hour : 10, 0, 0, 0); }
-    else if (k === 'tom') { d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); }
-    else { d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7)); d.setHours(10, 0, 0, 0); }
+    var min = Date.now() + 24 * 3600000; var d;
+    if (k === '2d' || k === '3d') { d = new Date(); d.setDate(d.getDate() + (k === '2d' ? 2 : 3)); d.setHours(10, 0, 0, 0); }
+    else if (k === 'best') { var bt = S.cur && S.cur.context && S.cur.context.best_time; d = new Date(); d.setDate(d.getDate() + 1); d.setHours(bt && bt.hour != null ? bt.hour : 10, 0, 0, 0); }
+    else if (k === 'mon') { d = new Date(); d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7)); d.setHours(10, 0, 0, 0); }
+    else { d = new Date(min + 5 * 60000); d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0); } // '24h': tomorrow, this time
+    while (d.getTime() < min) d.setDate(d.getDate() + 1);
     return localInput(d);
   }
-  function bestChip() { var bt = S.cur && S.cur.context && S.cur.context.best_time; return bt && bt.hour != null ? [['best', 'Tomorrow ' + pad(bt.hour) + ':00 (best time)']] : []; }
+  function bestChip() { var bt = S.cur && S.cur.context && S.cur.context.best_time; return bt && bt.hour != null ? [['best', pad(bt.hour) + ':00 (their best time)']] : []; }
   function bindWrap(el, task, a) {
     var w = S.wrap;
-    var save;
     qa('[data-mkc-out]', el).forEach(function (b) {
       b.onclick = function () {
         saveWrapInputs(el); w.outcome = b.getAttribute('data-mkc-out');
         var o = task.outcomes.filter(function (x) { return x.key === w.outcome; })[0] || {};
-        if (o.date === 'required' && !w.callback) { w.quick = 'tom'; w.callback = quickDate('tom'); }
-        if (!w.next && !(o.close || o.terminal) && o.key !== 'no_answer') w.next = o.key === 'promised' ? 'Chase payment: check MoMo for UGX 50,000' : o.date ? 'Call back' : '';
-        // No answer: one tap saves and brings the next number.
-        if (!o.spoke && !o.close && !o.date && w.outcome === 'no_answer') { renderNum(); save(); return; }
-        renderNum();
+        if (o.date === 'required' && !w.callback) { w.quick = '24h'; w.callback = quickDate('24h'); }
+        if (!o.date) { w.callback = ''; w.quick = ''; }
+        var routed = S.route && S.route.end && S.route.end.outcome === o.key;
+        if (!routed) { w.next = defaultNext(task, o); if (!w.note || w.autoNote) { w.note = o.key === 'no_answer' ? '' : (routePath() ? o.label + ' (' + routePath() + ')' : ''); w.autoNote = true; } }
+        if (w.outcome === 'no_answer') { renderWrap(task, a); saveWrap(task, a); return; } // one tap
+        renderWrap(task, a);
       };
     });
-    qa('[data-mkc-quick]', el).forEach(function (b) { b.onclick = function () { saveWrapInputs(el); w.quick = b.getAttribute('data-mkc-quick'); w.callback = quickDate(w.quick); renderNum(); }; });
-    qa('[data-mkc-chip]', el).forEach(function (b) {
-      b.onclick = function () {
-        saveWrapInputs(el); var c = b.getAttribute('data-mkc-chip');
-        w.note = w.note.indexOf(c) >= 0 ? w.note.replace(c, '').replace(/^[\s.;]+|[\s.;]+$/g, '').replace(/\s*;\s*;/g, ';') : (w.note.trim() ? w.note.trim() + '; ' + c : c);
-        renderNum();
-      };
-    });
-    var hb = q('[data-mkc-hello]', el); if (hb) hb.onclick = function () { saveWrapInputs(el); w.checklist.asked_hello = !w.checklist.asked_hello; renderNum(); };
-    qa('[data-mkc-nextchip]', el).forEach(function (b) { b.onclick = function () { saveWrapInputs(el); var c = b.getAttribute('data-mkc-nextchip'); w.next = c + (w.callback && /call back|chase/i.test(c) ? ' (' + kDayTime(new Date(w.callback).toISOString()) + ')' : ''); if (/call back|chase/i.test(c) && !w.callback) { w.quick = 'tom'; w.callback = quickDate('tom'); } renderNum(); }; });
-    save = function () {
-      saveWrapInputs(el);
-      var o = task.outcomes.filter(function (x) { return x.key === w.outcome; })[0];
-      var err = !o ? 'Tap what happened.' : (o.spoke && w.note.trim().length < 3 ? 'Tap a quick note or write one line.' : (o.date === 'required' && !w.callback ? 'Pick when to call back.' : ''));
-      if (!err && !(o.close || o.terminal) && o.key !== 'no_answer' && !(w.next || '').trim() && !w.callback) err = 'Pick the next step, so no call is left open.';
-      if (!err && o.close) {
-        var miss = task.checklist.filter(function (c) { return c.required && !w.checklist[c.key]; }).map(function (c) { return c.label; })
-          .concat((boot.close_checks[task.key] || []).filter(function (_c, i) { return !w.checklist['close_' + i]; }));
-        if (miss.length) err = T('close_title') + ': ' + miss.join('; ');
-      }
-      var box = q('[data-mkc-wraperr]');
-      if (err) { if (box) box.innerHTML = '<div class="mkc-err">' + esc(err) + '</div>'; return; }
-      var btn = q('[data-mkc-save]'); if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-      var cbIso = w.callback ? new Date(w.callback).toISOString() : null;
-      op('/attempts/' + a.id + '/wrapup', { session_id: S.id, outcome: w.outcome, note: w.note, checklist: w.checklist, callback_at: cbIso, next_step: w.next || '', transcript: txPayload() })
-        .then(function (done) {
-          S.lastDone = { name: a.name, phone: a.phone, outcome: w.outcome, callback_at: cbIso, task: S.task };
-          if (done.queued) toast(T('offline'));
-          if (o.close) celebrate();
-          next(); refreshSide();
-        }, function (e) { if (btn) { btn.disabled = false; btn.textContent = T('save'); } if (box) box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
-    };
-    var sb = q('[data-mkc-save]', el); if (sb) sb.onclick = save;
+    qa('[data-mkc-quick]', el).forEach(function (b) { b.onclick = function () { saveWrapInputs(el); w.quick = b.getAttribute('data-mkc-quick'); w.callback = quickDate(w.quick); renderWrap(task, a); }; });
+    var hb = q('[data-mkc-hello]', el); if (hb) hb.onclick = function () { saveWrapInputs(el); w.checklist.asked_hello = !w.checklist.asked_hello; w.checklist.wa_hi = w.checklist.asked_hello; renderWrap(task, a); };
+    var sb = q('[data-mkc-save]', el); if (sb) sb.onclick = function () { saveWrap(task, a); };
+    var nt = q('[data-mkc-note]', el); if (nt) nt.oninput = function () { w.autoNote = false; };
+  }
+  function saveWrap(task, a) {
+    var el = q('[data-mkc-wrapbox]') || document;
+    var w = S.wrap;
+    saveWrapInputs(el);
+    var o = task.outcomes.filter(function (x) { return x.key === w.outcome; })[0];
+    if (o && o.spoke && (w.note || '').trim().length < 3) w.note = o.label + (routePath() ? ' (' + routePath() + ')' : ''); // never ask again for what we know
+    if (o && !(w.next || '').trim()) w.next = defaultNext(task, o);
+    var minCb = Date.now() + 24 * 3600000 - 5 * 60000;
+    var err = !o ? 'Tap what happened.' : (o.date === 'required' && !w.callback ? 'Pick when to call back.' : (w.callback && new Date(w.callback).getTime() < minCb ? 'Call backs are at least 24 hours away. Pick tomorrow or later.' : ''));
+    if (!err && o.close) {
+      var miss = task.checklist.filter(function (c) { return c.required && !w.checklist[c.key]; }).map(function (c) { return c.label; })
+        .concat((boot.close_checks[task.key] || []).filter(function (_c, i) { return !w.checklist['close_' + i]; }));
+      if (miss.length) err = T('close_title') + ': ' + miss.join('; ');
+    }
+    var box = q('[data-mkc-wraperr]');
+    if (err) { if (box) box.innerHTML = '<div class="mkc-err">' + esc(err) + '</div>'; return; }
+    var btn = q('[data-mkc-save]'); if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    var cbIso = w.callback && o.date ? new Date(w.callback).toISOString() : null;
+    S.loadT0 = Date.now();
+    op('/attempts/' + a.id + '/wrapup', { session_id: S.id, outcome: w.outcome, note: w.note, checklist: w.checklist, callback_at: cbIso, next_step: w.next || '', transcript: txPayload() })
+      .then(function (done) {
+        S.lastDone = { name: a.name, phone: a.phone, outcome: w.outcome, callback_at: cbIso, task: S.task };
+        S.saved = (S.saved || 0) + 1;
+        if (done.queued) toast(T('offline'));
+        if (o.close) celebrate();
+        next(); refreshSide();
+      }, function (e) { if (btn) { btn.disabled = false; btn.textContent = '✓ Save & call next ›'; } if (box) box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
   }
   function saveWrapInputs(el) {
     var w = S.wrap;
     var n = q('[data-mkc-note]', el); if (n) w.note = n.value;
     var d = q('[data-mkc-when]', el); if (d) w.callback = d.value;
     var nxi = q('[data-mkc-next]', el); if (nxi) w.next = nxi.value;
-    qa('[data-mkc-chk]', el).forEach(function (c) { w.checklist[c.getAttribute('data-mkc-chk')] = c.checked; });
+    qa('[data-mkc-chk]', el).forEach(function (c) { w.checklist[c.getAttribute('data-mkc-chk')] = c.checked; if (c.getAttribute('data-mkc-also')) w.checklist[c.getAttribute('data-mkc-also')] = c.checked; });
   }
   var SKIP = [['wrong_number', 'Wrong number'], ['no_answer', 'No answer'], ['busy', 'Busy'], ['already_agent', 'Already an agent'], ['not_interested', 'Not interested'], ['do_not_contact', '⛔ Do not contact'], ['other', 'Other…']];
   function openSkip(a) {
@@ -1060,9 +1197,61 @@
     if (!st || idx >= steps.length - 1 || st[2] === 'hello' || /hello/i.test(st[0])) return 'close';
     return 'pitch';
   }
+  function routeFor() { var t = taskOf(S.task); return boot.scripts && boot.scripts.routes ? boot.scripts.routes[t.key] : null; }
+  var WHEN_LABEL = { '24h': 'tomorrow, this time', '2d': 'in 2 days', '3d': 'in 3 days', mon: 'next Monday', best: 'their best time' };
+  function routeHtml(task) {
+    var R = routeFor(); var r = S.route; var ctx = scriptCtx(); ctx.wa = boot.whatsapp_display;
+    var say = function (t, lead) { return '<div class="mkc-say"><span>' + (lead || 'Say') + '</span><p>' + esc(String(t || '').replace(/\{(\w+)\}/g, function (m, k) { return ctx[k] != null ? ctx[k] : ''; }).replace(/\s+/g, ' ').replace(/\s+([?.,!])/g, '$1').trim()) + '</p></div>'; };
+    var crumbs = r.path.length ? '<div class="mkc-crumbs">' + r.path.map(function (x) { return '<span>' + esc(x.label) + '</span>'; }).join('<i>›</i>') + '</div>' : '';
+    var tools = '<div class="mkc-row mkc-routetools">' + (r.path.length && S.phase === 'calling' ? '<button type="button" class="mkc-btn sm ghost" data-mkc-rback>‹ Back</button>' : '') + '<button type="button" class="mkc-btn sm ghost" data-mkc-fullscript>📄 Full script &amp; objections</button></div>';
+    if (S.phase === 'wrapup') return '<div class="mkc-routehead">Call ended</div>' + (crumbs || '<p class="mkc-muted">Wrap up in the box.</p>');
+    if (!r.node) {
+      return '<div class="mkc-routehead">📞 Ringing… when they pick up</div>' + say(R.nodes[R.start].say)
+        + '<div class="mkc-replies pick">' + (boot.scripts.pickup || []).map(function (p, i) { return '<button type="button" class="mkc-reply' + (p[1] === 'answered' ? ' go' : ' grey') + '" data-mkc-pick="' + i + '">' + esc(p[0]) + '</button>'; }).join('') + '</div>' + tools;
+    }
+    var n = R.nodes[r.node];
+    if (n.end) {
+      var o = task.outcomes.filter(function (x) { return x.key === n.end.outcome; })[0] || { label: n.end.outcome };
+      return crumbs + '<div class="mkc-routeend"><span>Suggested wrap-up</span><b>' + esc(o.label) + '</b><div>' + esc(n.end.note) + '</div>' + (n.end.next ? '<div>Next: ' + esc(n.end.next) + (n.end.when ? ' · ' + esc(WHEN_LABEL[n.end.when] || n.end.when) : '') + '</div>' : '') + '</div>'
+        + '<div class="mkc-replies"><button type="button" class="mkc-reply go big" data-mkc-endroute>End call &amp; wrap up ›</button></div>' + tools;
+    }
+    return crumbs + say(n.say) + '<div class="mkc-routehead">If they say…</div><div class="mkc-replies">'
+      + n.replies.map(function (x, i) { var to = R.nodes[x[1]]; return '<button type="button" class="mkc-reply' + (to && to.end ? ' fin' : '') + '" data-mkc-reply="' + i + '">' + esc(x[0]) + '</button>'; }).join('') + '</div>' + tools;
+  }
+  function bindRoute(el, task) {
+    var R = routeFor(); var r = S.route;
+    qa('[data-mkc-pick]', el).forEach(function (b) {
+      b.onclick = function () {
+        var p = boot.scripts.pickup[Number(b.getAttribute('data-mkc-pick'))];
+        if (p[1] === 'answered') { S.coach.answered = true; S.wrap.checklist.answered = true; r.node = R.start; renderNum(); renderScript(); return; }
+        // No answer: one tap saves and brings the next number.
+        S.coach.answered = false; S.wrap.checklist.answered = false; S.wrap.outcome = 'no_answer'; S.wrap.note = p[0];
+        var a = S.cur.attempt; endCallNow().then(function () { S.wrap.outcome = 'no_answer'; saveWrap(task, a); });
+      };
+    });
+    qa('[data-mkc-reply]', el).forEach(function (b) {
+      b.onclick = function () {
+        var x = R.nodes[r.node].replies[Number(b.getAttribute('data-mkc-reply'))];
+        r.path.push({ from: r.node, label: x[0] }); r.node = x[1];
+        var n = R.nodes[r.node]; r.end = n && n.end ? n.end : null;
+        if (/hello/i.test(x[0]) && /✓/.test(x[0])) { S.wrap.checklist.asked_hello = true; S.wrap.checklist.wa_hi = true; }
+        ev('route', r.node); renderScript();
+      };
+    });
+    var bk = q('[data-mkc-rback]', el); if (bk) bk.onclick = function () { var last = r.path.pop(); if (last) { r.node = last.from; r.end = null; } renderScript(); };
+    var er = q('[data-mkc-endroute]', el); if (er) er.onclick = function () { endCallNow(); };
+    var fs = q('[data-mkc-fullscript]', el); if (fs) fs.onclick = function () { S.fullScript = !S.fullScript; renderScript(); };
+  }
   function renderScript() {
     var el = q('[data-mkc-script]'); if (!el || !S) return;
     var task = taskOf(S.task);
+    var inCall = S.phase === 'calling' || S.phase === 'wrapup';
+    if (!inCall) { el.innerHTML = ''; return; } // no call, no script
+    if (routeFor() && !S.fullScript && (S.tab || 'script') === 'script') {
+      el.innerHTML = '<div class="mkc-tabs"><button type="button" class="mkc-tab on">🧭 Script</button><button type="button" class="mkc-tab" data-mkc-tabk="texts">Texts</button><button type="button" class="mkc-tab" data-mkc-tabk="kit">Sales kit</button></div>' + routeHtml(task);
+      qa('[data-mkc-tabk]', el).forEach(function (b) { b.onclick = function () { S.tab = b.getAttribute('data-mkc-tabk'); renderScript(); }; });
+      bindRoute(el, task); return;
+    }
     if (S.tab === 'objections') { S.tab = 'script'; S.stageManual = 'objections'; }
     var tabs = [['script', 'Script'], ['texts', 'Texts'], ['kit', 'Sales kit']];
     var html = '<div class="mkc-tabs">' + tabs.map(function (t) { return '<button type="button" class="mkc-tab' + (S.tab === t[0] ? ' on' : '') + '" data-mkc-tabk="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
@@ -1116,8 +1305,10 @@
           + '<button type="button" class="mkc-btn sm" data-mkc-kitcopy="' + esc(k.key) + '">Copy link</button></div></div>';
       }).join('');
     }
+    if (S.fullScript) html = '<button type="button" class="mkc-btn sm go" style="margin-bottom:8px" data-mkc-fullscript>🧭 Back to the routing script</button>' + html;
     el.innerHTML = html;
-    qa('[data-mkc-tabk]', el).forEach(function (b) { b.onclick = function () { S.tab = b.getAttribute('data-mkc-tabk'); renderScript(); }; });
+    var fsb = q('[data-mkc-fullscript]', el); if (fsb) fsb.onclick = function () { S.fullScript = false; S.tab = 'script'; renderScript(); };
+    qa('[data-mkc-tabk]', el).forEach(function (b) { b.onclick = function () { S.tab = b.getAttribute('data-mkc-tabk'); if (S.tab === 'script') S.fullScript = false; renderScript(); }; });
     qa('[data-mkc-var]', el).forEach(function (b) { b.onclick = function () { S.variant = b.getAttribute('data-mkc-var'); renderScript(); }; });
     qa('[data-mkc-stage]', el).forEach(function (b) { b.onclick = function () { S.stageManual = b.getAttribute('data-mkc-stage'); renderScript(); }; });
     qa('[data-mkc-lang]', el).forEach(function (b) { b.onclick = function () { S.lang = b.getAttribute('data-mkc-lang'); renderScript(); }; });
@@ -1136,6 +1327,7 @@
     if (!S) return;
     refreshPay();
     checkMeeting();
+    loadSplit();
     var p = S.person;
     Promise.all([
       api('/stats?person_key=' + encodeURIComponent(p) + '&session_id=' + encodeURIComponent(S.id)).catch(function () { return null; }),
@@ -1161,13 +1353,15 @@
     var st = S.stats || {}; var feed = S.feed || { items: [] };
     var kinds = { signup: 'Sign-up', payment: 'Paid', reply: 'Reply', callback: 'Callback' };
     var tabs = [['live', 'Live'], ['wa', 'WhatsApp'], ['leads', 'Leads'], ['search', '🔎 Search'], ['learn', '📚 Learn'], ['team', 'Team']];
-    var html = '<div class="mkc-panel" style="margin-bottom:12px"><div class="mkc-nudge">' + esc(st.next_milestone || feed.nudge || 'Let\'s go.') + '</div>'
+    el.classList.toggle('full', Boolean(S.sideFull));
+    var html = '<div class="mkc-panel" style="margin-bottom:12px"><div class="mkc-sidehead"><div class="mkc-nudge" style="flex:1;margin:0">' + esc(st.next_milestone || feed.nudge || 'Let\'s go.') + '</div>'
+      + (S.sideFull ? '<button type="button" class="mkc-btn sm dark" data-mkc-sidefull aria-label="Close the full view">✕ Close</button>' : '<button type="button" class="mkc-btn sm ghost" data-mkc-sidefull title="Open this panel full size">⤢ Open full</button>') + '</div>'
       + (st.callbacks_due_now ? '<div class="mkc-nudge" style="background:#dbeafe;color:#1e3a8a">' + st.callbacks_due_now + ' callback' + (st.callbacks_due_now > 1 ? 's' : '') + ' due now. They come first in the queue.</div>' : '')
       + '<div class="mkc-tabs">' + tabs.map(function (t) { return '<button type="button" class="mkc-tab' + (S.side === t[0] ? ' on' : '') + '" data-mkc-side-tab="' + t[0] + '">' + t[1] + (t[0] === 'wa' && S.wa && S.wa.length ? ' ' + S.wa.length : '') + (t[0] === 'leads' && S.leads && S.leads.length ? ' ' + S.leads.length : '') + '</button>'; }).join('') + '</div>';
     if (S.side === 'live') {
       if (!S.live && !S.liveLoading) { S.liveLoading = true; loadLive(function () { S.liveLoading = false; renderSide(); }); }
       html += '<div style="margin-bottom:8px">' + liveCountsHtml(S.live) + '<button type="button" class="mkc-btn sm ghost" style="margin-top:6px;width:100%" data-mkc-live2>🌐 Live site + preview</button></div>';
-      var items = (feed.items || []).map(function (i) { return '<div><span class="k">' + esc(kinds[i.kind] || i.kind) + '</span>' + esc(i.text) + ' <span class="mkc-muted">' + esc(kTime(i.at)) + '</span></div>'; }).join('');
+      var items = (feed.items || []).map(function (i) { return '<div><span class="k k-' + esc(i.kind) + '">' + esc(kinds[i.kind] || i.kind) + '</span><span class="t">' + esc(i.text) + '</span><span class="w">' + esc(kTime(i.at)) + '</span></div>'; }).join('');
       html += '<div class="mkc-feed">' + (items || '<div class="mkc-muted">Nothing new in the last day.</div>') + '</div>';
     } else if (S.side === 'wa') {
       html += '<p class="mkc-muted" style="margin:0 0 6px">Read only. Reply from the company phone; copy a suggested reply from the conversation.</p>'
@@ -1188,6 +1382,7 @@
       html += '<h4>Team today</h4><div class="mkc-lb">' + (lb || '<div class="mkc-muted">No calls yet today.</div>') + '</div><h4 style="margin-top:10px">My calls by task</h4><div class="mkc-lb">' + tasks + '</div>';
     }
     el.innerHTML = html + '</div>';
+    var sf = q('[data-mkc-sidefull]', el); if (sf) sf.onclick = function () { S.sideFull = !S.sideFull; renderSide(); };
     qa('[data-mkc-side-tab]', el).forEach(function (b) { b.onclick = function () { S.side = b.getAttribute('data-mkc-side-tab'); renderSide(); }; });
     qa('[data-mkc-wa]', el).forEach(function (b) { b.onclick = function () { openWhatsApp(b.getAttribute('data-mkc-wa')); }; });
     bindSearch(el);
@@ -1472,7 +1667,7 @@
   function fmtCountdown(c) { return c ? (c.days > 0 ? c.days + 'd ' : '') + (c.hours || 0) + 'h' : ''; }
   function loadMoney() {
     if (!S) return;
-    api('/my-money?person_key=' + encodeURIComponent(S.person)).then(function (m) { if (!S) return; S.my = m; renderDash(); }, function () {});
+    api('/my-money?person_key=' + encodeURIComponent(S.person)).then(function (m) { if (!S) return; S.my = m; renderDash(); var c = q('[data-mkc-comm]'); if (c) c.outerHTML = commHtml(); var c2 = q('[data-mkc-comm]'); if (c2) c2.onclick = openMoney; }, function () {});
   }
   function myMoneyCard() {
     var m = S.my; if (!m) return '';
@@ -1833,6 +2028,31 @@
       q('[data-x]', el).onclick = function () { if (S && opts.slotKey !== undefined) { S.meetShut = S.meetShut || {}; S.meetShut[opts.slotKey] = true; } if (S && sl) { S.meetShut = S.meetShut || {}; S.meetShut[sl.day + sl.slot] = true; } stopMtx(); clearInterval(timer); if (dirty) save(false).catch(function () {}); close(); };
     });
   }
+  // King: the day split (which block when). Callers' screens follow it.
+  function drawKSplit(host) {
+    var box = q('[data-k-split]', host); if (!box) return;
+    api('/day-split').then(function (sp) {
+      var kinds = sp.kinds || {}; var rowsL = sp.blocks.slice();
+      var draw = function () {
+        var mins = {}; rowsL.forEach(function (b) { var m = function (t) { var x = String(t).split(':'); return Number(x[0]) * 60 + Number(x[1] || 0); }; var d = Math.max(0, m(b.end) - m(b.start)); mins[b.kind] = (mins[b.kind] || 0) + d; });
+        var work = Object.keys(mins).filter(function (k) { return k !== 'lunch'; }).reduce(function (n, k) { return n + mins[k]; }, 0) || 1;
+        box.innerHTML = '<h4>⏱ Day split (callers follow it by time of day)</h4><p class="mkc-muted" style="margin:0 0 8px">Kampala time. The calling screen switches to the block\'s work after each call; a caller can still change mode by hand for that block. ' + (sp.custom ? 'Set by ' + esc(sp.updated_by || 'King') + '.' : 'Using the default split.') + '</p>'
+          + '<div class="mkc-splitsum">' + Object.keys(mins).filter(function (k) { return k !== 'lunch'; }).map(function (k) { return '<span class="mkc-pill">' + esc((kinds[k] || {}).label || k) + ' ' + Math.round(100 * mins[k] / work) + '% · ' + hm(mins[k] * 60000) + '</span>'; }).join('') + '</div>'
+          + '<div class="mkc-splitrows">' + rowsL.map(function (b, i) {
+            return '<div class="mkc-splitrow"><input class="mkc-input" type="time" data-ks-start="' + i + '" value="' + esc(b.start) + '" aria-label="Start"><span>–</span><input class="mkc-input" type="time" data-ks-end="' + i + '" value="' + esc(b.end) + '" aria-label="End"><select class="mkc-input" data-ks-kind="' + i + '" aria-label="What for">' + Object.keys(kinds).map(function (k) { return '<option value="' + esc(k) + '"' + (k === b.kind ? ' selected' : '') + '>' + esc(kinds[k].label) + '</option>'; }).join('') + '</select><button type="button" class="mkc-btn sm ghost" data-ks-del="' + i + '" aria-label="Remove">✕</button></div>';
+          }).join('') + '</div>'
+          + '<div class="mkc-row" style="margin-top:8px"><button type="button" class="mkc-btn sm" data-ks-add>+ Add block</button><button type="button" class="mkc-btn sm go" data-ks-save>Save split</button><button type="button" class="mkc-btn sm ghost" data-ks-reset>Use defaults</button></div><div data-ks-err></div>';
+        var read = function () { rowsL = rowsL.map(function (b, i) { return { start: q('[data-ks-start="' + i + '"]', box).value, end: q('[data-ks-end="' + i + '"]', box).value, kind: q('[data-ks-kind="' + i + '"]', box).value }; }); };
+        qa('[data-ks-start],[data-ks-end],[data-ks-kind]', box).forEach(function (inp) { inp.onchange = function () { read(); draw(); }; });
+        qa('[data-ks-del]', box).forEach(function (b) { b.onclick = function () { read(); rowsL.splice(Number(b.getAttribute('data-ks-del')), 1); draw(); }; });
+        q('[data-ks-add]', box).onclick = function () { read(); var last = rowsL[rowsL.length - 1]; rowsL.push({ start: last ? last.end : '08:00', end: '18:00', kind: 'new' }); draw(); };
+        var put = function (body) { api('/day-split', { method: 'PUT', body: body }).then(function () { toast('Day split saved'); drawKSplit(host); }, function (e) { q('[data-ks-err]', box).innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; }); };
+        q('[data-ks-save]', box).onclick = function () { read(); put({ blocks: rowsL, housekeeping_per_hour: sp.housekeeping_per_hour }); };
+        q('[data-ks-reset]', box).onclick = function () { put({ reset: true }); };
+      };
+      draw();
+    }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+  }
   function drawKMeet(host) {
     var box = q('[data-k-meetings]', host); if (!box) return;
     Promise.all([api('/meeting/settings'), api('/meeting/history?limit=40')]).then(function (res) {
@@ -2177,6 +2397,7 @@
       + '<div class="mkc-panel" style="margin-top:14px" data-k-cashlog></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-calls></div>'
       + '<div class="mkc-meetcard" style="margin-top:14px" data-k-meetings></div>'
+      + '<div class="mkc-panel" style="margin-top:14px" data-k-split></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-proofs></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-videos></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-blocks></div>'
@@ -2191,7 +2412,7 @@
     q('[data-k-meet]', host).onclick = openMeeting;
     K.period = K.period || 'day'; K.cashPeriod = K.cashPeriod || 'week';
     K.callsPeriod = K.callsPeriod || 'day';
-    drawKPlans(host); drawKAct(host); drawKCash(host); drawKCalls(host); drawKMeet(host); drawKProofs(host); drawKVideos(host); drawKBlocks(host);
+    drawKPlans(host); drawKAct(host); drawKCash(host); drawKCalls(host); drawKMeet(host); drawKSplit(host); drawKProofs(host); drawKVideos(host); drawKBlocks(host);
     qa('[data-k-sum]', host).forEach(function (b) { b.onclick = function () { var f = (K.sums[Number(b.getAttribute('data-k-sum'))] || {}).figures || {}; modal(reportHtml(f) + '<div class="mkc-row" style="margin-top:12px;justify-content:flex-end"><button class="mkc-btn dark" data-x>Close</button></div>', function (m, close) { q('[data-x]', m).onclick = close; }); }; });
     qa('[data-k-mklink]', host).forEach(function (b) {
       b.onclick = function () {
