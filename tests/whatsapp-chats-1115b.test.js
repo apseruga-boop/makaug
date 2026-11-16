@@ -256,7 +256,7 @@ test('a one-time code that has run out is let go, and while the number is logged
       assert.strictEqual(calls.length, 1);
       assert.match(calls[0].sql, /UPDATE outbound_message_queue\s+SET status = 'failed'/);
       assert.match(calls[0].sql, /status IN \('pending', 'retry'\)/);
-      assert.match(calls[0].sql, /LOWER\(COALESCE\(metadata->>'source', ''\)\) = 'otp'/, 'codes only');
+      assert.match(calls[0].sql, /\(LOWER\(COALESCE\(metadata->>'kind', ''\)\) = 'otp' OR LOWER\(COALESCE\(metadata->>'source', ''\)\) = 'otp'\)/, 'codes only');
       assert.match(calls[0].sql, /created_at < NOW\(\) - \(\$1 \|\| ' minutes'\)::interval/);
       assert.deepStrictEqual(calls[0].params, ['10']);
       // Looked at once a minute at most: it runs beside every hand-over.
@@ -267,7 +267,7 @@ test('a one-time code that has run out is let go, and while the number is logged
     await withFakeDb(() => null, async (calls) => {
       await bridge.claimWhatsappWebBridgeMessages({ clientId: 'makaug-waha-gows', limit: 5 });
       const claim = calls.find((c) => /UPDATE outbound_message_queue q/i.test(c.sql));
-      assert.match(claim.sql, /AND NOT \(LOWER\(COALESCE\(q\.metadata->>'source', ''\)\) = 'otp' AND q\.created_at < NOW\(\) - \(\$8 \|\| ' minutes'\)::interval\)/);
+      assert.match(claim.sql, /AND NOT \(\s+\(LOWER\(COALESCE\(q\.metadata->>'kind', ''\)\) = 'otp' OR LOWER\(COALESCE\(q\.metadata->>'source', ''\)\) = 'otp'\)\s+AND q\.created_at < NOW\(\) - \(\$8 \|\| ' minutes'\)::interval\s+\)/);
       assert.strictEqual(claim.params[7], '10');
     });
 
@@ -302,7 +302,7 @@ test('a one-time code that has run out is let go, and while the number is logged
     }
 
     const otpSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'phoneOtpDeliveryService.js'), 'utf8');
-    assert.match(otpSource, /if \(whatsappBridgeEnabled\(\) && !needsLinking\) \{/, 'a code is not queued while the number waits to be linked');
+    assert.match(otpSource, /if \(whatsappBridgeEnabled\(\) && !needsLinking && !mayNotWriteToThem\) \{/, 'a code is not queued while the number waits to be linked');
     assert.match(otpSource, /reason: 'whatsapp_session_not_linked'/);
   } finally {
     if (savedMinutes === undefined) delete process.env.OTP_EXPIRES_MINUTES; else process.env.OTP_EXPIRES_MINUTES = savedMinutes;

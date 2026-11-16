@@ -16411,7 +16411,8 @@ async function queueWhatsappWebBridgeAutoReply({
   nextStep = null,
   inboundMessageId = null,
   source = 'whatsapp_runtime',
-  actorId = 'system'
+  actorId = 'system',
+  kind = ''
 }) {
   let text = String(message || '').trim();
   if (!text) return null;
@@ -16484,7 +16485,8 @@ async function queueWhatsappWebBridgeAutoReply({
     metadata: {
       inbound_message_id: inboundMessageId || null,
       next_step: nextStep || null,
-      queued_by: source,
+      queued_by: kind || source,
+      ...(kind ? { message_kind: kind } : {}),
       queued_at: new Date().toISOString()
     }
   });
@@ -16573,7 +16575,7 @@ async function issueOtp(identifier, options = {}) {
     const queued = await whatsappWebBridgeService.queueWhatsappWebBridgeMessage({
       recipient: options.notifyPhone || destination,
       text: `makaug listing verification: ${otp}. Valid 10 mins. Do not share.`,
-      source: 'otp',
+      source: whatsappWebBridgeService.bridgeCarriedSource(),
       actorId: 'system',
       metadata: { kind: 'otp' }
     });
@@ -19315,6 +19317,7 @@ async function hasWrittenToUs(phone) {
   const result = await db.query(
     `SELECT 1 FROM whatsapp_messages
       WHERE direction = 'inbound'
+        AND message_type <> 'call'
         AND RIGHT(regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g'), 9) = $1
       LIMIT 1`,
     [tail]
@@ -19330,9 +19333,14 @@ async function hasWrittenToUs(phone) {
  * cannot be called back.
  */
 async function firstContactAllowed(phone) {
-  if (!filmLinks.limitsOn()) return { ok: true, wrote: false, unlimited: true };
+  // While the number only writes to people who have written to it, a film to
+  // anybody else would only wait in the queue. Staff are told so, and given
+  // their link, instead of being told it was sent.
+  const onlyWrote = whatsappWebBridgeService.onlyToPeopleWhoWrote();
+  if (!onlyWrote && !filmLinks.limitsOn()) return { ok: true, wrote: false, unlimited: true };
   try {
     if (await hasWrittenToUs(phone)) return { ok: true, wrote: true };
+    if (onlyWrote) return { ok: false, code: 'only_to_people_who_wrote', why: filmLinks.ONLY_WROTE_WHY, wrote: false };
     const today = (await db.query(
       `SELECT COUNT(*)::int AS n, MAX(created_at) AS last_at
          FROM outbound_message_queue
@@ -19350,7 +19358,7 @@ async function firstContactAllowed(phone) {
 
 /** Agent 007 option 3: their own link first, then the name-and-number way. */
 function agentFilmPromptFor(staffPhone, { now = new Date() } = {}) {
-  const note = filmLinks.firstContactNote({ now });
+  const note = filmLinks.firstContactNote({ now, onlyWrote: whatsappWebBridgeService.onlyToPeopleWhoWrote() });
   return [
     '🔗 *Your film link*',
     filmLinks.filmLink(staffNameForNumber(staffPhone)),
@@ -24627,7 +24635,10 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
           message: stayReply.message,
           nextStep: 'stay_request',
           inboundMessageId: runtimeInboundMessageId,
-          source: 'short_stay_request',
+          // Under the name the bridge asks for. Queued as 'short_stay_request'
+          // the answer to a host was never handed over.
+          source: whatsappWebBridgeService.bridgeCarriedSource(),
+          kind: 'short_stay_request',
           actorId: 'system'
         });
       }
@@ -24658,7 +24669,8 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
           message: bookingReply.message,
           nextStep: 'agent_booking',
           inboundMessageId: runtimeInboundMessageId,
-          source: 'agent_booking',
+          source: whatsappWebBridgeService.bridgeCarriedSource(),
+          kind: 'agent_booking',
           actorId: 'system'
         });
       }
@@ -24832,7 +24844,20 @@ router.post('/web-bridge/outbox/:id/sent', asyncRoute(async (req, res) => {
     return res.json({ ok: true, duplicate_suppressed: true, data: updated });
   }
 
-  const replyText = String(updated.payload?.text || '').trim();
+  // A one-time code has done its work once it is on the person's phone. It is
+  // not kept where staff read conversations, nor left in the queue.
+  const wasACode = whatsappWebBridgeService.carriesACode(updated);
+  const replyText = wasACode
+    ? whatsappWebBridgeService.withoutTheCode(String(updated.payload?.text || '').trim())
+    : String(updated.payload?.text || '').trim();
+  if (wasACode) {
+    await db.query(
+      `UPDATE outbound_message_queue
+          SET payload = jsonb_set(COALESCE(payload, '{}'::jsonb), '{text}', to_jsonb($2::text))
+        WHERE id = $1`,
+      [req.params.id, replyText]
+    ).catch((error) => logger.warn('A sent code could not be cleared from the queue:', error.message || String(error)));
+  }
   const replyMediaUrl = String(updated.payload?.media_url || '').trim();
   // Logged as what it actually was. Videos were recorded as 'image', which hid
   // the fact that none of them were ever attached.
