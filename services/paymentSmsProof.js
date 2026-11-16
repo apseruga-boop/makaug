@@ -162,6 +162,8 @@ async function submitProof({ attemptId = null, phone = '', personKey = '', image
   if (attemptId) callPhone = (await rows('SELECT phone FROM call_attempts WHERE id::text = $1', [String(attemptId)]))[0]?.phone || phone;
   const pk = key9(callPhone);
   if (pk.length !== 9) throw err(400, 'Pick the agent or number this payment is for.');
+  const sbx = require('./callingSandbox');
+  if (sbx.isTestKey(pk) || await sbx.isSandbox(personKey)) throw err(409, `${sbx.PRACTICE_MSG} stores the screenshot and makes a payment claim for King. The fields above show what it read.`, 'practice');
   const parsed = parseSmsText(ocrText);
   const c = await checkFields({ ...parsed, ...fields }, { phone: callPhone, now });
   if (c.hard.length) throw err(422, c.hard.join(' '), 'guard');

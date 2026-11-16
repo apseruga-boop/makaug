@@ -163,6 +163,7 @@ async function saveNotes(personKey, { day: dayStr, slot, notes = '', actions = [
   const d = /^\d{4}-\d{2}-\d{2}$/.test(String(dayStr || '')) ? dayStr : kampalaDay(now);
   const s = /^\d{2}:\d{2}$/.test(String(slot || '')) ? slot : 'adhoc';
   const items = cleanActions(actions);
+  if (items.some((a) => a.phone && !a.pipeline) && await require('./callingSandbox').isSandbox(pk)) throw httpError(409, 'Practice account (TEST): action items with a number are not put on the real pipeline. Leave the number empty.');
   // Numbers become the next step on that number, owned by the caller.
   for (const a of items) {
     if (!a.phone || a.pipeline) continue;
