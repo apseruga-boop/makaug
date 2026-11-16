@@ -1567,16 +1567,22 @@ async function loadPublicAgentOpenGraphMeta(agentId, options = {}) {
       : isApprovedFrancisShare
         ? absolutePublicUrl('/assets/marketing/francis-isabirye-agent-share-v2.png')
         : absolutePublicUrl(shareImagePath('agent', row.id, options.lang));
+  const listingCount = Number(row.approved_listing_count || publicSummary?.listings_counted || 0);
+  const defaultDescription = listingCount === 1
+    ? `${name} has 1 live listing on makaug.com.`
+    : listingCount > 0
+      ? `${name} has ${listingCount} live listings on makaug.com.`
+      : `${name} on makaug.com — see my listings.`;
   const title = isBrandFrancisPreview
-    ? `${name} | Uganda property agent on MakaUG`
+    ? `${name} | Uganda property agent on makaug.com`
     : isPremiumFrancisPreview
-      ? `${name} | Approved property agent on MakaUG`
-      : `${name} | Property agent on MakaUG`;
+      ? `${name} | Approved property agent on makaug.com`
+      : `${name} | my listings on makaug.com`;
   const shareDescription = isBrandFrancisPreview
     ? `Explore ${name}'s property profile and listings on makaug.com.`
     : isPremiumFrancisPreview
       ? `View ${name}'s live property profile and current listings on makaug.com.`
-      : description;
+      : (description && publicSummary?.listings_counted ? description : defaultDescription);
   return {
     title,
     description: shareDescription,

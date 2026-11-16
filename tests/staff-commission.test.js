@@ -330,3 +330,46 @@ test('the tab leads with commission; films and targets are secondary; no full ph
   const src = fs.readFileSync(path.join(__dirname, '..', 'services', 'staffCommission.js'), 'utf8');
   assert.doesNotMatch(src, /\b0?7\d{8}\b|\b2567\d{8}\b/);
 });
+
+test('a first-touch ?ref= is supporting evidence only and never makes someone eligible', () => {
+  const onlyRef = agent(90, '2026-11-18T10:00:00Z');
+  onlyRef.referral_code = 'ronald';
+  const evNone = c.evaluateCommission(world({ agents: [onlyRef] }));
+  assert.equal(evNone.rows.length, 0, 'a ref with no pitch must not create a commission row');
+
+  const h = happy(91);
+  h.a.referral_code = 'ronald';
+  const ev = c.evaluateCommission(world({ sends: [h.s], agents: [h.a], payments: [h.p], listings: [h.l] }));
+  const r = row(ev, h.a);
+  assert.equal(r.status, 'eligible');
+  assert.equal(r.person_key, 'ronald');
+  assert.equal(r.first_touch_ref, 'ronald');
+  assert.equal(r.first_touch_person, 'ronald');
+  assert.equal(r.commission_ugx, 10000);
+  assert.match((r.evidence || []).join(' '), /Supporting evidence only/);
+  assert.ok(!(r.flags || []).length, 'first-touch evidence must not hold the payout for review');
+});
+
+test('a first-touch ref does not override the first pitch, and owner-share is not staff attribution', () => {
+  const h = happy(92);
+  h.a.referral_code = 'sharon';
+  const ev = c.evaluateCommission(world({ sends: [h.s], agents: [h.a], payments: [h.p], listings: [h.l] }));
+  const r = row(ev, h.a);
+  assert.equal(r.person_key, 'ronald', 'first pitch still wins');
+  assert.equal(r.first_touch_ref, 'sharon');
+  assert.equal(r.first_touch_person, 'sharon');
+  assert.equal(r.status, 'eligible');
+  assert.match((r.evidence || []).join(' '), /first pitch still wins/);
+  assert.ok(!(r.flags || []).some((f) => /first-touch|first pitch still wins/i.test(f)), 'evidence must not sit on review flags');
+
+  const share = happy(93);
+  share.a.referral_code = 'owner-share';
+  const ev2 = c.evaluateCommission(world({ sends: [share.s], agents: [share.a], payments: [share.p], listings: [share.l] }));
+  const r2 = row(ev2, share.a);
+  assert.equal(r2.person_key, 'ronald');
+  assert.equal(r2.first_touch_ref, 'owner-share');
+  assert.equal(r2.first_touch_person, null);
+  assert.equal(r2.status, 'eligible');
+  assert.doesNotMatch((r2.evidence || []).join(' '), /first pitch still wins/);
+  assert.ok(!(r2.flags || []).length, 'owner-share must not hold the payout for review');
+});

@@ -232,6 +232,7 @@ async function defaultLoadAgent(db, id) {
     bioParts: cardBio.parts || null,
     minPrice: prices.length ? Math.min(...prices) : 0,
     maxPrice: prices.length ? Math.max(...prices) : 0,
+    approvedListingCount: Number(row.approved_listing_count || 0),
     photoUrl: usableAgentPhoto(row.profile_photo_url) ? String(row.profile_photo_url).trim() : ''
   };
 }

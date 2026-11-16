@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const db = require('../config/database');
+const { readReferralFromRequest } = require('../services/referralTracking');
 const logger = require('../config/logger');
 const { sendOtpEmail, sendSupportEmail, sendWelcomeEmail } = require('../services/emailService');
 const {
@@ -1301,10 +1302,11 @@ router.post('/register', async (req, res, next) => {
           weekly_tips_opt_in,
           preferred_contact_channel,
           preferred_language,
-          profile_data
-        ) VALUES ($1,$2,$3,$4,$5,$6,false,'active',$7,$8,$9,$10,$11::jsonb)
+          profile_data,
+          referral_code
+        ) VALUES ($1,$2,$3,$4,$5,$6,false,'active',$7,$8,$9,$10,$11::jsonb,$12)
         RETURNING *`,
-        [firstName, lastName, phone, email, role, passwordHash, marketingOptIn, weeklyTipsOptIn, preferredContactChannel, preferredLanguage, JSON.stringify(profileData)]
+        [firstName, lastName, phone, email, role, passwordHash, marketingOptIn, weeklyTipsOptIn, preferredContactChannel, preferredLanguage, JSON.stringify(profileData), readReferralFromRequest(req)]
       );
       user = result.rows[0];
     }

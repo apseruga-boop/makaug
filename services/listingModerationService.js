@@ -152,6 +152,19 @@ function getPublicListingUrl(listing = {}) {
   return `${getSiteBaseUrl()}/property/${encodeURIComponent(listing.id || '')}`;
 }
 
+function getOwnerShareListingUrl(listing = {}) {
+  const base = getPublicListingUrl(listing);
+  const join = base.includes('?') ? '&' : '?';
+  return `${base}${join}ref=owner-share`;
+}
+
+function getOwnerWhatsAppShareUrl(listing = {}) {
+  const shareUrl = getOwnerShareListingUrl(listing);
+  const title = String(listing.title || 'my listing').trim();
+  const text = `My listing is live on makaug.com: ${title}\nHave a look: ${shareUrl}`;
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
+
 function getOwnerPreviewUrl(listing = {}, token = '') {
   const params = new URLSearchParams({
     listing: String(listing.id || ''),
@@ -161,11 +174,7 @@ function getOwnerPreviewUrl(listing = {}, token = '') {
 }
 
 function getWhatsAppShareUrl(listing = {}) {
-  const text = [
-    `${listing.title || 'makaug property listing'}`,
-    getPublicListingUrl(listing)
-  ].filter(Boolean).join('\n');
-  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+  return getOwnerWhatsAppShareUrl(listing);
 }
 
 function getSocialShareLinks(listing = {}) {
@@ -1193,6 +1202,8 @@ module.exports = {
   getMissingApprovalChecks,
   getOwnerPreviewUrl,
   getPublicListingUrl,
+  getOwnerShareListingUrl,
+  getOwnerWhatsAppShareUrl,
   isFoundOnlineListing,
   hashOwnerEditToken,
   isOwnerEditTokenValid,

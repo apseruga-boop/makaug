@@ -2,6 +2,7 @@
 
 const perf = require('../services/staffPerformance');
 const commission = require('../services/staffCommission');
+const referrals = require('../services/referralTracking');
 
 /**
  * Staff Performance (Road to 1000). Everyone on the desk can read it, call,
@@ -164,6 +165,31 @@ function registerStaffPerformanceRoutes(router, { writeAudit, actorLabel } = {})
       });
       await audit(req, 'commission_settings_saved', { pays_on: out.pays_on, hold_days: out.hold_days });
       return res.json({ ok: true, data: out });
+    } catch (error) {
+      return fail(res, next, error);
+    }
+  });
+
+  router.get('/staff-performance/referrals', async (req, res, next) => {
+    try {
+      res.set('Cache-Control', 'no-store');
+      return res.json({ ok: true, data: await referrals.summary() });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post('/staff-performance/referrals/codes', async (req, res, next) => {
+    try {
+      const out = await referrals.addCode({
+        code: req.body?.code,
+        label: req.body?.label,
+        personKey: req.body?.person_key,
+        kind: req.body?.kind,
+        actor: actorOf(req)
+      });
+      await audit(req, 'referral_code_saved', { code: out.code, person_key: out.person_key });
+      return res.status(201).json({ ok: true, data: out });
     } catch (error) {
       return fail(res, next, error);
     }

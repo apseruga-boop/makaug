@@ -255,6 +255,7 @@ function evaluateCommission({
   items = [],
   claims = [],
   staffPhones = new Map(),
+  referralCodes = null,
   now = new Date()
 } = {}) {
   const settings = { ...DEFAULT_SETTINGS, ...rawSettings };
@@ -268,6 +269,13 @@ function evaluateCommission({
   const schemeStart = ms(`${settings.scheme_starts_on}T00:00:00+03:00`);
   const staffByKey = new Map(staff.map((s) => [s.person_key, s]));
   const allCorpus = corpus || listings;
+  const referral = require('./referralTracking');
+  const codes = Array.isArray(referralCodes) && referralCodes.length
+    ? referralCodes.slice()
+    : staff.filter((s) => s.person_key).map((s) => ({ code: s.person_key, person_key: s.person_key, label: s.name, kind: 'staff', active: true }));
+  if (!codes.some((c) => c.code === 'owner-share')) {
+    codes.push({ code: 'owner-share', person_key: null, label: 'Owner WhatsApp share', kind: 'system', active: true });
+  }
 
   const imagesByProperty = new Map();
   for (const im of images) {
@@ -380,6 +388,7 @@ function evaluateCommission({
       listing: null
     };
     rows.push(row);
+    referral.attachFirstTouchEvidence(row, a, codes);
     const stop = (reason) => { row.status = 'not_eligible'; row.reasons.push(reason); };
 
     // G1
@@ -674,7 +683,7 @@ async function loadInputs({ client = db, sends = [] } = {}) {
   const credited = attributeSends(sends, staff);
   const keys = [...new Set(credited.map((s) => s.phone_key).filter(Boolean))];
   const agents = await rowsOf(client,
-    `SELECT id, full_name, phone, whatsapp, email, nin, identity_document_url, user_id, registered_by_phone, created_at, status, removed_at, fee_exempt FROM agents`);
+    `SELECT id, full_name, phone, whatsapp, email, nin, identity_document_url, user_id, registered_by_phone, created_at, status, removed_at, fee_exempt, referral_code FROM agents`);
   const pitched = agents.filter((a) => [key9(a.phone), key9(a.whatsapp)].some((k) => k && keys.includes(k))).map((a) => a.id);
   const [payments, listings, corpus] = await Promise.all([
     rowsOf(client, `SELECT id, direction, kind, agent_id, amount_ugx, paid_at, payer_phone, verified_status, verification_source, method, voided_at
@@ -696,7 +705,11 @@ async function loadInputs({ client = db, sends = [] } = {}) {
                         OR LOWER(REGEXP_REPLACE(i.url, '[?#].*$', '')) IN (SELECT LOWER(REGEXP_REPLACE(x.url, '[?#].*$', '')) FROM property_images x WHERE x.property_id = ANY($1::uuid[]))`, [ids]),
     rowsOf(client, 'SELECT property_id, dhash FROM commission_photo_hashes WHERE dhash IS NOT NULL')
   ]);
-  return { settings, staff, sends: credited, agents, payments, listings, corpus, images, hashes, items, claims, staffPhones: staffPhoneMap(staff, knownOutreachSenders()) };
+  let referralCodes = staff.filter((s) => s.person_key).map((s) => ({ code: s.person_key, person_key: s.person_key, label: s.name, kind: 'staff', active: true }));
+  try {
+    referralCodes = await require('./referralTracking').listCodes({ client });
+  } catch (_error) { /* table may not exist in a test world */ }
+  return { settings, staff, sends: credited, agents, payments, listings, corpus, images, hashes, items, claims, referralCodes, staffPhones: staffPhoneMap(staff, knownOutreachSenders()) };
 }
 
 async function evaluate({ client = db, sends = [], now = new Date() } = {}) {
