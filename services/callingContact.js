@@ -144,3 +144,41 @@ async function openRef(ref = '') {
 }
 
 module.exports = { VIDEOS, smsText, logSms, helloOf, videoState, requestVideo, listVideoRequests, decideVideo, markVideoSentByHand, openRef, videoMessage };
+
+// ------------------------------------------------------------ live site --
+
+/** Today on makaug (Kampala day): counts + latest events, all masked. */
+async function liveSite({ now = new Date() } = {}) {
+  const day = calling.kampalaDay(now);
+  const start = `${day}T00:00:00+03:00`;
+  const one = async (sql) => Number(((await safeRows(sql, [start]))[0] || {}).n || 0);
+  const [visitors, leads, signups, submitted, approved, paid] = await Promise.all([
+    one('SELECT COUNT(DISTINCT client_id)::int AS n FROM analytics_events WHERE created_at >= $1'),
+    one('SELECT COUNT(*)::int AS n FROM leads WHERE created_at >= $1 AND deleted_at IS NULL AND COALESCE(is_test, false) = false'),
+    one('SELECT COUNT(*)::int AS n FROM agents WHERE created_at >= $1'),
+    one('SELECT COUNT(*)::int AS n FROM properties WHERE created_at >= $1 AND agent_id IS NOT NULL'),
+    one('SELECT COUNT(*)::int AS n FROM properties WHERE approved_at >= $1 AND agent_id IS NOT NULL'),
+    one("SELECT COUNT(DISTINCT agent_id)::int AS n FROM revenue_entries WHERE paid_at >= $1 AND agent_id IS NOT NULL AND voided_at IS NULL AND COALESCE(direction, 'in') = 'in'")
+  ]);
+  const first = (s) => String(s || '').trim().split(/\s+/)[0] || '';
+  const ev = [];
+  for (const a of await safeRows('SELECT full_name, created_at FROM agents WHERE created_at >= $1 ORDER BY created_at DESC LIMIT 8', [start])) ev.push({ kind: 'signup', at: a.created_at, text: `New agent sign-up: ${first(a.full_name) || 'agent'}` });
+  for (const l of await safeRows('SELECT category, location, lead_type, listing_id, created_at FROM leads WHERE created_at >= $1 AND deleted_at IS NULL AND COALESCE(is_test, false) = false ORDER BY created_at DESC LIMIT 8', [start])) ev.push({ kind: 'lead', at: l.created_at, text: `New enquiry${l.category ? `: ${l.category}` : ''}${l.location ? ` in ${l.location}` : ''}`, listing_id: l.listing_id || null });
+  for (const p of await safeRows("SELECT id, title, area, district, created_at, approved_at, status FROM properties WHERE agent_id IS NOT NULL AND (created_at >= $1 OR approved_at >= $1) ORDER BY GREATEST(created_at, COALESCE(approved_at, created_at)) DESC LIMIT 8", [start])) {
+    if (p.approved_at && new Date(p.approved_at) >= new Date(start)) ev.push({ kind: 'approved', at: p.approved_at, text: `Listing approved: ${p.title || 'property'}${p.area ? `, ${p.area}` : ''}`, listing_id: p.id });
+    else ev.push({ kind: 'submitted', at: p.created_at, text: `Agent listing submitted: ${p.title || 'property'}${p.area ? `, ${p.area}` : ''}`, listing_id: null });
+  }
+  for (const r of await safeRows("SELECT r.amount_ugx, r.paid_at, a.full_name FROM revenue_entries r LEFT JOIN agents a ON a.id = r.agent_id WHERE r.paid_at >= $1 AND r.agent_id IS NOT NULL AND r.voided_at IS NULL ORDER BY r.paid_at DESC LIMIT 8", [start])) ev.push({ kind: 'paid', at: r.paid_at, text: `Agent paid: UGX ${Number(r.amount_ugx || 0).toLocaleString('en-GB')}${r.full_name ? ` · ${first(r.full_name)}` : ''}` });
+  const latest = await safeRows(
+    `SELECT p.id, p.title, p.area, p.district, p.price, p.price_period, p.price_on_application, p.bedrooms, p.listing_type, p.approved_at,
+            (SELECT url FROM property_images i WHERE i.property_id = p.id ORDER BY i.is_primary DESC NULLS LAST, i.sort_order NULLS LAST LIMIT 1) AS image
+       FROM properties p WHERE p.status = 'approved' ORDER BY p.approved_at DESC NULLS LAST LIMIT 12`);
+  return {
+    day, at: new Date().toISOString(),
+    counts: { visitors, leads, signups, listings_submitted: submitted, listings_approved: approved, agents_paid: paid },
+    visitors_tracked: true,
+    feed: ev.sort((x, y) => new Date(y.at) - new Date(x.at)).slice(0, 15),
+    listings: latest.map((p) => ({ id: p.id, title: p.title, area: [p.area, p.district].filter(Boolean).join(', '), price: p.price_on_application ? 'Price on application' : (p.price ? `UGX ${Number(p.price).toLocaleString('en-GB')}${p.price_period ? ` / ${p.price_period}` : ''}` : ''), bedrooms: p.bedrooms, type: p.listing_type, image: p.image, path: `/property/${p.id}` }))
+  };
+}
+module.exports.liveSite = liveSite;

@@ -132,6 +132,7 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
     await audit(req, 'calling_video_requested', { attempt_id: req.params.id, request_id: r.id });
     return res.json({ ok: true, data: r });
   }));
+  router.get('/calling/live', wrap(async (req, res) => res.json({ ok: true, data: await contact.liveSite() })));
   router.get('/calling/lookup', wrap(async (req, res) => res.json({ ok: true, data: await extras.lookup(req.query?.phone) })));
   router.get('/calling/search', wrap(async (req, res) => res.json({ ok: true, data: await calling.searchCalls(req.query?.q, { personKey: isKing(req) ? (req.query?.person_key || '') : '' }) })));
   router.get('/calling/my-money', wrap(async (req, res) => res.json({ ok: true, data: await day.myMoney(req.query?.person_key) })));

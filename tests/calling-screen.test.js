@@ -110,6 +110,7 @@ test('v4: SMS text names us, our WhatsApp and the Hi ask; shared tools cover the
   assert.ok(shared('/calling/sessions/abc/inbound', 'POST'));
   assert.ok(shared('/calling/attempts/abc/video-request', 'POST'));
   assert.ok(shared('/calling/search', 'GET'));
+  assert.ok(shared('/calling/live', 'GET'));
   assert.ok(!shared('/calling/videos/abc/decide', 'POST'));
   assert.ok(!shared('/calling/blocks/700000000/remove', 'POST'));
   assert.ok(!shared('/calling/calls-summary', 'GET'));

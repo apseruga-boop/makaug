@@ -210,6 +210,7 @@
     '.mkc-break{position:fixed;inset:0;background:rgba(15,23,42,.92);color:#fff;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center}',
     '.mkc-break b{font-size:30px}',
     '.mkc-modal{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:6;display:flex;align-items:center;justify-content:center;padding:14px}',
+    '.mkc-modal.wide>div{max-width:1280px;height:92vh;max-height:92vh;display:flex;flex-direction:column}.mkc-livegrid{display:grid;grid-template-columns:340px 1fr;gap:12px;flex:1;min-height:0}.mkc-livegrid>div{min-height:0;overflow:auto}.mkc-lc{display:grid;grid-template-columns:1fr 1fr;gap:6px}.mkc-lc div{background:#f1f5f9;border-radius:10px;padding:8px}.mkc-lc b{display:block;font-size:22px}.mkc-lc span{font-size:11px;color:#64748b}.mkc-frame{width:100%;height:100%;border:1px solid #e2e8f0;border-radius:10px;background:#fff}.mkc-lv{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}.mkc-lv .c{border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;cursor:pointer}.mkc-lv img{width:100%;height:110px;object-fit:cover;background:#e2e8f0;display:block}.mkc-lv .c div{padding:6px 8px;font-size:12px}@media(max-width:800px){.mkc-livegrid{grid-template-columns:1fr}}',
     '.mkc-modal>div{background:#fff;border-radius:16px;padding:18px;max-width:560px;width:100%;max-height:90vh;overflow:auto;box-sizing:border-box}',
     '.mkc-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:12px;z-index:2147483600;font-weight:700;font-size:14px;box-shadow:0 8px 30px rgba(0,0,0,.25)}',
     '.mkc-toast.bad{background:#b91c1c}',
@@ -486,6 +487,7 @@
       + '<div class="mkc-road"><div style="font-size:11px;color:#94a3b8">Road to 1000 · <b style="color:#fff">' + road.paying_now + '</b> paying</div><div class="bar"><i style="width:' + Math.max(1, Math.min(100, road.percent || 0)) + '%"></i></div></div>'
       + '<div class="sp"></div>'
       + '<button type="button" class="mkc-btn mkc-in" data-mkc-in title="Someone rang the company phone and you answered in Phone Link">📲 Incoming call</button>'
+      + '<button type="button" class="mkc-btn sm" style="background:#0ea5e9;color:#fff" data-mkc-live>🌐 Live site</button>'
       + '<button type="button" class="mkc-btn sm go" data-mkc-add>➕ Add number</button>'
       + '<button type="button" class="mkc-btn sm ghost" style="color:#fff;border-color:#475569" data-mkc-rep>' + esc(T('report')) + '</button>'
       + '<button type="button" class="mkc-btn sm ghost" style="color:#fff;border-color:#475569" data-mkc-plan>📋 Today\'s plan</button>'
@@ -496,6 +498,7 @@
     q('[data-mkc-lang-ui]', el).onchange = function (e) { setLang(e.target.value); };
     q('[data-mkc-add]', el).onclick = openAddNumber;
     q('[data-mkc-in]', el).onclick = openInbound;
+    q('[data-mkc-live]', el).onclick = openLive;
     q('[data-mkc-rep]', el).onclick = function () { openReport(S.person); };
     q('[data-mkc-brk]', el).onclick = toggleBreak;
     q('[data-mkc-plan]', el).onclick = function () { openPlan(false); };
@@ -1099,6 +1102,7 @@
       if (r[4]) S.counts = r[4];
       if (r[0]) S.stats = r[0];
       if (!S.myAt || Date.now() - S.myAt > 300000) { S.myAt = Date.now(); loadMoney(); }
+      if (S.side === 'live') loadLive(function () { renderSide(); });
       if (r[1]) S.feed = r[1];
       if (r[2]) { notifyNew('wa', r[2].items, 'New WhatsApp'); S.wa = r[2].items; }
       if (r[3]) { notifyNew('leads', r[3].items, 'New lead'); S.leads = r[3].items; }
@@ -1115,6 +1119,8 @@
       + (st.callbacks_due_now ? '<div class="mkc-nudge" style="background:#dbeafe;color:#1e3a8a">' + st.callbacks_due_now + ' callback' + (st.callbacks_due_now > 1 ? 's' : '') + ' due now. They come first in the queue.</div>' : '')
       + '<div class="mkc-tabs">' + tabs.map(function (t) { return '<button type="button" class="mkc-tab' + (S.side === t[0] ? ' on' : '') + '" data-mkc-side-tab="' + t[0] + '">' + t[1] + (t[0] === 'wa' && S.wa && S.wa.length ? ' ' + S.wa.length : '') + (t[0] === 'leads' && S.leads && S.leads.length ? ' ' + S.leads.length : '') + '</button>'; }).join('') + '</div>';
     if (S.side === 'live') {
+      if (!S.live && !S.liveLoading) { S.liveLoading = true; loadLive(function () { S.liveLoading = false; renderSide(); }); }
+      html += '<div style="margin-bottom:8px">' + liveCountsHtml(S.live) + '<button type="button" class="mkc-btn sm ghost" style="margin-top:6px;width:100%" data-mkc-live2>🌐 Live site + preview</button></div>';
       var items = (feed.items || []).map(function (i) { return '<div><span class="k">' + esc(kinds[i.kind] || i.kind) + '</span>' + esc(i.text) + ' <span class="mkc-muted">' + esc(kTime(i.at)) + '</span></div>'; }).join('');
       html += '<div class="mkc-feed">' + (items || '<div class="mkc-muted">Nothing new in the last day.</div>') + '</div>';
     } else if (S.side === 'wa') {
@@ -1139,6 +1145,7 @@
     qa('[data-mkc-side-tab]', el).forEach(function (b) { b.onclick = function () { S.side = b.getAttribute('data-mkc-side-tab'); renderSide(); }; });
     qa('[data-mkc-wa]', el).forEach(function (b) { b.onclick = function () { openWhatsApp(b.getAttribute('data-mkc-wa')); }; });
     bindSearch(el);
+    var l2 = q('[data-mkc-live2]', el); if (l2) l2.onclick = openLive;
     qa('[data-mkc-claim]', el).forEach(function (b) {
       b.onclick = function () {
         var parts = b.getAttribute('data-mkc-claim').split('|');
@@ -1618,6 +1625,50 @@
         + '<p><b>"Send me details."</b> Ask them to WhatsApp "Hi" to 0780 863 394 first (WhatsApp won\'t let us message first), then request the video.</p>'
         + '<p><b>"I\'m busy."</b> Book a callback with a time; it comes back to you.</p><p><b>"Don\'t call me again."</b> Say sorry and pick <b>Don\'t contact again</b> – the number is blocked everywhere.</p>')
       + '</div>';
+  }
+  // ---- Live site: today's numbers + a preview of makaug.com, without leaving the screen
+  var LIVE_LINKS = [['/', 'Home'], ['/to-rent', 'To rent'], ['/for-sale', 'For sale'], ['/land', 'Land'], ['/short-term', 'Short stays'], ['/brokers', 'Agents'], ['/list-property', 'List property'], ['/about', 'About']];
+  function liveCountsHtml(L) {
+    var c = (L && L.counts) || {};
+    var cell = function (n, label) { return '<div><b>' + (n == null ? '–' : Number(n).toLocaleString('en-GB')) + '</b><span>' + label + '</span></div>'; };
+    return '<div class="mkc-lc">' + cell(c.visitors, 'visitors today') + cell(c.leads, 'new enquiries') + cell(c.signups, 'new agent sign-ups') + cell(c.listings_submitted, 'agent listings in') + cell(c.listings_approved, 'agent listings approved') + cell(c.agents_paid, 'agents paid') + '</div>';
+  }
+  function liveFeedHtml(L) {
+    var icon = { signup: '🙋', lead: '📩', submitted: '📝', approved: '✅', paid: '💰' };
+    return ((L && L.feed) || []).map(function (e) { return '<div class="mkc-hit"' + (e.listing_id ? ' data-live-open="/property/' + esc(e.listing_id) + '"' : ' style="cursor:default"') + '>' + (icon[e.kind] || '•') + ' ' + esc(e.text) + ' <span class="mkc-muted">' + esc(kTime(e.at)) + '</span></div>'; }).join('') || '<p class="mkc-muted">Nothing yet today.</p>';
+  }
+  function loadLive(cb) { api('/live').then(function (L) { if (!S) return; S.live = L; if (cb) cb(L); }, function () {}); }
+  function openLive() {
+    var tmr = null; var mode = 'frame';
+    modal('<div class="mkc-row" style="justify-content:space-between"><h3 style="margin:0;font-weight:900">🌐 Live site · today</h3><span class="mkc-muted" data-live-at></span><button class="mkc-btn sm" data-x>Close</button></div>'
+      + '<div class="mkc-livegrid" style="margin-top:8px"><div><div data-live-counts>' + liveCountsHtml(S.live) + '</div><h4 style="margin:10px 0 4px">Latest</h4><div data-live-feed>' + liveFeedHtml(S.live) + '</div></div>'
+      + '<div style="display:flex;flex-direction:column"><div class="mkc-row" style="margin-bottom:6px">' + LIVE_LINKS.map(function (l) { return '<button type="button" class="mkc-btn sm ghost" data-live-open="' + l[0] + '">' + l[1] + '</button>'; }).join('')
+      + '<button type="button" class="mkc-btn sm dark" data-live-viewer>Listing viewer</button><a class="mkc-btn sm ghost" target="_blank" rel="noopener" data-live-new href="/">Open in new tab ↗</a></div>'
+      + '<div style="flex:1;min-height:420px" data-live-pane><iframe class="mkc-frame" data-live-frame src="/" title="makaug.com preview" referrerpolicy="same-origin"></iframe></div></div></div>', function (m, close) {
+      m.classList.add('wide');
+      var stop = function () { clearInterval(tmr); close(); };
+      q('[data-x]', m).onclick = stop;
+      var pane = q('[data-live-pane]', m);
+      var paint = function (L) { var c = q('[data-live-counts]', m); if (!c) return; c.innerHTML = liveCountsHtml(L); q('[data-live-feed]', m).innerHTML = liveFeedHtml(L); q('[data-live-at]', m).textContent = 'updated ' + kTime(L.at) + ' · refreshes every 30 s'; bindOpen(); };
+      var viewer = function () {
+        mode = 'viewer';
+        var list = (S.live && S.live.listings) || [];
+        pane.innerHTML = '<p class="mkc-muted" style="margin:0 0 6px">Latest approved listings. Tap one to open its page here.</p><div class="mkc-lv">' + list.map(function (p) { return '<div class="c" data-live-open="' + esc(p.path) + '">' + (p.image ? '<img loading="lazy" src="' + esc(p.image) + '" alt="">' : '<img alt="">') + '<div><b>' + esc(p.title || 'Listing') + '</b><br>' + esc(p.area || '') + '<br>' + esc(p.price || '') + '</div></div>'; }).join('') + '</div>';
+        bindOpen();
+      };
+      var frame = function (path) {
+        mode = 'frame';
+        pane.innerHTML = '<iframe class="mkc-frame" data-live-frame src="' + esc(path) + '" title="makaug.com preview"></iframe>';
+        q('[data-live-new]', m).href = path;
+        var f = q('[data-live-frame]', pane);
+        f.onload = function () { var ok = true; try { var h = f.contentWindow.location.href; ok = h && h !== 'about:blank'; } catch (_) { ok = false; } if (!ok) { toast('The site can\'t be shown in a frame here – showing the listing viewer.'); viewer(); } };
+      };
+      function bindOpen() { qa('[data-live-open]', m).forEach(function (b) { b.onclick = function () { frame(b.getAttribute('data-live-open')); }; }); }
+      q('[data-live-viewer]', m).onclick = viewer;
+      frame('/');
+      loadLive(paint);
+      tmr = setInterval(function () { if (!document.body.contains(m)) { clearInterval(tmr); return; } loadLive(paint); }, 30000);
+    });
   }
   function periodTabs(attr, cur) {
     return '<div class="mkc-modes" style="display:inline-flex">' + [['day', 'Day'], ['week', 'Week'], ['month', 'Month']].map(function (x) { return '<button type="button" class="mkc-mode' + (x[0] === cur ? ' on' : '') + '" ' + attr + '="' + x[0] + '" style="color:#0f172a;background:' + (x[0] === cur ? '#fbbf24' : '#e2e8f0') + '">' + x[1] + '</button>'; }).join('') + '</div>';
