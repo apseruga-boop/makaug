@@ -2,6 +2,7 @@
 
 const calling = require('../services/callingScreen');
 const extras = require('../services/callingExtras');
+const day = require('../services/callingDay');
 
 /**
  * Calling screen. Staff (Ronald, Harriet, anyone on the desk) use the session,
@@ -61,7 +62,12 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
   router.post('/calling/sessions/:id/next', wrap(async (req, res) => res.json({ ok: true, data: await calling.nextNumber(req.params.id) })));
 
   router.post('/calling/sessions/:id/end', wrap(async (req, res) => {
+    // From 17:00 Kampala the day can't be closed until the cash check is signed.
+    if (!isKing(req) && day.kampalaHour() >= 17 && !(await day.cashStatus()).done) {
+      return res.status(409).json({ ok: false, code: 'cash_check', error: 'Do the 17:00 cash check first: every account, signed with your initials.' });
+    }
     const s = await calling.endSession(req.params.id);
+    if (s) await day.planResult(s.person_key, undefined, { save: true }).catch(() => null);
     if (s) await audit(req, 'calling_session_ended', { session_id: req.params.id, person: s.person_key });
     const summary = s ? await extras.saveSummary(s.person_key, undefined, 'session_end').catch(() => null) : null;
     return res.json({ ok: true, data: { ended: Boolean(s), summary } });
@@ -79,7 +85,8 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
 
   router.post('/calling/attempts/:id/wrapup', wrap(async (req, res) => {
     const out = await calling.wrapUp(req.params.id, {
-      ...opts(req), outcome: req.body?.outcome, note: req.body?.note, callbackAt: req.body?.callback_at, checklist: req.body?.checklist
+      ...opts(req), outcome: req.body?.outcome, note: req.body?.note, callbackAt: req.body?.callback_at, checklist: req.body?.checklist,
+      transcript: req.body?.transcript, nextStep: req.body?.next_step
     });
     await audit(req, 'calling_call_wrapped_up', { attempt_id: out.id, person: out.person_key, task: out.task_key, outcome: out.outcome, flags: out.flags });
     return res.json({ ok: true, data: out });
@@ -89,7 +96,7 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
   router.post('/calling/attempts/:id/skip', wrap(async (req, res) => res.json({ ok: true, data: await calling.skip(req.params.id, { sessionId: sid(req), reason: req.body?.reason, reasonCode: req.body?.reason_code, note: req.body?.note }) })));
 
   router.post('/calling/numbers', wrap(async (req, res) => {
-    const out = await calling.submitNumber({ personKey: req.body?.person_key, name: req.body?.name, phone: req.body?.phone, note: req.body?.note, addedBy: actorOf(req) });
+    const out = await calling.submitNumber({ personKey: req.body?.person_key, name: req.body?.name, phone: req.body?.phone, note: req.body?.note, howKnown: req.body?.how_known, mode: req.body?.mode, addedBy: actorOf(req) });
     await audit(req, 'calling_number_added', { submission_id: out.id, status: out.status, person: req.body?.person_key });
     return res.status(201).json({ ok: true, data: out });
   }));
@@ -110,7 +117,41 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
   router.get('/calling/feed', wrap(async (req, res) => res.json({ ok: true, data: await calling.feed(req.query?.person_key) })));
   router.get('/calling/report', wrap(async (req, res) => res.json({ ok: true, data: await calling.report(req.query?.person_key, req.query?.day || undefined) })));
 
+  // Money on the number on screen: send the pay link / MoMo code, mark "they paid".
+  router.get('/calling/attempts/:id/payment', wrap(async (req, res) => {
+    const a = (await require('../config/database').query('SELECT phone_key FROM call_attempts WHERE id = $1', [req.params.id])).rows[0];
+    if (!a) return res.status(404).json({ ok: false, error: 'Call not found.' });
+    return res.json({ ok: true, data: await day.paymentState(a.phone_key) });
+  }));
+  router.post('/calling/attempts/:id/pay', wrap(async (req, res) => {
+    const r = await day.sendPayment(req.params.id, { how: req.body?.how === 'momo' ? 'momo' : 'link', personKey: req.body?.person_key });
+    await audit(req, 'calling_payment_sent', { attempt_id: req.params.id, how: req.body?.how, sent: r.sent });
+    return res.json({ ok: true, data: r });
+  }));
+  router.post('/calling/attempts/:id/paid-claim', wrap(async (req, res) => {
+    const r = await day.markClaimed(req.params.id, { personKey: req.body?.person_key, note: req.body?.note, txid: req.body?.txid });
+    await audit(req, 'calling_payment_claimed', { attempt_id: req.params.id, claim_id: r.claim_id });
+    return res.json({ ok: true, data: r });
+  }));
+  // The morning plan (King agrees it; the caller signs with initials) and the 17:00 cash check.
+  router.get('/calling/plan', wrap(async (req, res) => res.json({ ok: true, data: await day.planResult(req.query?.person_key, req.query?.day || undefined) })));
+  router.post('/calling/plan', wrap(async (req, res) => {
+    const b = req.body || {};
+    const r = await day.savePlan(b.person_key, { ...b, agreedBy: isKing(req) && b.agree ? actorOf(req) : '', initials: b.initials || '' });
+    await audit(req, 'calling_plan_saved', { person: r.person_key, day: b.day || null });
+    return res.json({ ok: true, data: await day.planResult(r.person_key, b.day || undefined) });
+  }));
+  router.get('/calling/cash', wrap(async (req, res) => res.json({ ok: true, data: await day.cashStatus() })));
+  router.post('/calling/cash', wrap(async (req, res) => {
+    const r = await day.saveCash({ personKey: req.body?.person_key, initials: req.body?.initials, entries: req.body?.entries });
+    await audit(req, 'calling_cash_check_signed', { person: req.body?.person_key, done: r.done });
+    return res.json({ ok: true, data: r });
+  }));
+
   // King only.
+  router.get('/calling/activity', wrap(async (req, res) => res.json({ ok: true, data: await day.activity({ period: req.query?.period, day: req.query?.day || undefined, personKey: req.query?.person_key || '' }) })));
+  router.get('/calling/cashlog', wrap(async (req, res) => res.json({ ok: true, data: await day.cashLog({ period: req.query?.period, day: req.query?.day || undefined }) })));
+  router.get('/calling/plans', wrap(async (req, res) => res.json({ ok: true, data: await day.plans({ period: req.query?.period, day: req.query?.day || undefined }) })));
   router.get('/calling/performance', wrap(async (req, res) => {
     await extras.autoSaveAtFive().catch(() => null);
     return res.json({ ok: true, data: await calling.performance({ day: req.query?.day || undefined }) });

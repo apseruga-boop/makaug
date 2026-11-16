@@ -33,7 +33,9 @@ function isStaffSharedKingTool(path, method = 'GET') {
   if (p === '/calling/bootstrap' && m === 'GET') return true;
   if (p === '/calling/sessions' && m === 'POST') return true;
   if (/^\/calling\/sessions\/[^/]+\/(heartbeat|task|next|end|claim)$/.test(p) && m === 'POST') return true;
-  if (/^\/calling\/attempts\/[^/]+\/(tap|end|wrapup|skip)$/.test(p) && m === 'POST') return true;
+  if (/^\/calling\/attempts\/[^/]+\/(tap|end|wrapup|skip|pay|paid-claim)$/.test(p) && m === 'POST') return true;
+  if (/^\/calling\/attempts\/[^/]+\/payment$/.test(p) && m === 'GET') return true;
+  if (['/calling/plan', '/calling/cash'].includes(p) && (m === 'GET' || m === 'POST')) return true;
   if (p === '/calling/numbers' && m === 'POST') return true;
   if (['/calling/stats', '/calling/counts', '/calling/feed', '/calling/report', '/calling/summary', '/calling/whatsapp', '/calling/leads', '/calling/timeline'].includes(p) && m === 'GET') return true;
   // Read-only WhatsApp conversation view (no sending anywhere on the calling screen).

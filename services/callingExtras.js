@@ -289,7 +289,7 @@ async function pipeline({ includeArchived = false, now = new Date() } = {}) {
   const [agents, prospects, attempts, items, events, pays] = await Promise.all([
     safeRows(`SELECT id, full_name, phone, status, paid_until, last_payment_on, fee_exempt, created_at FROM agents WHERE removed_at IS NULL AND status = 'approved'`),
     safeRows(`SELECT id, full_name, phone, phone_key, status, do_not_contact, follow_up_at, follow_up_note, pitched_at, created_at FROM agent_prospects`),
-    rows(`SELECT phone_key, phone, full_name, person_key, task_key, outcome, note, callback_at, wrapped_at, shown_at, tapped_at, talk_s, status FROM call_attempts WHERE status = 'done' ORDER BY wrapped_at DESC`),
+    rows(`SELECT phone_key, phone, full_name, person_key, task_key, outcome, note, callback_at, wrapped_at, shown_at, tapped_at, talk_s, status, next_step, transcript FROM call_attempts WHERE status = 'done' ORDER BY wrapped_at DESC`),
     rows('SELECT * FROM pipeline_items'),
     safeRows(`SELECT phone_key, outcome, note, created_at, person_key FROM outreach_events WHERE kind = 'outcome' ORDER BY created_at DESC LIMIT 2000`),
     safeRows(`SELECT agent_id, MAX(paid_at) AS paid_at, SUM(amount_ugx)::bigint AS total FROM revenue_entries WHERE direction = 'in' AND kind = 'agent_subscription' AND voided_at IS NULL GROUP BY agent_id`)
@@ -334,6 +334,10 @@ async function pipeline({ includeArchived = false, now = new Date() } = {}) {
       payment: it.payment || (it.kind === 'agent' ? 'Not paid' : 'Not an agent yet'),
       last_said: said, calls: mine.length,
       skips: skipsBy.get(key)?.n || 0, last_skip: skipsBy.get(key)?.last || null,
+      // The loop is open when the last call was not a close / final no and has no next step.
+      open_loop: Boolean(last && !last.next_step && !last.callback_at && !['signed_up', 'paid', 'renewed', 'rejected', 'do_not_contact', 'wrong_number', 'no_answer'].includes(last.outcome)),
+      last_transcript: last && last.transcript ? { at: last.wrapped_at, by: last.person_key, summary: last.transcript.summary || '', next_step: last.next_step || last.transcript.suggested_next_step || '', text: String(last.transcript.text || '').slice(0, 1500), confirmed: last.transcript.confirmed } : null,
+      last_next_step: last ? last.next_step || null : null,
       said_hello: helloBy.has(key) ? { at: helloBy.get(key) } : null,
       next_action: item?.next_action || (last && last.callback_at ? `Call back (${last.outcome.replace(/_/g, ' ')})` : (last ? 'Call again' : 'First call')),
       due, overdue: Boolean(due && due < today), decision: item?.decision || '', owner: item?.owner_key || (last ? last.person_key : ''),
@@ -341,7 +345,7 @@ async function pipeline({ includeArchived = false, now = new Date() } = {}) {
       history: item?.history || []
     });
   }
-  const rank = (x) => (x.overdue ? 0 : x.due === today ? 1 : x.due ? 2 : 3);
+  const rank = (x) => (x.open_loop ? -1 : x.overdue ? 0 : x.due === today ? 1 : x.due ? 2 : 3);
   out.sort((a, b) => rank(a) - rank(b) || String(a.due || '9').localeCompare(String(b.due || '9')) || a.name.localeCompare(b.name));
   return { day: today, total: out.length, overdue: out.filter((x) => x.overdue).length, items: out };
 }
@@ -381,7 +385,7 @@ async function timeline({ attemptId = '', phoneKey = '' } = {}) {
   if (attemptId) key = (await rows('SELECT phone_key FROM call_attempts WHERE id::text = $1', [String(attemptId)]))[0]?.phone_key || '';
   if (!/^[0-9]{9}$/.test(key)) throw httpError(404, 'Number not found.');
   const [atts, evs, item, wa] = await Promise.all([
-    rows(`SELECT id, person_key, task_key, full_name, phone, status, outcome, note, callback_at, shown_at, tapped_at, ended_at, wrapped_at, talk_s, skip_reason, flags, actor_account, source_label
+    rows(`SELECT id, person_key, task_key, full_name, phone, status, outcome, note, callback_at, shown_at, tapped_at, ended_at, wrapped_at, talk_s, skip_reason, flags, actor_account, source_label, next_step, transcript
             FROM call_attempts WHERE phone_key = $1 AND status IN ('done', 'skipped', 'shown', 'calling') ORDER BY shown_at`, [key]),
     safeRows(`SELECT kind, outcome, note, person_key, created_at FROM outreach_events WHERE phone_key = $1 ORDER BY created_at`, [key]),
     rows('SELECT * FROM pipeline_items WHERE phone_key = $1', [key]),
@@ -397,6 +401,7 @@ async function timeline({ attemptId = '', phoneKey = '' } = {}) {
       shown_at: a.shown_at, tapped_at: a.tapped_at, ended_at: a.ended_at, wrapped_at: a.wrapped_at, talk_s: a.talk_s,
       outcome: a.status === 'skipped' ? 'skipped' : (a.outcome || a.status), note: a.note || a.skip_reason || '', flags: a.flags || [],
       callback_at: a.callback_at, follow_up_of: openCallback ? openCallback.id : null,
+      next_step: a.next_step || null, transcript: a.transcript || null,
       proof: a.tapped_at ? 'served and tapped' : (a.status === 'done' ? 'outcome without a tap' : 'served, not tapped')
     };
     if (openCallback) node.on_time = new Date(a.shown_at) <= new Date(new Date(openCallback.callback_at).getTime() + 86400000);

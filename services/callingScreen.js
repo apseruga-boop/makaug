@@ -25,6 +25,7 @@ const scripts = require('./callingScripts');
 const perf = require('./staffPerformance');
 const { staffSenderChoices, maskPhoneLast3 } = require('./outreachSenderName');
 const { phoneKey9, canonicalUgPhone } = require('../utils/ugPhone');
+const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
 const TZ = 'Africa/Kampala';
 const DEFAULT_TARGETS = Object.freeze({ calls_per_day: 40, closes_per_day: 2 });
@@ -176,8 +177,11 @@ function moneyScore(c = {}) {
     if (/^Payment lapsed/.test(r)) return 50;
     return 40;
   }
+  if (c.source_kind === 'own') return 88;
   if (c.source_kind === 'lead' || c.source_kind === 'whatsapp') return 85;
+  if (c.source_kind === 'listing') return c.found_online ? 66 : 72;
   if (c.source_kind === 'prospect') return c.prospect_pitched ? 75 : 60;
+  if (c.source_kind === 'list') return c.found_online ? 67 : 70; // the Companion's daily list
   if (c.found_online) return 65;
   return 50;
 }
@@ -269,6 +273,8 @@ function maskedAttempt(a = {}) {
     is_close: a.is_close,
     note: a.note,
     callback_at: a.callback_at,
+    next_step: a.next_step || null,
+    transcript_summary: a.transcript ? a.transcript.summary || '' : null,
     skip_reason: a.skip_reason,
     checklist: a.checklist,
     flags: a.flags || []
@@ -307,6 +313,8 @@ async function loadCallers() {
   };
   for (const p of staffSenderChoices()) add(p.key, p.name);
   for (const r of await safeRows('SELECT person_key, name, role, active, rate_pct, user_id::text AS user_id FROM commission_staff')) add(r.person_key, r.name, { role: r.role, commission_active: r.active, rate_pct: Number(r.rate_pct || 0), user_id: r.user_id || null });
+  // Anyone given a calling login gets their own queue and the default targets straight away.
+  for (const r of await safeRows("SELECT profile_data->>'person_key' AS person_key, TRIM(CONCAT(first_name, ' ', last_name)) AS full_name FROM users WHERE role = 'moderator' AND status = 'active' AND COALESCE(profile_data->>'person_key', '') <> ''")) add(r.person_key, r.full_name);
   for (const r of await safeRows('SELECT DISTINCT person_key FROM call_targets')) add(r.person_key, null);
   for (const r of await safeRows("SELECT DISTINCT person_key FROM call_sessions WHERE started_at > NOW() - INTERVAL '60 days'")) add(r.person_key, null);
   return [...people.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -384,7 +392,9 @@ async function openSession(id) {
   return s;
 }
 
-const EVENT_KINDS = new Set(['fs_exit', 'fs_enter', 'hidden', 'visible', 'break_start', 'break_end', 'kit_send']);
+// Everything the screen reports: leaving it, breaks (lunch:45 = a 45-minute lunch),
+// idle (idle_end detail = idle ms), open/close and every button pressed.
+const EVENT_KINDS = new Set(['fs_exit', 'fs_enter', 'hidden', 'visible', 'break_start', 'break_end', 'kit_send', 'screen_open', 'screen_close', 'idle_start', 'idle_end', 'action', 'work_on', 'work_off']);
 
 /**
  * Heartbeat from the screen: running totals (ms) and the events since the last
@@ -468,13 +478,21 @@ async function candidatesFor(task, personKey, { today = kampalaDay(), limit = 40
   const out = [];
   // Due callbacks for this task come first, the caller's own before anyone else's.
   const callbacks = await rows(
-    `SELECT DISTINCT ON (a.phone_key) a.phone_key, a.phone, a.full_name, a.person_key, a.callback_at, a.prospect_id, a.list_number_id, a.agent_id, a.outcome, a.task_key, a.source_label
+    `SELECT DISTINCT ON (a.phone_key) a.phone_key, a.phone, a.full_name, a.person_key, a.callback_at, a.prospect_id, a.list_number_id, a.agent_id, a.outcome, a.task_key, a.source_label, a.next_step, a.note, a.transcript->>'summary' AS tx_summary
        FROM call_attempts a WHERE a.status = 'done' AND a.callback_at IS NOT NULL AND a.callback_at <= NOW() + INTERVAL '${CALLBACK_EARLY_MIN} minutes'
       ORDER BY a.phone_key, COALESCE(a.wrapped_at, a.shown_at) DESC`
   );
-  for (const c of callbacks.filter((c) => c.task_key === task.key).sort((a, b) => (a.person_key === personKey ? 0 : 1) - (b.person_key === personKey ? 0 : 1) || new Date(a.callback_at) - new Date(b.callback_at))) {
-    out.push({ phone: c.phone, phone_key: c.phone_key, full_name: c.full_name, source_kind: 'callback', source_label: `Callback set ${c.person_key === personKey ? 'by you' : `by ${c.person_key}`} (${c.outcome.replace(/_/g, ' ')})`, reason: c.source_label || '', prospect_id: c.prospect_id, list_number_id: c.list_number_id, agent_id: c.agent_id, callback: true });
+  // A callback goes back to the person who booked it, at the time they booked.
+  // Someone else only gets it once it is 2 hours overdue, so none is lost.
+  const late = Date.now() - 2 * 3600000;
+  for (const c of callbacks.filter((c) => c.task_key === task.key && (c.person_key === personKey || new Date(c.callback_at).getTime() < late)).sort((a, b) => (a.person_key === personKey ? 0 : 1) - (b.person_key === personKey ? 0 : 1) || new Date(a.callback_at) - new Date(b.callback_at))) {
+    out.push({ phone: c.phone, phone_key: c.phone_key, full_name: c.full_name, source_kind: 'callback', source_label: `Callback set ${c.person_key === personKey ? 'by you' : `by ${c.person_key}`} (${c.outcome.replace(/_/g, ' ')})${c.next_step ? `: ${c.next_step}` : ''}`, reason: c.tx_summary || c.note || c.source_label || '', prospect_id: c.prospect_id, list_number_id: c.list_number_id, agent_id: c.agent_id, callback: true });
   }
+  // The caller's own numbers (added on the screen) go to them first, in the mode they chose.
+  const own = await safeRows(
+    `SELECT id, full_name, phone, phone_key, how_known, note FROM call_number_submissions
+      WHERE status = 'own' AND person_key = $1 AND COALESCE(mode, 'new_agents') = $2 ORDER BY added_at LIMIT $3`, [personKey, task.key, limit]);
+  for (const r of own) out.push({ phone: r.phone, phone_key: r.phone_key, full_name: r.full_name, source_kind: 'own', source_label: `Own number · added by you${r.how_known ? ` · ${r.how_known}` : ''}`, reason: r.note || '', submission_id: r.id });
   if (task.queue_kind === 'new_agents') {
     const list = await safeRows(
       `SELECT id, full_name, phone, phone_key, lead_source, list_day::text AS list_day FROM outreach_list_numbers
@@ -489,6 +507,26 @@ async function candidatesFor(task, personKey, { today = kampalaDay(), limit = 40
         ORDER BY (LOWER(COALESCE(pitched_by_name, '')) LIKE $1 || '%') DESC, COALESCE(follow_up_at, pitched_at) ASC NULLS LAST LIMIT $2`,
       [personKey, limit]
     );
+    // Leads and listings: people who enquired or listed privately in the last 14 days.
+    const leads = await safeRows(
+      `SELECT COALESCE(c.phone, c.whatsapp, l.metadata->>'phone', l.metadata->>'contact_phone') AS phone,
+              COALESCE(NULLIF(c.name, ''), l.metadata->>'name', l.metadata->>'contact_name') AS full_name, l.source, l.category, l.location, l.created_at
+         FROM leads l LEFT JOIN contacts c ON c.id = l.contact_id
+        WHERE l.created_at > NOW() - INTERVAL '14 days' AND COALESCE(l.is_test, false) = false AND l.deleted_at IS NULL
+        ORDER BY l.created_at DESC LIMIT $1`, [Math.min(limit, 150)]);
+    for (const r of leads) {
+      const k = phoneKey9(r.phone); if (!k) continue;
+      out.push({ phone: canonicalUgPhone(r.phone) || r.phone, phone_key: k, full_name: r.full_name, source_kind: 'lead', source_label: `Lead ${kampalaDay(r.created_at)} · ${String(r.source || 'website').replace(/_/g, ' ')}`, reason: [r.category, r.location].filter(Boolean).join(' · ') });
+    }
+    const listings = await safeRows(
+      `SELECT p.lister_phone AS phone, p.lister_name AS full_name, p.title, p.area, p.created_at, ${foundOnlinePropertySql('p')} AS found_online
+         FROM properties p
+        WHERE p.agent_id IS NULL AND COALESCE(p.lister_phone, '') <> '' AND p.created_at > NOW() - INTERVAL '30 days'
+        ORDER BY p.created_at DESC LIMIT $1`, [Math.min(limit, 150)]);
+    for (const r of listings) {
+      const k = phoneKey9(r.phone); if (!k) continue;
+      out.push({ phone: canonicalUgPhone(r.phone) || r.phone, phone_key: k, full_name: r.full_name, source_kind: 'listing', source_label: `Listing ${kampalaDay(r.created_at)}${r.found_online ? ' · found online' : ' · listed it themselves'}`, reason: [String(r.title || '').replace(/\*+/g, '').slice(0, 70), r.area].filter(Boolean).join(' · '), found_online: Boolean(r.found_online) });
+    }
     for (const r of prospects) {
       const when = r.pitched_at ? kampalaDay(r.pitched_at) : '';
       const by = r.pitched_by_name || '';
@@ -551,7 +589,7 @@ async function eligibleQueue(task, personKey, { now = new Date(), tasks = null, 
 
 async function historyFor(phoneKey) {
   const list = await rows(
-    `SELECT shown_at, wrapped_at, person_key, task_key, status, outcome, note, skip_reason, callback_at, talk_s FROM call_attempts
+    `SELECT shown_at, wrapped_at, person_key, task_key, status, outcome, note, skip_reason, callback_at, talk_s, next_step, transcript->>'summary' AS tx_summary FROM call_attempts
       WHERE phone_key = $1 AND status IN ('done', 'skipped') ORDER BY COALESCE(wrapped_at, shown_at) DESC LIMIT 30`,
     [phoneKey]
   );
@@ -562,7 +600,7 @@ async function historyFor(phoneKey) {
   return [
     ...list.map((a) => (a.status === 'skipped'
       ? { at: a.wrapped_at || a.shown_at, by: a.person_key, what: 'skipped', note: a.skip_reason || '', task: a.task_key, skipped: true }
-      : { at: a.wrapped_at, by: a.person_key, what: `${a.outcome.replace(/_/g, ' ')}${a.talk_s != null ? ` · ${a.talk_s}s` : ''}`, outcome: a.outcome, note: a.note || '', task: a.task_key, next_step: a.callback_at || null })),
+      : { at: a.wrapped_at, by: a.person_key, what: `${a.outcome.replace(/_/g, ' ')}${a.talk_s != null ? ` · ${a.talk_s}s` : ''}`, outcome: a.outcome, note: a.note || '', task: a.task_key, next_step: a.callback_at || null, next_text: a.next_step || '', summary: a.tx_summary || '' })),
     ...events.map((e) => ({ at: e.created_at, by: e.person_key || '', what: `Outreach: ${String(e.outcome || '').replace(/_/g, ' ')}`, note: e.note || '', task: 'outreach' }))
   ].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 30);
 }
@@ -596,7 +634,7 @@ async function helloFor(phoneKey) {
 
 const SOURCE_KIND_LABELS = Object.freeze({
   list: 'Your list', prospect: 'Outreach prospect', agent: 'Signed-up agent', callback: 'Callback',
-  lead: 'Lead (enquiry)', whatsapp: 'WhatsApp message', staff_added: 'Own number'
+  lead: 'Lead (enquiry)', whatsapp: 'WhatsApp message', staff_added: 'Own number', own: 'Own number', listing: 'Lister'
 });
 function sourceKindLabel(a = {}) {
   const label = String(a.source_label || '');
@@ -620,7 +658,7 @@ function present(attempt, task, history = [], { callerName = '', withPhone = tru
       last: history[0] || null,
       said_hello: hello,
       best_time: bestTime,
-      last_call: lastCall ? { at: lastCall.at, by: lastCall.by, outcome: lastCall.outcome || lastCall.what, note: lastCall.note || '', task: lastCall.task } : null,
+      last_call: lastCall ? { at: lastCall.at, by: lastCall.by, outcome: lastCall.outcome || lastCall.what, note: lastCall.note || '', task: lastCall.task, next_text: lastCall.next_text || '', summary: lastCall.summary || '' } : null,
       money: moneyScore(attempt) >= 80 ? 'Likely to pay' : moneyScore(attempt) >= 65 ? 'Warm' : 'Cold'
     },
     attempt: { ...maskedAttempt(attempt), phone: withPhone ? canonicalUgPhone(attempt.phone) : maskPhoneLast3(attempt.phone), phone_masked: maskPhoneLast3(attempt.phone) },
@@ -738,7 +776,21 @@ function parseCallback(value, now = new Date()) {
 }
 
 /** The call counts only here: an outcome, a note, and the follow-up when the outcome needs one. */
-async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackAt = '', checklist = {}, now: serverNow = new Date(), at = null, op = '' } = {}) {
+/** Keep only text from the live transcript; long digit runs become •••123. */
+function cleanTranscript(t) {
+  if (!t || typeof t !== 'object') return null;
+  const mask = (v, n) => String(v || '').replace(/\d[\d\s-]{6,}\d/g, (m) => `•••${m.replace(/\D/g, '').slice(-3)}`).trim().slice(0, n);
+  const text = mask(t.text, 8000);
+  if (!text && !t.summary) return null;
+  return {
+    text, summary: mask(t.summary, 600), suggested_outcome: mask(t.suggested_outcome, 40), suggested_next_step: mask(t.suggested_next_step || t.next_step, 300),
+    confirmed: t.confirmed === true, edited: t.edited === true, engine: 'chrome-web-speech', audio_kept: false, words: text ? text.split(/\s+/).length : 0
+  };
+}
+/** A call "closes the loop" with a close, a final no, or a next step. */
+function closesLoop(def = {}) { return Boolean(def.close || def.terminal); }
+
+async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackAt = '', checklist = {}, transcript = null, nextStep = '', now: serverNow = new Date(), at = null, op = '' } = {}) {
   const opId = cleanOp(op);
   const applied = await alreadyApplied(attemptId, opId);
   if (applied) return maskedAttempt(applied);
@@ -754,6 +806,12 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   if (text.length < 3) throw httpError(400, 'Write a short note about the call (or tap one of the quick notes).');
   const cb = parseCallback(callbackAt, now);
   if (def.date === 'required' && !cb) throw httpError(400, 'Pick the date and time to call back.');
+  // Every call ends with a close, a final no, or a next step.
+  let next = String(nextStep || '').trim().slice(0, 300);
+  if (!next && def.key === 'no_answer') next = 'Try again next working day';
+  if (!next && cb) next = 'Call back';
+  if (!next && !closesLoop(def)) throw httpError(400, 'Pick the next step (call back, chase payment, send the film…).');
+  const tx = cleanTranscript(transcript);
   const ticks = {};
   for (const step of Array.isArray(task.checklist) ? task.checklist : []) ticks[step.key] = Boolean(checklist && checklist[step.key]);
   // Coach answers are kept with the call too: did they answer, did they agree to WhatsApp "hi".
@@ -786,9 +844,10 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   const out = (await rows(
     `UPDATE call_attempts SET status = 'done', wrapped_at = $2, outcome = $3, spoke = $4, is_close = $5, note = $6, callback_at = $7,
         checklist = $8::jsonb, flags = $9::text[], talk_s = $10, wrapup_s = $11, gap_s = $12,
-        client_ops = CASE WHEN $13 = '' THEN client_ops ELSE array_append(client_ops, $13) END
+        client_ops = CASE WHEN $13 = '' THEN client_ops ELSE array_append(client_ops, $13) END,
+        next_step = NULLIF($14, ''), transcript = $15::jsonb
       WHERE id = $1 AND status IN ('shown', 'calling') RETURNING *`,
-    [a.id, now, def.key, Boolean(def.spoke), Boolean(def.close), text, cb, JSON.stringify(ticks), flags, talk, wrapS, gapS, opId]
+    [a.id, now, def.key, Boolean(def.spoke), Boolean(def.close), text, cb, JSON.stringify(ticks), flags, talk, wrapS, gapS, opId, next, tx ? JSON.stringify(tx) : null]
   ))[0];
   if (!out) throw httpError(409, 'This call is already wrapped up.');
   await mirrorToProspect(out, def).catch(() => null);
@@ -824,7 +883,17 @@ async function skip(attemptId, { sessionId, reason = '', reasonCode = '', note =
 
 // ------------------------------------------------------ add your own number --
 
-async function submitNumber({ personKey, name = '', phone = '', note = '', addedBy = '' } = {}) {
+const HOW_KNOWN = ['Friend or referral', 'Saw their listing', 'Sign board', 'Social media', 'Met them', 'Other'];
+
+/**
+ * A caller adds a number they found. Checked against everything we have by
+ * phone_key (agents, Outreach, lists, leads, listings, calls, other callers'
+ * own numbers). Already known: nothing is added and the history is shown.
+ * New: it goes straight into this caller's queue, tagged "own number".
+ * Commission is unchanged: it still only follows the normal rules (a
+ * confirmed payment, on a number nobody else had).
+ */
+async function submitNumber({ personKey, name = '', phone = '', note = '', howKnown = '', mode = 'new_agents', addedBy = '' } = {}) {
   const callers = await loadCallers();
   const person = callers.find((p) => p.key === cleanKey(personKey));
   if (!person) throw httpError(400, 'Pick who is adding the number.');
@@ -832,31 +901,56 @@ async function submitNumber({ personKey, name = '', phone = '', note = '', added
   const key = phoneKey9(canonical);
   if (!/^\+2567\d{8}$/.test(canonical)) throw httpError(400, 'Type a Uganda mobile number, like 0772 123 456.');
   const fullName = String(name || '').trim().slice(0, 120);
+  const tasks = await loadTasks({ all: true });
+  const modeKey = tasks.some((t) => t.key === mode) ? mode : 'new_agents';
+  const how = String(howKnown || '').trim().slice(0, 80);
+  const one = async (sql) => (await safeRows(sql, [key])).length > 0;
   const checks = [
-    ['an existing agent', async () => (await agentKeys([key])).has(key)],
-    ['already on Outreach', async () => (await safeRows('SELECT 1 FROM agent_prospects WHERE phone_key = $1 LIMIT 1', [key])).length > 0],
-    ['already on a call list', async () => (await safeRows('SELECT 1 FROM outreach_list_numbers WHERE phone_key = $1 AND accepted IS TRUE LIMIT 1', [key])).length > 0],
-    ['already called', async () => (await safeRows("SELECT 1 FROM call_attempts WHERE phone_key = $1 AND status IN ('done', 'shown', 'calling') LIMIT 1", [key])).length > 0],
-    ['already waiting for review', async () => (await safeRows("SELECT 1 FROM call_number_submissions WHERE phone_key = $1 AND status = 'pending' LIMIT 1", [key])).length > 0]
+    ['an agent already', async () => (await agentKeys([key])).has(key)],
+    ['already called', () => one("SELECT 1 FROM call_attempts WHERE phone_key = $1 AND status IN ('done', 'shown', 'calling', 'skipped') LIMIT 1")],
+    ['someone\'s own number already', () => one("SELECT 1 FROM call_number_submissions WHERE phone_key = $1 AND status IN ('own', 'pending') LIMIT 1")],
+    ['on Outreach already', () => one('SELECT 1 FROM agent_prospects WHERE phone_key = $1 LIMIT 1')],
+    ['on the Companion\'s list already', () => one('SELECT 1 FROM outreach_list_numbers WHERE phone_key = $1 AND accepted IS TRUE LIMIT 1')],
+    ['a lead already', () => one("SELECT 1 FROM leads l LEFT JOIN contacts c ON c.id = l.contact_id WHERE RIGHT(REGEXP_REPLACE(COALESCE(c.phone, c.whatsapp, l.metadata->>'phone', ''), '[^0-9]', '', 'g'), 9) = $1 LIMIT 1")],
+    ['a lister already', () => one("SELECT 1 FROM properties WHERE RIGHT(REGEXP_REPLACE(COALESCE(lister_phone, ''), '[^0-9]', '', 'g'), 9) = $1 LIMIT 1")]
   ];
   let duplicate = '';
   for (const [label, fn] of checks) { if (await fn()) { duplicate = label; break; } }
   const row = (await rows(
-    `INSERT INTO call_number_submissions (person_key, full_name, phone, phone_key, note, status, duplicate_of, added_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-    [person.key, fullName || null, canonical, key, String(note || '').trim().slice(0, 300) || null, duplicate ? 'duplicate' : 'pending', duplicate || null, String(addedBy).slice(0, 120)]
+    `INSERT INTO call_number_submissions (person_key, full_name, phone, phone_key, note, status, duplicate_of, added_by, mode, how_known)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT DO NOTHING RETURNING *`,
+    [person.key, fullName || null, canonical, key, String(note || '').trim().slice(0, 300) || null, duplicate ? 'duplicate' : 'own', duplicate || null, String(addedBy).slice(0, 120), modeKey, how || null]
   ))[0];
-  return { id: row.id, status: row.status, duplicate_of: row.duplicate_of, phone: maskPhoneLast3(canonical), name: fullName };
+  if (!row && !duplicate) duplicate = 'someone\'s own number already';
+  if (duplicate) {
+    // Show what we know instead (masked: the caller sees who, when and what, not the number).
+    const hist = (await attemptsFor([key])).get(key) || [];
+    const owner = (await safeRows("SELECT person_key, added_at FROM call_number_submissions WHERE phone_key = $1 AND status = 'own' LIMIT 1", [key]))[0] || null;
+    return {
+      status: 'exists', duplicate_of: duplicate, phone: maskPhoneLast3(canonical), name: fullName,
+      owner: owner ? { person_key: owner.person_key, added_at: owner.added_at } : null,
+      history: hist.slice(0, 8).map((h) => ({ at: h.wrapped_at || h.shown_at, by: h.person_key, task: h.task_key, outcome: h.status === 'skipped' ? 'skipped' : (h.outcome || h.status), note: h.note || '', callback_at: h.callback_at || null }))
+    };
+  }
+  return { id: row.id, status: 'own', mode: modeKey, phone: maskPhoneLast3(canonical), name: fullName };
 }
 
 async function listSubmissions({ status = 'pending' } = {}) {
-  const list = await rows('SELECT * FROM call_number_submissions WHERE ($1 = \'all\' OR status = $1) ORDER BY added_at DESC LIMIT 200', [status]);
-  return list.map((r) => ({ id: r.id, person_key: r.person_key, name: r.full_name, phone: maskPhoneLast3(r.phone), note: r.note, status: r.status, duplicate_of: r.duplicate_of, added_at: r.added_at, reviewed_by: r.reviewed_by, reviewed_at: r.reviewed_at }));
+  const list = await rows(
+    `SELECT * FROM call_number_submissions WHERE ($1 = 'all' OR status = $1 OR ($1 = 'pending' AND status = 'own' AND reviewed_at IS NULL AND added_at > NOW() - INTERVAL '7 days'))
+      ORDER BY added_at DESC LIMIT 200`, [status]);
+  return list.map((r) => ({ mode: r.mode || 'new_agents', how_known: r.how_known || '', id: r.id, person_key: r.person_key, name: r.full_name, phone: maskPhoneLast3(r.phone), note: r.note, status: r.status, duplicate_of: r.duplicate_of, added_at: r.added_at, reviewed_by: r.reviewed_by, reviewed_at: r.reviewed_at }));
 }
 
 async function reviewSubmission(id, { decision = '', name, actor = '' } = {}) {
   const r = (await rows('SELECT * FROM call_number_submissions WHERE id = $1', [id]))[0];
   if (!r) throw httpError(404, 'Number not found.');
+  if (r.status === 'own') {
+    // Own numbers are already in the caller's queue; King can only take one out.
+    if (decision === 'reject') { await db.query("UPDATE call_number_submissions SET status = 'rejected', reviewed_by = $2, reviewed_at = NOW() WHERE id = $1", [id, actor]); return { id, status: 'rejected' }; }
+    await db.query('UPDATE call_number_submissions SET reviewed_by = $2, reviewed_at = NOW() WHERE id = $1', [id, actor]);
+    return { id, status: 'own' };
+  }
   if (r.status !== 'pending') throw httpError(409, 'This number has already been reviewed.');
   if (!['approve', 'reject'].includes(decision)) throw httpError(400, 'Approve or reject.');
   const fullName = name != null ? String(name).trim().slice(0, 120) : r.full_name;
@@ -1175,6 +1269,9 @@ async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
 
 module.exports = {
   SKIP_REASONS,
+  HOW_KNOWN,
+  cleanTranscript,
+  closesLoop,
   skipCodeOf,
   moneyScore,
   sourceKindLabel,

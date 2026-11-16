@@ -86,3 +86,13 @@ test('v2: no answer 3 times parks the number for 7 days; best time from answered
   assert.equal(bt.hour, 10); assert.equal(bt.answered, 2); assert.equal(bt.tries, 3);
   assert.equal(c.bestTimeFrom([]), null);
 });
+
+test('v3: transcript is text only, phone numbers masked, and every call closes the loop', () => {
+  const t = c.cleanTranscript({ text: 'my number is 0772 123 456 call me tomorrow', summary: 'Call back', suggested_next_step: 'Call back tomorrow 10:00', confirmed: true });
+  assert.ok(!/0772 123 456/.test(t.text) && /•••456/.test(t.text));
+  assert.equal(t.audio_kept, false); assert.equal(t.engine, 'chrome-web-speech');
+  assert.equal(c.cleanTranscript({}), null);
+  assert.equal(c.closesLoop({ close: true }), true);
+  assert.equal(c.closesLoop({ terminal: true }), true);
+  assert.equal(c.closesLoop({ key: 'interested' }), false);
+});
