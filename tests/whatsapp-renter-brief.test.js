@@ -66,8 +66,9 @@ test('a result line says what the home is when the title does not', () => {
     { id: 'a', title: 'Property for rent in Bunga', area: 'Bunga', district: 'Kampala', price: 600000, price_period: 'mo', listing_type: 'rent', property_type: 'single room', total_count: 2 },
     { id: 'b', title: 'Property for rent in Bunga', area: 'Bunga', district: 'Kampala', price: 1200000, price_period: 'mo', listing_type: 'rent', property_type: 'apartment', bedrooms: 2, total_count: 2 }
   ], { location: 'Bunga', searchType: 'rent' });
-  assert.match(reply, /1\. 🏡 \*Property for rent in Bunga\*\n🏷️ Single room\n📍 Bunga, Kampala/);
-  assert.match(reply, /🏷️ 2 bedrooms · apartment/);
+  // 16 Nov 2026: results are a short list, each line what it is and where.
+  assert.match(reply, /\*1\* · Single room, Bunga\n/);
+  assert.match(reply, /\*2\* · 2-bed apartment, Bunga\n/);
 });
 
 test('giving up is heard: the brief is read back and a person takes over', () => {

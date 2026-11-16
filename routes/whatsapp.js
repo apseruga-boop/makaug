@@ -169,6 +169,11 @@ const { propertyPriceMetadata } = require('../utils/propertyPriceCurrency');
 const {
   buildWhatsappPropertyCard,
   buildWhatsappPropertySearchReply,
+  buildWhatsappResultsList,
+  buildWhatsappPropertyPickCard,
+  shortCodesFromWhatsappReply,
+  shareCardImageUrl,
+  WHATSAPP_PROPERTY_SEARCH_PREVIEW_LIMIT,
   cleanWhatsappPropertyTitle,
   formatWhatsappPropertyPrice,
   propertyIdsFromWhatsappReply
@@ -283,7 +288,7 @@ const T = {
     kmAway: 'km away',
     searchNoResults: 'I do not have an approved matching listing right now.',
     askAgentArea: '👔 Which district or area do you need an agent for? (for example Kampala, Wakiso, Mbarara). You can also share your location.',
-    noAgentsFound: 'I do not have a verified agent matching that area right now.',
+    noAgentsFound: 'I do not have a verified agent for that area yet. Reply *6* and a person from the team will find you one, or tell me what you are looking for there and I will search the listings.',
     menuHint: 'Type MENU anytime to return to the main menu.',
     languageUpdated: '✅ Language updated.',
     restarted: '🔄 Session restarted.',
@@ -961,21 +966,6 @@ function ugandaIndependenceGreeting(lang, date = new Date()) {
   return lines[code] || lines.en;
 }
 
-function assistantIntro(lang) {
-  const code = resolveLangCode(lang);
-  const intros = {
-    en: "I'm your makaug property assistant in your pocket.",
-    lg: 'Nze makaug assistant wo ow\'eby\'amaka ku WhatsApp.',
-    sw: 'Mimi ni msaidizi wako wa makaug wa mali kwenye WhatsApp.',
-    ac: 'An aye makaug property assistant mamegi i WhatsApp.',
-    ny: 'Ndi makaug property assistant yaawe aha WhatsApp.',
-    rn: 'Ndi assistant wawe wa makaug kuri WhatsApp.',
-    sm: 'Nze makaug assistant wo ow\'eby\'amaka ku WhatsApp.',
-    am: 'እኔ በ WhatsApp ውስጥ ያለዎት የ makaug የንብረት አጋዥ ነኝ።'
-  };
-  return intros[code] || intros.en;
-}
-
 function cleanDisplayName(value) {
   const raw = normalizeInput(value);
   if (!raw) return '';
@@ -1016,25 +1006,60 @@ function timeGreetingWithName(lang, sessionData = {}) {
   return `${timeGreeting(lang)}${firstName ? `, ${firstName}` : ''}`;
 }
 
+// The menu, 16 Nov 2026. The five numbers people already know stay where they
+// are and 6 is a person. The question goes on the greeting line, and the nine
+// languages go behind one word instead of a line of names.
+const MAKAUG_MENU_HEADER = "🏡 *makaug* · Uganda's property marketplace";
+
+function menuHeader() {
+  return IS_SOUTH_AFRICA ? whatsappBrandHeader('Property assistant') : MAKAUG_MENU_HEADER;
+}
+
+function menuQuestion(code) {
+  const asks = {
+    en: 'What can I help you with?',
+    lg: "Londa ky'oyagala:",
+    sw: 'Chagua unachohitaji:',
+    ac: 'Yer gin ma imito:',
+    ny: 'Toorana eki orikwenda:',
+    rn: 'Hitamo ico ukeneye:',
+    sm: "Londa ky'oyagala:",
+    am: 'የሚፈልጉትን ይምረጡ:',
+    ar: 'اختر ما تحتاجه:'
+  };
+  return asks[code] || asks.en;
+}
+
 function greetingMenus() {
   return {
-    en: `Choose what you need:\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nYou can also type naturally, like "2 bedroom house in Kampala".`,
-    lg: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Yingira makaug nga agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda".`,
-    sw: `Chagua unachohitaji:\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n4️⃣ Off-plan projects\n5️⃣ Jiunge na makaug kama agent\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala".`,
-    ac: `Yer gin ma imito:\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nI romo coc ki leb ma yot, calo "ot me rent i Gulu".`,
-    ny: `Toorana eki orikwenda:\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nNoobaasa kuhandiika nk'omuntu arikugamba.`,
-    rn: `Hitamo ico ukeneye:\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nMushobora kwandika bisanzwe.`,
-    sm: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nOsobola n'okuwandika nga "ennyumba e Jinja".`,
-    am: `የሚፈልጉትን ይምረጡ:\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nበተፈጥሮ መጻፍም ይችላሉ፣ ለምሳሌ "2 bedroom house in Kampala".`,
-    ar: `اختر ما تحتاجه:\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n\nيمكنك أيضاً الكتابة بشكل طبيعي، مثل "2 bedroom house in Kampala".`
+    en: `1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Talk to a person\n\nOr just type what you want, like "2 bedroom house in Kira under 1m".`,
+    lg: `1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Yingira makaug nga agent\n6️⃣ Yogera n'omuntu\n\nOsobola n'okuwandika nga "ennyumba e Ntinda".`,
+    sw: `1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n4️⃣ Off-plan projects\n5️⃣ Jiunge na makaug kama agent\n6️⃣ Ongea na mtu\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala".`,
+    ac: `1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Lok ki dano\n\nI romo coc ki leb ma yot, calo "ot me rent i Gulu".`,
+    ny: `1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Gamba n'omuntu\n\nNoobaasa kuhandiika nk'omuntu arikugamba.`,
+    rn: `1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Vugana n'umuntu\n\nMushobora kwandika bisanzwe.`,
+    sm: `1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ Yogera n'omuntu\n\nOsobola n'okuwandika nga "ennyumba e Jinja".`,
+    am: `1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ ከሰው ጋር ይነጋገሩ\n\nበተፈጥሮ መጻፍም ይችላሉ፣ ለምሳሌ "2 bedroom house in Kampala".`,
+    ar: `1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n4️⃣ Off-plan projects\n5️⃣ Join makaug as an agent\n6️⃣ تحدث مع شخص\n\nيمكنك أيضاً الكتابة بشكل طبيعي، مثل "2 bedroom house in Kampala".`
   };
+}
+
+function menuLanguageLine(code) {
+  const lines = {
+    en: IS_SOUTH_AFRICA ? '_Reply LANGUAGE to change language._' : '_Reply LANGUAGE for Luganda, Kiswahili and 6 more._',
+    lg: '_Wandiika LANGUAGE okukyusa olulimi._',
+    sw: '_Andika LANGUAGE kubadilisha lugha._',
+    sm: '_Wandiika LANGUAGE okukyusa olulimi._',
+    am: '_ቋንቋ ለመቀየር LANGUAGE ብለው ይጻፉ።_',
+    ar: '_اكتب LANGUAGE لتغيير اللغة._'
+  };
+  return lines[code] || lines.en;
 }
 
 function welcomeMessage(lang, sessionData = {}) {
   const code = resolveLangCode(lang);
-  const lead = timeGreetingWithName(code, sessionData);
   const menus = greetingMenus();
-  return `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n\n${menus[code] || menus.en}\n\nBrowse makaug anytime: ${HOME_URL}`;
+  return `${menuHeader()}\n${timeGreetingWithName(code, sessionData)} 👋 ${menuQuestion(code)}\n\n${menus[code] || menus.en}\n${menuLanguageLine(code)}`;
 }
 
 function detectLanguageFromText(text) {
@@ -1574,11 +1599,7 @@ function photoEnoughPrompt(lang, count = WHATSAPP_MIN_LISTING_PHOTOS) {
 }
 
 function friendlyGreetingReply(lang, sessionData = {}) {
-  const code = resolveLangCode(lang);
-  const lead = timeGreetingWithName(code, sessionData);
-  const languageLine = languageComfortLine(code);
-  const menus = greetingMenus();
-  return `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n${menus[code] || menus.en}\n\n${t(code, 'menuHint')}`;
+  return welcomeMessage(lang, sessionData);
 }
 
 function whatsappContactConfirmationPrompt(lang, phone) {
@@ -1688,7 +1709,7 @@ function photoStepReminderMessage(lang, step) {
 function friendlyUnknownReply(lang) {
   const code = resolveLangCode(lang);
   const messages = {
-    en: `I can help with that. Tell me what you need in one sentence, or pick:\n1️⃣ List a property\n2️⃣ Search properties\n3️⃣ Find an agent\n\nExample: "rent in Muyenga under 2m"`,
+    en: `I can help with that. Tell me what you need in one sentence, or pick:\n1️⃣ List a property\n2️⃣ Search properties\n3️⃣ Find an agent\n6️⃣ Talk to a person\n\nExample: "rent in Muyenga under 2m"`,
     lg: `Nsobola okukuyamba. Mpandiikira ky'oyagala mu sentence emu, oba londa:\n1️⃣ Listing y'ennyumba\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent`,
     sw: `Naweza kusaidia. Niambie unahitaji nini kwa sentensi moja, au chagua:\n1️⃣ Orodhesha mali\n2️⃣ Tafuta mali\n3️⃣ Tafuta agent`,
     ac: `Aromo konyi. Waca gin ma imito i lok acel, onyo yer:\n1️⃣ Ket property\n2️⃣ Yeny property\n3️⃣ Nong agent`,
@@ -9661,8 +9682,17 @@ async function handleUnknownForwardedAdvert({ phone = '', session = {}, cleanBod
   const now = Date.now();
   const text = normalizeInput(cleanBody);
   const forwarded = looksLikeForwardedProperty({ cleanBody, mediaUrl, runtime });
-  const facts = text && !mediaUrl ? employeePropertyFacts(text, {}) : null;
-  const isCaption = Boolean(facts && facts.listingType && Number(facts.price) > 0 && !looksLikeSearchBrief(text));
+  // The words of an advert, typed on their own or written on its photo.
+  const facts = text ? employeePropertyFacts(text, {}) : null;
+  // Photos in this burst say advert. Without them, a short line with no phone
+  // number and no seller's words is somebody saying what they want: "student
+  // hostel near Makerere 300k" and "Land for sale in Wakiso around 50m" were
+  // both told "That looks like a property you are selling" (16 Nov 2026).
+  const burstAt = Date.parse(state?.since || '');
+  const photosInBurst = Boolean(mediaUrl) || Number(runtime.mediaCount || 0) > 0
+    || (Number(state?.media || 0) > 0 && Number.isFinite(burstAt) && now - burstAt < 60 * 60 * 1000);
+  const isCaption = Boolean(facts && facts.listingType && Number(facts.price) > 0 && !looksLikeSearchBrief(text)
+    && (photosInBurst || looksLikeAdvertText(text)));
 
   const confirm = async (fullName) => {
     let agent = await findAgentByPhoneAnyStatus(phone);
@@ -9735,7 +9765,7 @@ async function handleUnknownForwardedAdvert({ phone = '', session = {}, cleanBod
       // Albums often arrive before their caption: look back for them.
       since: state?.since || new Date(now - 10 * 60 * 1000).toISOString(),
       captions: Number(state?.captions || 0) + 1,
-      media: Number(state?.media || 0),
+      media: Number(state?.media || 0) + (mediaUrl ? 1 : 0),
       prompted_at: state?.prompted_at || null,
       awaiting_name: false
     };
@@ -9772,6 +9802,20 @@ const SEARCH_BRIEF_CUES = /\b(?:i(?:'| a)?m|i am|am|we(?:'re| are)|she is|he is)
 
 function looksLikeSearchBrief(text = '') {
   return SEARCH_BRIEF_CUES.test(normalizeInput(text));
+}
+
+// What an advert has that somebody saying what they want does not: a number
+// to call, the length of a description, or the words of somebody selling.
+const ADVERT_PHONE = /(?:\+?256|\b0)[\s-]?7\d{2}[\s-]?\d{3}[\s-]?\d{3}\b/;
+const ADVERT_WORDS = /\b(?:call|contact|whatsapp|inbox|available|going (?:at|for)|asking|negotiable|nego|selling|on sale|for more (?:details|info|information)|viewing fee|price is)\b/i;
+
+function looksLikeAdvertText(text = '') {
+  const raw = String(text || '');
+  if (ADVERT_PHONE.test(raw)) return true;
+  const lines = raw.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length >= 3 || normalizeInput(raw).length >= 140) return true;
+  if (/\?\s*$/.test(raw)) return false;
+  return ADVERT_WORDS.test(raw);
 }
 
 function looksLikeForwardedProperty({ cleanBody = '', mediaUrl = '', runtime = {} } = {}) {
@@ -14623,7 +14667,8 @@ function formatCheapestAreasLine(lang, areaStats = []) {
   }[code] || 'Cheapest areas from live listings';
   const rows = areaStats.slice(0, 5).map((row, index) => {
     const area = [row.area_label, row.district].filter(Boolean).join(', ');
-    return `${index + 1}. ${area || ACTIVE_COUNTRY_NAME} - from ${formatPrice(row.min_price, row.price_period || '')} (${row.listing_count} listing${Number(row.listing_count) === 1 ? '' : 's'})`;
+    void index;
+    return `• ${area || ACTIVE_COUNTRY_NAME} - from ${formatPrice(row.min_price, row.price_period || '')} (${row.listing_count} listing${Number(row.listing_count) === 1 ? '' : 's'})`;
   });
   return `\n${heading}:\n${rows.join('\n')}\n`;
 }
@@ -14640,7 +14685,9 @@ function formatAffordabilityAdviceMessage(lang, rows = [], areaStats = [], filte
   const header = `${whatsappBrandHeader('Affordability search')}\n${affordabilityExactLabel(lang, exactMatch)}\n🎯 ${filterBits.join(' • ')}${fxNote}`;
   const areaLine = formatCheapestAreasLine(lang, areaStats);
   if (!rows.length) {
-    return `${header}${areaLine}\nI do not have live approved listings to show for this yet. Reply with another budget, area, or property type and I will check again.\n${t(lang, 'menuHint')}`;
+    // "So here are the cheapest options I can see", then "I do not have
+    // listings to show": both, in one message (16 Nov 2026).
+    return `${whatsappBrandHeader('Affordability search')}\n🎯 ${filterBits.join(' • ')}${fxNote}${areaLine}\nI have nothing live for that yet. Try another area, budget or kind of place and I will look again, or reply *6* and a person from the team will help you look.`;
   }
   return `${header}${areaLine}\n${formatPropertySearchMessage(lang, rows, filters.area || 'Any area', searchType)}`;
 }
@@ -16405,6 +16452,195 @@ function replyAsksSomething(text = '') {
   return /\breply\b/i.test(words) || /\*\d{1,2}\*\s*=/.test(words) || /\?/.test(words);
 }
 
+/**
+ * What kind of reply this is, from its own words: 'results' (a numbered list
+ * to pick from), 'pick' (one property, with CONTACT), 'menu', or ''.
+ */
+function whatsappReplyKind(text = '') {
+  const clean = String(text || '');
+  if (/Reply \*CONTACT\* for the owner's number/.test(clean)) return 'pick';
+  if (/Reply \*\d+\*(?:, \*\d+\*)*(?: or \*\d+\*)? to see (?:one|it)\b/.test(clean)) return 'results';
+  if (/What can I help you with\?|Choose what you need:/.test(clean)) return 'menu';
+  return '';
+}
+
+/** A live property by the first eight characters of its id (makaug.com/p/<code>). */
+async function propertyByShortCode(code = '') {
+  const clean = String(code || '').trim().toLowerCase();
+  if (!/^[0-9a-f]{8}$/.test(clean)) return null;
+  const result = await db.query(
+    `SELECT id::text AS id, updated_at
+       FROM properties
+      WHERE id::text LIKE $1 AND status = 'approved'
+      ORDER BY updated_at DESC NULLS LAST
+      LIMIT 1`,
+    [`${clean}%`]
+  );
+  return result.rows[0] || null;
+}
+
+// How long a list of results can be picked from by its numbers.
+const RESULTS_PICK_MINUTES = 30;
+const RESULTS_KEPT = 12;
+
+// Every list built in this process, found by the codes it shows, with the rest
+// of its rows behind it for MORE. The no-match fallback ("the closest I have
+// anywhere in Uganda") never reached the search log, so a "1" after it started
+// the listing questions; recording here and remembering where the reply goes
+// out covers every search that makes a list.
+const RESULT_LISTS = new Map();
+
+function recordResultList(rows = []) {
+  const ids = (Array.isArray(rows) ? rows : [])
+    .map((row) => String(row?.id || ''))
+    .filter((id) => /^[0-9a-f-]{36}$/i.test(id))
+    .slice(0, RESULTS_KEPT);
+  const shown = ids.slice(0, WHATSAPP_PROPERTY_SEARCH_PREVIEW_LIMIT).map((id) => id.slice(0, 8).toLowerCase());
+  if (shown.length < 2) return;
+  if (RESULT_LISTS.size >= 500) RESULT_LISTS.delete(RESULT_LISTS.keys().next().value);
+  RESULT_LISTS.set(shown.join(','), ids);
+}
+
+/**
+ * What this person has just been shown: a list (numbered from 1), or one
+ * property on its own. MORE's lists carry on from one already remembered, and
+ * a property picked from a list leaves the list as it is.
+ */
+async function rememberResultsShown(phone, text = '') {
+  const kind = whatsappReplyKind(text);
+  const codes = shortCodesFromWhatsappReply(text, HOME_URL);
+  if (!phone || !codes.length) return;
+  if (kind === 'results') {
+    const first = Number((String(text).match(/^\*(\d+)\* · /m) || [])[1] || 0);
+    if (first !== 1) return;
+  } else if (kind !== 'pick' || /to see the others?\b/.test(text)) {
+    return;
+  }
+  let ids = kind === 'results' ? RESULT_LISTS.get(codes.join(',')) : null;
+  if (!ids) {
+    const found = await db.query(
+      `SELECT id::text AS id FROM properties WHERE substr(id::text, 1, 8) = ANY($1::text[]) AND status = 'approved'`,
+      [codes]
+    );
+    const byCode = new Map(found.rows.map((row) => [row.id.slice(0, 8).toLowerCase(), row.id]));
+    ids = codes.map((code) => byCode.get(code)).filter(Boolean);
+  }
+  if (!ids.length) return;
+  const now = new Date().toISOString();
+  await patchSessionData(phone, kind === 'pick'
+    ? { last_results: ids.slice(0, 1), last_results_shown: 1, last_results_at: now, listing_enquiry_property_id: ids[0], listing_enquiry_at: now }
+    : { last_results: ids, last_results_shown: Math.min(codes.length, ids.length), last_results_at: now });
+}
+
+/** Live properties by id, in the order given, with what a card needs. */
+async function loadResultRows(ids = []) {
+  const wanted = (Array.isArray(ids) ? ids : []).map((id) => String(id || '').trim()).filter((id) => /^[0-9a-f-]{36}$/i.test(id));
+  if (!wanted.length) return [];
+  const result = await db.query(
+    `SELECT id::text AS id, title, listing_type, transaction_type, property_type, price, price_period,
+            price_on_application, area, district, bedrooms, extra_fields, status, updated_at
+       FROM properties
+      WHERE id = ANY($1::uuid[]) AND status = 'approved'`,
+    [wanted]
+  );
+  const byId = new Map(result.rows.map((row) => [row.id, row]));
+  return wanted.map((id) => byId.get(id)).filter(Boolean);
+}
+
+/** The last reply this number was sent, and what kind it was. */
+async function lastReplyKindFor(phone = '') {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 9) return '';
+  const result = await db.query(
+    `SELECT payload->>'text' AS text
+       FROM outbound_message_queue
+      WHERE user_phone = ANY($1::text[]) AND channel = 'whatsapp'
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [[...new Set([String(phone), digits, `+${digits}`])]]
+  ).catch(() => ({ rows: [] }));
+  return whatsappReplyKind(result.rows[0]?.text || '');
+}
+
+/**
+ * "2" after a list of results is the second property, not menu option 2.
+ * "MORE" is the next three. "CONTACT" after a property is its owner's number,
+ * through the same enquiry as a link from the website (which also tells the
+ * lister). Today a "1" after results started the listing questions and sent a
+ * five-minute video (16 Nov 2026). Returns { message, nextStep } or null.
+ */
+async function handleResultsReply({ phone, step = '', text = '', sessionData = {}, lang = 'en' } = {}) {
+  if (!['main_menu', 'greeting', ''].includes(String(step || ''))) return null;
+  const clean = normalizeInput(text).toLowerCase().replace(/[.!?]+$/, '').trim();
+  if (!clean || clean.length > 40) return null;
+  const ids = Array.isArray(sessionData.last_results) ? sessionData.last_results : [];
+  const at = Date.parse(sessionData.last_results_at || '');
+  const fresh = ids.length && Number.isFinite(at) && Date.now() - at <= RESULTS_PICK_MINUTES * 60000;
+  const shown = Math.min(Number(sessionData.last_results_shown) || 0, ids.length);
+
+  const number = clean.match(/^(?:no\.?\s*|number\s*|#\s*)?(\d{1,2})$/);
+  const wantsMore = /^(?:more|next|more please|show more|see more|more options|others|other options|another|any other|zaidi|ebirala)$/.test(clean);
+  const wantsContact = /^(?:contact|contacts|call|call them|number|phone|phone number|their number|owner'?s? number|agent'?s? number|i want (?:it|this|this one|that one)|interested|i'?m interested|i am interested|book|book (?:it|a viewing|viewing)|viewing|view it|visit|how do i (?:get|see) it)$/.test(clean);
+  if (!number && !wantsMore && !wantsContact) return null;
+  if (!fresh) return null;
+  const kind = await lastReplyKindFor(phone);
+  if (kind === 'menu' || (!kind && !wantsContact)) return null;
+
+  if (wantsContact) {
+    // CONTACT straight after a list: which one?
+    if (kind === 'results' && shown > 1) {
+      const numbers = Array.from({ length: shown }, (_, i) => `*${i + 1}*`);
+      return {
+        message: `Which one? Reply ${numbers.slice(0, -1).join(', ')} or ${numbers[numbers.length - 1]} to see it, then *CONTACT* for the owner's number.`,
+        nextStep: 'main_menu'
+      };
+    }
+    const picked = String(sessionData.listing_enquiry_property_id || '').trim()
+      || (ids.length === 1 ? ids[0] : '');
+    if (!picked || (kind !== 'pick' && ids.length !== 1)) return null;
+    const enquiryReply = await buildWhatsappListingEnquiryResponse({ propertyId: picked }, { phone, lang });
+    if (!enquiryReply) return null;
+    await patchSessionData(phone, {
+      listing_enquiry_property_id: picked,
+      listing_enquiry_at: new Date().toISOString()
+    });
+    return { message: enquiryReply, nextStep: 'main_menu' };
+  }
+
+  if (number) {
+    const n = Number(number[1]);
+    if (n < 1 || n > shown) return null;
+    const [row] = await loadResultRows([ids[n - 1]]);
+    if (!row) return { message: `Number ${n} has just been taken off makaug. Reply another number, or tell me what you are looking for.`, nextStep: 'main_menu' };
+    const others = [];
+    for (let k = 1; k <= shown; k += 1) if (k !== n) others.push(k);
+    await patchSessionData(phone, {
+      listing_enquiry_property_id: row.id,
+      listing_enquiry_reference: null,
+      listing_enquiry_at: new Date().toISOString()
+    });
+    return { message: buildWhatsappPropertyPickCard(row, { homeUrl: HOME_URL, others: others.slice(0, 5) }), nextStep: 'main_menu' };
+  }
+
+  // MORE: the next three of the ones kept.
+  if (shown >= ids.length) {
+    return { message: 'That was all of them. Tell me another area, budget or kind of place and I will look again.', nextStep: 'main_menu' };
+  }
+  const next = await loadResultRows(ids.slice(shown, shown + WHATSAPP_PROPERTY_SEARCH_PREVIEW_LIMIT));
+  if (!next.length) return null;
+  const nowShown = shown + next.length;
+  await patchSessionData(phone, { last_results_shown: nowShown, last_results_at: new Date().toISOString() });
+  return {
+    message: buildWhatsappResultsList(next, {
+      homeUrl: HOME_URL,
+      header: '🔎 *More you might like*',
+      startAt: shown + 1,
+      hasMore: nowShown < ids.length
+    }),
+    nextStep: 'main_menu'
+  };
+}
+
 async function queueWhatsappWebBridgeAutoReply({
   phone,
   message,
@@ -16458,6 +16694,24 @@ async function queueWhatsappWebBridgeAutoReply({
       }
       mediaType = mediaUrl ? 'image' : 'text';
     }
+  }
+
+  // Results, and a property somebody picked from them, carry the property's
+  // card: its photo with the price, where, and whether it is verified. The
+  // words go under it. One message, as before (16 Nov 2026).
+  if (!mediaUrl && !staffCard && whatsappReplyKind(text) && text.length <= WHATSAPP_PHOTO_CAPTION_LIMIT) {
+    const code = shortCodesFromWhatsappReply(text, HOME_URL)[0];
+    const row = code ? await propertyByShortCode(code).catch(() => null) : null;
+    const cardUrl = row ? shareCardImageUrl(row, HOME_URL) : '';
+    if (cardUrl) {
+      mediaUrl = cardUrl;
+      mediaType = 'image';
+    }
+  }
+  if (!staffCard && ['results', 'pick'].includes(whatsappReplyKind(text))) {
+    await rememberResultsShown(phone, text).catch((error) => {
+      logger.warn('Results memory failed:', error.message || String(error));
+    });
   }
 
   // Words this person was sent a minute ago would be dropped by the bridge as
@@ -18836,6 +19090,7 @@ async function formatNoMatchOrFallbackReply({
 
 function formatPropertySearchMessage(lang, rows, location, searchType) {
   void lang;
+  recordResultList(rows);
   return buildWhatsappPropertySearchReply(rows, {
     homeUrl: HOME_URL,
     location,
@@ -20601,6 +20856,109 @@ function offPlanWhereAnswer(text = '') {
  * asked "Is the free time up after 1 days listing", was told Ronald would reach
  * out, and nobody was told.
  */
+// "Talk to a person": 6 on the menu, or asking for one in words. Until 16 Nov
+// 2026 the answer was an email address. Now the team hears at once (the same
+// alert as any chat that needs a person, to the people who get the agent-join
+// alerts), the assistant stops talking over them, and the reply says when
+// somebody answers. MENU gives the assistant back to anyone who asked for a
+// person themselves.
+const PERSON_REQUEST = /\b(?:(?:speak|talk|chat) (?:to|with) (?:a |the |your |some )?(?:person|human|someone|somebody|real person|real human|team|staff|customer care|customer service)|human (?:support|help|being)|real (?:person|human)|customer (?:care|service)|(?:kuongea|ongea) na mtu|(?:okwogera|yogera) n'?omuntu)\b/i;
+const PERSON_REQUEST_LOCKED_STEPS = new Set(['verify_otp', 'ask_id_number', 'ask_selfie', 'ask_terms']);
+
+function wantsToTalkToAPerson(step = '', text = '') {
+  const clean = normalizeInput(text);
+  const currentStep = String(step || '').trim().toLowerCase();
+  if (!clean || PERSON_REQUEST_LOCKED_STEPS.has(currentStep)) return false;
+  if (clean === '6') return ['main_menu', 'greeting', ''].includes(currentStep);
+  return clean.length <= 160 && PERSON_REQUEST.test(clean);
+}
+
+function kampalaHourNow(date = new Date()) {
+  const hour = Number(new Intl.DateTimeFormat('en-GB', {
+    timeZone: ACTIVE_TENANT.timezone || 'Africa/Kampala',
+    hour: '2-digit',
+    hourCycle: 'h23'
+  }).format(date));
+  return Number.isFinite(hour) ? hour : 12;
+}
+
+function talkToPersonMessage(lang, date = new Date()) {
+  const code = resolveLangCode(lang);
+  const hour = kampalaHourNow(date);
+  const later = hour < 9 ? 'today' : (hour >= 18 ? 'tomorrow' : '');
+  const messages = {
+    en: [
+      later
+        ? `👋 I have told the makaug team. We answer between 9am and 6pm, so a person will reply to you here from 9am ${later}.`
+        : '👋 I have told the makaug team. A person will reply to you here soon. We answer between 9am and 6pm.',
+      '',
+      'While you wait, write what it is about and they will see it.',
+      'Changed your mind? Reply *MENU*.'
+    ].join('\n'),
+    lg: [
+      later
+        ? `👋 Ntegeezezza ab'e makaug. Tuddamu wakati wa 9am ne 6pm, kale omuntu ajja kukuddamu wano okuva ku 9am ${later === 'today' ? 'leero' : 'enkya'}.`
+        : "👋 Ntegeezezza ab'e makaug. Omuntu ajja kukuddamu wano mu bbanga ttono. Tuddamu wakati wa 9am ne 6pm.",
+      '',
+      "Bw'oba olinda, wandiika ky'oyagala era bajja kukiraba.",
+      'Okyusizza endowooza? Ddamu *MENU*.'
+    ].join('\n'),
+    sw: [
+      later
+        ? `👋 Nimewajulisha timu ya makaug. Tunajibu kati ya saa 3 asubuhi na saa 12 jioni, kwa hivyo mtu atakujibu hapa kuanzia saa 3 asubuhi ${later === 'today' ? 'leo' : 'kesho'}.`
+        : '👋 Nimewajulisha timu ya makaug. Mtu atakujibu hapa hivi karibuni. Tunajibu kati ya saa 3 asubuhi na saa 12 jioni.',
+      '',
+      'Wakati unasubiri, andika ni kuhusu nini na wataiona.',
+      'Umebadilisha nia? Jibu *MENU*.'
+    ].join('\n')
+  };
+  messages.sm = messages.lg;
+  return messages[code] || messages.en;
+}
+
+async function talkToPersonReply({ phone, lang = 'en', contactName = '', text = '' } = {}) {
+  const said = normalizeInput(text);
+  const fromMenu = said === '6';
+  const reason = fromMenu ? 'Picked 6, Talk to a person, on the menu' : 'Asked to talk to a person';
+  await safeConversationControl(phone, {
+    status: 'needs_human',
+    priority: 'high',
+    category: 'support',
+    last_summary: fromMenu ? reason : said.slice(0, 400),
+    metadata: {
+      needs_person_reason: 'asked_for_person',
+      needs_person_at: new Date().toISOString(),
+      needs_person_source: fromMenu ? 'menu' : 'text'
+    }
+  }, 'whatsapp_talk_to_person');
+  deferWhatsappWork('talk-to-a-person alert', () => require('../services/leadDeskService').alertTeamConversationNeedsPerson(db, {
+    phone,
+    contactName,
+    summary: fromMenu ? '' : said,
+    reason,
+    language: languageDisplayName(lang),
+    extraRecipients: require('../services/agentFilmReplyService').agentJoinAlertRecipients(process.env, { staff: [] })
+  }));
+  return talkToPersonMessage(lang);
+}
+
+// What it costs to list, asked in words.
+const LISTING_COST_QUESTION = /\b(?:how much|cost|costs|charge|charges|fee|fees|pay|price)\b.{0,40}\b(?:to|for) (?:list|listing|post|posting|advertise|advertising|upload|put up|join|become|register|subscribe)\b|\bis (?:it |listing |posting |advertising )?free (?:to |for )?(?:list|post|advertis|join)|\bdo you charge\b|\b(?:listing|posting|advertising|agent|subscription) (?:fee|fees|cost|costs|charge|charges|price)\b/i;
+const COST_ANSWER_STEPS = new Set(['', 'main_menu', 'greeting', 'listing_type', 'ownership', 'search_type', 'submitted']);
+
+function listingCostReply() {
+  return [
+    '💰 *What it costs to list on makaug*',
+    '',
+    `🏠 *Owners:* ${controlRoom.ownerFeeLabel()} a month per property, from the day it goes live.`,
+    `👔 *Agents:* ${agentMonthlyFeeLabel()} a month, short stays included.`,
+    '',
+    'No commission: buyers and tenants call you direct. Nothing is charged automatically.',
+    '',
+    'Reply *1* to list your property, or *5* to join as an agent.'
+  ].join('\n');
+}
+
 async function routeReply(lang, route, { phone = '', text = '' } = {}) {
   if (route === 'agent_registration' && !IS_SOUTH_AFRICA && phone) {
     return { message: await agentJoinRequestReply({ phone, text }), nextStep: 'main_menu' };
@@ -20642,7 +21000,7 @@ function menuRouteReply(lang, route) {
   }
   if (route === 'support') {
     return {
-      message: `👋 Human support\n${process.env.SUPPORT_PHONE ? `📱 ${process.env.SUPPORT_PHONE}\n` : ''}📧 ${process.env.SUPPORT_EMAIL || ACTIVE_TENANT.email}\n\n${t(lang, 'menuHint')}`,
+      message: `👋 Want a person from the makaug team? Reply *6* and I will let them know. We answer between 9am and 6pm.\n\nOr tell me what you need and I will try first.\n📧 ${process.env.SUPPORT_EMAIL || ACTIVE_TENANT.email}`,
       nextStep: 'main_menu'
     };
   }
@@ -20678,8 +21036,8 @@ function isActionableStepReply(step, value = '') {
   const clean = normalizeInput(value).toLowerCase();
   if (!currentStep || !clean || isResumeControlReply(clean)) return false;
 
-  if (currentStep === 'greeting') return ['1', '2', '3', '4'].includes(clean);
-  if (currentStep === 'main_menu') return ['1', '2', '3', '4', '5', '9'].includes(clean);
+  if (currentStep === 'greeting') return ['1', '2', '3', '4', '5', '6'].includes(clean);
+  if (currentStep === 'main_menu') return ['1', '2', '3', '4', '5', '6', '9'].includes(clean);
   if (currentStep === 'choose_language') return /^[1-9]$/.test(clean);
   if (currentStep === 'listing_type') return Boolean(mapListingTypeInput(clean));
   if (currentStep === 'ownership') return Boolean(mapOwnershipInput(clean)) || Boolean(mapListingTypeInput(clean));
@@ -20902,6 +21260,24 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (where === 'uganda') return respond(offPlanUgandaReply(), 'main_menu');
     return respond(offPlanWhereQuestion(), 'off_plan_where');
   }
+  // A number, MORE or CONTACT right after results is about the results.
+  const resultsReply = await handleResultsReply({ phone, step, text: cleanBody, sessionData, lang }).catch((error) => {
+    logger.warn('Results reply failed:', error.message || String(error));
+    return null;
+  });
+  if (resultsReply) return respond(resultsReply.message, resultsReply.nextStep);
+
+  // 6 on the menu, or asking in words for a person.
+  if (wantsToTalkToAPerson(step, cleanBody)) {
+    return respond(await talkToPersonReply({ phone, lang, contactName: runtime.contactName || sessionData.contact_name || '', text: cleanBody }), 'main_menu');
+  }
+
+  // "How much does it cost to list my house?" got the listing questions and a
+  // five-minute film (16 Nov 2026). It gets the answer.
+  if (COST_ANSWER_STEPS.has(String(step || '')) && LISTING_COST_QUESTION.test(cleanBody)) {
+    return respond(listingCostReply(), 'main_menu');
+  }
+
   // Someone asking about a listing they are looking at, before anything else.
   // The message our own property pages write contains "listing" and "for rent",
   // so the listing-intent check used to read a renter's availability question
@@ -21058,7 +21434,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   }
 
   if (bodyUpper === 'LANG' || bodyUpper === 'LANGUAGE') {
-    return respond(`${t(lang, 'languageUpdated')}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
+    return respond(`🌍 ${languageComfortLine(lang)}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
   }
 
   const languageSwitch = parseLanguageChange(cleanBody);
@@ -21534,6 +21910,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '4') return respond(offPlanWhereQuestion(), 'off_plan_where');
     if (cleanBody === '5') return respond(await agentJoinRequestReply({ phone, text: 'Menu: join makaug as an agent' }), 'main_menu');
+    if (cleanBody === '6') return respond(await talkToPersonReply({ phone, lang, contactName: runtime.contactName || sessionData.contact_name || '', text: cleanBody }), 'main_menu');
     return respond(`${friendlyGreetingReply(lang, sessionData)}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
   }
 
@@ -21602,6 +21979,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '4') return respond(offPlanWhereQuestion(), 'off_plan_where');
     if (cleanBody === '5') return respond(await agentJoinRequestReply({ phone, text: 'Menu: join makaug as an agent' }), 'main_menu');
+    if (cleanBody === '6') return respond(await talkToPersonReply({ phone, lang, contactName: runtime.contactName || sessionData.contact_name || '', text: cleanBody }), 'main_menu');
     if (cleanBody === '9') return respond(t(lang, 'chooseLanguage'), 'choose_language');
 
     if (compactUpper === 'WIDEN' && Number.isFinite(Number(sessionData.search_lat)) && Number.isFinite(Number(sessionData.search_lng))) {
@@ -23617,8 +23995,23 @@ async function processInboundRuntimeUnlocked({
     modelUsed: intentResult.model || null
   }));
 
-  const shouldPauseAutomation = ['off', 'copilot'].includes(String(conversationControl?.ai_mode || '').toLowerCase())
+  let shouldPauseAutomation = ['off', 'copilot'].includes(String(conversationControl?.ai_mode || '').toLowerCase())
     || ['needs_human', 'escalated'].includes(String(conversationControl?.status || '').toLowerCase());
+
+  // Somebody who asked for a person themselves can have the assistant back by
+  // typing MENU, as that reply told them. A chat the team has taken over, or
+  // one the assistant handed on for its own reasons, stays with the team.
+  if (shouldPauseAutomation
+    && String(conversationControl?.status || '').toLowerCase() === 'needs_human'
+    && !['off', 'copilot'].includes(String(conversationControl?.ai_mode || '').toLowerCase())
+    && conversationControl?.metadata?.needs_person_reason === 'asked_for_person'
+    && /^(?:menu|main menu|home|start)$/i.test(normalizeInput(effectiveBody))) {
+    await safeConversationControl(phone, {
+      status: 'open',
+      metadata: { needs_person_reason: null, needs_person_released_at: new Date().toISOString(), needs_person_released_by: 'customer_menu' }
+    }, 'whatsapp_talk_to_person_menu');
+    shouldPauseAutomation = false;
+  }
 
   if (shouldPauseAutomation) {
     await updateSession(phone, { current_step: sessionStep, current_intent: intentResult.intent || null });
@@ -25164,6 +25557,16 @@ module.exports.importForwardedAdvert = importForwardedAdvert;
 
 module.exports.__test = {
   processInboundRuntime,
+  handleResultsReply,
+  recordResultList,
+  rememberResultsShown,
+  welcomeMessage,
+  wantsToTalkToAPerson,
+  talkToPersonMessage,
+  listingCostReply,
+  LISTING_COST_QUESTION,
+  looksLikeAdvertText,
+  whatsappReplyKind,
   validateAndStoreListingPhotos,
   shortStayListingKit,
   extractNaturalSearchFilters,

@@ -155,7 +155,7 @@ assert(
   routeSource.includes("isGenericWebsiteHelpLaunch(cleanBody) && ['greeting', 'main_menu', 'submitted'].includes(step)"),
   'Generic website launch must return the natural greeting before main-menu search parsing'
 );
-assert(routeSource.includes("I'm your makaug property assistant in your pocket."), 'Greeting must introduce the natural property assistant');
+assert(routeSource.includes("Or just type what you want, like"), 'Greeting must invite a natural request');
 assert(routeSource.includes('Speak English, Luganda, Kiswahili'), 'Greeting must explain multilingual natural-language support');
 assert(routeSource.includes("'confirm_whatsapp_contact'"), 'Natural listing flow must confirm the authenticated WhatsApp contact');
 assert(routeSource.includes("verification_channel: 'whatsapp_sender'"), 'WhatsApp sender confirmation must be stored as provenance');

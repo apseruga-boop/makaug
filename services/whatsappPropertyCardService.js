@@ -310,6 +310,160 @@ function totalWhatsappSearchMatches(rows = []) {
   );
 }
 
+/**
+ * A property's short link: makaug.com/p/74234ea2, the first part of its id.
+ * The long one (makaug.com/property/74234ea2-2cfe-4ecb-…) filled half a line
+ * of every result and told nobody anything (16 Nov 2026: "naff and a bit
+ * boring"). /p/<code> on the site sends it to the property page.
+ */
+function shortPropertyCode(id = '') {
+  const match = cleanText(id).toLowerCase().match(/^([0-9a-f]{8})-?[0-9a-f]{4}/);
+  return match ? match[1] : '';
+}
+
+function homeHost(homeUrl = DEFAULT_HOME_URL) {
+  return safeHomeUrl(homeUrl).replace(/\/+$/, '').replace(/^https?:\/\//i, '');
+}
+
+function shortPropertyUrl(row = {}, homeUrl = DEFAULT_HOME_URL) {
+  const code = shortPropertyCode(row.id);
+  return code ? `${homeHost(homeUrl)}/p/${code}` : propertyUrlForWhatsapp(row, homeUrl);
+}
+
+/** The short codes in a reply, in the order they appear. */
+function shortCodesFromWhatsappReply(value = '', homeUrl = DEFAULT_HOME_URL) {
+  const escaped = homeHost(homeUrl).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matches = String(value || '').matchAll(new RegExp(`(?:https?://)?${escaped}/p/([0-9a-f]{8})\\b`, 'ig'));
+  return [...new Set(Array.from(matches, (match) => match[1].toLowerCase()))];
+}
+
+/**
+ * The picture that goes with a property on WhatsApp: the card makaug.com
+ * already draws for every listing (its photo, the price, where, and whether it
+ * is verified). A listing with no photo gets the card for its kind.
+ */
+function shareCardImageUrl(row = {}, homeUrl = DEFAULT_HOME_URL) {
+  const id = cleanText(row.id);
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return '';
+  const updated = Date.parse(row.updated_at || '');
+  const version = Number.isFinite(updated) ? Math.floor(updated / 1000).toString(36) : '3';
+  return `${safeHomeUrl(homeUrl).replace(/\/+$/, '')}/og/property/${encodeURIComponent(id)}.jpg?v=${version}`;
+}
+
+/** "USh 900K/month" → "USh 900K a month". */
+function whatsappPriceWords(row = {}) {
+  return formatWhatsappPropertyPrice(row)
+    .replace(/\/(?:mo|month)\b/i, ' a month')
+    .replace(/\/night\b/i, ' a night')
+    .replace(/\/(?:sem|semester)\b/i, ' a semester')
+    .replace(/\/(?:yr|year)\b/i, ' a year')
+    .replace(/\/(?:wk|week)\b/i, ' a week');
+}
+
+/** "2-bed house for rent in Kira" → "2-bed house, Kira". Anything else as it is. */
+function shortListingLabel(row = {}) {
+  const title = cleanWhatsappPropertyTitle(row);
+  const match = title.match(/^(.{3,60}?)\s+(?:(?:for|to)\s+(?:rent|sale|let|lease)\s+)?(?:in|at)\s+([^,]{2,40})$/i);
+  const label = match ? `${match[1]}, ${match[2]}` : title;
+  return label.length > 56 ? `${label.slice(0, 55).trim()}…` : label;
+}
+
+/**
+ * A result's label: what it is and where. "Property for rent in Bunga" says
+ * nothing about what it is, so the listing's own type and bedrooms say it
+ * (a renter asking for a single room cannot tell a room from a villa).
+ */
+function resultLabel(row = {}) {
+  const title = cleanWhatsappPropertyTitle(row);
+  const label = shortListingLabel(row);
+  const homeLine = whatsappHomeTypeLine(row, title);
+  if (!homeLine) return label;
+  const what = homeLine
+    .replace(/^(\d+) bedrooms? · (.+)$/, '$1-bed $2')
+    .replace(/^(\d+) bedrooms?$/, '$1 bedrooms');
+  const generic = label.match(/^(?:Property|Properties|Home|Listing)(, .+)?$/i);
+  if (generic) return `${what.charAt(0).toUpperCase()}${what.slice(1)}${generic[1] || ''}`;
+  return `${label} · ${what}`;
+}
+
+function searchNoun(searchType = '') {
+  const nouns = {
+    sale: 'properties for sale',
+    rent: 'homes to rent',
+    student: 'student rooms',
+    commercial: 'commercial spaces',
+    land: 'plots and land',
+    any: 'properties'
+  };
+  return nouns[cleanText(searchType).toLowerCase()] || nouns.any;
+}
+
+/** "Reply *1*, *2* or *3* to see one", for the numbers shown. */
+function pickPrompt(first, last) {
+  const numbers = [];
+  for (let n = first; n <= last; n += 1) numbers.push(`*${n}*`);
+  if (numbers.length === 1) return `Reply ${numbers[0]} to see it`;
+  return `Reply ${numbers.slice(0, -1).join(', ')} or ${numbers[numbers.length - 1]} to see one`;
+}
+
+/**
+ * Results as a list that fits under the property's picture: the number, what
+ * it is, the price, the short link. The first is numbered `startAt`, so MORE
+ * carries on from where the list stopped.
+ */
+function buildWhatsappResultsList(rows = [], {
+  homeUrl = DEFAULT_HOME_URL,
+  header = '',
+  startAt = 1,
+  hasMore = false,
+  browseUrl = '',
+  total = 0
+} = {}) {
+  const safeRows = (Array.isArray(rows) ? rows : []).filter(Boolean);
+  const lines = [];
+  if (header) lines.push(header, '');
+  safeRows.forEach((row, index) => {
+    lines.push(`*${startAt + index}* · ${resultLabel(row)}`);
+    lines.push(`      *${whatsappPriceWords(row)}*`);
+    if (cleanText(row.distance_label)) lines.push(`      📏 ${cleanText(row.distance_label)}`);
+    lines.push(`      ${shortPropertyUrl(row, homeUrl)}`);
+  });
+  if (safeRows.length) {
+    lines.push('');
+    lines.push(`${pickPrompt(startAt, startAt + safeRows.length - 1)}${hasMore ? ', *MORE* for more' : ''}.`);
+  }
+  const all = cleanText(browseUrl).replace(/^https?:\/\//i, '');
+  if (all && total > startAt + safeRows.length - 1) lines.push(`See all ${total}: ${all}`);
+  return lines.join('\n').trim();
+}
+
+/**
+ * One property, when somebody has picked it from a list (or it was the only
+ * match): what it is, the price, where, the short link, and the word that gets
+ * them the person holding it. `others` are the other numbers they can pick.
+ */
+function buildWhatsappPropertyPickCard(row = {}, { homeUrl = DEFAULT_HOME_URL, others = [] } = {}) {
+  const location = [cleanText(row.area), cleanText(row.district)].filter(Boolean).join(', ') || ACTIVE_TENANT.countryName;
+  const title = cleanWhatsappPropertyTitle(row);
+  const homeLine = whatsappHomeTypeLine(row, title);
+  const lines = [
+    `🏡 *${title}*`,
+    `💰 ${whatsappPriceWords(row)}`,
+    `📍 ${location}`
+  ];
+  if (homeLine) lines.push(`🛏️ ${homeLine.charAt(0).toUpperCase()}${homeLine.slice(1)}`);
+  if (cleanText(row.distance_label)) lines.push(`📏 ${cleanText(row.distance_label)}`);
+  if (cleanText(row.nearest_place_label)) lines.push(`📍 ${cleanText(row.nearest_place_label)}`);
+  lines.push(`🔗 ${shortPropertyUrl(row, homeUrl)} · photos and map`);
+  lines.push('');
+  const rest = (Array.isArray(others) ? others : []).filter((n) => Number.isInteger(n) && n > 0);
+  let otherWords = '';
+  if (rest.length === 1) otherWords = `, or *${rest[0]}* to see the other`;
+  if (rest.length > 1) otherWords = `, or ${rest.slice(0, -1).map((n) => `*${n}*`).join(', ')} or *${rest[rest.length - 1]}* to see the others`;
+  lines.push(`Reply *CONTACT* for the owner's number${otherWords}.`);
+  return lines.join('\n');
+}
+
 function buildWhatsappPropertySearchReply(rows = [], {
   homeUrl = DEFAULT_HOME_URL,
   location = '',
@@ -322,52 +476,40 @@ function buildWhatsappPropertySearchReply(rows = [], {
     return `No approved properties are available right now.\n🔎 View all properties: ${browseUrl}`;
   }
   if (safeRows.length === 1) {
-    const caption = buildWhatsappPropertyCard(safeRows[0], {
-      homeUrl,
-      allPropertiesUrl: browseUrl
-    }).caption;
-    const extra = [
-      cleanText(safeRows[0].distance_label) ? `📏 ${cleanText(safeRows[0].distance_label)}` : '',
-      cleanText(safeRows[0].nearest_place_label) ? `📍 ${cleanText(safeRows[0].nearest_place_label)}` : ''
-    ].filter(Boolean);
-    return extra.length ? `${caption}\n${extra.join('\n')}` : caption;
+    return buildWhatsappPropertyPickCard(safeRows[0], { homeUrl });
   }
 
   const visibleRows = safeRows.slice(0, WHATSAPP_PROPERTY_SEARCH_PREVIEW_LIMIT);
   const totalMatches = totalWhatsappSearchMatches(safeRows);
   const cleanLocation = cleanText(location);
   const proximityHeader = cleanText(safeRows[0]?.proximity_header);
-  const lines = [
-    proximityHeader
-      ? `🔎 *${totalMatches} ${whatsappSearchTypeLabel(searchType)} ${proximityHeader}*`
-      : `🔎 *${totalMatches} matching ${whatsappSearchTypeLabel(searchType)} found${cleanLocation ? ` in ${cleanLocation}` : ''}*`,
-    proximityHeader ? `Closest ${visibleRows.length} first:` : `Showing the newest ${visibleRows.length}:`,
-    ''
-  ];
-
-  visibleRows.forEach((row, index) => {
-    const title = cleanWhatsappPropertyTitle(row);
-    lines.push(`${index + 1}. 🏡 *${title}*`);
-    // "Property for rent in Bunga" says nothing about what it is. When the
-    // title carries no home type or bedroom count, say it on its own line
-    // (a renter asking for a single room cannot tell a room from a villa).
-    const homeLine = whatsappHomeTypeLine(row, title);
-    if (homeLine) lines.push(`🏷️ ${homeLine.charAt(0).toUpperCase()}${homeLine.slice(1)}`);
-    lines.push(`📍 ${[cleanText(row.area), cleanText(row.district)].filter(Boolean).join(', ') || ACTIVE_TENANT.countryName}`);
-    if (cleanText(row.distance_label)) lines.push(`📏 ${cleanText(row.distance_label)}`);
-    if (cleanText(row.nearest_place_label)) lines.push(`📍 ${cleanText(row.nearest_place_label)}`);
-    lines.push(`💰 ${formatWhatsappPropertyPrice(row)}`);
-    lines.push(`🔗 ${propertyUrlForWhatsapp(row, homeUrl)}`);
-    lines.push('');
+  // "3 homes to rent in Kira", or "3 homes to rent within 2 km of Ntinda".
+  const header = proximityHeader
+    ? `🔎 *${totalMatches} ${searchNoun(searchType)} ${proximityHeader}*`
+    : `🔎 *${totalMatches} ${searchNoun(searchType)}${cleanLocation ? ` in ${cleanLocation}` : ''}*`;
+  return buildWhatsappResultsList(visibleRows, {
+    homeUrl,
+    header,
+    startAt: 1,
+    hasMore: safeRows.length > visibleRows.length,
+    browseUrl,
+    total: totalMatches
   });
-
-  lines.push(`🔎 View all ${totalMatches} matches: ${browseUrl}`);
-  return lines.join('\n').trim();
 }
 
 module.exports = {
   buildWhatsappPropertyCard,
   buildWhatsappPropertySearchReply,
+  buildWhatsappResultsList,
+  buildWhatsappPropertyPickCard,
+  shortPropertyCode,
+  shortPropertyUrl,
+  shortCodesFromWhatsappReply,
+  shareCardImageUrl,
+  whatsappPriceWords,
+  shortListingLabel,
+  resultLabel,
+  searchNoun,
   cleanWhatsappPropertyTitle,
   formatWhatsappPropertyPrice,
   meaningfulWhatsappPeriod,
