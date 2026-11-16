@@ -82,7 +82,8 @@
       + opt('', helpers.t('sortNewest'))
       + opt('price_asc', helpers.t('sortLow'))
       + opt('price_desc', helpers.t('sortHigh'))
-      + opt('rating', helpers.t('sortRated'))
+      // Best reviewed only once a stay has a review to sort by.
+      + (sort === 'rating' ? opt('rating', helpers.t('sortRated')) : '')
       + '</select>';
   }
 
@@ -110,8 +111,53 @@
     return '<div class="listing-map-col st-opt-mapcol hidden">'
       + '<div class="listing-map-shell">'
       + '<div id="map-short-term" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>'
+      // The "Can't find what you're looking for?" card sits under the map, as
+      // it does on the sale and rent pages, whenever the map is on screen.
+      + '<div id="st-map-lead-slot"></div>'
       + '</div></div>';
   }
+
+  // Aggregator notice. Short on the grid, the same words on every stay.
+  function aggregatorNotice(helpers) {
+    return '<div class="st-opt-aggregator" role="note" id="st-aggregator">'
+      + '<p><b>makaug.com gathers short stays posted online in Uganda</b> (social media, Airbnb and similar sites) so they are easier to find. '
+      + 'We do not take bookings or payments and are not responsible for any stay. '
+      + 'Contact the original poster to check availability, dates and price.</p></div>';
+  }
+
+  function safetyTips() {
+    return '<section class="st-opt-safety" aria-labelledby="st-opt-safety-h">'
+      + '<h2 id="st-opt-safety-h">Before you pay for a stay</h2>'
+      + '<ul>'
+      + '<li>View the place, or have someone you trust view it, before you pay.</li>'
+      + '<li>Do not send a deposit to someone you cannot verify.</li>'
+      + '<li>Check the original post and that the photos, price and dates match.</li>'
+      + '<li>Report a listing that looks wrong with "Something wrong with this listing?" or on WhatsApp.</li>'
+      + '</ul>'
+      + '<p>makaug.com is not a party to any booking. Payment is agreed between you and the poster.</p>'
+      + '</section>';
+  }
+
+  function mapIsOnScreen() {
+    var col = document.querySelector('#page-short-term .st-opt-mapcol');
+    // On a phone the open map covers the page, so the card stays with the list.
+    var wide = window.matchMedia ? window.matchMedia('(min-width: 1024px)').matches : true;
+    return !!(wide && col && col.offsetParent);
+  }
+
+  // One card, never two: it moves between the results and the map column.
+  function placeLeadCard() {
+    var slot = document.getElementById('st-lead-slot');
+    var under = document.getElementById('st-map-lead-slot');
+    var home = document.getElementById('st-lead-home');
+    if (!slot || !under || !home) return;
+    if (mapIsOnScreen()) {
+      if (slot.parentNode !== under) under.appendChild(slot);
+    } else if (slot.parentNode !== home) {
+      home.appendChild(slot);
+    }
+  }
+  window.shortStayPlaceLeadCard = placeLeadCard;
 
   function blocksDirectContact(listing) {
     if (!listing) return true;
@@ -187,18 +233,23 @@
   }
 
   function searchHtml(helpers) {
+    var narrow = window.matchMedia ? window.matchMedia('(max-width: 767px)').matches : false;
     return '<div class="st-opt st-opt-grid"><div class="st-opt-wrap">'
       + '<header class="st-opt-intro"><h1>short stays</h1>'
-      + '<p>Apartments, cottages and guest houses by the night, with the host’s own photos.</p></header>'
+      + '<p>Apartments, cottages and guest houses by the night, found online across Uganda.</p></header>'
       + searchFields(helpers, 'is-pill')
-      + payLine(helpers)
-      + '<div id="st-ai-slot"></div>'
+      + aggregatorNotice(helpers)
+      + (narrow ? '' : '<div id="st-ai-slot"></div>')
       + '<div class="st-opt-tools"><div class="st-count" id="st-count">' + helpers.esc(helpers.t('loading')) + '</div><div class="st-opt-tools-end">'
       + sortSelect(helpers)
       + mapButton(helpers)
       + '</div></div>'
       + '<div id="st-results"></div>'
-      + '<div id="st-lead-slot"></div>'
+      // On a phone Ask AI follows the stays, so the first stay is on screen.
+      + (narrow ? '<div id="st-ai-slot"></div>' : '')
+      + '<div id="st-lead-home"><div id="st-lead-slot"></div></div>'
+      + safetyTips()
+      + payLine(helpers)
       + '</div>' + mapColumn() + '</div>'
       + '<div id="st-worth-slot"></div>';
   }
@@ -260,12 +311,16 @@
         + '<a class="st-opt-tel" id="st-stay-call"><i class="fas fa-phone"></i> Call</a>';
     }
     var source = String(listing.source_url || listing.source_post_url || listing.youtube_url || listing.tiktok_url || '');
+    var ask = '<a class="st-opt-wa st-opt-ask" id="st-stay-ask" target="_blank" rel="noopener noreferrer" data-whatsapp-static="true">'
+      + '<i class="fab fa-whatsapp"></i> Ask makaug.com about ' + helpers.esc(listing.reference || 'this stay') + '</a>';
+    var note = '<p class="st-opt-found-note">This stay was found online. Contact the original poster to check availability and dates.</p>';
     if (/^https:\/\//i.test(source) && !/^https:\/\/media\.makaug\.com\//i.test(source)) {
-      return '<p class="st-opt-found">Found online</p>'
-        + '<a class="st-opt-source" href="' + helpers.esc(source) + '" target="_blank" rel="noopener noreferrer">See original post</a>';
+      return '<p class="st-opt-found">Found online</p>' + note
+        + '<a class="st-opt-source" href="' + helpers.esc(source) + '" target="_blank" rel="noopener noreferrer">See original post</a>'
+        + ask;
     }
-    return '<p class="st-opt-found">Found online</p>'
-      + '<p class="st-opt-found-note">No original post is listed for this stay.</p>';
+    return '<p class="st-opt-found">Found online</p>' + note
+      + '<p class="st-opt-found-note">No original post is listed for this stay.</p>' + ask;
   }
 
   function bookCard(listing, payload, helpers) {
@@ -306,7 +361,72 @@
     } catch (_error) {}
   }
 
+  // The message makaug.com's own WhatsApp opens with on a stay page: the stay
+  // ref, its name and the dates typed in, so nobody has to ask which stay.
+  function supportStayMessage(listing) {
+    var fields = stayFields();
+    var name = String((listing && listing.title) || 'a short stay').replace(/[\r\n"]/g, ' ').trim();
+    var ref = String((listing && listing.reference) || '').trim();
+    var text = 'Hi makaug.com, I am asking about short stay ' + (ref ? ref + ' (' + name + ')' : '"' + name + '"') + '.';
+    var from = prettyStayDate(fields.checkIn, false);
+    var to = prettyStayDate(fields.checkOut, true);
+    var nights = from && to ? nightCount(fields.checkIn, fields.checkOut) : 0;
+    var people = Number(fields.guests);
+    if (from && to && nights > 0) text += ' Dates: ' + from + ' to ' + to + ' (' + nights + ' night' + (nights === 1 ? '' : 's') + ').';
+    if (people > 0) text += ' Guests: ' + people + '.';
+    text += ' Please help me check availability.';
+    return text;
+  }
+
+  function shareLinksHtml(listing, helpers) {
+    var url = stayPublicUrl(listing);
+    var text = (listing.title || 'Short stay') + ' on makaug.com';
+    var enc = encodeURIComponent;
+    return '<div class="st-opt-share" aria-label="Share this stay">'
+      + '<span>Share</span>'
+      + '<a href="https://wa.me/?text=' + helpers.esc(enc(text + ': ' + url)) + '" target="_blank" rel="noopener noreferrer" data-whatsapp-static="true" aria-label="Share on WhatsApp"><i class="fab fa-whatsapp" aria-hidden="true"></i></a>'
+      + '<a href="https://www.facebook.com/sharer/sharer.php?u=' + helpers.esc(enc(url)) + '" target="_blank" rel="noopener noreferrer" aria-label="Share on Facebook"><i class="fab fa-facebook-f" aria-hidden="true"></i></a>'
+      + '<a href="https://x.com/intent/post?text=' + helpers.esc(enc(text)) + '&url=' + helpers.esc(enc(url)) + '" target="_blank" rel="noopener noreferrer" aria-label="Share on X"><i class="fab fa-x-twitter" aria-hidden="true"></i></a>'
+      + '<button type="button" id="st-share-copy" data-url="' + helpers.esc(url) + '" aria-label="Copy link"><i class="fas fa-link" aria-hidden="true"></i> Copy link</button>'
+      + '</div>';
+  }
+
+  var activeStay = null;
+  window.shortStaySupportMessage = function () {
+    if (!activeStay) return '';
+    if (!/^\/short-term\/[^/]+$/.test(window.location.pathname || '')) return '';
+    return supportStayMessage(activeStay);
+  };
+
+  function paintSupportLinks(listing) {
+    activeStay = listing || null;
+    var ask = document.getElementById('st-stay-ask');
+    if (ask && typeof window.supportWhatsappUrl === 'function') {
+      ask.href = window.supportWhatsappUrl({});
+    } else if (ask && typeof supportWhatsappUrl === 'function') {
+      ask.href = supportWhatsappUrl({}); // eslint-disable-line no-undef
+    }
+    var copy = document.getElementById('st-share-copy');
+    if (copy && copy.getAttribute('data-bound') !== '1') {
+      copy.setAttribute('data-bound', '1');
+      copy.addEventListener('click', function () {
+        var url = copy.getAttribute('data-url') || window.location.href;
+        var done = function () { copy.innerHTML = '<i class="fas fa-check" aria-hidden="true"></i> Copied'; };
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, done);
+        else done();
+      });
+    }
+    ['st-d-in', 'st-d-out', 'st-d-guests'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && el.getAttribute('data-ask-bound') !== '1') {
+        el.setAttribute('data-ask-bound', '1');
+        el.addEventListener('change', function () { paintSupportLinks(activeStay); });
+      }
+    });
+  }
+
   function paintStayLinks(listing) {
+    paintSupportLinks(listing);
     if (!listing || blocksDirectContact(listing)) return;
     var fields = stayFields();
     var wa = document.getElementById('st-stay-wa');
@@ -346,7 +466,7 @@
       }).join('') + '</div>'
       : '<div class="st-opt-nophoto st-opt-nophoto-lg"><i class="fas fa-house"></i><span>No photo from this listing yet</span></div>';
     var facts = [
-      [listing.max_guests, 'Guests'],
+      [listing.max_guests || null, 'Guests'],
       [listing.bedrooms, 'Bedrooms'],
       [listing.beds, 'Beds'],
       [listing.bathrooms, 'Bathrooms']
@@ -360,8 +480,10 @@
       + '<div class="st-opt-detailtop">'
       + '<div><div class="st-opt-badges">' + badges(listing, helpers) + '</div>'
       + '<h1>' + helpers.esc(listing.title || 'Short stay') + '</h1>'
-      + '<p class="st-opt-where">' + helpers.esc(whereText(listing)) + ' · ' + helpers.esc(specText(listing)) + '</p>'
+      + '<p class="st-opt-where">' + helpers.esc(whereText(listing)) + (specText(listing) ? ' · ' + helpers.esc(specText(listing)) : '') + '</p>'
+      + shareLinksHtml(listing, helpers)
       + '</div></div>'
+      + aggregatorNotice(helpers)
       + '<div class="st-opt-detaillayout">'
       + '<div>' + gallery
       + '<div class="st-opt-facts">' + facts + '</div>'
@@ -371,6 +493,7 @@
       + '<div class="listing-map-col st-opt-detailmap"><div class="listing-map-shell">'
       + '<div id="map-short-term" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>'
       + '</div></div>'
+      + safetyTips()
       + '<details class="st-opt-report"><summary>Something wrong with this listing?</summary>'
       + '<form id="st-report-form" class="st-form-grid">'
       + '<div><label class="st-label" for="st-report-reason">What is wrong</label>'
@@ -411,11 +534,13 @@
     btn.setAttribute('data-bound', '1');
     btn.addEventListener('click', function () {
       if (typeof window.toggleListingMap === 'function') window.toggleListingMap();
+      setTimeout(placeLeadCard, 80);
     });
   }
 
   function syncMap(snapshot) {
     bindMapButton();
+    placeLeadCard();
     var active = document.querySelector('.st-view.is-active') || document.getElementById('page-short-term');
     document.querySelectorAll('[id="map-short-term"]').forEach(function (node) {
       if (active && !active.contains(node)) node.removeAttribute('id');
@@ -425,6 +550,9 @@
       if (typeof window.syncListingMapToggle === 'function') window.syncListingMapToggle();
     }).catch(function () {});
   }
+
+  if (typeof window.addEventListener === 'function') window.addEventListener('resize', function () { placeLeadCard(); });
+  if (typeof MutationObserver === 'function' && typeof document !== 'undefined' && document.body) new MutationObserver(function () { placeLeadCard(); }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
   window.makaugShortTermOptions = {
     searchHtml: searchHtml,

@@ -2125,7 +2125,54 @@ app.get(['/', '/index.html'], async (req, res, next) => {
 // ---------------------------------------------------------------------------
 
 const SHORT_TERM_PAGE_TITLE = 'Short Term Stays in Uganda | Nightly Rentals | makaug.com';
-const SHORT_TERM_PAGE_DESCRIPTION = 'Find short stays across Uganda by the night. Apartments, cottages and guest houses in Kampala, Entebbe, Jinja and beyond, with the host’s own contact details on every listing.';
+const SHORT_TERM_PAGE_DESCRIPTION = 'Short stays across Uganda by the night: apartments, cottages and guest houses in Kampala, Entebbe, Jinja and beyond, gathered from posts online. Contact the poster to check dates and price.';
+const SHORT_TERM_GRID_LIMIT = 48;
+
+// Filtered or empty variants of /short-term are not pages of their own. They
+// keep their canonical (/short-term) and are kept out of the index.
+const SHORT_TERM_NOINDEX_PARAMS = ['check_in', 'check_out', 'guests', 'max_price', 'min_price', 'sort', 'page', 'bedrooms', 'amenities', 'place_type', 'limit'];
+function shortTermGridShouldNoindex(query = {}, total = 0) {
+  if (!total) return true;
+  return SHORT_TERM_NOINDEX_PARAMS.some((key) => String(query[key] || '').trim() !== '');
+}
+
+// A stay's own photo as its share image, when it is a public https image.
+function shortTermShareImage(listing, req) {
+  const photo = String((listing && listing.primary_image) || '').trim();
+  if (/^https:\/\//i.test(photo) && photo.length <= 1000) return photo;
+  return absolutePublicUrl(shareImagePath('short-stay', null, requestShareLang(req)));
+}
+
+function shortTermStayMetaDescription(listing) {
+  const where = [listing.area, listing.district].filter(Boolean).join(', ');
+  const bits = [];
+  if (listing.bedrooms) bits.push(`${listing.bedrooms} bedroom${listing.bedrooms === 1 ? '' : 's'}`);
+  if (listing.max_guests) bits.push(`sleeps ${listing.max_guests}`);
+  const price = listing.nightly_display && listing.nightly_display !== 'POA'
+    ? `${listing.nightly_display} per night`
+    : 'Price on request';
+  const found = listing.found_online ? ' Found online: contact the original poster to check availability.' : '';
+  const titled = String(listing.title || '');
+  const place = where && !(listing.area && titled.toLowerCase().includes(String(listing.area).toLowerCase()))
+    ? ` in ${where}`
+    : (listing.district && !titled.toLowerCase().includes(String(listing.district).toLowerCase()) ? `, ${listing.district}` : '');
+  return `${titled}${place}. ${bits.length ? `${bits.join(', ')}. ` : ''}${price}.${found}`.slice(0, 300);
+}
+
+// The static search hero carries an H1. On a stay page the stay's title is the
+// page's only H1, so the hero heading becomes the stay title for crawlers and
+// the page script demotes the hero once the stay renders.
+function shortTermStayHeroHeading(html, title) {
+  return String(html || '').replace(
+    /<h1>Find a short stay in Uganda<\/h1>/,
+    `<h1 data-st-ssr-h1="1">${escapeHtmlText(title)}</h1>`
+  );
+}
+
+function escapeHtmlText(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 app.get('/short-term', async (req, res, next) => {
   if (!shortTermEnabled()) return next();
@@ -2134,7 +2181,7 @@ app.get('/short-term', async (req, res, next) => {
     let listings = [];
     let total = 0;
     try {
-      const result = await searchShortTermListings(db, { ...(req.query || {}), limit: 24 });
+      const result = await searchShortTermListings(db, { ...(req.query || {}), limit: SHORT_TERM_GRID_LIMIT });
       listings = result.listings;
       total = result.total;
     } catch (error) {
@@ -2159,6 +2206,10 @@ app.get('/short-term', async (req, res, next) => {
       structuredData: rendered.structuredData
     });
 
+    if (shortTermGridShouldNoindex(req.query || {}, total)) {
+      html = patchMetaTag(html, 'robots', 'noindex,follow');
+      res.set('X-Robots-Tag', 'noindex, follow');
+    }
     res.set('X-makaug-Short-Term-SSR', String(listings.length));
     res.set('X-makaug-Short-Term-Total', String(total));
     return sendTextResponse(req, res, html, { cacheControl: PUBLIC_HTML_CACHE_CONTROL });
@@ -2290,12 +2341,12 @@ app.get('/short-term/:slug', async (req, res, next) => {
       listings: [listing],
       baseUrl: absolutePublicUrl('/')
     });
-    html = patchPublicPageSeoMeta(rendered.html, {
-      title: `${listing.title} | Short Stay in ${listing.area}, Uganda | makaug.com`,
-      description: `${listing.place_type_label} in ${listing.area}, ${listing.district}. Sleeps ${listing.max_guests}. From ${listing.nightly_display} per night. Contact the host directly on makaug.`,
+    html = patchPublicPageSeoMeta(shortTermStayHeroHeading(rendered.html, listing.title), {
+      title: `${listing.title} | Short stay | makaug.com`,
+      description: shortTermStayMetaDescription(listing),
       canonical: absolutePublicUrl(`/short-term/${listing.slug}`),
-      image: absolutePublicUrl(shareImagePath('short-stay', null, requestShareLang(req))),
-      imageAlt: shareCardAlt('short-stay', requestShareLang(req)),
+      image: shortTermShareImage(listing, req),
+      imageAlt: listing.title,
       structuredData: vacationRentalStructuredData(listing, absolutePublicUrl('/'))
     });
 

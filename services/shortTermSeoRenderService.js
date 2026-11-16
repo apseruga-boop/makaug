@@ -43,7 +43,7 @@ function renderCard(listing, baseUrl) {
     <h3 class="st-ssr-card-title" itemprop="name">${escapeHtml(listing.title)}</h3>
   </a>
   <p class="st-ssr-card-where"><span itemprop="addressLocality">${escapeHtml(listing.area)}</span>, ${escapeHtml(listing.district)}</p>
-  <p class="st-ssr-card-spec">${escapeHtml(listing.place_type_label)} &middot; ${listing.bedrooms} bedroom${listing.bedrooms === 1 ? '' : 's'} &middot; sleeps ${listing.max_guests}</p>
+  <p class="st-ssr-card-spec">${escapeHtml(listing.place_type_label)} &middot; ${listing.bedrooms} bedroom${listing.bedrooms === 1 ? '' : 's'}${Number(listing.max_guests) > 0 ? ` &middot; sleeps ${listing.max_guests}` : ''}</p>
   <p class="st-ssr-card-price"><strong>${escapeHtml(listing.nightly_display)}</strong> per night</p>
   <p class="st-ssr-card-meta">${score}</p>
   <p class="st-ssr-card-desc" itemprop="description">${escapeHtml(truncate(listing.description, 160))}</p>
@@ -97,7 +97,7 @@ function vacationRentalStructuredData(listing, baseUrl = '') {
     },
     containsPlace: {
       '@type': 'Accommodation',
-      occupancy: { '@type': 'QuantitativeValue', value: listing.max_guests },
+      occupancy: Number(listing.max_guests) > 0 ? { '@type': 'QuantitativeValue', maxValue: Number(listing.max_guests) } : undefined,
       numberOfBedrooms: listing.bedrooms,
       numberOfBathroomsTotal: listing.bathrooms,
       numberOfBeds: listing.beds

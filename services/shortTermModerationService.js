@@ -16,6 +16,7 @@
 // two different people with two different roles, and no amount of clicking in
 // the staff queue can shortcut it.
 
+const { foundOnlineStayPublicRule, isFoundOnlineRow } = require('./shortStayDisplay');
 const logger = require('../config/logger');
 const { usableShortStayPhotoCount } = require('../utils/staffSourceMedia');
 
@@ -367,6 +368,18 @@ function canApprove(checklist = {}) {
 // Applying a decision
 // ---------------------------------------------------------------------------
 
+// A stay found online only goes live with a nightly price and a specific
+// place (an area, not just "Kampala"). Hosts' own listings may still be POA.
+function assertFoundOnlinePublicRule(listing) {
+  if (!isFoundOnlineRow(listing)) return;
+  const rule = foundOnlineStayPublicRule(listing);
+  if (rule.ok) return;
+  const fixes = [];
+  if (rule.missing.includes('price')) fixes.push('Add the nightly price from the original post. Found-online stays cannot go live as POA.');
+  if (rule.missing.includes('location')) fixes.push('Add the specific area (for example Kololo or Ntinda), not just the district.');
+  throw moderationError('A stay found online needs a price and a specific location before it can go live.', 400, fixes);
+}
+
 async function loadListingForReview(client, listingId) {
   const result = await client.query(
     `SELECT l.*, COALESCE(m.photo_count, 0)::int AS photo_count
@@ -440,6 +453,7 @@ async function applyStaffDecision(db, listingId, { action, checklist, reason, no
           ['Save a district and an area. A missing price can stay as POA.']
         );
       }
+      assertFoundOnlinePublicRule(listing);
       if (usableShortStayPhotoCount(listing) === 0) {
         throw moderationError(
           'This listing has no photos, so it cannot go live.',
@@ -559,6 +573,7 @@ async function applyKingDecision(db, listingId, { action, checklist, overrides, 
           ['Save a district and an area. A missing price can stay as POA.']
         );
       }
+      assertFoundOnlinePublicRule(listing);
       if (usableShortStayPhotoCount(listing) === 0) {
         throw moderationError(
           'This listing has no photos. Send it back rather than publishing it.',

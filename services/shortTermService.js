@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 
 const logger = require('../config/logger');
+const shortStayDisplay = require('./shortStayDisplay');
 const { parseShortTermSearchText } = require('./shortTermQuery');
 const { shortTermEnabled } = require('../utils/shortTermFeatureFlags');
 const {
@@ -605,13 +606,19 @@ function normalizeShortTermListing(row = {}, options = {}) {
   const media = withFoundOnlinePublicCover(row, publicSafeStayImages(Array.isArray(row.media) ? row.media : []));
   const primary = media.find((item) => item.is_primary) || media[0] || null;
 
+  // What a guest reads. The stored caption stays as source_title.
+  const usdNightly = shortStayDisplay.parseUsdNightly(row.title, row.description);
+  const hasUgxPrice = Number(row.base_nightly_ugx || 0) > 0 && !(row.extra_fields && row.extra_fields.price_on_application === true);
+  const guests = shortStayDisplay.effectiveGuests(row);
+
   const listing = {
     id: String(row.id),
     reference: row.reference || null,
     slug: row.slug || null,
     url: row.slug ? `/short-term/${row.slug}` : null,
-    title: row.title || '',
-    description: row.description || '',
+    title: shortStayDisplay.cleanStayTitle(row) || row.title || '',
+    source_title: row.title || '',
+    description: shortStayDisplay.cleanStayDescription(row.description || ''),
     district: row.district || '',
     area: row.area || '',
     latitude: stayPin(row)[0],
@@ -622,12 +629,14 @@ function normalizeShortTermListing(row = {}, options = {}) {
     bedrooms: toInt(row.bedrooms, 0),
     beds: toInt(row.beds, 0),
     bathrooms: toInt(row.bathrooms, 0),
-    max_guests: toInt(row.max_guests, 0),
+    max_guests: guests,
+    guests_estimated: guests !== toInt(row.max_guests, 0),
     currency: 'UGX',
-    nightly_ugx: Number(row.base_nightly_ugx || 0) > 0 && !(row.extra_fields && row.extra_fields.price_on_application === true) ? Number(row.base_nightly_ugx) : null,
-    nightly_display: Number(row.base_nightly_ugx || 0) > 0 && !(row.extra_fields && row.extra_fields.price_on_application === true)
+    nightly_ugx: hasUgxPrice ? Number(row.base_nightly_ugx) : null,
+    nightly_usd: !hasUgxPrice && usdNightly ? usdNightly : null,
+    nightly_display: hasUgxPrice
       ? formatUgx(row.base_nightly_ugx)
-      : 'POA',
+      : (usdNightly ? `USD ${usdNightly}` : 'POA'),
     price_on_application: !(Number(row.base_nightly_ugx) > 0) || (row.extra_fields && row.extra_fields.price_on_application === true),
     found_online_label: row.extra_fields && row.extra_fields.found_online_label ? row.extra_fields.found_online_label : null,
     cleaning_fee_ugx: Number(row.cleaning_fee_ugx || 0),
@@ -753,7 +762,7 @@ function buildSearchFilters(query = {}) {
   const guests = toInt(normalized.guests, 0);
   if (guests > 0) {
     values.push(guests);
-    where.push(`l.max_guests >= $${values.length}`);
+    where.push(`${shortStayDisplay.effectiveGuestsSql('l')} >= $${values.length}`);
   }
 
   const bedrooms = toInt(normalized.bedrooms, 0);
@@ -771,7 +780,8 @@ function buildSearchFilters(query = {}) {
   const maxPrice = toBigIntSafe(normalized.max_price, 0);
   if (maxPrice > 0) {
     values.push(maxPrice);
-    where.push(`l.base_nightly_ugx <= $${values.length}`);
+    // A POA stay has no price to compare, so a price cap leaves it out.
+    where.push(`l.base_nightly_ugx > 0 AND ${PRICED_SQL} AND l.base_nightly_ugx <= $${values.length}`);
   }
 
   const placeType = cleanText(normalized.place_type, 30);
@@ -821,13 +831,30 @@ function buildSearchFilters(query = {}) {
   return { where: where.join(' AND '), values, amenities };
 }
 
+// A stay with a real UGX price. POA (no price, or flagged POA) is not.
+const PRICED_SQL = `COALESCE(l.extra_fields->>'price_on_application', 'false') <> 'true'`;
+// A stay priced only in USD in its text ("USD 120 per night") counts as priced
+// for ordering, matching what the card shows.
+const USD_NIGHTLY_SQL = `(COALESCE(l.title, '') || ' ' || COALESCE(l.description, '')) ~* '(usd|us\\$|\\$)\\s?[0-9]{2,4}\\s*(per|a|/|each)\\s*(night|nite|day)|[0-9]{2,4}\\s?(usd|dollars?|\\$)\\s*(per|a|/|each)\\s*(night|nite|day)'`;
+const POA_LAST_SQL = `(CASE WHEN (COALESCE(l.base_nightly_ugx, 0) > 0 AND ${PRICED_SQL}) OR ${USD_NIGHTLY_SQL} THEN 0 ELSE 1 END) ASC`;
+// Price to order by: UGX when set, else the USD figure at a rough 3,700 UGX a
+// dollar. Ordering only; nothing shown to visitors is converted.
+const USD_TEXT_SQL = `lower(COALESCE(l.title, '') || ' ' || COALESCE(l.description, ''))`;
+const SORT_PRICE_SQL = `(CASE WHEN COALESCE(l.base_nightly_ugx, 0) > 0 AND ${PRICED_SQL} THEN l.base_nightly_ugx
+  ELSE COALESCE(
+    substring(${USD_TEXT_SQL} from '(?:usd|us\\$|\\$)\\s?([0-9]{2,4})\\s*(?:per|a|/|each)\\s*(?:night|nite|day)'),
+    substring(${USD_TEXT_SQL} from '([0-9]{2,4})\\s?(?:usd|dollars?|\\$)\\s*(?:per|a|/|each)\\s*(?:night|nite|day)')
+  )::bigint * 3700 END)`;
+
 function orderByFor(sort) {
   switch (String(sort || '').trim()) {
-    case 'price_asc': return 'l.base_nightly_ugx ASC, l.created_at DESC';
-    case 'price_desc': return 'l.base_nightly_ugx DESC, l.created_at DESC';
-    case 'newest': return 'l.listed_at DESC NULLS LAST, l.created_at DESC';
+    // POA stays go last in either price order: they have no price to sort by.
+    case 'price_asc': return `${POA_LAST_SQL}, ${SORT_PRICE_SQL} ASC NULLS LAST, l.created_at DESC`;
+    case 'price_desc': return `${POA_LAST_SQL}, ${SORT_PRICE_SQL} DESC NULLS LAST, l.created_at DESC`;
+    case 'newest': return `${POA_LAST_SQL}, l.listed_at DESC NULLS LAST, l.created_at DESC`;
     case 'rating': return 'review_average DESC NULLS LAST, review_count DESC, l.created_at DESC';
-    default: return 'l.listed_at DESC NULLS LAST, l.created_at DESC';
+    // Default: stays with a price first, then the newest.
+    default: return `${POA_LAST_SQL}, l.listed_at DESC NULLS LAST, l.created_at DESC`;
   }
 }
 

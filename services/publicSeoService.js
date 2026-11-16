@@ -51,8 +51,8 @@ const PUBLIC_PAGE_SEO = Object.freeze({
     description: 'Browse property brokers and agents across Uganda by area, see their live listings and contact them directly.'
   },
   '/list-property': {
-    title: 'List your property in Uganda: UGX 20,000 a month',
-    description: 'List a house, rental, plot or commercial space on makaug.com. Pay nothing for 7 days, then UGX 20,000 a month. Reviewed before it goes live.'
+    title: 'List your property in Uganda from UGX 20,000 a month',
+    description: 'List on makaug.com. Owners pay UGX 20,000 a month; agents pay UGX 50,000 a month. No free trial or free days. Reviewed before publication.'
   },
   '/help': {
     title: 'Help centre: makaug.com questions answered',

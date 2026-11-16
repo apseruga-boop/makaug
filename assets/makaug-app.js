@@ -9542,7 +9542,7 @@ function applyLanguageUI() {
   const hasCanonicalAreaSeoTitle = /^\/(?:for-sale|to-rent|land|commercial|student-accommodation)(?:\/[a-z0-9-]+)+$/i.test(pathname)
     || /^\/hostels\/[a-z0-9-]+$/i.test(pathname);
   const hasCanonicalPropertySeoTitle = /^\/property\/[^/?#]+$/i.test(pathname);
-  const hasOwnDocumentTitle = /^\/short-term(?:\/|$)/i.test(pathname);
+  const hasOwnDocumentTitle = /^\/short-term(?:\/|$)/i.test(pathname) || pathname === '/list-property';
   const serverRenderedSeoHeading = document.querySelector('.page.active [data-ssr-seo-h1="1"]');
   const hasServerRenderedSeoTitle = preserveServerRenderedSeoHeading(serverRenderedSeoHeading);
   if (hasServerRenderedSeoTitle && serverRenderedSeoHeading.dataset.ssrSeoTitle) {
@@ -29497,7 +29497,8 @@ function buildPublicWhatsappMessage(context = {}) {
   const specialMessage = contextKey === "detail"
     ? buildDetailSupportWhatsappMessage()
     : (contextKey === "broker-profile" ? buildBrokerProfileSupportWhatsappMessage() : "");
-  const base = specialMessage || PUBLIC_WHATSAPP_CONTEXTS[contextKey] || PUBLIC_WHATSAPP_CONTEXTS.home;
+  const stayMessage = typeof window.shortStaySupportMessage === "function" ? window.shortStaySupportMessage() : "";
+  const base = stayMessage || specialMessage || PUBLIC_WHATSAPP_CONTEXTS[contextKey] || PUBLIC_WHATSAPP_CONTEXTS.home;
   const topic = cleanWhatsappValue(context.topic || "");
   const path = cleanWhatsappValue(context.path || `${window.location.pathname || "/"}${window.location.search || ""}`);
   return [
