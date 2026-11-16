@@ -397,7 +397,7 @@ async function openSession(id) {
 
 // Everything the screen reports: leaving it, breaks (lunch:45 = a 45-minute lunch),
 // idle (idle_end detail = idle ms), open/close and every button pressed.
-const EVENT_KINDS = new Set(['inbound_start', 'fs_exit', 'fs_enter', 'hidden', 'visible', 'break_start', 'break_end', 'kit_send', 'screen_open', 'screen_close', 'idle_start', 'idle_end', 'action', 'work_on', 'work_off']);
+const EVENT_KINDS = new Set(['inbound_start', 'fs_exit', 'fs_enter', 'hidden', 'visible', 'break_start', 'break_end', 'kit_send', 'screen_open', 'screen_close', 'idle_start', 'idle_end', 'action', 'work_on', 'work_off', 'meeting_join']);
 
 /**
  * Heartbeat from the screen: running totals (ms) and the events since the last
@@ -1385,6 +1385,8 @@ async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
 }
 
 module.exports = {
+  roadTo1000,
+  callbacksDue,
   SKIP_REASONS,
   HOW_KNOWN,
   blockNumber,
