@@ -4,6 +4,7 @@
 // The row waits in the short-stay moderation queue. Nothing here sends a
 // message, email, or payment chase. Found-online sources are never contacted.
 
+const { foundOnlineStayPublicRule } = require('./shortStayDisplay');
 const { pricePlausibility } = require('../utils/pricePlausibility');
 const { FOUND_ONLINE_LABEL } = require('./freeCategoryHashtagSources');
 const { youtubePreviewFields } = require('../utils/staffSourceMedia');
@@ -54,6 +55,18 @@ function placeTypeFor(item = {}) {
 }
 
 function buildFoundOnlineShortStayRecord(item = {}, agent = {}) {
+  const record = buildFoundOnlineShortStayRecordBase(item, agent);
+  // A found-online stay goes public only with a price and a specific place.
+  // Stays without them are still saved for staff, marked as not publishable.
+  const rule = foundOnlineStayPublicRule(record);
+  record.extra_fields.public_rule = { ok: rule.ok, missing: rule.missing };
+  if (!rule.ok) {
+    record.moderation_notes = `${record.moderation_notes} Not publishable until it has: ${rule.missing.join(' and ')}.`;
+  }
+  return record;
+}
+
+function buildFoundOnlineShortStayRecordBase(item = {}, agent = {}) {
   const nightly = nightlyAmount(item);
   const plausibility = pricePlausibility({
     listing_type: 'short_term',
@@ -83,7 +96,8 @@ function buildFoundOnlineShortStayRecord(item = {}, agent = {}) {
     bedrooms: Math.max(0, Number(item.beds || item.bedrooms || 1) || 1),
     beds: Math.max(1, Number(item.beds || 1) || 1),
     bathrooms: Math.max(0, Number(item.baths || item.bathrooms || 1) || 1),
-    max_guests: 2,
+    // Unknown guest counts are estimated from bedrooms (two a bedroom).
+    max_guests: Math.min(30, Math.max(2, (Math.max(0, Number(item.beds || item.bedrooms || 1) || 1)) * 2)),
     base_nightly_ugx: implausible ? 0 : nightly,
     host_name: hostName,
     host_phone: '',

@@ -142,5 +142,5 @@ test('on desktop the results grid sits left of a sticky map; mobile stays stacke
   assert.match(optionsCss, /@media \(min-width: 1024px\) \{[\s\S]*\.st-opt-grid:has\(> \.listing-map-col\.mk-map-col-active\)/);
   assert.match(optionsCss, /grid-template-columns: minmax\(0, 1fr\) minmax\(400px, 42vw\)/);
   assert.doesNotMatch(optionsCss, /margin: 12px auto 28px/);
-  assert.match(html, /short-term-options\.css\?v=20261110-st-lead-guide/);
+  assert.match(html, /short-term-options\.css\?v=20261116-st-review/);
 });

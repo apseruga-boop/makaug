@@ -2328,6 +2328,13 @@
         if (el && String(el.value).trim()) params.set(name, String(el.value).trim());
       });
     }
+    if (params.get('check_in') && params.get('check_out') && params.get('check_out') <= params.get('check_in')) {
+      var outField = document.getElementById('st-out');
+      if (outField) { outField.setCustomValidity('Check-out must be after check-in.'); outField.reportValidity(); }
+      return Promise.resolve();
+    }
+    var outField = document.getElementById('st-out');
+    if (outField) outField.setCustomValidity('');
     var incomingBeds = new URLSearchParams(window.location.search || '');
     if (!params.get('bedrooms') && incomingBeds.get('bedrooms') && (params.get('q') || '') === (incomingBeds.get('q') || '')) {
       params.set('bedrooms', incomingBeds.get('bedrooms'));
@@ -2359,7 +2366,26 @@
       window.history.replaceState({}, '', '/short-term' + (search ? '?' + search : ''));
     }
 
-    return api('/search' + (search ? '?' + search : '')).then(function (payload) {
+    var firstParams = new URLSearchParams(search);
+    firstParams.set('limit', '48');
+    firstParams.set('page', '1');
+    return api('/search?' + firstParams.toString()).then(function collect(payload) {
+      var listings = payload.listings || [];
+      var pages = Number(payload.pages) || 1;
+      var nextPage = 2;
+      function next() {
+        if (nextPage > pages) return Promise.resolve(payload);
+        var moreParams = new URLSearchParams(search);
+        moreParams.set('limit', '48');
+        moreParams.set('page', String(nextPage++));
+        return api('/search?' + moreParams.toString()).then(function (more) {
+          listings = listings.concat(more.listings || []);
+          payload.listings = listings;
+          return next();
+        });
+      }
+      return next();
+    }).then(function (payload) {
       state.listings = payload.listings || [];
       state.total = payload.total || 0;
       // Kept apart from state.listings on purpose. A partner row has no host
@@ -3088,6 +3114,12 @@
     if (stay.guests) stayParams.set('guests', stay.guests);
     var detailQuery = stayParams.toString() ? '?' + stayParams.toString() : '';
     api('/listings/' + encodeURIComponent(slug) + detailQuery).then(function (payload) {
+      document.querySelectorAll('#page-short-term .st-view-search h1').forEach(function (heading) {
+        var p = document.createElement('p');
+        p.className = (heading.className ? heading.className + ' ' : '') + 'st-opt-demoted-h1';
+        p.textContent = heading.textContent;
+        heading.replaceWith(p);
+      });
       view.innerHTML = detailViewHtml(payload);
       view.setAttribute('data-st-detail', slug);
       bindDetail(payload);
@@ -3096,7 +3128,7 @@
       }
       syncDesignMap({ listings: [payload.listing] });
       openEnquiryFromQuery(payload.listing);
-      document.title = payload.listing.title + ' | Short stay on makaug.com';
+      document.title = payload.listing.title + ' | Short stay | makaug.com';
       trackSt('st_listing_view', { slug: slug });
     }).catch(function (error) {
       view.removeAttribute('data-st-loaded');
