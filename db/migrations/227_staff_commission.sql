@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS commission_settings (
   min_payment_ugx INTEGER NOT NULL DEFAULT 50000 CHECK (min_payment_ugx > 0),
   -- Days after an agent qualifies before commission can go into a payout, in
   -- case the payment is refunded or the listing is removed or rejected.
-  hold_days INTEGER NOT NULL DEFAULT 14 CHECK (hold_days >= 0 AND hold_days <= 90),
+  hold_days INTEGER NOT NULL DEFAULT 7 CHECK (hold_days >= 0 AND hold_days <= 90),
   -- Commission whose hold ends on or before this day of the month (Kampala)
   -- is paid on that month's payday; later than that waits for the next one.
   cutoff_day INTEGER NOT NULL DEFAULT 20 CHECK (cutoff_day BETWEEN 1 AND 28),

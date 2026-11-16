@@ -186,14 +186,20 @@ test('G6: the listing must be new, approved, own (not found-online) and not a co
   assert.equal(c.hamming('ffff0000ffff0000', 'ffff0000ffff0003'), 2);
 });
 
-test('G7: 14-day hold; refund in the hold stops it; refund after payout is clawed back', () => {
+test('G7: 7-day hold; refund in the hold stops it; refund after payout is clawed back', () => {
   const h = happy(16);
   const early = c.evaluateCommission(world({ sends: [h.s], agents: [h.a], payments: [h.p], listings: [h.l], now: new Date('2026-11-25T09:00:00Z') }));
   assert.equal(row(early, h.a).status, 'on_hold');
   assert.equal(early.totals.people.ronald.due_next_payday_ugx, 0);
   assert.equal(early.totals.people.ronald.pending_ugx, 10000);
-  // Hold ends 2 Dec (after the 20 Nov cut-off) → paid 25 Dec.
+  // Qualified 18 Nov 12:00 UTC: the 7-day hold ends 25 Nov (after the 20 Nov cut-off) → paid 25 Dec.
+  assert.equal(row(early, h.a).lines[0].hold_until, '2026-11-25T12:00:00.000Z');
   assert.equal(row(early, h.a).lines[0].due_payday, '2026-12-25');
+  assert.equal(c.DEFAULT_SETTINGS.hold_days, 7);
+  assert.equal(c.DEFAULT_SETTINGS.pays_on, 'first_payment');
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '227_staff_commission.sql'), 'utf8');
+  assert.match(sql, /hold_days INTEGER NOT NULL DEFAULT 7 /);
+  assert.match(sql, /pays_on TEXT NOT NULL DEFAULT 'first_payment'/);
 
   const refund = { id: id('r'), direction: 'out', kind: 'refund', agent_id: h.a.id, amount_ugx: 50000, paid_at: '2026-11-20T10:00:00Z' };
   const refunded = c.evaluateCommission(world({ sends: [h.s], agents: [h.a], payments: [h.p, refund], listings: [h.l] }));

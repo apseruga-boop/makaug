@@ -9,7 +9,7 @@
  * but only when the agent has BOTH paid AND has a genuinely new property live.
  * First payment only by default; commission_settings.pays_on = 'every_payment'
  * makes renewals earn too. Commission is paid on the 25th; anything whose
- * 14-day hold ends after the 20th waits for the next 25th.
+ * 7-day hold ends after the 20th waits for the next 25th.
  *
  * Nothing here is typed in by hand: who pitched, who signed up, who paid and
  * what is listed all come from agent_prospects, agents, revenue_entries and
@@ -28,7 +28,7 @@
  *   G6  genuinely new listing: approved and live, posted after the pitch, not
  *       found-online, not a copy (same ref, same photo file, near-identical photo
  *       hash, or same area + price within 5% + similar title)
- *   G7  hold: 14 days after qualifying before it can be paid; a refund, a void or
+ *   G7  hold: 7 days after qualifying before it can be paid; a refund, a void or
  *       the listing going down during the hold stops it; a refund after payout is
  *       clawed back from the next payout
  *   G8  suspicious patterns (held for admin review): one phone paying for several
@@ -50,7 +50,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   default_rate_pct: 20,
   pays_on: 'first_payment',
   min_payment_ugx: 50000,
-  hold_days: 14,
+  hold_days: 7,
   cutoff_day: 20,
   payday_day: 25,
   scheme_starts_on: '2026-11-16'
