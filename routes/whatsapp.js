@@ -9140,11 +9140,15 @@ function agentAlsoSavedReply({ facts = {}, storedMedia = [], caption = '' } = {}
 async function saveReadyKeptSubmissions({ phone, currentStep = 'employee_property_media', data = {} } = {}) {
   const saved = [];
   if (data.whatsapp_agent_self_intake !== true) return saved;
-  const pendingAt = Number(data.pending_caption_sender_ms || 0);
+  // When it was sent; when the phone's send time was not kept (a waiting list
+  // from before 16 Nov 2026 has none), when it was stored. Three complete
+  // adverts behind one waiting for its price were left unsaved for want of it.
+  const pendingAt = Number(data.pending_caption_sender_ms || 0) || Date.parse(data.pending_property_media_stored_at || '') || 0;
   if (!pendingAt || !normalizeInput(data.pending_property_caption || '')) return saved;
   const keep = [];
   for (const entry of employeePendingSubmissionQueue(data)) {
-    const candidate = Boolean(entry.caption) && entry.media.length > 0 && entry.senderMs > pendingAt;
+    const entryAt = Number(entry.senderMs || 0) || Date.parse(entry.storedAt || '') || 0;
+    const candidate = Boolean(entry.caption) && entry.media.length > 0 && entryAt > pendingAt;
     const facts = candidate ? employeePropertyFacts(entry.caption, data) : null;
     if (!candidate || employeePropertyMissing(facts).length) { keep.push(entry); continue; }
     try {
@@ -9184,43 +9188,51 @@ async function settleAgentWaitingAdverts({ phone = '', currentStep = 'employee_p
   let alreadySaved = 0;
   if (data.whatsapp_agent_self_intake !== true) return { saved, alreadySaved, retired: 0 };
   let changed = false;
-  for (let guard = 0; guard < 30; guard += 1) {
-    const caption = normalizeInput(data.pending_property_caption || '');
-    const media = employeePendingStoredMedia(data);
-    if (!caption || !media.length) break;
-    const facts = employeePropertyFacts(caption, data);
-    if (employeePropertyMissing(facts).length) break;
-    const existing = await findEmployeeDuplicateProperty({ caption, facts, sessionData: data });
-    if (existing) {
-      alreadySaved += 1;
-    } else {
-      const propertyId = await createEmployeeReviewProperty({
-        phone,
-        inboundMessageId: data.pending_property_media_message_id || '',
-        caption,
-        facts,
-        storedMedia: media,
-        sessionData: data
-      });
-      if (!propertyId) break;
-      noteEmployeePropertyCreated(data, propertyId, media, caption);
-      data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
-      data.total_media_count = Number(data.total_media_count || 0) + media.length;
-      alertTeamAgentPropertySubmitted({ agent: data.agent || {}, propertyId, facts, caption });
-      saved.push({ propertyId, caption, facts, storedMedia: media });
+  const saveCompleteOnes = async () => {
+    for (let guard = 0; guard < 30; guard += 1) {
+      const caption = normalizeInput(data.pending_property_caption || '');
+      const media = employeePendingStoredMedia(data);
+      if (!caption || !media.length) break;
+      const facts = employeePropertyFacts(caption, data);
+      if (employeePropertyMissing(facts).length) break;
+      const existing = await findEmployeeDuplicateProperty({ caption, facts, sessionData: data });
+      if (existing) {
+        alreadySaved += 1;
+      } else {
+        const propertyId = await createEmployeeReviewProperty({
+          phone,
+          inboundMessageId: data.pending_property_media_message_id || '',
+          caption,
+          facts,
+          storedMedia: media,
+          sessionData: data
+        });
+        if (!propertyId) break;
+        noteEmployeePropertyCreated(data, propertyId, media, caption);
+        data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
+        data.total_media_count = Number(data.total_media_count || 0) + media.length;
+        alertTeamAgentPropertySubmitted({ agent: data.agent || {}, propertyId, facts, caption });
+        saved.push({ propertyId, caption, facts, storedMedia: media });
+      }
+      delete data.pending_property_caption;
+      clearEmployeePendingMedia(data);
+      promoteEmployeeQueuedSubmission(data);
+      changed = true;
     }
-    delete data.pending_property_caption;
-    clearEmployeePendingMedia(data);
-    promoteEmployeeQueuedSubmission(data);
-    changed = true;
-  }
-  const kept = await saveReadyKeptSubmissions({ phone: '', currentStep, data });
-  if (kept.length) {
-    saved.push(...kept);
-    changed = true;
-  }
+    // Complete ones kept behind the one at the front, which still needs something.
+    const kept = await saveReadyKeptSubmissions({ phone: '', currentStep, data });
+    if (kept.length) {
+      saved.push(...kept);
+      changed = true;
+    }
+  };
+  await saveCompleteOnes();
   const retired = retireStaleAgentSubmissions(data);
-  if (retired) changed = true;
+  if (retired) {
+    changed = true;
+    // What came to the front when a stale one was retired.
+    await saveCompleteOnes();
+  }
   if (changed && phone) await replaceEmployeeSession(phone, currentStep, data);
   return { saved, alreadySaved, retired };
 }
