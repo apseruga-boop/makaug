@@ -27,6 +27,7 @@ const { phoneKey9, canonicalUgPhone } = require('../utils/ugPhone');
 const { httpError, kampalaDay, cleanKey } = calling;
 const SETUP_HOURS = 48;
 const TZ = 'Africa/Kampala';
+const sandbox = require('./callingSandbox');
 
 async function rows(sql, params = []) { return (await db.query(sql, params)).rows || []; }
 async function safeRows(sql, params = []) { try { return await rows(sql, params); } catch (_) { return []; } }
@@ -57,7 +58,7 @@ async function listLogins({ now = new Date() } = {}) {
     const l = links.find((x) => String(x.user_id) === String(u.id));
     const linkState = !l ? 'none' : l.used_at ? 'used' : l.revoked_at ? 'revoked' : new Date(l.expires_at) < now ? 'expired' : 'waiting';
     return {
-      user_id: u.id, person_key: p.person_key, name: `${u.first_name}`.trim(), login: u.email, scope: p.staff_scope,
+      user_id: u.id, person_key: p.person_key, name: (String(p.sandbox) === 'true' ? `${u.first_name} ${u.last_name || ''}` : `${u.first_name}`).trim(), login: u.email, scope: p.staff_scope, sandbox: String(p.sandbox) === 'true',
       password_set: p.password_setup === 'done', password_set_at: p.password_set_at || null,
       last_login_at: u.last_login_at, status: u.status,
       link: l ? { state: linkState, created_at: l.created_at, expires_at: l.expires_at, used_at: l.used_at, created_by: l.created_by } : { state: 'none' }
@@ -250,6 +251,7 @@ async function resolveContact(kind, ref) {
  */
 async function claimContact(sessionId, { kind = '', ref = '', now = new Date() } = {}) {
   const s = await calling.openSession(sessionId);
+  if (await sandbox.isSandbox(s.person_key)) throw httpError(409, `${sandbox.PRACTICE_MSG} pulls a real WhatsApp contact or lead into your queue.`);
   const c = await resolveContact(String(kind), ref);
   const key = phoneKey9(c.phone);
   if (!key) throw httpError(400, 'That lead has no Ugandan phone number.');
@@ -289,7 +291,7 @@ async function pipeline({ includeArchived = false, now = new Date() } = {}) {
   const [agents, prospects, attempts, items, events, pays] = await Promise.all([
     safeRows(`SELECT id, full_name, phone, status, paid_until, last_payment_on, fee_exempt, created_at FROM agents WHERE removed_at IS NULL AND status = 'approved'`),
     safeRows(`SELECT id, full_name, phone, phone_key, status, do_not_contact, follow_up_at, follow_up_note, pitched_at, created_at FROM agent_prospects`),
-    rows(`SELECT phone_key, phone, full_name, person_key, task_key, outcome, note, callback_at, wrapped_at, shown_at, tapped_at, talk_s, status, next_step, transcript FROM call_attempts WHERE status = 'done' ORDER BY wrapped_at DESC`),
+    rows(`SELECT phone_key, phone, full_name, person_key, task_key, outcome, note, callback_at, wrapped_at, shown_at, tapped_at, talk_s, status, next_step, transcript FROM call_attempts WHERE status = 'done' AND ${sandbox.REAL_PEOPLE()} ORDER BY wrapped_at DESC`),
     rows('SELECT * FROM pipeline_items'),
     safeRows(`SELECT phone_key, outcome, note, created_at, person_key FROM outreach_events WHERE kind = 'outcome' ORDER BY created_at DESC LIMIT 2000`),
     safeRows(`SELECT agent_id, MAX(paid_at) AS paid_at, SUM(amount_ugx)::bigint AS total FROM revenue_entries WHERE direction = 'in' AND kind = 'agent_subscription' AND voided_at IS NULL GROUP BY agent_id`)
@@ -495,7 +497,7 @@ async function autoSaveAtFive(now = new Date()) {
 }
 
 async function savedSummaries({ day = kampalaDay() } = {}) {
-  return rows('SELECT person_key, day, made_at, figures FROM call_daily_reports WHERE day = $1::date ORDER BY person_key', [day]);
+  return rows(`SELECT person_key, day, made_at, figures FROM call_daily_reports WHERE day = $1::date AND ${sandbox.REAL_PEOPLE()} ORDER BY person_key`, [day]);
 }
 
 module.exports = {

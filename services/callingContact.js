@@ -77,6 +77,8 @@ async function videoState(attemptId) {
 
 async function requestVideo(attemptId, { personKey = '', videoKey = 'join_agent' } = {}) {
   const a = await attemptOf(attemptId);
+  const sbx = require('./callingSandbox');
+  if (sbx.isTestKey(a.phone_key) || await sbx.isSandbox(a.person_key)) throw httpError(409, `${sbx.PRACTICE_MSG} asks King to send the agent video on WhatsApp.`);
   if (!VIDEOS[videoKey]) throw httpError(400, 'Pick a video.');
   const hello = await helloOf(a.phone_key);
   if (!hello) throw httpError(409, 'Locked: they have not messaged our WhatsApp yet. Ask them to send "Hi" to 0780 863 394 first.');
@@ -110,6 +112,7 @@ async function decideVideo(id, { approve = false, actor = '', note = '' } = {}) 
   const r = (await rows('SELECT * FROM call_video_requests WHERE id::text = $1', [String(id)]))[0];
   if (!r) throw httpError(404, 'Request not found.');
   if (r.status !== 'requested' && !(approve && r.status === 'approved')) throw httpError(409, `Already ${r.status}.`);
+  if (approve && require('./callingSandbox').isTestKey(r.phone_key)) throw httpError(409, 'TEST practice number: never sent.');
   if (!approve) {
     await db.query("UPDATE call_video_requests SET status = 'rejected', decided_by = $2, decided_at = NOW(), decision_note = $3 WHERE id = $1", [r.id, String(actor).slice(0, 80), String(note).slice(0, 200)]);
     return { status: 'rejected' };

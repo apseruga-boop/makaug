@@ -24,6 +24,7 @@ const db = require('../config/database');
 const scripts = require('./callingScripts');
 const perf = require('./staffPerformance');
 const { staffSenderChoices, maskPhoneLast3 } = require('./outreachSenderName');
+const sandbox = require('./callingSandbox');
 const { phoneKey9, canonicalUgPhone } = require('../utils/ugPhone');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
@@ -317,7 +318,11 @@ async function loadCallers() {
   for (const p of staffSenderChoices()) add(p.key, p.name);
   for (const r of await safeRows('SELECT person_key, name, role, active, rate_pct, user_id::text AS user_id FROM commission_staff')) add(r.person_key, r.name, { role: r.role, commission_active: r.active, rate_pct: Number(r.rate_pct || 0), user_id: r.user_id || null });
   // Anyone given a calling login gets their own queue and the default targets straight away.
-  for (const r of await safeRows("SELECT profile_data->>'person_key' AS person_key, TRIM(CONCAT(first_name, ' ', last_name)) AS full_name FROM users WHERE role = 'moderator' AND status = 'active' AND COALESCE(profile_data->>'person_key', '') <> ''")) add(r.person_key, r.full_name);
+  for (const r of await safeRows("SELECT id::text AS user_id, profile_data->>'person_key' AS person_key, TRIM(CONCAT(first_name, ' ', last_name)) AS full_name, COALESCE(profile_data->>'sandbox', 'false') = 'true' AS sandbox FROM users WHERE role = 'moderator' AND status = 'active' AND COALESCE(profile_data->>'person_key', '') <> ''")) {
+    // A practice login is known by its user id; a real person keeps their commission_staff link.
+    add(r.person_key, r.full_name, r.sandbox ? { user_id: r.user_id, sandbox: true } : {});
+    const cur = people.get(cleanKey(r.person_key)); if (cur && !cur.user_id) cur.user_id = r.user_id;
+  }
   for (const r of await safeRows('SELECT DISTINCT person_key FROM call_targets')) add(r.person_key, null);
   for (const r of await safeRows("SELECT DISTINCT person_key FROM call_sessions WHERE started_at > NOW() - INTERVAL '60 days'")) add(r.person_key, null);
   return [...people.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -480,6 +485,7 @@ async function agentKeys(keys = []) {
 
 /** Candidates in queue order for one task and caller. Each: phone, phone_key, name, source. */
 async function candidatesFor(task, personKey, { today = kampalaDay(), limit = 400 } = {}) {
+  if (await sandbox.isSandbox(personKey)) return practiceCandidates(task, personKey);
   const cfg = task.config || {};
   const out = [];
   // Due callbacks for this task come first, the caller's own before anyone else's.
@@ -567,7 +573,20 @@ async function candidatesFor(task, personKey, { today = kampalaDay(), limit = 40
       out.push({ phone: a.phone, phone_key: phoneKey9(a.phone), full_name: a.full_name, source_kind: 'agent', source_label: `Agent · ${reason}`, reason, agent_id: a.id });
     }
   }
-  return out.filter((c) => c.phone_key && c.phone_key.length === 9);
+  // TEST practice numbers never reach a real caller.
+  return out.filter((c) => c.phone_key && c.phone_key.length === 9 && !sandbox.isTestKey(c.phone_key));
+}
+
+/** A practice caller's queue: their own TEST callbacks first, then the TEST practice numbers. Never a real phone. */
+async function practiceCandidates(task, personKey) {
+  const cbs = await safeRows(
+    `SELECT DISTINCT ON (phone_key) phone_key, phone, full_name, callback_at, outcome FROM call_attempts
+      WHERE person_key = $1 AND task_key = $2 AND status = 'done' AND callback_at IS NOT NULL AND callback_at <= NOW() + INTERVAL '${CALLBACK_EARLY_MIN} minutes'
+      ORDER BY phone_key, COALESCE(wrapped_at, shown_at) DESC`, [personKey, task.key]);
+  const out = cbs.filter((c) => sandbox.isTestKey(c.phone_key)).map((c) => ({ phone: c.phone, phone_key: c.phone_key, full_name: c.full_name, source_kind: 'callback', source_label: `TEST practice · callback you set (${String(c.outcome || '').replace(/_/g, ' ')})`, reason: 'Practice callback' }));
+  const label = { new_agents: 'TEST practice number · pretend new agent', payments: 'TEST practice number · pretend unpaid sign-up', retention: 'TEST practice number · pretend client to keep' }[task.queue_kind] || 'TEST practice number';
+  for (const n of sandbox.practiceNumbers()) out.push({ ...n, source_kind: 'list', source_label: `${label} – not a real phone, nothing is sent`, reason: 'Practice' });
+  return out;
 }
 
 async function eligibleQueue(task, personKey, { now = new Date(), tasks = null, limit = 400 } = {}) {
@@ -927,6 +946,8 @@ async function startInbound(sessionId, { phone = '', fromAttempt = '', name = ''
   const canonical = canonicalUgPhone(phone);
   const key = phoneKey9(canonical);
   if (!key || !/^\+256\d{9}$/.test(canonical)) throw httpError(400, 'Type the number that is calling, like 0772 123 456.');
+  if (await sandbox.isSandbox(s.person_key) && !sandbox.isTestKey(key)) throw httpError(409, 'Practice account (TEST): use a TEST practice number, e.g. 0700 000 101. Real numbers are never used from practice.');
+  if (!(await sandbox.isSandbox(s.person_key)) && sandbox.isTestKey(key)) throw httpError(400, 'That is a TEST practice number, not a real caller.');
   const busy = (await rows("SELECT id FROM call_attempts WHERE session_id = $1 AND status = 'calling'", [sessionId]))[0];
   if (busy) throw httpError(409, 'Finish the wrap-up for this call first.');
   await db.query("UPDATE call_attempts SET status = 'released' WHERE (session_id = $1 OR phone_key = $2) AND status = 'shown'", [sessionId, key]);
@@ -957,7 +978,7 @@ async function searchCalls(qText = '', { personKey = '', limit = 40 } = {}) {
   const list = await rows(
     `SELECT id, person_key, task_key, direction, phone_key, full_name, status, outcome, note, next_step, skip_reason, source_label, transcript, callback_at, COALESCE(wrapped_at, tapped_at, shown_at) AS at
        FROM call_attempts
-      WHERE status IN ('done', 'skipped') AND ($3 = '' OR person_key = $3)
+      WHERE status IN ('done', 'skipped') AND ($3 = '' OR person_key = $3) AND ($3 <> '' OR ${sandbox.REAL_PEOPLE()})
         AND ((LENGTH($2) >= 3 AND phone_key LIKE '%' || $2 || '%')
           OR (SELECT bool_and(LOWER(CONCAT_WS(' ', full_name, note, next_step, outcome, skip_reason, source_label, transcript->>'summary', transcript->>'text')) LIKE w) FROM unnest($1::text[]) AS w))
       ORDER BY COALESCE(wrapped_at, tapped_at, shown_at) DESC LIMIT $4`, [like.length ? like : ['%%'], digits, cleanKey(personKey), limit]);
@@ -977,7 +998,7 @@ async function callsSummary({ from, to } = {}) {
   const start = `${from}T00:00:00+03:00`; const end = `${addDays(to, 1)}T00:00:00+03:00`;
   const list = await rows(
     `SELECT id, person_key, task_key, direction, phone_key, full_name, status, outcome, is_close, note, next_step, callback_at, transcript, talk_s, COALESCE(wrapped_at, tapped_at, shown_at) AS at
-       FROM call_attempts WHERE status IN ('done', 'skipped') AND COALESCE(tapped_at, shown_at) >= $1 AND COALESCE(tapped_at, shown_at) < $2 ORDER BY at`, [start, end]);
+       FROM call_attempts WHERE status IN ('done', 'skipped') AND COALESCE(tapped_at, shown_at) >= $1 AND COALESCE(tapped_at, shown_at) < $2 AND ${sandbox.REAL_PEOPLE()} ORDER BY at`, [start, end]);
   const done = list.filter((a) => a.status === 'done');
   const by = {}; const outcomes = {};
   for (const a of done) {
@@ -1015,6 +1036,7 @@ async function submitNumber({ personKey, name = '', phone = '', note = '', howKn
   const callers = await loadCallers();
   const person = callers.find((p) => p.key === cleanKey(personKey));
   if (!person) throw httpError(400, 'Pick who is adding the number.');
+  if (person.sandbox) throw httpError(409, `${sandbox.PRACTICE_MSG} adds the number to the real calling list.`);
   const canonical = canonicalUgPhone(phone);
   const key = phoneKey9(canonical);
   if (!/^\+2567\d{8}$/.test(canonical)) throw httpError(400, 'Type a Uganda mobile number, like 0772 123 456.');
@@ -1095,7 +1117,7 @@ async function reviewSubmission(id, { decision = '', name, actor = '' } = {}) {
 
 async function dayAttempts(personKey, day) {
   return rows(
-    `SELECT * FROM call_attempts WHERE ($1::text IS NULL OR person_key = $1)
+    `SELECT * FROM call_attempts WHERE ($1::text IS NULL OR person_key = $1) AND ($1::text IS NOT NULL OR ${sandbox.REAL_PEOPLE()})
         AND (COALESCE(tapped_at, shown_at) AT TIME ZONE '${TZ}')::date = $2::date ORDER BY shown_at`,
     [personKey, day]
   );
@@ -1103,7 +1125,7 @@ async function dayAttempts(personKey, day) {
 
 async function daySessions(personKey, day) {
   return rows(
-    `SELECT * FROM call_sessions WHERE ($1::text IS NULL OR person_key = $1) AND (started_at AT TIME ZONE '${TZ}')::date = $2::date ORDER BY started_at`,
+    `SELECT * FROM call_sessions WHERE ($1::text IS NULL OR person_key = $1) AND ($1::text IS NOT NULL OR ${sandbox.REAL_PEOPLE()}) AND (started_at AT TIME ZONE '${TZ}')::date = $2::date ORDER BY started_at`,
     [personKey, day]
   );
 }
@@ -1141,7 +1163,7 @@ async function roadTo1000() {
 async function leaderboard(day) {
   const list = await rows(
     `SELECT person_key, COUNT(*) FILTER (WHERE status = 'done')::int AS calls, COUNT(*) FILTER (WHERE is_close)::int AS closes
-       FROM call_attempts WHERE (COALESCE(tapped_at, shown_at) AT TIME ZONE '${TZ}')::date = $1::date GROUP BY person_key ORDER BY closes DESC, calls DESC`,
+       FROM call_attempts WHERE (COALESCE(tapped_at, shown_at) AT TIME ZONE '${TZ}')::date = $1::date AND ${sandbox.REAL_PEOPLE()} GROUP BY person_key ORDER BY closes DESC, calls DESC`,
     [day]
   );
   const callers = await loadCallers();
@@ -1151,7 +1173,7 @@ async function leaderboard(day) {
 async function callbacksDue(personKey, now = new Date()) {
   const list = await rows(
     `SELECT DISTINCT ON (phone_key) phone_key, phone, full_name, callback_at, outcome, task_key, person_key FROM call_attempts
-      WHERE status = 'done' AND callback_at IS NOT NULL ORDER BY phone_key, wrapped_at DESC`
+      WHERE status = 'done' AND callback_at IS NOT NULL AND (person_key = $1 OR ${sandbox.REAL_PEOPLE()}) ORDER BY phone_key, wrapped_at DESC`, [cleanKey(personKey || '')]
   );
   const later = await rows("SELECT phone_key, MAX(COALESCE(wrapped_at, shown_at)) AS at FROM call_attempts WHERE status IN ('shown','calling') GROUP BY phone_key");
   const busy = new Set(later.map((r) => r.phone_key));
@@ -1305,7 +1327,7 @@ async function performance({ day = kampalaDay(), now = new Date() } = {}) {
   const [attempts, sessions, cbs, submissions, road] = await Promise.all([
     dayAttempts(null, day), daySessions(null, day), callbacksDue(null, now), listSubmissions({ status: 'pending' }), roadTo1000()
   ]);
-  const keys = new Set([...callers.map((p) => p.key), ...attempts.map((a) => a.person_key), ...sessions.map((s) => s.person_key)]);
+  const keys = new Set([...callers.filter((p) => !p.sandbox).map((p) => p.key), ...attempts.map((a) => a.person_key), ...sessions.map((s) => s.person_key)]);
   const people = [];
   for (const key of keys) {
     const mine = attempts.filter((a) => a.person_key === key);
@@ -1370,8 +1392,9 @@ async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
   const me = callers.find((p) => p.user_id && userId && String(p.user_id) === String(userId)) || null;
   return {
     tasks: tasks.map((t) => ({ key: t.key, name: t.name, description: t.description, queue_kind: t.queue_kind, checklist: t.checklist, outcomes: t.outcomes, script_variants: t.script_variants })),
-    callers: callers.map((p) => ({ key: p.key, name: p.name })),
+    callers: callers.map((p) => ({ key: p.key, name: p.name, sandbox: Boolean(p.sandbox) || undefined })),
     locked_person: me ? me.key : null,
+    sandbox: Boolean(me && me.sandbox),
     scripts: { variants: scripts.VARIANTS, objections: scripts.OBJECTIONS, greetings: scripts.GREETINGS, luganda_status: 'Ronald to check' },
     templates: scripts.TEMPLATES,
     template_rules: scripts.TEMPLATE_RULES,

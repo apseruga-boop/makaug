@@ -83,10 +83,26 @@
   }
   function taskOf(key) { return (boot.tasks || []).filter(function (t) { return t.key === key; })[0] || boot.tasks[0]; }
   function personName(key) { var p = (boot.callers || []).filter(function (c) { return c.key === key; })[0]; return p ? p.name : key; }
+  // Practice login (e.g. "Arthur (test)"): TEST numbers only; the phone, SMS and WhatsApp links never open.
+  var practiceOn = false;
+  function practiceMode() {
+    if (!boot || !boot.sandbox || practiceOn) return;
+    practiceOn = true;
+    var b = document.createElement('div'); b.className = 'mkc-practice'; b.setAttribute('data-mkc-practice', '');
+    b.textContent = '🧪 PRACTICE ACCOUNT – TEST numbers only. Nothing is dialled or sent, and nothing counts towards money, commission or Road to 1000.';
+    document.body.appendChild(b);
+    document.addEventListener('click', function (e) {
+      var a = e.target && e.target.closest ? e.target.closest('a[href^="tel:"],a[href^="sms:"],a[href*="wa.me/"],a[href*="whatsapp.com/"]') : null;
+      if (!a) return;
+      e.preventDefault(); e.stopPropagation();
+      b.style.opacity = '0'; clearTimeout(b._t); b._t = setTimeout(function () { b.style.opacity = ''; }, 4500);
+      toast('Practice: TEST number – not dialled, nothing sent. In real calls this opens ' + (/^tel:/.test(a.getAttribute('href')) ? 'Phone Link to ring' : /^sms:/.test(a.getAttribute('href')) ? 'Messages with the text' : 'WhatsApp') + '.');
+    }, true);
+  }
   function loadBoot(force) {
     if (!bootPromise || force) {
       bootPromise = api('/bootstrap').then(function (d) {
-        boot = d;
+        boot = d; practiceMode();
         try { localStorage.setItem(BOOT_KEY, JSON.stringify(d)); } catch (e) { /* full */ }
         return d;
       }, function (e) {
@@ -187,6 +203,7 @@
     '.mkc-in{background:#2563eb;color:#fff;font-size:17px;font-weight:900;padding:10px 18px;border-radius:12px;box-shadow:0 0 0 3px #bfdbfe}.mkc-pill.in{background:#dbeafe;color:#1e40af}.mkc-hit{border:1px solid #e2e8f0;border-radius:10px;padding:6px 8px;margin:4px 0;cursor:pointer}.mkc-hit mark{background:#fef08a}',
     '.mkc-learn{border:1px solid #e2e8f0;border-radius:10px;padding:6px 10px;margin:6px 0;font-size:13px;line-height:1.45}.mkc-learn p,.mkc-learn ul,.mkc-learn ol{margin:4px 0;padding-left:16px}.mkc-learn summary{cursor:pointer}.mkc-learn a{color:#047857;font-weight:700}.mkc-lg{background:#fefce8;border-radius:8px;padding:4px 8px;margin:4px 0;font-size:13px}',
     '.mkc-meetbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#ede9fe;border:1px solid #c4b5fd;color:#4c1d95;border-radius:12px;padding:10px 12px;margin:0 0 10px}.mkc-rep{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.mkc-rep>div{border:1px solid #e2e8f0;border-radius:12px;padding:10px;background:#fff}.mkc-rep h5{margin:0 0 6px;font-size:13px;color:#334155}.mkc-rep .big{font-size:22px;font-weight:900}.mkc-rep ul{margin:4px 0 0;padding-left:16px;font-size:12px}.mkc-act{display:grid;grid-template-columns:minmax(0,1fr) 140px 150px 34px;gap:6px;margin:4px 0}.mkc-act input{min-width:0;width:100%;box-sizing:border-box}@media(max-width:700px){.mkc-act{grid-template-columns:1fr 1fr}}',
+    '.mkc-practice{position:fixed;left:50%;transform:translateX(-50%);bottom:10px;z-index:2147483600;background:#7c2d12;color:#fff;font:800 12px/1.35 system-ui,sans-serif;padding:7px 14px;border-radius:99px;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:calc(100vw - 20px);text-align:center;pointer-events:none;transition:opacity .2s}',
     '.mkc-proof{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}.mkc-proof img{max-width:100%;max-height:360px;border:1px solid #e2e8f0;border-radius:10px;display:block}.mkc-drop{border:2px dashed #94a3b8;border-radius:12px;padding:18px;text-align:center;color:#475569;cursor:pointer}.mkc-drop.on{border-color:#047857;background:#ecfdf5}.mkc-fld{display:grid;grid-template-columns:120px 1fr;gap:6px;align-items:center;margin:4px 0}.mkc-fld input,.mkc-fld select{width:100%;box-sizing:border-box}.mkc-ocrbar{height:6px;background:#e2e8f0;border-radius:99px;overflow:hidden}.mkc-ocrbar i{display:block;height:100%;background:#0ea5e9;width:0}@media(max-width:700px){.mkc-proof{grid-template-columns:1fr}.mkc-fld{grid-template-columns:1fr}}',
     '.mkc-call{display:flex;justify-content:center;width:100%;box-sizing:border-box;font-size:22px;padding:18px;border-radius:16px}',
     '.mkc-timer{font-size:46px;font-weight:900;font-variant-numeric:tabular-nums;color:#047857;text-align:center}',
@@ -2185,7 +2202,7 @@
     if (!list.length) return '<p class="mkc-muted">No staff logins yet.</p>';
     var state = { none: 'No link yet', waiting: 'Link sent, not used yet', used: 'Link used', expired: 'Link expired', revoked: 'Link replaced' };
     return list.map(function (l) {
-      return '<div class="mkc-kit"><div><b>' + esc(l.name) + '</b> <span class="mkc-pill">' + esc(l.scope === 'caller' ? 'calling screen only' : 'staff') + '</span><div class="mkc-muted">' + esc(l.login) + '</div>'
+      return '<div class="mkc-kit"><div><b>' + esc(l.name) + '</b> <span class="mkc-pill">' + esc(l.scope === 'caller' ? 'calling screen only' : 'staff') + '</span>' + (l.sandbox ? ' <span class="mkc-pill warn">PRACTICE · TEST numbers only</span>' : '') + '<div class="mkc-muted">' + esc(l.login) + '</div>'
         + '<div class="mkc-muted">' + (l.password_set ? '<span class="mkc-good">Password set</span>' : 'No password yet') + ' · ' + esc(state[l.link.state] || l.link.state) + (l.link.state === 'waiting' ? ' (until ' + esc(kDayTime(l.link.expires_at)) + ')' : '') + (l.last_login_at ? ' · last sign-in ' + esc(kDayTime(l.last_login_at)) : '') + '</div></div>'
         + '<button type="button" class="mkc-btn sm dark" data-k-mklink="' + esc(l.user_id) + '" data-k-name="' + esc(l.name) + '">' + (l.password_set ? 'Reset link' : 'Make setup link') + '</button></div>';
     }).join('');

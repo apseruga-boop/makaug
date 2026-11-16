@@ -15,6 +15,7 @@
 
 const db = require('../config/database');
 const calling = require('./callingScreen');
+const { REAL_PEOPLE } = require('./callingSandbox');
 const { momoMerchantCode, momoMerchantName, momoWhatsappSteps } = require('../config/momoMerchant');
 
 const { kampalaDay, httpError, cleanKey } = calling;
@@ -104,8 +105,14 @@ function momoText(amountUgx = FEE_UGX) {
  * go (no bridge, they never said Hello), the text comes back for Ronald to
  * copy or open in WhatsApp himself.
  */
+async function practiceGuard(a, personKey, what) {
+  const sbx = require('./callingSandbox');
+  if (sbx.isTestKey(a.phone_key) || await sbx.isSandbox(a.person_key) || await sbx.isSandbox(cleanKey(personKey))) throw httpError(409, `${sbx.PRACTICE_MSG} ${what}.`);
+}
+
 async function sendPayment(attemptId, { how = 'link', personKey = '', actor = 'calling' } = {}) {
   const a = await phoneOfAttempt(attemptId);
+  await practiceGuard(a, personKey, how === 'momo' ? 'sends the MoMo code on makaug WhatsApp' : 'sends the pay link on makaug WhatsApp');
   const person = cleanKey(personKey) || a.person_key;
   const agent = await agentFor(a.phone_key);
   const payLinks = require('./payLinkService');
@@ -134,6 +141,7 @@ async function sendPayment(attemptId, { how = 'link', personKey = '', actor = 'c
 /** "They say they paid": a pending claim for admin to verify against MoMo. */
 async function markClaimed(attemptId, { personKey = '', note = '', txid = '' } = {}) {
   const a = await phoneOfAttempt(attemptId);
+  await practiceGuard(a, personKey, 'makes a payment claim for King to confirm');
   const person = cleanKey(personKey) || a.person_key;
   const billing = require('./billingOpsService');
   const ref = String(txid || '').replace(/\s+/g, '').slice(0, 60) || null;
@@ -158,12 +166,12 @@ async function activity({ period = 'day', day = kampalaDay(), personKey = '' } =
   const who = cleanKey(personKey);
   const sessions = await rows(
     `SELECT id, person_key, started_at, ended_at, last_heartbeat_at, open_ms, focus_ms, away_ms, break_ms, exit_count, break_count
-       FROM call_sessions WHERE started_at >= $1 AND started_at < $2 AND ($3 = '' OR person_key = $3) ORDER BY started_at`, [start, end, who]);
+       FROM call_sessions WHERE started_at >= $1 AND started_at < $2 AND ($3 = '' OR person_key = $3) AND ($3 <> '' OR ${REAL_PEOPLE()}) ORDER BY started_at`, [start, end, who]);
   const ids = sessions.map((s) => s.id);
   const events = ids.length ? await rows('SELECT session_id, kind, detail, at FROM call_session_events WHERE session_id = ANY($1::uuid[]) ORDER BY at', [ids]) : [];
   const attempts = await rows(
     `SELECT person_key, status, tapped_at, wrapped_at, shown_at, talk_s, is_close, outcome, task_key, direction FROM call_attempts
-      WHERE COALESCE(tapped_at, shown_at) >= $1 AND COALESCE(tapped_at, shown_at) < $2 AND ($3 = '' OR person_key = $3)`, [start, end, who]);
+      WHERE COALESCE(tapped_at, shown_at) >= $1 AND COALESCE(tapped_at, shown_at) < $2 AND ($3 = '' OR person_key = $3) AND ($3 <> '' OR ${REAL_PEOPLE()})`, [start, end, who]);
   const pays = await rows(
     `SELECT p.person_key, p.kind, p.at, c.status AS claim_status FROM call_payment_actions p LEFT JOIN payment_claims c ON c.id = p.claim_id
       WHERE p.at >= $1 AND p.at < $2 AND ($3 = '' OR p.person_key = $3)`, [start, end, who]);
@@ -216,7 +224,8 @@ async function activity({ period = 'day', day = kampalaDay(), personKey = '' } =
     `SELECT COALESCE(NULLIF(u.profile_data->>'person_key', ''), cs.person_key) AS person_key, u.last_login_at
        FROM users u LEFT JOIN commission_staff cs ON cs.user_id = u.id
       WHERE u.last_login_at >= $1 AND u.last_login_at < $2 AND (u.profile_data ? 'person_key' OR cs.person_key IS NOT NULL)`, [start, end]);
-  for (const l of logins) { if (l.person_key && (!who || l.person_key === who)) { const c = cell(l.person_key, kampalaDay(l.last_login_at)); c.login_at = l.last_login_at; } }
+  const sbKeys = who ? new Set() : await require('./callingSandbox').sandboxKeys();
+  for (const l of logins) { if (l.person_key && !sbKeys.has(l.person_key) && (!who || l.person_key === who)) { const c = cell(l.person_key, kampalaDay(l.last_login_at)); c.login_at = l.last_login_at; } }
   const openAt = new Map();
   for (const e of events) {
     const s = sOf.get(e.session_id); if (!s) continue;
@@ -338,7 +347,7 @@ async function planResult(personKey, day = kampalaDay(), { save = false } = {}) 
 
 async function plans({ period = 'week', day = kampalaDay() } = {}) {
   const range = periodRange(period, day);
-  const list = await rows('SELECT * FROM call_day_plans WHERE day BETWEEN $1 AND $2 ORDER BY day DESC, person_key', [range.from, range.to]);
+  const list = await rows(`SELECT * FROM call_day_plans WHERE day BETWEEN $1 AND $2 AND ${REAL_PEOPLE()} ORDER BY day DESC, person_key`, [range.from, range.to]);
   return { ...range, plans: list.map((p) => ({ ...p, day: String(kampalaDay(p.day) || p.day).slice(0, 10), numbers: (p.numbers || []).map(mask) })) };
 }
 
@@ -374,6 +383,7 @@ async function cashStatus(day = kampalaDay()) {
 
 /** Sign the day's cash check: every account, initials required. Signed rows can't be changed. */
 async function saveCash({ day = kampalaDay(), personKey = '', initials = '', entries = [] } = {}) {
+  if (await require('./callingSandbox').isSandbox(cleanKey(personKey))) throw httpError(409, `${require('./callingSandbox').PRACTICE_MSG} signs the real 17:00 cash check.`);
   const ini = String(initials || '').replace(/[^A-Za-z]/g, '').toUpperCase();
   if (ini.length < 2 || ini.length > 4) throw httpError(400, 'Type your initials (2–4 letters) to sign.');
   const status = await cashStatus(day);
