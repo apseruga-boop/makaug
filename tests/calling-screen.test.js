@@ -115,3 +115,29 @@ test('v4: SMS text names us, our WhatsApp and the Hi ask; shared tools cover the
   assert.ok(!shared('/calling/blocks/700000000/remove', 'POST'));
   assert.ok(!shared('/calling/calls-summary', 'GET'));
 });
+
+test('meeting mode: King times + Meet link are checked, the slot opens 10 minutes before', () => {
+  const m = require('../services/callingMeeting');
+  assert.deepEqual(m.cleanTimes('16:30, 8:30'), ['08:30', '16:30']);
+  assert.throws(() => m.cleanTimes('25:00'), /not a time/);
+  assert.equal(m.cleanMeetUrl('https://meet.google.com/abc-defg-hij'), 'https://meet.google.com/abc-defg-hij');
+  assert.throws(() => m.cleanMeetUrl('https://evil.example/meet'), /Google Meet link/);
+  const set = { times: ['09:00', '16:30'] };
+  const at = (iso) => m.currentSlot(set, new Date(iso));
+  assert.equal(at('2026-11-17T05:45:00Z').report_ready, false); // 08:45 Kampala, 15 min early
+  const soon = at('2026-11-17T05:52:00Z'); // 08:52 Kampala
+  assert.equal(soon.slot, '09:00'); assert.equal(soon.soon, true); assert.equal(soon.minutes_to, 8);
+  assert.equal(at('2026-11-17T06:20:00Z').on, true); // 09:20, on
+  assert.equal(at('2026-11-17T09:00:00Z').slot, '16:30'); // 12:00 → next one
+  assert.equal(at('2026-11-17T16:00:00Z'), null); // 19:00, all done
+});
+
+test('meeting mode: staff can read their report and save notes; settings + history are King-only', () => {
+  const { isStaffSharedKingTool: ok } = require('../utils/staffSharedKingTools');
+  assert.equal(ok('/calling/meeting', 'GET'), true);
+  assert.equal(ok('/calling/meeting/report', 'GET'), true);
+  assert.equal(ok('/calling/meeting/notes', 'POST'), true);
+  assert.equal(ok('/calling/meeting/settings', 'POST'), false);
+  assert.equal(ok('/calling/meeting/settings', 'GET'), false);
+  assert.equal(ok('/calling/meeting/history', 'GET'), false);
+});

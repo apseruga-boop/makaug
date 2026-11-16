@@ -133,8 +133,40 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
     return res.json({ ok: true, data: r });
   }));
   router.get('/calling/live', wrap(async (req, res) => res.json({ ok: true, data: await contact.liveSite() })));
+  // Payment SMS proof: screenshot read in the browser (Tesseract.js), checked here, claim for King.
+  const smsProof = require('../services/paymentSmsProof');
+  const proofWrap = (fn) => wrap(async (req, res) => { try { return await fn(req, res); } catch (e) { if (e instanceof smsProof.ProofError) return res.status(e.status).json({ ok: false, error: e.message, code: e.code }); throw e; } });
+  router.post('/calling/sms-proof/parse', proofWrap(async (req, res) => {
+    let phone = String(req.body?.phone || '');
+    if (req.body?.attempt_id) phone = (await require('../config/database').query('SELECT phone FROM call_attempts WHERE id::text = $1', [String(req.body.attempt_id)])).rows[0]?.phone || phone;
+    const parsed = smsProof.parseSmsText(req.body?.text || '');
+    const fields = { ...parsed, ...(req.body?.fields || {}) };
+    const c = await smsProof.checkFields(fields, { phone });
+    const k = (v) => String(v || '').replace(/\D+/g, '').slice(-9);
+    return res.json({ ok: true, data: { parsed: { ...parsed, sender_phone_masked: parsed.sender_phone ? `•••${k(parsed.sender_phone).slice(-3)}` : null }, problems: c.hard, flags: c.flags, plan: c.plan.label, min_ugx: c.plan.min_ugx, who: c.plan.who ? String(c.plan.who).split(/\s+/)[0] : '' } });
+  }));
+  router.post('/calling/sms-proof', proofWrap(async (req, res) => {
+    const r = await smsProof.submitProof({ attemptId: req.body?.attempt_id || null, phone: req.body?.phone || '', personKey: req.body?.person_key || actorOf(req), imageDataUrl: req.body?.image, ocrText: req.body?.ocr_text, ocrConfidence: req.body?.ocr_confidence, fields: req.body?.fields || {} });
+    await audit(req, 'calling_sms_proof_uploaded', { proof_id: r.id, claim_id: r.claim_id });
+    return res.json({ ok: true, data: r });
+  }));
+  router.get('/calling/sms-proofs/:id/image', proofWrap(async (req, res) => {
+    const img = await smsProof.imageFor(req.params.id);
+    res.set('Cache-Control', 'private, no-store');
+    if (img.redirect) return res.redirect(302, img.redirect);
+    res.type(img.type); return res.send(img.buffer);
+  }));
   router.get('/calling/lookup', wrap(async (req, res) => res.json({ ok: true, data: await extras.lookup(req.query?.phone) })));
   router.get('/calling/search', wrap(async (req, res) => res.json({ ok: true, data: await calling.searchCalls(req.query?.q, { personKey: isKing(req) ? (req.query?.person_key || '') : '' }) })));
+  // Meeting mode: King sets the times + Meet link; callers get the report 10 min before and keep notes.
+  const meeting = require('../services/callingMeeting');
+  const actorName = (req) => String(req.adminAuth?.name || req.adminAuth?.email || actorId(req) || (isKing(req) ? 'King' : 'staff')).slice(0, 60);
+  router.get('/calling/meeting', wrap(async (req, res) => res.json({ ok: true, data: await meeting.status(req.query?.person_key) })));
+  router.get('/calling/meeting/report', wrap(async (req, res) => res.json({ ok: true, data: await meeting.buildReport(req.query?.person_key) })));
+  router.post('/calling/meeting/notes', wrap(async (req, res) => res.json({ ok: true, data: await meeting.saveNotes(req.body?.person_key, req.body || {}, { actor: actorName(req) }) })));
+  router.get('/calling/meeting/history', wrap(async (req, res) => res.json({ ok: true, data: await meeting.history({ personKey: req.query?.person_key || '', limit: req.query?.limit }) })));
+  router.get('/calling/meeting/settings', wrap(async (req, res) => res.json({ ok: true, data: await meeting.getSettings() })));
+  router.post('/calling/meeting/settings', wrap(async (req, res) => res.json({ ok: true, data: await meeting.saveSettings(req.body || {}, actorName(req)) })));
   router.get('/calling/my-money', wrap(async (req, res) => res.json({ ok: true, data: await day.myMoney(req.query?.person_key) })));
   // Money on the number on screen: send the pay link / MoMo code, mark "they paid".
   router.get('/calling/attempts/:id/payment', wrap(async (req, res) => {
@@ -175,6 +207,7 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
     return res.json({ ok: true, data: r });
   }));
   router.post('/calling/videos/:id/sent', wrap(async (req, res) => res.json({ ok: true, data: await contact.markVideoSentByHand(req.params.id, { actor: actorOf(req) }) })));
+  router.get('/calling/sms-proofs', wrap(async (req, res) => res.json({ ok: true, data: await smsProof.listProofs({ status: req.query?.status || '' }) })));
   router.get('/calling/blocks', wrap(async (req, res) => res.json({ ok: true, data: await calling.listBlocks() })));
   router.post('/calling/blocks/:phone_key/remove', wrap(async (req, res) => {
     const r = await calling.unblockNumber(String(req.params.phone_key).replace(/\D/g, '').slice(-9), { actor: actorOf(req), note: req.body?.note });

@@ -552,7 +552,9 @@ async function matchSmsToClaims(db, smsRow) {
 const CLAIM_SOURCE_NOTE = {
   momo_sms: "Found in the merchant line's MoMo SMS",
   pay_link: 'Claimed on the payment page',
-  whatsapp: 'Confirmed from a WhatsApp payment claim'
+  whatsapp: 'Confirmed from a WhatsApp payment claim',
+  calling_screen: 'Claimed on the calling screen',
+  calling_sms_proof: 'Payment SMS screenshot uploaded on the calling screen'
 };
 
 /** Check 3 of 3: Ronald or Arthur confirms. Only now does the money count. */
@@ -565,11 +567,15 @@ async function confirmClaim(db, { claimId, actor, method, accountKey, amountUgx,
     ? (await db.query('SELECT account_key, reference, amount_ugx FROM money_sms_inbox WHERE id = $1', [claim.sms_id]).catch(() => ({ rows: [] }))).rows[0]
     : null;
   const smsMethod = sms ? require('./paymentMatchService').methodForAccount(sms.account_key) : '';
+  // A payment SMS screenshot from the calling screen knows its network.
+  const proofMethod = !sms && claim.source === 'calling_sms_proof'
+    ? await require('./paymentSmsProof').methodForClaim(claim.id).catch(() => '')
+    : '';
   const payment = {
     amount: amountUgx || claim.amount_ugx,
     amount_original: amountOriginal || undefined,
     fx_rate_ugx: fxRate || undefined,
-    method: method || smsMethod || (claim.sms_id ? 'mtn_momo' : ''),
+    method: method || smsMethod || proofMethod || (claim.sms_id ? 'mtn_momo' : ''),
     account_key: accountKey || undefined,
     reference: claim.reference || sms?.reference || null,
     receipt_url: claim.receipt_url,

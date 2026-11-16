@@ -466,6 +466,31 @@ app.use('/api/property-seeker', propertySeekerRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/field-agent', fieldAgentRoutes);
 app.use('/api/staff-setup', require('./routes/staff-setup'));
+// Tesseract.js, self-hosted for the payment-SMS reader (free OCR in the browser).
+app.use('/vendor/tesseract/core', express.static(path.join(__dirname, 'node_modules', 'tesseract.js-core'), { index: false, maxAge: '30d', immutable: true }));
+app.get(['/vendor/tesseract/tesseract.min.js', '/vendor/tesseract/worker.min.js'], (req, res) => {
+  res.set('Cache-Control', 'public, max-age=2592000, immutable');
+  res.sendFile(path.join(__dirname, 'node_modules', 'tesseract.js', 'dist', path.basename(req.path)));
+});
+// English language data: fetched once from the public tessdata mirror, then served from here.
+app.get('/vendor/tesseract/lang/eng.traineddata.gz', async (_req, res) => {
+  const fs = require('fs');
+  const file = path.join(require('os').tmpdir(), 'makaug-tesseract-web', 'eng.traineddata.gz');
+  try {
+    if (!fs.existsSync(file)) {
+      const r = await fetch('https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz');
+      if (!r.ok) throw new Error(`tessdata ${r.status}`);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(`${file}.part`, Buffer.from(await r.arrayBuffer()));
+      fs.renameSync(`${file}.part`, file);
+    }
+    res.set('Cache-Control', 'public, max-age=2592000, immutable');
+    res.type('application/gzip');
+    return res.sendFile(file);
+  } catch (e) {
+    return res.status(503).json({ ok: false, error: 'Text reader data is not available right now.' });
+  }
+});
 // Agent video sent from the calling screen: count the open, then the film with its ref.
 app.get('/v/:ref', async (req, res) => {
   const to = await require('./services/callingContact').openRef(req.params.ref).catch(() => null);

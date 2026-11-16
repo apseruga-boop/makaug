@@ -186,6 +186,8 @@
     '.mkc-phone{font-size:40px;font-weight:900;letter-spacing:.02em;margin:14px 0 4px;font-variant-numeric:tabular-nums}',
     '.mkc-in{background:#2563eb;color:#fff;font-size:17px;font-weight:900;padding:10px 18px;border-radius:12px;box-shadow:0 0 0 3px #bfdbfe}.mkc-pill.in{background:#dbeafe;color:#1e40af}.mkc-hit{border:1px solid #e2e8f0;border-radius:10px;padding:6px 8px;margin:4px 0;cursor:pointer}.mkc-hit mark{background:#fef08a}',
     '.mkc-learn{border:1px solid #e2e8f0;border-radius:10px;padding:6px 10px;margin:6px 0;font-size:13px;line-height:1.45}.mkc-learn p,.mkc-learn ul,.mkc-learn ol{margin:4px 0;padding-left:16px}.mkc-learn summary{cursor:pointer}.mkc-learn a{color:#047857;font-weight:700}.mkc-lg{background:#fefce8;border-radius:8px;padding:4px 8px;margin:4px 0;font-size:13px}',
+    '.mkc-meetbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#ede9fe;border:1px solid #c4b5fd;color:#4c1d95;border-radius:12px;padding:10px 12px;margin:0 0 10px}.mkc-rep{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.mkc-rep>div{border:1px solid #e2e8f0;border-radius:12px;padding:10px;background:#fff}.mkc-rep h5{margin:0 0 6px;font-size:13px;color:#334155}.mkc-rep .big{font-size:22px;font-weight:900}.mkc-rep ul{margin:4px 0 0;padding-left:16px;font-size:12px}.mkc-act{display:grid;grid-template-columns:minmax(0,1fr) 140px 150px 34px;gap:6px;margin:4px 0}.mkc-act input{min-width:0;width:100%;box-sizing:border-box}@media(max-width:700px){.mkc-act{grid-template-columns:1fr 1fr}}',
+    '.mkc-proof{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}.mkc-proof img{max-width:100%;max-height:360px;border:1px solid #e2e8f0;border-radius:10px;display:block}.mkc-drop{border:2px dashed #94a3b8;border-radius:12px;padding:18px;text-align:center;color:#475569;cursor:pointer}.mkc-drop.on{border-color:#047857;background:#ecfdf5}.mkc-fld{display:grid;grid-template-columns:120px 1fr;gap:6px;align-items:center;margin:4px 0}.mkc-fld input,.mkc-fld select{width:100%;box-sizing:border-box}.mkc-ocrbar{height:6px;background:#e2e8f0;border-radius:99px;overflow:hidden}.mkc-ocrbar i{display:block;height:100%;background:#0ea5e9;width:0}@media(max-width:700px){.mkc-proof{grid-template-columns:1fr}.mkc-fld{grid-template-columns:1fr}}',
     '.mkc-call{display:flex;justify-content:center;width:100%;box-sizing:border-box;font-size:22px;padding:18px;border-radius:16px}',
     '.mkc-timer{font-size:46px;font-weight:900;font-variant-numeric:tabular-nums;color:#047857;text-align:center}',
     '.mkc-hist{margin-top:10px;border-top:1px dashed #e2e8f0;padding-top:8px;font-size:12px;color:#475569}',
@@ -344,11 +346,13 @@
     }, function (e) { toast(e.message, 'bad'); if (document.fullscreenElement) document.exitFullscreen().catch(function () {}); });
   }
   function ev(kind, detail) { if (S) S.events.push({ kind: kind, detail: detail || '', at: new Date().toISOString() }); }
-  function onVis() { if (!S) return; ev(document.hidden ? 'hidden' : 'visible', S.phase === 'calling' ? 'on a call' : ''); if (!document.hidden) { beat(); refreshPay(); } }
+  function inMeeting() { if (!S || !S.meeting) return false; var w = S.meeting.win; if (w && w.closed) { endMeeting(); return false; } return true; }
+  function endMeeting() { if (!S || !S.meeting) return; ev('meeting_end', String(Math.round((Date.now() - S.meeting.since) / 1000)) + 's'); clearInterval(S.meeting.poll); S.meeting = null; renderTop(); }
+  function onVis() { if (!S) return; ev(document.hidden ? 'hidden' : 'visible', inMeeting() ? 'in meeting' : (S.phase === 'calling' ? 'on a call' : '')); if (!document.hidden) { beat(); refreshPay(); } }
   function onFs() {
-    if (!S) return; ev(document.fullscreenElement ? 'fs_enter' : 'fs_exit');
-    // Leaving full screen ends work mode: downtime until he turns it back on.
-    if (!document.fullscreenElement && S.work && fsAvailable()) { setWork(false, 'left full screen'); return; }
+    if (!S) return; ev(document.fullscreenElement ? 'fs_enter' : 'fs_exit', inMeeting() ? 'in meeting' : '');
+    // Leaving full screen ends work mode: downtime until he turns it back on (not while in the team meeting).
+    if (!document.fullscreenElement && S.work && fsAvailable() && !inMeeting()) { setWork(false, 'left full screen'); return; }
     renderTop();
   }
   function fsAvailable() { return !!(document.documentElement.requestFullscreen) && !isPhone(); }
@@ -378,7 +382,7 @@
     S.lastInput = now;
   }
   function checkIdle(now) {
-    if (!S || S.idleSince || S.onBreak || S.phase === 'calling') return;
+    if (!S || S.idleSince || S.onBreak || S.phase === 'calling' || inMeeting()) return;
     if (now - (S.lastInput || now) >= IDLE_MS) { S.idleSince = S.lastInput; ev('idle_start', ''); }
   }
   // Every button pressed on the screen is logged by name (no personal data).
@@ -395,6 +399,7 @@
     if (S.onBreak) t.break_ms += d;
     else if (!S.work) t.down_ms = (t.down_ms || 0) + d;
     else if (away && S.phase === 'calling') t.oncall_hidden_ms += d;
+    else if (away && inMeeting()) { t.focus_ms += d; t.meeting_ms = (t.meeting_ms || 0) + d; }
     else if (away) t.away_ms += d;
     else t.focus_ms += d;
     var wt = q('[data-mkc-worktime]'); if (wt) wt.textContent = clock(t.focus_ms + t.oncall_hidden_ms);
@@ -486,6 +491,7 @@
       + '<span class="mkc-net" data-mkc-net style="' + (net.offline ? '' : 'display:none') + '">' + esc(T('offline')) + '</span>'
       + '<div class="mkc-road"><div style="font-size:11px;color:#94a3b8">Road to 1000 · <b style="color:#fff">' + road.paying_now + '</b> paying</div><div class="bar"><i style="width:' + Math.max(1, Math.min(100, road.percent || 0)) + '%"></i></div></div>'
       + '<div class="sp"></div>'
+      + '<button type="button" class="mkc-btn sm" style="background:#7c3aed;color:#fff" data-mkc-meet>🗓 Meeting</button>'
       + '<button type="button" class="mkc-btn mkc-in" data-mkc-in title="Someone rang the company phone and you answered in Phone Link">📲 Incoming call</button>'
       + '<button type="button" class="mkc-btn sm" style="background:#0ea5e9;color:#fff" data-mkc-live>🌐 Live site</button>'
       + '<button type="button" class="mkc-btn sm go" data-mkc-add>➕ Add number</button>'
@@ -498,6 +504,8 @@
     q('[data-mkc-lang-ui]', el).onchange = function (e) { setLang(e.target.value); };
     q('[data-mkc-add]', el).onclick = openAddNumber;
     q('[data-mkc-in]', el).onclick = openInbound;
+    q('[data-mkc-meet]', el).onclick = function () { openTeamMeeting(); };
+    checkMeeting(true);
     q('[data-mkc-live]', el).onclick = openLive;
     q('[data-mkc-rep]', el).onclick = function () { openReport(S.person); };
     q('[data-mkc-brk]', el).onclick = toggleBreak;
@@ -1090,6 +1098,7 @@
   function refreshSide() {
     if (!S) return;
     refreshPay();
+    checkMeeting();
     var p = S.person;
     Promise.all([
       api('/stats?person_key=' + encodeURIComponent(p) + '&session_id=' + encodeURIComponent(S.id)).catch(function () { return null; }),
@@ -1241,7 +1250,7 @@
     var done = p.state === 'confirmed';
     return '<div class="mkc-pay" data-mkc-paybox style="background:' + col + '"><div class="mkc-row" style="justify-content:space-between"><b>💰 ' + esc(p.label) + '</b><span class="mkc-muted">' + ugx(p.amount_ugx) + ' · MoMo ' + esc(p.momo_code) + '</span></div>'
       + (done ? '' : '<div class="mkc-row" style="margin-top:6px"><button type="button" class="mkc-btn sm go" data-pay="link">Send pay link</button><button type="button" class="mkc-btn sm" data-pay="momo">Send MoMo code</button>'
-        + (p.state === 'claimed' || p.state === 'arrived' ? '' : '<button type="button" class="mkc-btn sm amber" data-pay="claim">They say they paid</button>') + '</div>')
+        + (p.state === 'claimed' || p.state === 'arrived' ? '' : '<button type="button" class="mkc-btn sm amber" data-pay="claim">They say they paid</button>') + '<button type="button" class="mkc-btn sm dark" data-pay="sms">📷 Upload payment SMS</button></div>')
       + (S.payOut && S.payOut.id === a.id ? S.payOut.html : '') + '</div>';
   }
   function loadPay(a) {
@@ -1257,6 +1266,7 @@
       b.onclick = function () {
         var k = b.getAttribute('data-pay');
         if (k === 'claim') { openClaim(a); return; }
+        if (k === 'sms') { openSmsProof({ attempt: a }); return; }
         b.disabled = true;
         api('/attempts/' + a.id + '/pay', { method: 'POST', body: { how: k, person_key: S.person } }).then(function (r) {
           S.pay[a.id] = r.state;
@@ -1670,6 +1680,330 @@
       tmr = setInterval(function () { if (!document.body.contains(m)) { clearInterval(tmr); return; } loadLive(paint); }, 30000);
     });
   }
+  // ---- Meeting mode: report 10 min before, Meet in a popup, notes + action items
+  function meetReportHtml(r) {
+    var d = function (b, label) {
+      if (!b) return '';
+      var outs = Object.keys(b.outcomes || {}).sort(function (x, y) { return b.outcomes[y] - b.outcomes[x]; });
+      var m = b.money || {};
+      return '<div><h5>' + esc(label) + ' · ' + esc(b.day || '') + '</h5><div class="big">' + (b.calls || 0) + (b.calls === 1 ? ' call' : ' calls') + '</div><div class="mkc-muted">' + (b.connected || 0) + ' spoke · ' + (b.closes || 0) + ' closes · ' + (b.skipped || 0) + ' skipped' + (b.targets ? ' · target ' + b.targets.calls + '/' + b.targets.closes : '') + '</div>'
+        + (outs.length ? '<ul>' + outs.map(function (k) { return '<li>' + esc(k.replace(/_/g, ' ')) + ': <b>' + b.outcomes[k] + '</b></li>'; }).join('') + '</ul>' : '<div class="mkc-muted">No outcomes yet</div>')
+        + '<div style="margin-top:6px"><b>' + ((b.new_numbers || {}).count || 0) + '</b> new agents added (own numbers)</div>'
+        + '<div>Money: <b>' + (m.confirmed || 0) + '</b> confirmed · <b>' + (m.claimed || 0) + '</b> claimed · ' + (m.pay_links_sent || 0) + ' pay links'
+        + ((m.sms_proofs_waiting || {}).n ? ' · ' + m.sms_proofs_waiting.n + ' SMS proof(s) waiting (' + ugx(m.sms_proofs_waiting.ugx) + ')' : '') + ((m.sms_proofs_confirmed || {}).n ? ' · ' + m.sms_proofs_confirmed.n + ' SMS proof(s) confirmed (' + ugx(m.sms_proofs_confirmed.ugx) + ')' : '') + '</div></div>';
+    };
+    var o = r.owes || {}; var rd = r.road_to_1000 || {}; var l = r.open_loops || {}; var c = r.commission;
+    return '<div class="mkc-rep">' + d(r.today, 'Today') + d(r.yesterday, 'Yesterday')
+      + '<div><h5>Who owes us</h5><div class="big">' + (o.unpaid_signups || 0) + ' + ' + (o.overdue || 0) + '</div><div class="mkc-muted">unpaid sign-ups + overdue renewals</div><ul>' + (o.top || []).slice(0, 8).map(function (x) { return '<li>' + esc(x.name) + ' ' + esc(x.phone) + ' <span class="mkc-muted">since ' + esc(x.since) + '</span></li>'; }).join('') + '</ul></div>'
+      + '<div><h5>Road to 1000</h5><div class="big">' + (rd.paying_now || 0) + ' / ' + (rd.goal || 1000) + '</div><div class="bar" style="height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden"><i style="display:block;height:100%;background:#10b981;width:' + Math.max(1, rd.percent || 0) + '%"></i></div><div class="mkc-muted">' + (rd.percent || 0) + '% · ends ' + esc(rd.ends_on || '') + '</div></div>'
+      + '<div><h5>Open loops</h5><div class="big">' + (l.count || 0) + '</div><div class="mkc-muted">' + (l.callbacks_overdue || 0) + ' callbacks overdue · ' + (l.callbacks_due_now || 0) + ' due now</div><ul>' + (l.list || []).slice(0, 8).map(function (x) { return '<li>' + esc(x.name) + ' ' + esc(x.phone) + ' – ' + esc(x.next_action) + (x.overdue ? ' <b style="color:#b91c1c">overdue</b>' : '') + '</li>'; }).join('') + '</ul></div>'
+      + '<div><h5>Commission</h5>' + (c ? (c.on_commission ? '<div class="big">' + ugx(c.due_next_payday_ugx) + '</div><div class="mkc-muted">due on payday ' + esc(c.next_payday || '') + ' · ' + c.rate_pct + '%</div>' : '<div class="mkc-muted">Not on commission yet</div>') : '<div class="mkc-muted">–</div>') + '</div></div>';
+  }
+  var MTX = null;
+  function meetPopup(url) {
+    var w = window.open(url, 'makaugMeet', 'popup=yes,width=1040,height=720,left=40,top=40');
+    if (!w) { toast('Your browser blocked the pop-up. Allow pop-ups for makaug.com, or use the link.', 'bad'); return false; }
+    // While Meet is open the meeting is work time: not away, idle or downtime.
+    if (S) {
+      if (S.meeting) clearInterval(S.meeting.poll);
+      if (!S.work) setWork(true, 'team meeting');
+      if (S.idleSince) { ev('idle_end', String(Date.now() - S.idleSince)); S.idleSince = null; }
+      S.meeting = { win: w, since: Date.now(), poll: setInterval(inMeeting, 3000) };
+    }
+    return true;
+  }
+  function checkMeeting(first) {
+    if (!S) return;
+    api('/meeting?person_key=' + encodeURIComponent(S.person)).then(function (m) {
+      S.meet = m; var b = q('[data-mkc-meet]'); var sl = m.slot;
+      if (b) b.textContent = sl && sl.report_ready ? (sl.on ? '🔴 Meeting now' : '🗓 Meeting in ' + sl.minutes_to + ' min') : (sl ? '🗓 Meeting ' + sl.slot : '🗓 Meeting');
+      if (first && window.Notification && Notification.permission === 'default' && (m.settings.times || []).length) { try { Notification.requestPermission(); } catch (x) { /* optional */ } }
+      S.meetSeen = S.meetSeen || {}; S.meetShut = S.meetShut || {};
+      var key = sl ? sl.day + sl.slot : '';
+      if (sl && sl.report_ready && !S.meetShut[key] && !document.querySelector('[data-mt-rep]')) {
+        clearTimeout(S.meetRetry); S.meetRetry = setTimeout(checkMeeting, 5000);
+        if (document.querySelector('.mkc-modal')) return; // let him finish what is open
+        if (!S.meetSeen[key]) {
+          S.meetSeen[key] = true;
+          var msg = sl.on ? 'The team meeting has started.' : 'Team meeting in ' + sl.minutes_to + ' minutes – your report is ready.';
+          try { if (window.Notification && Notification.permission === 'granted') new Notification('makaug · ' + (m.settings.title || 'Meeting'), { body: msg, tag: 'mk-meet-' + sl.slot }); } catch (x) { /* optional */ }
+          toast('🗓 ' + msg);
+        }
+        openTeamMeeting({ slotKey: key });
+      }
+    }, function () { /* offline: try next minute */ });
+  }
+  function openTeamMeeting(opts) {
+    opts = opts || {};
+    var who = opts.person || (S && S.person);
+    var m = (S && S.meet) || {}; var sl = m.slot || null; var set = m.settings || {};
+    var notes = (m.notes && m.notes.notes) || ''; var acts = ((m.notes && m.notes.actions) || []).slice();
+    var slotKey = sl ? sl.slot : 'adhoc'; var dayKey = sl ? sl.day : '';
+    modal('<div class="mkc-row" style="justify-content:space-between"><h3 style="margin:0;font-weight:900">🗓 ' + esc(set.title || 'Team meeting') + (sl ? ' · ' + esc(sl.slot) + ' <span class="mkc-muted" style="font-size:12px;font-weight:600">Kampala</span>' : '') + '</h3><button class="mkc-btn sm" data-x>Close</button></div>'
+      + '<div class="mkc-meetbar">' + (sl ? (sl.on ? '<b>🔴 On now</b>' : '<b>Starts in ' + sl.minutes_to + ' min</b>') : '<b>No meeting set for now</b>') + '<span class="sp" style="flex:1"></span>'
+      + (set.meet_url ? '<button type="button" class="mkc-btn go" data-mt-join>▶ Join meeting</button><a class="mkc-muted" target="_blank" rel="noopener" href="' + esc(set.meet_url) + '">open link</a>' : '<span class="mkc-muted">King has not added the Meet link yet</span>') + '</div>'
+      + '<div data-mt-rep><p class="mkc-muted">Building your report…</p></div>'
+      + '<h4 style="margin:12px 0 4px">Meeting notes</h4><div class="mkc-row"><button type="button" class="mkc-btn sm dark" data-mt-tx>🎙 Live notes</button><span class="mkc-muted" data-mt-txs>Speech-to-text in this browser; only the text is kept, no audio.</span></div>'
+      + '<textarea class="mkc-input" data-mt-notes rows="5" style="width:100%;box-sizing:border-box;margin-top:6px" placeholder="What was agreed…">' + esc(notes) + '</textarea>'
+      + '<h4 style="margin:10px 0 4px">Action items</h4><div class="mkc-muted" style="font-size:12px">Add a number to make it that number\'s next step in your queue; leave it empty for a general task.</div><div data-mt-acts></div>'
+      + '<div class="mkc-row" style="margin-top:6px"><button type="button" class="mkc-btn sm" data-mt-add>+ Action item</button><span class="sp" style="flex:1"></span><span class="mkc-muted" data-mt-saved></span><button type="button" class="mkc-btn go" data-mt-save>Save notes</button></div>'
+      + ((m.tasks || []).length ? '<h4 style="margin:12px 0 4px">Open meeting tasks</h4><ul style="margin:0;padding-left:18px">' + m.tasks.map(function (t) { return '<li>' + esc(t.text) + (t.due ? ' <span class="mkc-muted">by ' + esc(t.due) + '</span>' : '') + ' <span class="mkc-muted">(' + esc(t.day) + ' ' + esc(t.slot) + ')</span></li>'; }).join('') + '</ul>' : ''), function (el, close) {
+      var box0 = el.firstChild; if (box0) { box0.style.maxWidth = '980px'; }
+      var report = null; var dirty = false;
+      var drawActs = function () {
+        q('[data-mt-acts]', el).innerHTML = acts.map(function (a, i) {
+          return '<div class="mkc-act" data-i="' + i + '"><input class="mkc-input" data-a="text" placeholder="What, e.g. Send John the sign-up link" value="' + esc(a.text || '') + '"><input class="mkc-input" data-a="phone" inputmode="tel" placeholder="Number (optional)" value="' + esc(a.phone || '') + '"' + (a.pipeline ? ' disabled title="Saved to the pipeline"' : '') + '><input class="mkc-input" type="date" data-a="due" value="' + esc(a.due || '') + '"><button type="button" class="mkc-btn sm ghost" data-a-del>×</button></div>';
+        }).join('') || '<div class="mkc-muted">None yet.</div>';
+        qa('.mkc-act', el).forEach(function (row) {
+          var i = Number(row.getAttribute('data-i'));
+          qa('[data-a]', row).forEach(function (inp) { inp.oninput = function () { acts[i][inp.getAttribute('data-a')] = inp.value; dirty = true; }; });
+          q('[data-a-del]', row).onclick = function () { acts.splice(i, 1); dirty = true; drawActs(); };
+        });
+      };
+      drawActs();
+      api('/meeting/report?person_key=' + encodeURIComponent(who)).then(function (r) { report = r; q('[data-mt-rep]', el).innerHTML = meetReportHtml(r); }, function (e) { q('[data-mt-rep]', el).innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+      var save = function (joined) {
+        var body = { person_key: who, day: dayKey, slot: slotKey, notes: q('[data-mt-notes]', el).value, actions: acts, joined: !!joined, report: report };
+        return api('/meeting/notes', { method: 'POST', body: body }).then(function (n) {
+          acts = n.actions.slice(); dirty = false; drawActs(); if (S && S.meet) S.meet.notes = n;
+          q('[data-mt-saved]', el).textContent = 'Saved ' + new Date().toTimeString().slice(0, 5); return n;
+        }, function (e) { q('[data-mt-saved]', el).innerHTML = '<span class="mkc-bad">' + esc(e.message) + '</span>'; throw e; });
+      };
+      q('[data-mt-notes]', el).oninput = function () { dirty = true; };
+      q('[data-mt-add]', el).onclick = function () { acts.push({ text: '', phone: '', due: '' }); drawActs(); var ins = qa('[data-a="text"]', el); if (ins.length) ins[ins.length - 1].focus(); };
+      q('[data-mt-save]', el).onclick = function () { save(false).then(function () { toast('Meeting notes saved'); }, function () {}); };
+      var j = q('[data-mt-join]', el); if (j) j.onclick = function () { if (meetPopup(set.meet_url)) { save(true).catch(function () {}); if (S) ev('meeting_join', slotKey); } };
+      var stopMtx = function () { if (MTX && !MTX.stopped) { MTX.stopped = true; try { MTX.sr.stop(); } catch (x) { /* ignore */ } } };
+      q('[data-mt-tx]', el).onclick = function () {
+        var b = this; var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (MTX && !MTX.stopped) { stopMtx(); b.textContent = '🎙 Live notes'; save(false).catch(function () {}); return; }
+        if (!SR) { toast('Live notes need Chrome or Edge on a laptop. Type the notes instead.', 'bad'); return; }
+        try {
+          var r = new SR(); r.continuous = true; r.interimResults = true; r.lang = 'en-UG';
+          var ta = q('[data-mt-notes]', el); var base = ta.value ? ta.value.replace(/\s*$/, '\n') : '';
+          MTX = { sr: r, stopped: false };
+          r.onresult = function (e) {
+            var fin = '', interim = '';
+            for (var i = e.resultIndex; i < e.results.length; i++) { if (e.results[i].isFinal) fin += e.results[i][0].transcript.trim() + '. '; else interim += e.results[i][0].transcript; }
+            if (fin) base += fin; ta.value = base + interim; dirty = true;
+          };
+          r.onerror = function (e) { if (e && e.error === 'not-allowed') { MTX.stopped = true; toast('Microphone blocked: allow it for live notes.', 'bad'); b.textContent = '🎙 Live notes'; } };
+          r.onend = function () { if (MTX && !MTX.stopped && document.body.contains(el)) { try { r.start(); } catch (x) { /* ignore */ } } };
+          r.start(); b.textContent = '⏹ Stop live notes'; q('[data-mt-txs]', el).textContent = 'Listening… (text only, no audio kept)';
+        } catch (x) { toast('Live notes are not available in this browser.', 'bad'); }
+      };
+      var timer = setInterval(function () { if (!document.body.contains(el)) { clearInterval(timer); stopMtx(); return; } if (dirty) save(false).catch(function () {}); }, 30000);
+      q('[data-x]', el).onclick = function () { if (S && opts.slotKey !== undefined) { S.meetShut = S.meetShut || {}; S.meetShut[opts.slotKey] = true; } if (S && sl) { S.meetShut = S.meetShut || {}; S.meetShut[sl.day + sl.slot] = true; } stopMtx(); clearInterval(timer); if (dirty) save(false).catch(function () {}); close(); };
+    });
+  }
+  function drawKMeet(host) {
+    var box = q('[data-k-meet]', host); if (!box) return;
+    Promise.all([api('/meeting/settings'), api('/meeting/history?limit=40')]).then(function (res) {
+      var st = res[0]; var hist = res[1];
+      box.innerHTML = '<h4 style="margin:0 0 6px">🗓 Team meetings</h4>'
+        + '<div class="mkc-row" style="align-items:flex-end;flex-wrap:wrap;gap:8px"><label>Times (Kampala, 24h)<br><input class="mkc-input" data-km-times placeholder="08:30, 16:30" value="' + esc((st.times || []).join(', ')) + '"></label>'
+        + '<label style="flex:1;min-width:240px">Google Meet link (from the calendar invite)<br><input class="mkc-input" style="width:100%;box-sizing:border-box" data-km-url placeholder="https://meet.google.com/abc-defg-hij" value="' + esc(st.meet_url || '') + '"></label>'
+        + '<label>Title<br><input class="mkc-input" data-km-title value="' + esc(st.title || '') + '"></label><button type="button" class="mkc-btn go" data-km-save>Save</button></div>'
+        + '<div class="mkc-muted" style="margin:4px 0 8px" data-km-msg>' + (st.updated_at ? 'Saved by ' + esc(st.updated_by || '') + ' · ' + esc(kDayTime(st.updated_at)) : 'Not set yet. Callers get a notification and their report 10 minutes before each time.') + '</div>'
+        + '<div class="mkc-row" style="gap:6px;flex-wrap:wrap"><span class="mkc-muted">Meeting report for:</span>' + (boot.callers || []).map(function (c) { return '<button type="button" class="mkc-btn sm" data-km-rep="' + esc(c.key) + '">' + esc(c.name) + '</button>'; }).join('') + (st.meet_url ? '<button type="button" class="mkc-btn sm go" data-km-join>▶ Join meeting</button>' : '') + '</div>'
+        + '<div data-km-report style="margin-top:8px"></div>'
+        + '<h4 style="margin:12px 0 6px">Meeting notes history</h4>'
+        + (hist.length ? '<div class="mkc-scroll"><table class="mkc-table"><tr><th>When</th><th>Who</th><th>Notes</th><th>Action items</th><th>Report then</th></tr>' + hist.map(function (n) {
+          var r = n.report || {}; var t = r.today || {};
+          return '<tr><td>' + esc(n.day) + ' ' + esc(n.slot) + (n.joined_at ? '<div class="mkc-muted">joined ' + esc(kDayTime(n.joined_at)) + '</div>' : '') + '</td><td>' + esc(personName(n.person_key)) + '</td><td style="max-width:360px;white-space:pre-wrap">' + esc(String(n.notes || '').slice(0, 600)) + '</td>'
+            + '<td>' + ((n.actions || []).map(function (a) { return '<div>• ' + esc(a.text) + (a.phone ? ' <span class="mkc-muted">' + esc(a.phone) + (a.pipeline ? ' → queue' : '') + '</span>' : '') + (a.due ? ' <span class="mkc-muted">by ' + esc(a.due) + '</span>' : '') + '</div>'; }).join('') || '–') + '</td>'
+            + '<td class="mkc-muted">' + (t.calls != null ? t.calls + ' calls · ' + (t.closes || 0) + ' closes · ' + (((t.money || {}).confirmed) || 0) + ' paid' : '–') + '</td></tr>';
+        }).join('') + '</table></div>' : '<p class="mkc-muted">No meeting notes yet.</p>');
+      q('[data-km-save]', box).onclick = function () {
+        api('/meeting/settings', { method: 'POST', body: { times: q('[data-km-times]', box).value, meet_url: q('[data-km-url]', box).value, title: q('[data-km-title]', box).value } })
+          .then(function () { toast('Meeting settings saved'); drawKMeet(host); }, function (e) { q('[data-km-msg]', box).innerHTML = '<span class="mkc-bad">' + esc(e.message) + '</span>'; });
+      };
+      var kj = q('[data-km-join]', box); if (kj) kj.onclick = function () { meetPopup(st.meet_url); };
+      qa('[data-km-rep]', box).forEach(function (b) {
+        b.onclick = function () {
+          var out = q('[data-km-report]', box); out.innerHTML = '<p class="mkc-muted">Building…</p>';
+          api('/meeting/report?person_key=' + encodeURIComponent(b.getAttribute('data-km-rep'))).then(function (r) { out.innerHTML = '<div class="mkc-muted" style="margin-bottom:4px"><b>' + esc(r.name) + '</b> · built ' + esc(kDayTime(r.made_at)) + '</div>' + meetReportHtml(r); }, function (e) { out.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+        };
+      });
+    }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+  }
+  // ---- Payment SMS proof: screenshot -> free OCR in the browser -> check -> claim for King
+  var OCR = null;
+  function loadTesseract() {
+    if (OCR) return OCR;
+    OCR = new Promise(function (resolve, reject) {
+      if (window.Tesseract) return resolve(window.Tesseract);
+      var sc = document.createElement('script'); sc.src = '/vendor/tesseract/tesseract.min.js'; sc.async = true;
+      sc.onload = function () { resolve(window.Tesseract); }; sc.onerror = function () { OCR = null; reject(new Error('The text reader could not load. Type the details by hand.')); };
+      document.head.appendChild(sc);
+    });
+    return OCR;
+  }
+  function shrinkImage(file) {
+    return new Promise(function (resolve, reject) {
+      var r = new FileReader();
+      r.onerror = function () { reject(new Error('Could not read that file.')); };
+      r.onload = function () {
+        var img = new Image();
+        img.onload = function () {
+          var max = 1800; var sc = Math.min(1, max / Math.max(img.width, img.height));
+          var c = document.createElement('canvas'); c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          resolve(c.toDataURL('image/jpeg', 0.88));
+        };
+        img.onerror = function () { reject(new Error('That is not a picture. Use a PNG or JPG screenshot.')); };
+        img.src = r.result;
+      };
+      r.readAsDataURL(file);
+    });
+  }
+  function readText(dataUrl, onPct) {
+    return loadTesseract().then(function (T) {
+      return T.recognize(dataUrl, 'eng', {
+        workerPath: '/vendor/tesseract/worker.min.js', corePath: '/vendor/tesseract/core', langPath: '/vendor/tesseract/lang',
+        logger: function (m) { if (m && m.status === 'recognizing text' && onPct) onPct(Math.round((m.progress || 0) * 100)); }
+      });
+    }).then(function (r) { return { text: (r && r.data && r.data.text) || '', confidence: r && r.data ? r.data.confidence : null }; });
+  }
+  // Second try for a dim / blurry screenshot: 2x, grey, then each pixel against its neighbourhood (adaptive threshold).
+  function cleanForOcr(dataUrl) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () {
+        var sc = img.width < 1400 ? 2 : 1; var w = img.width * sc; var h = img.height * sc;
+        var c = document.createElement('canvas'); c.width = w; c.height = h; var x = c.getContext('2d');
+        x.imageSmoothingQuality = 'high'; x.drawImage(img, 0, 0, w, h);
+        var d = x.getImageData(0, 0, w, h); var px = d.data; var g = new Float64Array(w * h); var I = new Float64Array((w + 1) * (h + 1));
+        for (var i = 0; i < w * h; i++) g[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
+        for (var yy = 0; yy < h; yy++) { var row = 0; for (var xx = 0; xx < w; xx++) { row += g[yy * w + xx]; I[(yy + 1) * (w + 1) + xx + 1] = I[yy * (w + 1) + xx + 1] + row; } }
+        var r = Math.max(12, Math.round(w / 30));
+        for (var y2 = 0; y2 < h; y2++) {
+          for (var x2 = 0; x2 < w; x2++) {
+            var x0 = Math.max(0, x2 - r), x1 = Math.min(w, x2 + r + 1), y0 = Math.max(0, y2 - r), y1 = Math.min(h, y2 + r + 1);
+            var mean = (I[y1 * (w + 1) + x1] - I[y0 * (w + 1) + x1] - I[y1 * (w + 1) + x0] + I[y0 * (w + 1) + x0]) / ((x1 - x0) * (y1 - y0));
+            var dark = g[y2 * w + x2] < mean * 0.92; var k = (y2 * w + x2) * 4;
+            px[k] = px[k + 1] = px[k + 2] = dark ? 0 : 255; px[k + 3] = 255;
+          }
+        }
+        x.putImageData(d, 0, 0); resolve(c.toDataURL('image/png'));
+      };
+      img.onerror = function () { resolve(null); };
+      img.src = dataUrl;
+    });
+  }
+  function fieldsFound(p) { return ['amount_ugx', 'txn_id', 'paid_at', 'sender_phone'].filter(function (k) { return p && p[k]; }).length; }
+  function toLocalInput(iso) { if (!iso) return ''; var d = new Date(new Date(iso).getTime() + 3 * 3600000); return d.toISOString().slice(0, 16); }
+  function fromLocalInput(v) { return v ? new Date(v + ':00+03:00').toISOString() : ''; }
+  function openSmsProof(ctx) {
+    var a = ctx.attempt || null;
+    var st = { img: '', text: '', conf: null, parsed: null };
+    var who = a ? esc(a.name || '') + ' ' + esc(a.phone_masked || '') : '';
+    modal('<div class="mkc-row" style="justify-content:space-between"><h3 style="margin:0;font-weight:900">📷 Upload payment SMS</h3><button class="mkc-btn sm" data-x>Close</button></div>'
+      + '<p class="mkc-muted" style="margin:4px 0 8px">Screenshot the MoMo / Airtel confirmation SMS (on the phone, or in Phone Link → Messages) and add it here. The text is read on this computer – check every field before you send it to King.</p>'
+      + (a ? '<div class="mkc-tpl">For: <b>' + who + '</b></div>' : '<div class="mkc-fld"><label>Agent\'s number</label><input class="mkc-input" data-sp-phone inputmode="tel" placeholder="0772 123 456"></div>')
+      + '<div class="mkc-proof" style="margin-top:8px"><div><div class="mkc-drop" data-sp-drop tabindex="0">Tap to choose a screenshot<br><span class="mkc-muted">or paste it here (Ctrl+V) · PNG/JPG, up to 6 MB</span><input type="file" accept="image/*" data-sp-file style="display:none"></div><div data-sp-prev style="margin-top:8px"></div>'
+      + '<div class="mkc-ocrbar" style="margin-top:6px;display:none" data-sp-bar><i></i></div><div class="mkc-muted" data-sp-stat></div>'
+      + '<details style="margin-top:6px"><summary class="mkc-muted">Text read from the picture</summary><pre data-sp-text style="white-space:pre-wrap;font-size:11px;background:#f8fafc;padding:6px;border-radius:8px;max-height:160px;overflow:auto"></pre></details></div>'
+      + '<div><div class="mkc-fld"><label>Amount (UGX)</label><input class="mkc-input" data-f="amount_ugx" inputmode="numeric"></div>'
+      + '<div class="mkc-fld"><label>Sender name</label><input class="mkc-input" data-f="sender_name"></div>'
+      + '<div class="mkc-fld"><label>Sender number</label><input class="mkc-input" data-f="sender_phone" inputmode="tel" placeholder="as on the SMS" title="Shown as the last 3 digits. Type the full number to change it."></div>'
+      + '<div class="mkc-fld"><label>Transaction ID</label><input class="mkc-input" data-f="txn_id"></div>'
+      + '<div class="mkc-fld"><label>Date &amp; time</label><input class="mkc-input" type="datetime-local" data-f="paid_at"></div>'
+      + '<div class="mkc-fld"><label>Network</label><select class="mkc-select" data-f="network"><option value="">–</option><option value="mtn">MTN MoMo</option><option value="airtel">Airtel Money</option></select></div>'
+      + '<div data-sp-checks style="margin-top:6px"></div><div data-sp-err></div>'
+      + '<button type="button" class="mkc-btn go" style="width:100%;margin-top:8px" data-sp-go disabled>Send to King to confirm</button></div></div>', function (m, close) {
+      q('[data-x]', m).onclick = close;
+      var f = function (k) { return q('[data-f="' + k + '"]', m); };
+      var phoneOf = function () { var p = q('[data-sp-phone]', m); return p ? p.value : ''; };
+      var fields = function () { return { amount_ugx: f('amount_ugx').value.replace(/[^\d]/g, ''), sender_name: f('sender_name').value.trim(), sender_phone: /^•/.test(f('sender_phone').value.trim()) ? (st.parsed && st.parsed.sender_phone) || '' : f('sender_phone').value.trim(), txn_id: f('txn_id').value.trim(), paid_at: fromLocalInput(f('paid_at').value), network: f('network').value, direction: st.parsed ? st.parsed.direction : '', to_makaug: st.parsed ? st.parsed.to_makaug : null }; };
+      var tmr;
+      var check = function () {
+        api('/sms-proof/parse', { method: 'POST', body: { text: st.text, attempt_id: a ? a.id : null, phone: phoneOf(), fields: fields() } }).then(function (r) {
+          q('[data-sp-checks]', m).innerHTML = '<div class="mkc-muted">Plan: ' + esc(r.plan) + (r.who ? ' · ' + esc(r.who) : '') + '</div>'
+            + r.problems.map(function (x) { return '<div class="mkc-bad">✖ ' + esc(x) + '</div>'; }).join('')
+            + r.flags.map(function (x) { return '<div style="color:#b45309">⚠ ' + esc(x) + ' <span class="mkc-muted">(King will see this)</span></div>'; }).join('')
+            + (!r.problems.length && !r.flags.length ? '<div class="mkc-good" style="font-weight:800">✓ All checks pass</div>' : '');
+          q('[data-sp-go]', m).disabled = !st.img || r.problems.length > 0;
+        }, function (e) { q('[data-sp-err]', m).innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+      };
+      qa('[data-f]', m).forEach(function (i) { i.oninput = i.onchange = function () { clearTimeout(tmr); tmr = setTimeout(check, 400); }; });
+      var ph = q('[data-sp-phone]', m); if (ph) ph.oninput = function () { clearTimeout(tmr); tmr = setTimeout(check, 400); };
+      var take = function (file) {
+        if (!file) return;
+        if (file.size > 15e6) { q('[data-sp-err]', m).innerHTML = '<div class="mkc-err">That file is too big. Crop the screenshot to the SMS.</div>'; return; }
+        var stat = q('[data-sp-stat]', m); var bar = q('[data-sp-bar]', m);
+        stat.textContent = 'Preparing the picture…';
+        shrinkImage(file).then(function (url) {
+          st.img = url; q('[data-sp-prev]', m).innerHTML = '<img alt="Payment SMS screenshot" src="' + url + '">';
+          bar.style.display = ''; stat.textContent = 'Reading the text… (first time takes a little longer)';
+          return readText(url, function (pct) { q('i', bar).style.width = pct + '%'; });
+        }).then(function (r) {
+          var ask = function (t) { return api('/sms-proof/parse', { method: 'POST', body: { text: t, attempt_id: a ? a.id : null, phone: phoneOf() } }); };
+          return ask(r.text).then(function (p1) {
+            if (fieldsFound(p1.parsed) >= 3) return { r: r, p: p1, again: false };
+            stat.textContent = 'Hard to read – cleaning up the picture and reading it again…';
+            return cleanForOcr(st.img).then(function (clean) {
+              if (!clean) return { r: r, p: p1, again: false };
+              return readText(clean, function (pct) { q('i', bar).style.width = pct + '%'; }).then(function (r2) {
+                return ask(r2.text).then(function (p2) { return fieldsFound(p2.parsed) > fieldsFound(p1.parsed) ? { r: r2, p: p2, again: true } : { r: r, p: p1, again: false }; });
+              });
+            });
+          });
+        }).then(function (best) {
+          var r0 = best.r; var r = best.p;
+          st.text = r0.text; st.conf = r0.confidence; q('[data-sp-text]', m).textContent = r0.text;
+          bar.style.display = 'none';
+          stat.textContent = (best.again ? 'Read after cleaning up the picture. ' : 'Read. ') + 'Confidence ' + Math.round(r0.confidence || 0) + '% – check the fields.' + (fieldsFound(r.parsed) < 3 ? ' Some fields are missing: type them from the SMS.' : '');
+          var p = r.parsed; st.parsed = p;
+          if (p.amount_ugx) f('amount_ugx').value = p.amount_ugx; if (p.sender_name) f('sender_name').value = p.sender_name;
+          if (p.sender_phone) f('sender_phone').value = p.sender_phone_masked || p.sender_phone; if (p.txn_id) f('txn_id').value = p.txn_id;
+          if (p.paid_at) f('paid_at').value = toLocalInput(p.paid_at); if (p.network) f('network').value = p.network;
+          check();
+        }).catch(function (e) { bar.style.display = 'none'; stat.textContent = ''; q('[data-sp-err]', m).innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; q('[data-sp-go]', m).disabled = !st.img; });
+      };
+      var drop = q('[data-sp-drop]', m); var file = q('[data-sp-file]', m);
+      drop.onclick = function () { file.click(); };
+      file.onchange = function () { take(file.files[0]); };
+      drop.ondragover = function (e) { e.preventDefault(); drop.classList.add('on'); };
+      drop.ondragleave = function () { drop.classList.remove('on'); };
+      drop.ondrop = function (e) { e.preventDefault(); drop.classList.remove('on'); take(e.dataTransfer.files[0]); };
+      m.addEventListener('paste', function (e) { var it = [].slice.call((e.clipboardData || {}).items || []).filter(function (x) { return /^image\//.test(x.type); })[0]; if (it) take(it.getAsFile()); });
+      st.take = take; m._sp = st;
+      q('[data-sp-go]', m).onclick = function () {
+        var b = this; b.disabled = true;
+        api('/sms-proof', { method: 'POST', body: { attempt_id: a ? a.id : null, phone: phoneOf(), person_key: S ? S.person : '', image: st.img, ocr_text: st.text, ocr_confidence: st.conf, fields: fields() } }).then(function (r) {
+          close(); toast('Sent to King: UGX ' + Number(r.amount_ugx).toLocaleString('en-GB') + ' · ' + r.txn_id + (r.flags.length ? ' · ' + r.flags.length + ' flag(s)' : ''));
+          if (a && S && S.pay) { delete S.pay[a.id]; loadPay(a); }
+          if (ctx.after) ctx.after();
+        }, function (e) { b.disabled = false; q('[data-sp-err]', m).innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+      };
+    });
+  }
+  function drawKProofs(host) {
+    var box = q('[data-k-proofs]', host); if (!box) return;
+    api('/sms-proofs').then(function (list) {
+      var waiting = list.filter(function (p) { return p.status === 'pending'; }).length;
+      box.innerHTML = '<div class="mkc-row" style="justify-content:space-between"><h4 style="margin:0">📷 Payment SMS proofs (' + waiting + ' to confirm)</h4><button type="button" class="mkc-btn sm dark" data-kp-up>Upload payment SMS</button></div>'
+        + '<p class="mkc-muted" style="margin:4px 0 6px">Confirm only when the money is in the MoMo / Airtel line. Confirming records the payment through the normal path (sales, Road to 1000, commission).</p>'
+        + (list.length ? '<div class="mkc-scroll"><table class="mkc-table"><tr><th>Screenshot</th><th>Read from the SMS</th><th>For</th><th>Checks</th><th></th></tr>' + list.slice(0, 30).map(function (p) {
+          return '<tr><td><a href="' + esc(p.image) + '" target="_blank" rel="noopener"><img src="' + esc(p.image) + '" alt="" style="width:90px;max-height:120px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0"></a></td>'
+            + '<td><b>' + ugx(p.amount_ugx) + '</b> · ' + esc((p.network || '').toUpperCase()) + '<div>' + esc(p.sender_name || '–') + ' ' + esc(p.sender_phone || '') + '</div><div class="mkc-muted">ID ' + esc(p.txn_id) + ' · ' + esc(kDayTime(p.paid_at)) + (p.confidence != null ? ' · OCR ' + Math.round(p.confidence) + '%' : '') + '</div></td>'
+            + '<td>' + esc(p.phone) + '<div class="mkc-muted">' + esc(String(p.purpose || '').replace(/_/g, ' ')) + ' · by ' + esc(personName(p.by)) + '</div></td>'
+            + '<td>' + ((p.flags || []).map(function (x) { return '<span class="mkc-pill warn">' + esc(x) + '</span>'; }).join(' ') || '<span class="mkc-pill live">OK</span>') + '</td>'
+            + '<td>' + (p.status === 'pending' && p.claim_id ? '<button type="button" class="mkc-btn sm go" data-kp-ok="' + esc(p.claim_id) + '">Confirm</button> <button type="button" class="mkc-btn sm ghost" data-kp-no="' + esc(p.claim_id) + '">Reject</button>' : '<span class="mkc-pill' + (p.status === 'confirmed' ? ' live' : ' flag') + '">' + esc(p.status) + '</span>') + '</td></tr>';
+        }).join('') + '</table></div>' : '<p class="mkc-muted">No payment SMS uploaded yet.</p>');
+      q('[data-kp-up]', box).onclick = function () { openSmsProof({ after: function () { drawKProofs(host); } }); };
+      var decide = function (id, ok) {
+        if (ok && !window.confirm('Confirm this payment? Only if the money is in the MoMo / Airtel line.')) return;
+        var note = ok ? '' : (window.prompt('Why reject it?') || ''); if (!ok && !note) return;
+        fetch('/api/admin/revenue/claims/' + encodeURIComponent(id) + '/' + (ok ? 'confirm' : 'reject'), { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(ok ? { note: 'Checked against the payment SMS screenshot' } : { note: note }) })
+          .then(function (res) { return res.json().then(function (j) { if (!res.ok || j.ok === false) throw new Error(j.error || 'Could not save'); return j; }); })
+          .then(function () { toast(ok ? 'Payment confirmed' : 'Rejected'); drawKProofs(host); }, function (e) { toast(e.message); });
+      };
+      qa('[data-kp-ok]', box).forEach(function (b) { b.onclick = function () { decide(b.getAttribute('data-kp-ok'), true); }; });
+      qa('[data-kp-no]', box).forEach(function (b) { b.onclick = function () { decide(b.getAttribute('data-kp-no'), false); }; });
+    }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+  }
   function periodTabs(attr, cur) {
     return '<div class="mkc-modes" style="display:inline-flex">' + [['day', 'Day'], ['week', 'Week'], ['month', 'Month']].map(function (x) { return '<button type="button" class="mkc-mode' + (x[0] === cur ? ' on' : '') + '" ' + attr + '="' + x[0] + '" style="color:#0f172a;background:' + (x[0] === cur ? '#fbbf24' : '#e2e8f0') + '">' + x[1] + '</button>'; }).join('') + '</div>';
   }
@@ -1803,6 +2137,8 @@
       + '<div class="mkc-panel" style="margin-top:14px" data-k-act></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-cashlog></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-calls></div>'
+      + '<div class="mkc-panel" style="margin-top:14px" data-k-meet></div>'
+      + '<div class="mkc-panel" style="margin-top:14px" data-k-proofs></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-videos></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-blocks></div>'
       + '<div class="mkc-grid" style="padding:0;margin-top:14px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">'
@@ -1816,7 +2152,7 @@
     q('[data-k-meet]', host).onclick = openMeeting;
     K.period = K.period || 'day'; K.cashPeriod = K.cashPeriod || 'week';
     K.callsPeriod = K.callsPeriod || 'day';
-    drawKPlans(host); drawKAct(host); drawKCash(host); drawKCalls(host); drawKVideos(host); drawKBlocks(host);
+    drawKPlans(host); drawKAct(host); drawKCash(host); drawKCalls(host); drawKMeet(host); drawKProofs(host); drawKVideos(host); drawKBlocks(host);
     qa('[data-k-sum]', host).forEach(function (b) { b.onclick = function () { var f = (K.sums[Number(b.getAttribute('data-k-sum'))] || {}).figures || {}; modal(reportHtml(f) + '<div class="mkc-row" style="margin-top:12px;justify-content:flex-end"><button class="mkc-btn dark" data-x>Close</button></div>', function (m, close) { q('[data-x]', m).onclick = close; }); }; });
     qa('[data-k-mklink]', host).forEach(function (b) {
       b.onclick = function () {

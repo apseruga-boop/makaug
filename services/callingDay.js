@@ -222,6 +222,8 @@ async function activity({ period = 'day', day = kampalaDay(), personKey = '' } =
     const s = sOf.get(e.session_id); if (!s) continue;
     const c = cell(s.person_key, kampalaDay(e.at));
     const t = new Date(e.at).getTime();
+    // In the team meeting (Meet pop-up open) is work: not "left the screen".
+    if ((e.kind === 'hidden' || e.kind === 'fs_exit') && e.detail === 'in meeting') continue;
     if (e.kind === 'hidden' || e.kind === 'fs_exit') { c.left_screen += 1; openAt.set(`${e.session_id}:away`, t); }
     if ((e.kind === 'visible' || e.kind === 'fs_enter') && openAt.has(`${e.session_id}:away`)) {
       const ms = t - openAt.get(`${e.session_id}:away`); openAt.delete(`${e.session_id}:away`);
