@@ -3258,6 +3258,9 @@ async function buildWhatsappListingEnquiryResponse(enquiry = {}, { phone = '', l
       : Boolean(listing?.agent_email || listing?.lister_email);
     const agentNotApproved = Boolean(listing?.agent_id)
       && (listing.agent_is_source_profile || String(listing.agent_status || '').toLowerCase() !== 'approved');
+    if (listing?.agent_id && !agentNotApproved && !listing.is_found_online) {
+      property.agent_profile_url = `${HOME_URL}/agents/${listing.agent_id}`;
+    }
     listerNotified = Boolean(
       listing
       && listing.is_live
@@ -3298,7 +3301,9 @@ async function buildWhatsappListingEnquiryResponse(enquiry = {}, { phone = '', l
     priceLabel: formatWhatsappPropertyPrice(property),
     propertyUrl: `${HOME_URL}/property/${property.id}`,
     reference: property.inquiry_reference || reference,
-    listerNotified
+    listerNotified,
+    agentProfileUrl: property.agent_profile_url || '',
+    termsUrl: `${HOME_URL}/terms`
   });
 }
 
@@ -17052,6 +17057,176 @@ async function handleResultsReply({ phone, step = '', text = '', sessionData = {
   };
 }
 
+// ---------------------------------------------------------------------------
+// A reply about one of the properties we just sent (16 Nov 2026)
+// ---------------------------------------------------------------------------
+// A renter was sent two rooms by a member of staff (a self-contained double in
+// Kira and studio rooms in Zana, both 300K a month) and answered "The studio of
+// 300k seems okay". The assistant read it as a new search for studios and
+// asked for the area. A reply that points at one of the properties we just
+// sent this person is about that property: who holds it and how to reach them.
+const SHOWN_LISTINGS_HOURS = 48;
+const PICK_TYPE_WORDS = [
+  'studio', 'double', 'single', 'self contained', 'bedsitter', 'bed sitter', 'apartment', 'flat',
+  'house', 'bungalow', 'cottage', 'mansion', 'villa', 'plot', 'land', 'shop', 'office',
+  'warehouse', 'hostel', 'duplex', 'penthouse', 'storeyed', 'room'
+];
+// "Okay", "I like it", "how can I see it": interest, not a new search.
+const PICK_INTEREST = /\b(?:ok(?:ay)?|fine|good|great|perfect|like|love|interested|want|take|book|view|visit|see|contact|call|number|available|works?|suits?)\b/;
+const PICK_ORDINALS = [
+  /\b(?:first|1st)\b|(?:^|\s)(?:number|no\.?|option|#)\s*1\b/,
+  /\b(?:second|2nd)\b|(?:^|\s)(?:number|no\.?|option|#)\s*2\b/,
+  /\b(?:third|3rd)\b|(?:^|\s)(?:number|no\.?|option|#)\s*3\b/,
+  /\b(?:fourth|4th)\b|(?:^|\s)(?:number|no\.?|option|#)\s*4\b/,
+  /\b(?:fifth|5th)\b|(?:^|\s)(?:number|no\.?|option|#)\s*5\b/
+];
+
+/** The property codes in a message: makaug.com/p/xxxxxxxx and /property/<id> links, in order. */
+function listingCodesInText(text = '') {
+  const codes = [];
+  for (const match of String(text || '').matchAll(/\/(?:p\/([0-9a-f]{8})\b|property\/([0-9a-f]{8})-[0-9a-f-]{27})/gi)) {
+    const code = String(match[1] || match[2] || '').toLowerCase();
+    if (code && !codes.includes(code)) codes.push(code);
+  }
+  return codes;
+}
+
+/** The live properties in the latest message we sent this person with property links, in the last two days. */
+async function recentlySentListings(phone = '') {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 9) return [];
+  const result = await db.query(
+    `SELECT payload->>'text' AS text
+       FROM outbound_message_queue
+      WHERE user_phone = ANY($1::text[]) AND channel = 'whatsapp'
+        AND status IN ('sent', 'processing')
+        AND created_at > NOW() - ($2 || ' hours')::interval
+      ORDER BY created_at DESC
+      LIMIT 6`,
+    [[...new Set([String(phone), digits, `+${digits}`])], String(SHOWN_LISTINGS_HOURS)]
+  ).catch(() => ({ rows: [] }));
+  for (const row of result.rows) {
+    const codes = listingCodesInText(row.text);
+    if (!codes.length) continue;
+    const found = await db.query(
+      `SELECT id::text AS id FROM properties WHERE substr(id::text, 1, 8) = ANY($1::text[]) AND status = 'approved'`,
+      [codes]
+    );
+    const byCode = new Map(found.rows.map((item) => [item.id.slice(0, 8).toLowerCase(), item.id]));
+    return loadResultRows(codes.map((code) => byCode.get(code)).filter(Boolean));
+  }
+  return [];
+}
+
+/** Prices written in a reply: "300k", "1.2m", "300,000", and a bare "300" as thousands. */
+function pickPriceFigures(clean = '') {
+  const figures = [];
+  for (const match of String(clean || '').matchAll(/(\d+(?:[.,]\d+)*)\s*(k|m|mn|million|bn|billion)?\b/g)) {
+    const raw = match[1].replace(/,/g, '');
+    let value = Number(raw);
+    if (!Number.isFinite(value) || value <= 0) continue;
+    const unit = String(match[2] || '');
+    if (unit === 'k') value *= 1e3;
+    else if (['m', 'mn', 'million'].includes(unit)) value *= 1e6;
+    else if (['bn', 'billion'].includes(unit)) value *= 1e9;
+    else if (value >= 50 && value < 1000) value *= 1e3;
+    figures.push(value);
+  }
+  return figures;
+}
+
+/**
+ * The one property a reply points at, out of those just sent, or null. By its
+ * place in the list, its kind ("the studio"), its area ("the Zana one") or its
+ * price ("the 300k one"). A reply that names a place none of them is in is a
+ * new search, not a pick.
+ */
+function pickShownListing(text = '', rows = []) {
+  const list = Array.isArray(rows) ? rows.filter(Boolean) : [];
+  const clean = normalizeInput(text).toLowerCase();
+  if (!list.length || !clean || clean.length > 160) return null;
+  const words = ` ${clean.replace(/[^a-z0-9]+/g, ' ').trim()} `;
+  const key = (value) => ` ${String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()} `;
+  const hasWord = (haystack, word) => haystack.includes(` ${word} `) || haystack.includes(` ${word}s `);
+
+  const place = require('../utils/ugandaLocationRegistry').resolveCanonicalUgandaLocationFromText(clean);
+  const named = place.status === 'matched' ? [place.match] : (place.status === 'ambiguous' ? place.candidates || [] : []);
+  if (named.length) {
+    const ours = (entry) => list.some((row) => {
+      const rowPlaces = key(`${row.area || ''} ${row.district || ''} ${row.title || ''}`);
+      return hasWord(rowPlaces, key(entry.name).trim()) || hasWord(rowPlaces, key(entry.district).trim());
+    });
+    if (!named.some(ours)) return null;
+  }
+
+  // "2 bedroom house in Kira under 500k" is a search, even with Kira in the list.
+  if (/\b(?:under|below|less than|not more than|budget|max(?:imum)?|looking for|search|find me)\b/.test(clean)) return null;
+  const typesSaid = PICK_TYPE_WORDS.filter((word) => hasWord(words, word));
+  const prices = pickPriceFigures(clean.replace(/\b\d+\s*(?:bed(?:room)?s?|br)\b/g, ' '));
+  const bedsSaid = Number((clean.match(/\b(\d+)\s*(?:bed(?:room)?s?|br)\b/) || [])[1] || 0);
+  const ordinal = /\blast\b/.test(clean) ? list.length - 1 : PICK_ORDINALS.findIndex((pattern) => pattern.test(clean));
+  const scored = list.map((row, index) => {
+    const about = key(`${row.title || ''} ${row.property_type || ''}`);
+    const where = key(`${row.area || ''}`);
+    const kinds = typesSaid.filter((word) => hasWord(about, word)).length;
+    const cues = {
+      ordinal: ordinal >= 0 && ordinal === index ? 1 : 0,
+      kind: kinds,
+      area: where.trim().length > 2 && words.includes(where) ? 1 : 0,
+      price: prices.some((figure) => Number(row.price) > 0 && Math.abs(Number(row.price) - figure) <= Number(row.price) * 0.03) ? 1 : 0
+    };
+    // A kind or a number of bedrooms the property is not.
+    const contradicts = (typesSaid.length > 0 && kinds === 0 && !cues.ordinal)
+      || (bedsSaid > 0 && Number(row.bedrooms) > 0 && Number(row.bedrooms) !== bedsSaid);
+    const distinct = Boolean(cues.ordinal || cues.kind || cues.area);
+    return { row, distinct, score: contradicts ? 0 : cues.ordinal + cues.kind + cues.area + cues.price };
+  });
+  const best = Math.max(...scored.map((item) => item.score));
+  // One property sent, and a reply that wants it.
+  if (best <= 0) return list.length === 1 && PICK_INTEREST.test(clean) ? list[0] : null;
+  const top = scored.filter((item) => item.score === best);
+  if (top.length !== 1) return null;
+  // The price alone picks it only when the reply says it wants it, or "the 300k one".
+  if (!top[0].distinct && !PICK_INTEREST.test(clean) && !/\bone\b/.test(clean)) return null;
+  return top[0].row;
+}
+
+/** A reply that points at one of the properties just sent: who holds it and how to reach them. */
+async function handleShownListingPick({ phone, step = '', text = '', lang = 'en' } = {}) {
+  if (!['main_menu', 'greeting', ''].includes(String(step || ''))) return null;
+  const clean = normalizeInput(text);
+  if (!clean || clean.length > 160 || /^\d{1,2}$/.test(clean)) return null;
+  const rows = await recentlySentListings(phone);
+  if (!rows.length) return null;
+  const picked = pickShownListing(clean, rows);
+  if (!picked) return null;
+  // An agent answering "your property is live" with "thanks, I like it" is
+  // not asking about their own listing.
+  const last9 = String(phone || '').replace(/\D/g, '').slice(-9);
+  const own = await db.query(
+    `SELECT 1
+       FROM properties p
+       LEFT JOIN agents a ON a.id = p.agent_id
+      WHERE p.id = $1::uuid
+        AND $2::text IN (
+          RIGHT(regexp_replace(COALESCE(p.lister_phone, ''), '\\D', '', 'g'), 9),
+          RIGHT(regexp_replace(COALESCE(a.whatsapp, ''), '\\D', '', 'g'), 9),
+          RIGHT(regexp_replace(COALESCE(a.phone, ''), '\\D', '', 'g'), 9)
+        )
+      LIMIT 1`,
+    [picked.id, last9]
+  ).then((result) => result.rows.length > 0).catch(() => true);
+  if (own) return null;
+  const reply = await buildWhatsappListingEnquiryResponse({ propertyId: picked.id }, { phone, lang });
+  if (!reply) return null;
+  await patchSessionData(phone, {
+    listing_enquiry_property_id: picked.id,
+    listing_enquiry_reference: null,
+    listing_enquiry_at: new Date().toISOString()
+  });
+  return { message: reply, nextStep: 'main_menu' };
+}
+
 async function queueWhatsappWebBridgeAutoReply({
   phone,
   message,
@@ -21678,6 +21853,12 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   });
   if (resultsReply) return respond(resultsReply.message, resultsReply.nextStep);
 
+  const shownPick = await handleShownListingPick({ phone, step, text: cleanBody, lang }).catch((error) => {
+    logger.warn('Shown listing pick failed:', error.message || String(error));
+    return null;
+  });
+  if (shownPick) return respond(shownPick.message, shownPick.nextStep);
+
   // 6 on the menu, or asking in words for a person.
   if (wantsToTalkToAPerson(step, cleanBody)) {
     return respond(await talkToPersonReply({ phone, lang, contactName: runtime.contactName || sessionData.contact_name || '', text: cleanBody }), 'main_menu');
@@ -25986,6 +26167,9 @@ module.exports.forwardedAdvertMimeType = forwardedAdvertMimeType;
 module.exports.importForwardedAdvert = importForwardedAdvert;
 
 module.exports.__test = {
+  pickShownListing,
+  listingCodesInText,
+  pickPriceFigures,
   settleAgentWaitingAdverts,
   agentWaitingAdvertsReport,
   agentAdvertBurst,
