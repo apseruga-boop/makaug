@@ -13249,7 +13249,7 @@ router.get('/whatsapp/outbox-health', async (req, res, next) => {
       `SELECT id, status, attempts, created_at, next_attempt_at, sent_at, last_error,
               regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g') AS digits,
               COALESCE(metadata->>'source', '') AS source,
-              COALESCE(metadata->>'message_kind', '') AS kind,
+              COALESCE(NULLIF(metadata->>'message_kind', ''), metadata->>'kind', '') AS kind,
               COALESCE(metadata->>'delivery_mode', '') AS delivery_mode,
               COALESCE(NULLIF(metadata->>'claim_count', ''), '0')::int AS claim_count,
               metadata->>'claimed_at' AS claimed_at,
@@ -13257,14 +13257,15 @@ router.get('/whatsapp/outbox-health', async (req, res, next) => {
               COALESCE(metadata->>'failure_class', '') AS failure_class,
               (payload->>'media_type') AS media_type,
               LEFT(COALESCE(payload->>'text', ''), 90) AS preview,
-              campaign_id
+              campaign_id,
+              (status IN ('pending', 'retry') AND $5::boolean AND NOT ${require('../services/whatsappWebBridgeService').hasWrittenSql('outbound_message_queue')}) AS waiting_for_first_message
          FROM outbound_message_queue
         WHERE channel = 'whatsapp'
           AND status = ANY($1::text[])
           AND ($3::text = '' OR regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g') = $3::text)
         ORDER BY CASE WHEN $4::boolean THEN created_at END DESC, created_at ASC
         LIMIT $2`,
-      [statuses, limit, toDigits, newestFirst]
+      [statuses, limit, toDigits, newestFirst, require('../services/whatsappWebBridgeService').onlyToPeopleWhoWrote()]
     );
     const mask = (digits) => (digits.length > 6 ? `${digits.slice(0, 5)}***${digits.slice(-3)}` : digits);
     const data = rows.rows.map((row) => ({
@@ -13284,7 +13285,12 @@ router.get('/whatsapp/outbox-health', async (req, res, next) => {
       failure_class: row.failure_class,
       last_error: row.last_error ? String(row.last_error).slice(0, 160) : null,
       campaign: Boolean(row.campaign_id),
-      preview: row.preview
+      // Held because the person has never written to the number: it goes when they do.
+      waiting_for_first_message: row.waiting_for_first_message === true,
+      // A one-time code is not shown here, sent or not.
+      preview: (row.kind === 'otp' || row.source === 'otp')
+        ? require('../services/whatsappWebBridgeService').withoutTheCode(row.preview)
+        : row.preview
     }));
     const summary = await db.query(
       `SELECT status, COALESCE(metadata->>'delivery_mode', '') AS delivery_mode,
@@ -13296,6 +13302,34 @@ router.get('/whatsapp/outbox-health', async (req, res, next) => {
     );
     return res.json({ ok: true, data, summary: summary.rows });
   } catch (error) {
+    return next(error);
+  }
+});
+
+// Numbers that are sent nothing unasked for now (a member of staff who should
+// not get the notices, say). GET lists them, masked; POST { phone, paused,
+// note } pauses one or lets it receive again. An answer to a message of
+// theirs still goes.
+router.get('/whatsapp/paused-numbers', async (req, res, next) => {
+  try {
+    const { tails, notes } = await require('../services/whatsappWebBridgeService').pausedNumbers({ fresh: true });
+    return res.json({ ok: true, data: tails.map((tail) => ({ number: `•••${tail.slice(-3)}`, ...(notes[tail] || {}) })) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/whatsapp/paused-numbers', async (req, res, next) => {
+  try {
+    const phone = String(req.body?.phone || '').trim();
+    const paused = req.body?.paused !== false && String(req.body?.paused).toLowerCase() !== 'false';
+    const actorId = adminActorId(req);
+    const { tails, notes, let_go: letGo } = await require('../services/whatsappWebBridgeService')
+      .setNumberPaused(phone, paused, { by: actorId, note: cleanText(req.body?.note) });
+    await writeAudit(paused ? 'whatsapp_number_paused' : 'whatsapp_number_unpaused', { number: `•••${phone.replace(/\D/g, '').slice(-3)}`, let_go: letGo }, actorId);
+    return res.json({ ok: true, let_go: letGo, data: tails.map((tail) => ({ number: `•••${tail.slice(-3)}`, ...(notes[tail] || {}) })) });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
     return next(error);
   }
 });

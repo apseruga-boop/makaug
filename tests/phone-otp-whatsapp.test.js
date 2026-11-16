@@ -13,6 +13,11 @@ async function main() {
   const originalEmail = emailService.sendOtpEmail;
   const originalQuery = db.query;
   const previousBridge = process.env.WHATSAPP_WEB_BRIDGE_ENABLED;
+  // This file is run with plain node, where the rule that the number only
+  // writes to people who have written to it is on. It has its own case below.
+  const previousRule = process.env.WHATSAPP_ONLY_TO_PEOPLE_WHO_WROTE;
+  const originalHasWritten = bridge.hasWrittenToUs;
+  process.env.WHATSAPP_ONLY_TO_PEOPLE_WHO_WROTE = 'off';
 
   try {
     process.env.WHATSAPP_WEB_BRIDGE_ENABLED = 'true';
@@ -32,7 +37,9 @@ async function main() {
     assert.strictEqual(result.ok, true, 'bridge-enabled phone OTP should succeed');
     assert.strictEqual(result.channel, 'whatsapp');
     assert.strictEqual(queued.length, 1);
-    assert.strictEqual(queued[0].source, 'otp');
+    // Under the name the bridge asks for. Queued as 'otp' a code was never
+    // handed over: on 16 Nov 2026 three were found in the queue, days old.
+    assert.strictEqual(queued[0].source, 'whatsapp_runtime');
     assert.strictEqual(queued[0].actorId, 'system');
     assert.deepStrictEqual(queued[0].metadata, { kind: 'otp' });
     assert.ok(!JSON.stringify(queued[0].metadata).includes('123456'), 'bridge metadata must not store the code');
@@ -120,6 +127,33 @@ async function main() {
     assert.strictEqual(queued.length, 1);
     bridge.whatsappSessionNeedsLinking = originalNeedsLinking;
 
+    // 16 Nov 2026: the number only writes to people who have written to it.
+    // A code for somebody who never has would wait in the queue until it ran
+    // out. It is not queued: email when there is one, and the truth when not.
+    process.env.WHATSAPP_ONLY_TO_PEOPLE_WHO_WROTE = 'on';
+    bridge.hasWrittenToUs = async () => false;
+    queued.length = 0;
+    emailed = null;
+    emailService.sendOtpEmail = async (args) => {
+      emailed = args;
+      return { sent: true, provider: 'resend', status: 'sent' };
+    };
+    const stranger = await sendPhoneOtp({ to: '+256700555099', message: 'your code is 555555', email: 'person@example.com', otp: '555555' });
+    assert.strictEqual(queued.length, 0, 'no code is queued for somebody who has never written to the number');
+    assert.strictEqual(stranger.channel, 'email');
+    assert.strictEqual(stranger.attempts[0].error, 'they_have_not_written_to_the_number');
+    emailService.sendOtpEmail = originalEmail;
+    const strangerNoEmail = await sendPhoneOtp({ to: '+256700555099', message: 'your code is 666666', otp: '666666' });
+    assert.strictEqual(strangerNoEmail.ok, false);
+    assert.strictEqual(queued.length, 0);
+    bridge.hasWrittenToUs = async () => true;
+    const known = await sendPhoneOtp({ to: '+256700555098', message: 'your code is 777777', otp: '777777' });
+    assert.strictEqual(known.ok, true, 'somebody who has written gets their code on WhatsApp');
+    assert.strictEqual(known.channel, 'whatsapp');
+    assert.strictEqual(queued.length, 1);
+    bridge.hasWrittenToUs = originalHasWritten;
+    process.env.WHATSAPP_ONLY_TO_PEOPLE_WHO_WROTE = 'off';
+
     assert.strictEqual(whatsapp.__test.whatsappListerPhoneMatchesChat('+256780863394', '0780863394'), true);
     assert.strictEqual(whatsapp.__test.whatsappListerPhoneMatchesChat('256780863394', '+256780863394'), true);
     assert.strictEqual(whatsapp.__test.whatsappListerPhoneMatchesChat('+256780863394', '+256700000000'), false);
@@ -169,6 +203,9 @@ async function main() {
   } finally {
     bridge.queueWhatsappWebBridgeMessage = originalQueue;
     bridge.whatsappSessionNeedsLinking = originalNeedsLinking;
+    bridge.hasWrittenToUs = originalHasWritten;
+    if (previousRule == null) delete process.env.WHATSAPP_ONLY_TO_PEOPLE_WHO_WROTE;
+    else process.env.WHATSAPP_ONLY_TO_PEOPLE_WHO_WROTE = previousRule;
     emailService.sendOtpEmail = originalEmail;
     db.query = originalQuery;
     if (previousBridge == null) delete process.env.WHATSAPP_WEB_BRIDGE_ENABLED;

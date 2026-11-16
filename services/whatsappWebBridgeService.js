@@ -411,6 +411,26 @@ async function queueWhatsappWebBridgeMessage({
     return { ...(rejected.rows[0] || {}), rejected: true, rejected_reason: 'invalid_recipient' };
   }
 
+  // A number staff have paused is sent nothing unasked. The record is kept,
+  // so it can be seen what it would have been sent; an answer to a message of
+  // theirs is not stopped.
+  if (!meta.inbound_message_id && await isNumberPaused(userPhone)) {
+    const held = await db.query(
+      `INSERT INTO outbound_message_queue (
+        user_phone, payload, status, attempts, next_attempt_at, channel, user_consent_snapshot, campaign_id, metadata, last_error
+      ) VALUES ($1, $2::jsonb, 'failed', 0, NOW(), 'whatsapp', TRUE, $3, $4::jsonb, $5)
+      RETURNING *`,
+      [
+        userPhone,
+        JSON.stringify(payload),
+        campaignId || null,
+        JSON.stringify({ ...meta, retry_suppressed: true, failure_class: 'paused_number' }),
+        'Not sent: this number is paused and is sent nothing for now.'
+      ]
+    );
+    return { ...(held.rows[0] || {}), rejected: true, rejected_reason: 'paused_number' };
+  }
+
   const existing = await db.query(
     `SELECT *
        FROM outbound_message_queue
@@ -553,6 +573,35 @@ async function whatsappSessionNeedsLinking() {
   }
 }
 
+/**
+ * The kind of message the bridge asks for. It asks by name, and a message
+ * queued under any other name is never handed over: it sits "pending" and
+ * nobody is told. Staff replies were lost to that until 5 Oct 2026. Sign-in
+ * codes ('otp') and short-stay messages ('short_stay_request',
+ * 'agent_booking') still were on 16 Nov 2026: three codes and six booking
+ * messages, up to twelve days old, never sent. Anything that must reach a
+ * person is queued under this name, with what it is kept in its details.
+ */
+function bridgeCarriedSource() {
+  return String(process.env.WHATSAPP_REPLY_BRIDGE_SOURCE || 'whatsapp_runtime').trim().toLowerCase() || 'whatsapp_runtime';
+}
+
+// What the bridge asks for unless it is told otherwise (OUTBOX_ALLOWED_SOURCES
+// on the bridge service). tests/whatsapp-bridge-carried-sources.test.js holds
+// every queued message to this list.
+const BRIDGE_CARRIED_SOURCES = ['whatsapp_runtime', 'whatsapp_missed_call'];
+
+/** A one-time code, written so that it can be kept: "your code is ••••••". */
+function withoutTheCode(text = '') {
+  return String(text || '').replace(/\b\d{4,8}\b/g, '••••••');
+}
+
+/** Whether a queued message carries a one-time code. */
+function carriesACode(row = {}) {
+  const meta = (row && row.metadata) || {};
+  return String(meta.kind || '').toLowerCase() === 'otp' || String(meta.source || '').toLowerCase() === 'otp';
+}
+
 /** How long a one-time code is good for, in minutes. */
 function codeMinutes() {
   return Math.min(60, Math.max(parseInt(process.env.OTP_EXPIRES_MINUTES || '10', 10) || 10, 1));
@@ -574,13 +623,224 @@ async function letGoOfExpiredCodes({ force = false } = {}) {
       `UPDATE outbound_message_queue
           SET status = 'failed',
               last_error = 'The code had run out before WhatsApp could send it.',
+              -- A code that will never be used is not kept either.
+              payload = jsonb_set(COALESCE(payload, '{}'::jsonb), '{text}',
+                to_jsonb(regexp_replace(COALESCE(payload->>'text', ''), '[0-9]{4,8}', '••••••', 'g'))),
               metadata = COALESCE(metadata, '{}'::jsonb) || '{"failure_class":"expired","retry_suppressed":true}'::jsonb,
               updated_at = NOW()
         WHERE channel = 'whatsapp'
           AND status IN ('pending', 'retry')
-          AND LOWER(COALESCE(metadata->>'source', '')) = 'otp'
+          AND (LOWER(COALESCE(metadata->>'kind', '')) = 'otp' OR LOWER(COALESCE(metadata->>'source', '')) = 'otp')
           AND created_at < NOW() - ($1 || ' minutes')::interval`,
       [String(codeMinutes())]
+    );
+    return result.rowCount || 0;
+  } catch (_error) {
+    return 0;
+  }
+}
+
+/**
+ * The number only writes to people who have written to it.
+ *
+ * 15 Nov 2026, 15:42:03: WhatsApp removed the link that carries every message
+ * and restricted the number for "spam, automated or bulk messaging". Two
+ * seconds earlier the number had sent "your property is live" to a new agent
+ * who had never written to it. 16 Nov 2026, 05:28:12, thirteen minutes after
+ * the number was linked again: removed again. Two seconds earlier it had sent
+ * a lead-desk notice to a member of staff's number that had been sent 186
+ * automatic messages in a month and had never once answered.
+ *
+ * So a message is handed to the bridge only when the person it is for has
+ * written to the number at some time, or when it answers a message of theirs.
+ * Anything else waits in the queue. The moment they write, even "Hi", what is
+ * waiting for them goes. It is the rule for every kind of message, the
+ * welcome to a new agent and a notice to staff included, because WhatsApp
+ * makes no exception for them. WHATSAPP_ONLY_TO_PEOPLE_WHO_WROTE=off removes
+ * it; under test it is off unless a test turns it on.
+ */
+function onlyToPeopleWhoWrote(env = process.env) {
+  const flag = String(env.WHATSAPP_ONLY_TO_PEOPLE_WHO_WROTE || '').trim().toLowerCase();
+  if (['off', 'false', '0', 'no'].includes(flag)) return false;
+  if (['on', 'true', '1', 'yes'].includes(flag)) return true;
+  if (env.NODE_TEST_CONTEXT) return false;
+  return String(env.NODE_ENV || '').toLowerCase() !== 'test';
+}
+
+/**
+ * SQL, true when the person a queued row is for has written to us, or the row
+ * answers a message of theirs. `q` is the row's alias. The first test uses the
+ * index on (user_phone, created_at); the second is for a reply whose number is
+ * stored in another form than the message it answers.
+ */
+function hasWrittenSql(q = 'q') {
+  return `(
+          EXISTS (
+            SELECT 1 FROM whatsapp_messages m
+             WHERE m.direction = 'inbound'
+               -- A call is not a message: somebody who only rang has not written.
+               AND m.message_type <> 'call'
+               AND m.user_phone IN (
+                 ${q}.user_phone,
+                 regexp_replace(COALESCE(${q}.user_phone, ''), '\\D', '', 'g'),
+                 '+' || regexp_replace(COALESCE(${q}.user_phone, ''), '\\D', '', 'g')
+               )
+          )
+          OR EXISTS (
+            SELECT 1 FROM whatsapp_messages m
+             WHERE COALESCE(${q}.metadata->>'inbound_message_id', '') <> ''
+               AND m.wa_message_id = ${q}.metadata->>'inbound_message_id'
+               AND m.direction = 'inbound'
+               AND RIGHT(regexp_replace(m.user_phone, '\\D', '', 'g'), 9)
+                 = RIGHT(regexp_replace(COALESCE(${q}.user_phone, ''), '\\D', '', 'g'), 9)
+          )
+        )`;
+}
+
+/** Whether this number has ever written to us. When it cannot be told, no. */
+async function hasWrittenToUs(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 9) return false;
+  const normalized = normalizeBridgeRecipient(phone) || digits;
+  try {
+    const result = await db.query(
+      `SELECT 1 FROM whatsapp_messages
+        WHERE direction = 'inbound' AND message_type <> 'call' AND user_phone = ANY($1::text[])
+        LIMIT 1`,
+      [[...new Set([normalized, digits, `+${digits}`, String(normalized).replace(/\D/g, ''), `+${String(normalized).replace(/\D/g, '')}`])]]
+    );
+    return result.rows.length > 0;
+  } catch (_error) {
+    return false;
+  }
+}
+
+// Numbers that are sent nothing unasked for the time being, on staff's say
+// (16 Nov 2026: a member of staff's number that had been sent 186 automatic
+// notices in a month). Kept in billing_settings so it can be changed without
+// a release: { tails: ["700555061"], notes: { "700555061": { by, at, note } } }.
+const PAUSED_NUMBERS_KEY = 'whatsapp_paused_numbers';
+
+function phoneTail(phone) {
+  return String(phone || '').replace(/\D/g, '').slice(-9);
+}
+
+/**
+ * SQL, true when the number a queued row is for is paused and the row is not
+ * an answer to a message of theirs. An answer still goes: somebody who writes
+ * to us is not met with silence.
+ */
+function pausedSql(q = 'q') {
+  return `(
+          COALESCE(${q}.metadata->>'inbound_message_id', '') = ''
+          AND EXISTS (
+            SELECT 1 FROM billing_settings b
+             WHERE b.key = '${PAUSED_NUMBERS_KEY}'
+               AND (b.value->'tails') ? RIGHT(regexp_replace(COALESCE(${q}.user_phone, ''), '\\D', '', 'g'), 9)
+          )
+        )`;
+}
+
+let pausedNumbersRead = { at: 0, value: { tails: [], notes: {} } };
+
+/**
+ * The paused numbers: { tails, notes }. Read at most every fifteen seconds
+ * (it is asked for every message that is queued); the hand-over to the bridge
+ * always asks the database itself. When it cannot be read, nobody is paused.
+ */
+async function pausedNumbers({ fresh = false } = {}) {
+  if (!fresh && Date.now() - pausedNumbersRead.at < 15000) return pausedNumbersRead.value;
+  try {
+    const result = await db.query('SELECT value FROM billing_settings WHERE key = $1 LIMIT 1', [PAUSED_NUMBERS_KEY]);
+    const value = result.rows?.[0]?.value || {};
+    const tails = Array.isArray(value.tails) ? value.tails.map((tail) => String(tail)).filter((tail) => /^\d{9}$/.test(tail)) : [];
+    pausedNumbersRead = { at: Date.now(), value: { tails, notes: value.notes && typeof value.notes === 'object' ? value.notes : {} } };
+    return pausedNumbersRead.value;
+  } catch (_error) {
+    return { tails: [], notes: {} };
+  }
+}
+
+async function isNumberPaused(phone) {
+  const tail = phoneTail(phone);
+  if (tail.length !== 9) return false;
+  return (await pausedNumbers()).tails.includes(tail);
+}
+
+/**
+ * Pause a number, or let it receive again. Returns the list as it now stands.
+ * Pausing also lets go of what is already waiting for them unasked, so the day
+ * they are let receive again they are not sent a pile of old notices.
+ */
+async function setNumberPaused(phone, paused, { by = '', note = '' } = {}) {
+  const tail = phoneTail(phone);
+  if (tail.length !== 9) {
+    const error = new Error('That is not a phone number');
+    error.status = 400;
+    throw error;
+  }
+  const current = await pausedNumbers({ fresh: true });
+  const tails = current.tails.filter((entry) => entry !== tail);
+  const notes = { ...current.notes };
+  delete notes[tail];
+  if (paused) {
+    tails.push(tail);
+    notes[tail] = { by: String(by || '').slice(0, 80), at: new Date().toISOString(), note: String(note || '').slice(0, 200) };
+  }
+  await db.query(
+    `INSERT INTO billing_settings (key, value, updated_by, updated_at) VALUES ($1, $2::jsonb, $3, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = NOW()`,
+    [PAUSED_NUMBERS_KEY, JSON.stringify({ tails, notes }), String(by || 'system').slice(0, 80)]
+  );
+  pausedNumbersRead = { at: Date.now(), value: { tails, notes } };
+  let letGo = 0;
+  if (paused) {
+    const cleared = await db.query(
+      `UPDATE outbound_message_queue
+          SET status = 'failed',
+              last_error = 'Not sent: this number was paused.',
+              metadata = COALESCE(metadata, '{}'::jsonb) || '{"failure_class":"paused_number","retry_suppressed":true}'::jsonb,
+              updated_at = NOW()
+        WHERE channel = 'whatsapp'
+          AND status IN ('pending', 'retry')
+          AND COALESCE(metadata->>'inbound_message_id', '') = ''
+          AND RIGHT(regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g'), 9) = $1`,
+      [tail]
+    );
+    letGo = cleared.rowCount || 0;
+  }
+  return { tails, notes, let_go: letGo };
+}
+
+let lastWaitingSweepAt = 0;
+
+/**
+ * What is waiting for somebody who has never written does not wait for ever.
+ * A notice to staff, a Morning Brief or "sorry we missed your call" is no use
+ * the next day and is let go after twelve hours; everything else (a welcome,
+ * "your property is live") after seven days. Looked at once a minute at most, and only while the rule
+ * is on.
+ */
+async function letGoOfWhatNobodyCameFor({ force = false } = {}) {
+  if (!onlyToPeopleWhoWrote()) return 0;
+  if (!force && Date.now() - lastWaitingSweepAt < 60000) return 0;
+  lastWaitingSweepAt = Date.now();
+  try {
+    const result = await db.query(
+      `UPDATE outbound_message_queue q
+          SET status = 'failed',
+              last_error = 'Not sent: they have never written to the makaug number.',
+              metadata = COALESCE(q.metadata, '{}'::jsonb) || '{"failure_class":"never_wrote","retry_suppressed":true}'::jsonb,
+              updated_at = NOW()
+        WHERE q.channel = 'whatsapp'
+          AND q.status IN ('pending', 'retry')
+          AND COALESCE(q.metadata->>'delivery_mode', '') = 'web_bridge'
+          AND q.next_attempt_at < NOW() - (
+            CASE WHEN COALESCE(q.metadata->>'message_kind', '') ~ '^(agent_brief|lead_handoff_)'
+                   OR LOWER(COALESCE(q.metadata->>'source', '')) = 'whatsapp_missed_call'
+              THEN INTERVAL '12 hours' ELSE INTERVAL '7 days' END
+          )
+          AND NOT ${hasWrittenSql('q')}`
     );
     return result.rowCount || 0;
   } catch (_error) {
@@ -615,6 +875,7 @@ async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient 
   const claimWindow = getBridgeClaimWindowSeconds();
   const normalizedClientId = String(clientId || '').trim() || 'web_bridge';
   await letGoOfExpiredCodes();
+  await letGoOfWhatNobodyCameFor();
   if (await bridgeSessionCannotSend(normalizedClientId)) return [];
   const recipientDigits = String(recipient || '').replace(/\D/g, '');
   const normalizedAllowedSources = (Array.isArray(allowedSources) ? allowedSources : String(allowedSources || '').split(','))
@@ -646,8 +907,15 @@ async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient 
         -- In the quiet hours, a message that is more than half an hour late
         -- waits for the morning.
         AND NOT ($7::boolean AND q.next_attempt_at < NOW() - INTERVAL '30 minutes')
+        -- Nothing unasked to a number staff have paused.
+        AND NOT ${pausedSql('q')}
+        -- Only to somebody who has written to us, or in answer to them.
+        AND (NOT $9::boolean OR ${hasWrittenSql('q')})
         -- A one-time code that has run out is never handed over.
-        AND NOT (LOWER(COALESCE(q.metadata->>'source', '')) = 'otp' AND q.created_at < NOW() - ($8 || ' minutes')::interval)
+        AND NOT (
+          (LOWER(COALESCE(q.metadata->>'kind', '')) = 'otp' OR LOWER(COALESCE(q.metadata->>'source', '')) = 'otp')
+          AND q.created_at < NOW() - ($8 || ' minutes')::interval
+        )
       ORDER BY q.next_attempt_at ASC, q.created_at ASC
       LIMIT $1
       FOR UPDATE SKIP LOCKED
@@ -666,7 +934,7 @@ async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient 
     FROM claimable
     WHERE q.id = claimable.id
     RETURNING q.*, claimable.due_at`,
-    [safeLimit, normalizedClientId, String(claimWindow), recipientDigits, normalizedAllowedSources, getBridgeMaxClaims(), isOutboxQuietHours(), String(codeMinutes())]
+    [safeLimit, normalizedClientId, String(claimWindow), recipientDigits, normalizedAllowedSources, getBridgeMaxClaims(), isOutboxQuietHours(), String(codeMinutes()), onlyToPeopleWhoWrote()]
   );
 
   // UPDATE … RETURNING hands rows back in no particular order, and the bridge
@@ -773,6 +1041,18 @@ async function getWhatsappWebBridgeStatus() {
 module.exports = {
   classifyBridgeSendError,
   bridgeSessionCannotSend,
+  bridgeCarriedSource,
+  BRIDGE_CARRIED_SOURCES,
+  onlyToPeopleWhoWrote,
+  pausedSql,
+  pausedNumbers,
+  isNumberPaused,
+  setNumberPaused,
+  hasWrittenSql,
+  hasWrittenToUs,
+  letGoOfWhatNobodyCameFor,
+  withoutTheCode,
+  carriesACode,
   whatsappSessionNeedsLinking,
   letGoOfExpiredCodes,
   isOutboxQuietHours,

@@ -74,12 +74,32 @@ async function sendPhoneOtp({ to, message, email, otp, expiresMinutes } = {}) {
     }));
   }
 
-  if (whatsappBridgeEnabled() && !needsLinking) {
+  // The number only writes to people who have written to it (16 Nov 2026). A
+  // code for somebody who never has would wait in the queue until it ran out,
+  // and the site would have said it was on its way.
+  const mayNotWriteToThem = whatsappBridgeEnabled() && !needsLinking
+    && typeof whatsappWebBridgeService.onlyToPeopleWhoWrote === 'function'
+    && whatsappWebBridgeService.onlyToPeopleWhoWrote()
+    && !(await whatsappWebBridgeService.hasWrittenToUs(recipient).catch(() => false));
+  if (mayNotWriteToThem) {
+    attempts.push(publicAttemptSummary({
+      channel: 'whatsapp',
+      provider: 'whatsapp_web_bridge',
+      status: 'failed',
+      reason: 'they_have_not_written_to_the_number'
+    }));
+  }
+
+  if (whatsappBridgeEnabled() && !needsLinking && !mayNotWriteToThem) {
     try {
       const queued = await whatsappWebBridgeService.queueWhatsappWebBridgeMessage({
         recipient,
         text: body,
-        source: 'otp',
+        // Under the name the bridge asks for. Queued as 'otp' it was never
+        // handed over: every code "sent to WhatsApp" stayed in the queue.
+        source: typeof whatsappWebBridgeService.bridgeCarriedSource === 'function'
+          ? whatsappWebBridgeService.bridgeCarriedSource()
+          : 'whatsapp_runtime',
         actorId: 'system',
         metadata: { kind: 'otp' }
       });
