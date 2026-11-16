@@ -2474,12 +2474,31 @@ function firstDistrictFromText(input = '') {
 
 // What a block EARNS, written just before the figure. "Making 1.8m", "earning
 // 900k monthly", "bringing in 2m". An income is never an asking price.
-const LISTING_INCOME_CUE = /(?:mak(?:ing|es)|earn(?:ing|s)?|collect(?:ing|s)?|generat(?:ing|es)|bring(?:ing|s)?(?:\s+in)?|fetch(?:ing|es)?|income|returns?|profits?)\s*(?:of|at)?\s*$/i;
+const LISTING_INCOME_CUE = /(?:mak(?:ing|es)|earn(?:ing|s)?|collect(?:ing|s)?|generat(?:ing|es)|bring(?:ing|s)?(?:\s+in)?|fetch(?:ing|es)?|income|returns?|profits?)\s*(?:of|at)?\s*(?:(?:usd|ugx|ush)\s*)*$/i;
+
+// The figure the caption calls the price. "Fetching $20000 USD per month …
+// Price is $1.4Million USD" was listed at UGX 76M, its monthly income, and
+// "each being rented at 500k … Price is ugx. 580Million" at UGX 500,000, one
+// room's rent (16 Nov 2026). A figure written as the price is the price.
+// It has to look like money (a currency, an m/bn/k, or five digits or more):
+// "Selling 5 bedroom house … @600m" is not priced at 5.
+const LABELLED_PRICE = /\b(?:asking\s+price|sale\s+price|selling\s+price|price|priced|asking)\s*(?:is|of|at|now|:|=|-|@)?\s*(?:is\s+)?(?:only\s+|just\s+|now\s+)?((?:ugx|ush|usd)\s*\d+(?:\.\d+)?\s*(?:b|bn|bil|billion|m|mn|mil|million|k|thousand)?|\d+(?:\.\d+)?\s*(?:b|bn|bil|billion|m|mn|mil|million|k|thousand)\b|\d{5,12}\b)/i;
+
+function labelledPriceFragment(clean = '') {
+  const match = clean.match(LABELLED_PRICE);
+  return match ? match[1].trim() : '';
+}
 
 function listingPriceSourceFragment(input = '') {
   const clean = normalizeInput(input).toLowerCase().replace(/,/g, '');
   if (!clean) return '';
-  const explicitSalePrice = clean.match(/\b(?:price|asking|selling|on sale(?: for)?|for sale(?: at)?|rent(?:ed)? at)\D{0,20}(\d+(?:\.\d+)?\s*(?:b|bn|bil|billion|m|mn|mil|million|k|thousand)?)\b/i);
+  const labelled = labelledPriceFragment(clean);
+  if (labelled) return labelled;
+  // A property for sale "rented at 500k" earns that; it is not the price.
+  const forSale = /\b(?:for sale|on sale|selling|sale)\b/i.test(clean);
+  const explicitSalePrice = forSale
+    ? clean.match(/\b(?:price|asking|selling|on sale(?: for)?|for sale(?: at)?)\D{0,20}(\d+(?:\.\d+)?\s*(?:b|bn|bil|billion|m|mn|mil|million|k|thousand)?)\b/i)
+    : clean.match(/\b(?:price|asking|selling|on sale(?: for)?|for sale(?: at)?|rent(?:ed)? at)\D{0,20}(\d+(?:\.\d+)?\s*(?:b|bn|bil|billion|m|mn|mil|million|k|thousand)?)\b/i);
   const explicitCurrency = clean.match(/\b(?:ugx|ush|usd|us\$)\s*\d+(?:\.\d+)?\s*(?:b|bn|bil|billion|m|mn|mil|million|k|thousand)?\b/i);
 
   // "…3 RENTAL UNITS … MAKING 1.8M UGX TITLED SELLING AT 170M UGX" — 9 Oct 2026.
@@ -5478,7 +5497,11 @@ function normalizeCaptionPriceNotation(caption = '') {
     .replace(/(\d[\d,.]*\s*(?:m|k|bn|mn|million|billion)?)\s*(?:\$|us\s*\$|usd|u\.s\.d\.|(?:us\s+)?dollars?)(?![a-z])/gi, 'USD $1')
     // 300m UGX · 1,200,000/= · 500,000 shs · shs 500,000
     .replace(/(\d[\d,.]*\s*(?:m|k|bn|mn|million|billion)?)\s*(?:ugx|ush|shs?|shillings?|\/=)(?![a-z])/gi, 'UGX $1')
-    .replace(/\b(?:ugx|ush|shs|shillings?)\s*(\d[\d,.]*)/gi, 'UGX $1');
+    // "ugx. 580Million" (16 Nov 2026): a full stop after the currency.
+    .replace(/\b(?:ugx|ush|shs|shillings?)\.?\s*(\d[\d,.]*)/gi, 'UGX $1')
+    // "$20000 USD" was rewritten twice, to "USD USD 20000", and the income
+    // check before it no longer saw "Fetching" beside the figure.
+    .replace(/\b(USD|UGX)(?:\s+\1)+\b/gi, '$1');
 }
 
 // ---------------------------------------------------------------------------
@@ -5533,8 +5556,11 @@ function perUnitPriceFacts(caption = '', unitPrice = 0) {
   const countedUnit = quantityMatch ? singularUnit(quantityMatch[2]) : '';
 
   const cue = PER_UNIT_PRICE_CUE.exec(text);
+  // "9 units, each being rented at 500k … Price is 580M" (16 Nov 2026): that
+  // "each" is the rent each unit earns, not a price per unit.
+  const eachAboutPrice = text.replace(/\beach\b(?=[^.\n]{0,25}\b(?:rent(?:ed|ing|s)?|let|earn(?:s|ing)?|mak(?:es|ing)|fetch(?:es|ing)?|bring(?:s|ing)?)\b)/gi, ' ');
   const unit = singularUnit(cue ? (cue[1] || cue[2] || '') : '')
-    || (BARE_PER_UNIT_CUE.test(text) ? countedUnit : '');
+    || (BARE_PER_UNIT_CUE.test(eachAboutPrice) ? countedUnit : '');
   if (!unit) return { perUnit: false };
 
   const quantity = quantityMatch && countedUnit === unit
@@ -5585,10 +5611,14 @@ function explicitDistrictInCaption(caption = '', { area = '' } = {}) {
   const areaName = normalizeInput(area);
   if (!areaName) return null;
   const escaped = areaName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const beside = new RegExp(`(?:\\b([A-Za-z][A-Za-z'’\\-]{2,})\\s*[,\\-–]?\\s+)?\\b${escaped}\\b(?:\\s*[,\\-–]?\\s+([A-Za-z][A-Za-z'’\\-]{2,}))?`, 'i');
+  const beside = new RegExp(`(?:\\b([A-Za-z][A-Za-z'’\\-]{2,})\\s*[,\\-–]?\\s+)?\\b${escaped}\\b(?:\\s*[,\\-–]?\\s+([A-Za-z][A-Za-z'’\\-]{2,})(?:\\s+([A-Za-z]+))?)?`, 'i');
   const near = text.match(beside);
   if (!near) return null;
-  for (const candidate of [near[1], near[2]]) {
+  // "A house for sale in Nsangi - Masaka road" (16 Nov 2026) went in as Masaka
+  // district. Masaka road runs through Wakiso; Nsangi is in Wakiso. A district
+  // name followed by "road" names the road.
+  const roadAfter = /^(?:road|rd|highway|hwy|street|st|avenue|ave|bypass|expressway|express)$/i.test(String(near[3] || ''));
+  for (const candidate of [near[1], roadAfter ? '' : near[2]]) {
     if (!candidate || candidate.length < 4 || /^(?:road|rd|estate|estates|district|near|along|off|opp|opposite|plot|plots|land|house|the|and|with|viewing|view|hill|town|city|trading|centre|center)$/i.test(candidate)) continue;
     const resolved = resolveWhatsappLocation(candidate, { allowText: true });
     if (resolved?.status === 'matched' && resolved.match?.level === 'district') return resolved;
@@ -5647,6 +5677,9 @@ function offPlanProjectNameFromCaption(caption = '', sessionData = {}) {
   const at = first.match(/\bat\s+([A-Z][A-Za-z0-9'’&-]*(?:\s+[A-Z][A-Za-z0-9'’&-]*){0,3})(?=\s*(?:[,.;:—–-]|\s+(?:in|on|along|near|off|opposite)\b|$))/);
   return at ? at[1].trim() : '';
 }
+
+// Words a caption uses around a place that are never the place itself.
+const CAPTION_PLACE_FILLER_WORDS = /^(?:town|city|village|villages|district|division|parish|ward|estate|estates|central|north|south|east|west|uganda|trading|centre|center|land|plot|plots|acre|acres|title|ready|private|mailo|freehold|leasehold|commercial|residential|contact|sale|rent|house|houses|home|homes)$/i;
 
 function employeePropertyFacts(caption = '', sessionData = {}) {
   // Luganda/Swahili captions are read through their English equivalents.
@@ -5830,6 +5863,9 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     let anotherNameAmbiguous = false;
     windowWords.forEach((word, index) => {
       if (word.length < 4) return;
+      // "Zilobwe Wabitungulu town" (16 Nov 2026): "town" is a word, not a
+      // second place, and its being a ward somewhere made Zilobwe a question.
+      if (CAPTION_PLACE_FILLER_WORDS.test(word)) return;
       if (/^(?:road|rd|highway|hwy|street|avenue)$/i.test(windowWords[index + 1] || '')) return;
       const attempt = resolveWhatsappLocation(word, { allowText: true });
       // A second name that is itself ambiguous (Kasana + Nakasajja) is not
@@ -5837,7 +5873,8 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
       if (attempt?.status === 'ambiguous') anotherNameAmbiguous = true;
       if (
         attempt?.status === 'matched'
-        && Number(attempt.confidence || 0) >= 1
+        // A place spelt the other Luganda way (Zilobwe for Zirobwe) is that place.
+        && (Number(attempt.confidence || 0) >= 1 || attempt.match_type === 'spelling_variant')
         && !['district', 'region'].includes(normalizeInput(attempt.match?.level || ''))
       ) found.set(attempt.match?.canonical_location_id || word.toLowerCase(), attempt);
     });
@@ -5979,7 +6016,7 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   const locationLevel = normalizeInput(locationResolution?.match?.level || '');
   const exactLocation = locationResolution?.status === 'matched'
     && !['district', 'region'].includes(locationLevel)
-    && Number(locationResolution?.confidence || 0) >= 1;
+    && (Number(locationResolution?.confidence || 0) >= 1 || locationResolution?.match_type === 'spelling_variant');
   let locationPatch = exactLocation ? canonicalWhatsappLocationPatch(locationResolution) : {};
 
   // A district on its own is too vague to publish, so it used to be refused
@@ -9140,6 +9177,187 @@ async function saveReadyKeptSubmissions({ phone, currentStep = 'employee_propert
  * Built from the session alone, so it can be sent straight away for a text
  * reply or once a burst of photos has gone quiet.
  */
+// ---------------------------------------------------------------------------
+// An agent forwarding a burst of adverts (16 Nov 2026)
+// ---------------------------------------------------------------------------
+// An agent forwarded fifteen adverts in three minutes and was sent a long
+// "Saved" for each one: thirteen messages in nine minutes from the number,
+// every one ending with the same three paragraphs. In a burst the "Saved"
+// confirmations wait, and one summary goes once it is quiet. A property sent
+// on its own is still confirmed there and then.
+const AGENT_BURST_WINDOW_SECONDS = 90;
+
+/** Two or more adverts (a caption with media) from this number in the last minute and a half. */
+async function agentAdvertBurst(phone = '') {
+  const last9 = String(phone || '').replace(/\D/g, '').slice(-9);
+  if (last9.length < 9) return false;
+  const result = await db.query(
+    `SELECT COUNT(*)::int AS adverts
+       FROM whatsapp_messages
+      WHERE direction = 'inbound'
+        AND RIGHT(regexp_replace(user_phone, '\\D', '', 'g'), 9) = $1
+        AND created_at > NOW() - ($2 || ' seconds')::interval
+        AND COALESCE(NULLIF(TRIM(payload->>'body'), ''), NULLIF(TRIM(payload->>'effectiveBody'), '')) IS NOT NULL
+        AND (COALESCE(payload->>'mediaUrl', '') <> '' OR COALESCE(payload->>'media_url', '') <> '')`,
+    [last9, String(AGENT_BURST_WINDOW_SECONDS)]
+  ).catch(() => ({ rows: [{ adverts: 0 }] }));
+  return Number(result.rows[0]?.adverts || 0) >= 2;
+}
+
+/** Keep the properties this message saved, to confirm them in the summary. */
+async function holdAgentSavedConfirmations(phone = '', earlierIds = [], propertyId = '') {
+  const result = await db.query('SELECT session_data FROM whatsapp_sessions WHERE phone = $1', [phone]);
+  const data = result.rows[0]?.session_data || {};
+  const before = new Set((Array.isArray(earlierIds) ? earlierIds : []).map(String));
+  const savedNow = (Array.isArray(data.property_ids) ? data.property_ids : []).map(String).filter((id) => !before.has(id));
+  if (propertyId && !savedNow.includes(String(propertyId))) savedNow.push(String(propertyId));
+  if (!savedNow.length) return [];
+  const held = [...new Set([...(Array.isArray(data.agent_held_saved_ids) ? data.agent_held_saved_ids.map(String) : []), ...savedNow])];
+  await patchSessionData(phone, { agent_held_saved_ids: held });
+  return savedNow;
+}
+
+/** Keep a one-line note from this message for the summary ("I have added 1 video to …"). */
+async function holdAgentNote(phone = '', note = '') {
+  const text = normalizeInput(note);
+  if (!text) return false;
+  const result = await db.query('SELECT session_data FROM whatsapp_sessions WHERE phone = $1', [phone]);
+  const data = result.rows[0]?.session_data || {};
+  const notes = (Array.isArray(data.agent_held_notes) ? data.agent_held_notes : []).map(String).slice(-9);
+  notes.push(text);
+  await patchSessionData(phone, { agent_held_notes: notes });
+  return true;
+}
+
+/** "8-bed house, Nsangi", "Land, Garuga", "12 units, Naguru". */
+function agentSummaryLabel(row = {}) {
+  const place = normalizeInput(row.area || row.district || '');
+  const type = normalizeInput(row.property_type || '').toLowerCase().replace(/_/g, ' ');
+  const beds = Number(row.bedrooms) > 0 ? `${Number(row.bedrooms)}-bed ` : '';
+  // "Block of apartments; 12 units of 2 and 3 bedroom" is twelve units, not a 3-bed.
+  const caption = String(row.description || '');
+  const unitsMatch = caption.match(/\b(\d{1,3})\s*units?\b/i) || caption.match(/\bunits?\s*[:\-]?\s*(\d{1,3})\b/i);
+  const units = unitsMatch ? Number(unitsMatch[1]) : 0;
+  const period = String(row.price_period || '').toLowerCase();
+  const landLike = String(row.listing_type) === 'land' || ['acre', 'decimal', 'plot'].includes(period);
+  let what;
+  if (units > 1) what = `${units} units`;
+  else if (landLike && !beds) what = String(row.listing_type) === 'commercial' ? 'commercial land' : 'land';
+  else if (type && !/^(?:property|properties|other)$/.test(type)) what = `${beds}${type}`;
+  else if (beds) what = `${beds}property`;
+  else what = 'property';
+  what = what.charAt(0).toUpperCase() + what.slice(1);
+  return place ? `${what}, ${place}` : what;
+}
+
+/** "USD 1.4M", "USh 450M an acre", in the currency the agent quoted. */
+function agentSummaryPrice(row = {}) {
+  if (row.price_on_application === true) return 'price on application';
+  const usd = String(row.price_original_currency || '').toUpperCase() === 'USD' && Number(row.price_original) > 0;
+  const amount = usd ? Number(row.price_original) : Number(row.price);
+  if (!(amount > 0)) return 'price on application';
+  const short = (value, unit, suffix) => `${(Math.round((value / unit) * 10) / 10).toString().replace(/\.0$/, '')}${suffix}`;
+  const figure = amount >= 1e9 ? short(amount, 1e9, 'BN') : amount >= 1e6 ? short(amount, 1e6, 'M') : amount >= 1e3 ? short(amount, 1e3, 'K') : String(Math.round(amount));
+  const period = String(row.price_period || '').toLowerCase();
+  const per = period === 'acre' ? ' an acre'
+    : (['month', 'mo', 'monthly'].includes(period) ? ' a month'
+      : (period === 'plot' ? ' a plot' : ''));
+  return `${usd ? 'USD' : 'USh'} ${figure}${per}`;
+}
+
+/** The held confirmations, as one list, and the property ids it covers. */
+async function agentHeldSavedSummary(heldIds = []) {
+  const ids = (Array.isArray(heldIds) ? heldIds : []).map(String).filter((id) => /^[0-9a-f-]{36}$/i.test(id));
+  if (!ids.length) return '';
+  const result = await db.query(
+    `SELECT id::text AS id, listing_type, property_type, bedrooms, area, district, price, price_period,
+            price_original, price_original_currency, price_on_application, description
+       FROM properties
+      WHERE id::text = ANY($1::text[])`,
+    [ids]
+  );
+  const byId = new Map(result.rows.map((row) => [row.id, row]));
+  const rows = ids.map((id) => byId.get(id)).filter(Boolean);
+  if (!rows.length) return '';
+  const lines = [rows.length === 1
+    ? '✅ *Saved 1 of your properties for review:*'
+    : `✅ *Saved ${rows.length} of your properties for review:*`];
+  rows.forEach((row, index) => lines.push(`${index + 1}. ${agentSummaryLabel(row)} · ${agentSummaryPrice(row)}`));
+  return lines.join('\n');
+}
+
+// "Why", after the list of what is not saved.
+const AGENT_WHY = /^\s*(?:why|but why|why not|how come|what|huh|meaning|what do you mean|what does (?:this|that) mean|i don'?t understand|i do not understand|explain|\?+)\s*[?.!]*\s*$/i;
+
+/**
+ * "Why" after the not-saved list was taken as a detail for the first property,
+ * and the same list came back word for word (16 Nov 2026). Say why, about the
+ * first one only, and how to get a person.
+ */
+function agentWhyReply(data = {}) {
+  const items = [];
+  const pendingMedia = employeePendingStoredMedia(data);
+  const pendingCaption = normalizeInput(data.pending_property_caption || '');
+  if (pendingMedia.length || pendingCaption) items.push({ caption: pendingCaption, media: pendingMedia });
+  for (const entry of employeePendingSubmissionQueue(data)) items.push({ caption: normalizeInput(entry.caption || ''), media: entry.media || [] });
+  if (!items.length) return '';
+  const first = items[0];
+  const label = first.caption ? employeeCaptionLabel(first.caption) : 'the photos you sent with no description';
+  let needs;
+  if (!first.caption) needs = 'what it is, rent or sale, the area and district, and the price';
+  else if (!first.media.length) needs = 'its photos or a short video';
+  else needs = agentMissingPhrases(employeePropertyMissing(employeePropertyFacts(first.caption, data))).join('; ') || 'nothing more: it will save shortly';
+  const helper = agentHelpContact();
+  return [
+    items.length === 1
+      ? 'That property is safe with me, but I cannot send it to the team yet: it is missing something they need to check it.'
+      : `Those ${items.length} properties are safe with me, but I cannot send them to the team yet: each one is missing something they need to check it.`,
+    '',
+    `The first one, ${label}, needs ${needs}.`,
+    '',
+    `Reply with just that and I will add it, then ask about the next. Or reply *HELP* and ${helper.name} will call you.`
+  ].join('\n');
+}
+
+// A property waiting more than three days for a detail is not raised again
+// with every new batch: on 16 Nov 2026 a house from 11 Nov led the list.
+const AGENT_PENDING_STALE_MS = 72 * 60 * 60 * 1000;
+
+/** Move waiting properties older than three days out of the list the agent is asked about. */
+function retireStaleAgentSubmissions(data = {}, now = Date.now()) {
+  if (data.whatsapp_agent_self_intake !== true) return 0;
+  const age = (iso, ms) => {
+    const at = Number(ms) > 0 ? Number(ms) : Date.parse(iso || '');
+    return Number.isFinite(at) && at > 0 ? now - at : 0;
+  };
+  const retired = Array.isArray(data.retired_agent_submissions) ? data.retired_agent_submissions.slice(-19) : [];
+  let count = 0;
+  const queue = employeePendingSubmissionQueue(data);
+  const keep = [];
+  for (const entry of queue) {
+    if (age(entry.storedAt, entry.senderMs) > AGENT_PENDING_STALE_MS) {
+      retired.push({ caption: entry.caption, media: entry.media, storedAt: entry.storedAt || null, retired_at: new Date(now).toISOString() });
+      count += 1;
+    } else keep.push(entry);
+  }
+  if (count) {
+    if (keep.length) data.pending_property_queue = keep;
+    else delete data.pending_property_queue;
+  }
+  const pendingCaption = normalizeInput(data.pending_property_caption || '');
+  const pendingMedia = employeePendingStoredMedia(data);
+  if ((pendingCaption || pendingMedia.length)
+    && age(data.pending_property_media_stored_at, data.pending_caption_sender_ms) > AGENT_PENDING_STALE_MS) {
+    retired.push({ caption: pendingCaption, media: pendingMedia, storedAt: data.pending_property_media_stored_at || null, retired_at: new Date(now).toISOString() });
+    delete data.pending_property_caption;
+    clearEmployeePendingMedia(data);
+    promoteEmployeeQueuedSubmission(data);
+    count += 1;
+  }
+  if (count) data.retired_agent_submissions = retired.slice(-20);
+  return count;
+}
+
 function agentPendingNotice(data = {}) {
   if (data.whatsapp_agent_self_intake !== true) return '';
   const items = [];
@@ -12466,6 +12684,10 @@ async function handleEmployeeWhatsappIntake({
     if (!candidates.length) {
       if (!cleanBody || placeholderBody) {
         return { handled: true, nextStep: currentStep, message: 'No usable media bytes reached makaug. Please resend the photo, video or document.' };
+      }
+      if (data.whatsapp_agent_self_intake === true && AGENT_WHY.test(cleanBody)) {
+        const why = agentWhyReply(data);
+        if (why) return { handled: true, nextStep: currentStep, message: why };
       }
       const existingBatchProperties = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
       const pendingStoredMedia = employeePendingStoredMedia(data);
@@ -15864,7 +16086,14 @@ async function agentTopUpExistingProperty({ data = {}, existingProperty = null, 
     const attachment = await attachEmployeeReviewMedia({ propertyId: existingProperty.id, storedMedia, phone, inboundMessageId });
     if (!attachment.attached) return null;
     data.current_property_id = existingProperty.id;
-    return `📸 Thank you — I have added ${attachment.attached} ${attachment.attached === 1 ? 'photo' : 'photos/videos'} to the property you already sent us. It is with our team for review, and I will send you the link when it is live.`;
+    // The Naguru advert sent twice on 16 Nov 2026 came with a video, and the
+    // reply thanked him for "1 photo" on "the property you already sent us".
+    const videos = storedMedia.filter((item) => item.kind === 'video').length;
+    const photos = storedMedia.length - videos;
+    const count = attachment.attached;
+    const noun = !photos ? (count === 1 ? 'video' : 'videos') : (!videos ? (count === 1 ? 'photo' : 'photos') : 'photos and videos');
+    const place = normalizeInput(existingProperty.area || '');
+    return `📸 Thank you — I have added ${count} ${noun} to your property${place ? ` in ${place}` : ''} that you sent us before. It is with our team for review, and I will send you the link when it is live.`;
   } catch (error) {
     logger.warn('Agent top-up of existing property failed:', error.message || String(error));
     return null;
@@ -16003,7 +16232,10 @@ async function buildEmployeeBatchSummary(phone, since) {
     });
   }
   const duplicateLines = employeeBatchDuplicateLines(data);
-  if (!saved.length && !notSaved.length && !duplicateLines.length) return '';
+  const agentHeldSomething = data.whatsapp_agent_self_intake === true
+    && ((Array.isArray(data.agent_held_saved_ids) && data.agent_held_saved_ids.length > 0)
+      || (Array.isArray(data.agent_held_notes) && data.agent_held_notes.length > 0));
+  if (!saved.length && !notSaved.length && !duplicateLines.length && !agentHeldSomething) return '';
   const lines = [];
   const everythingReady = notSaved.length > 0
     && notSaved.every((item) => /^nothing more\b/i.test(item.needs));
@@ -16046,13 +16278,41 @@ async function buildEmployeeBatchSummary(phone, since) {
   // each property, on top of the confirmation he had already been sent — two
   // messages for one property, the second in a language he never signed up to.
   if (data.whatsapp_agent_self_intake === true) {
-    // Everything saved: he has already been told, once, per property. Anything
-    // outstanding is said in his words, not the staff batch's. A property saved
-    // just now, by this summary, has not been confirmed to him yet.
-    const confirmations = keptSaved.map((item, index) => (index === 0
+    // Saved in a burst: confirmed here, in one list, rather than one long
+    // message each (16 Nov 2026). Saved on its own: he has already been told.
+    // A property saved just now, by this summary, has not been confirmed yet.
+    const heldIds = Array.isArray(data.agent_held_saved_ids) ? data.agent_held_saved_ids : [];
+    let heldSummary = '';
+    if (heldIds.length) {
+      heldSummary = await agentHeldSavedSummary(heldIds).catch((error) => {
+        logger.warn('Held agent confirmations could not be listed:', error.message || String(error));
+        return '';
+      });
+      await db.query(`UPDATE whatsapp_sessions SET session_data = session_data - 'agent_held_saved_ids' WHERE phone = $1`, [phone]).catch(() => null);
+      delete data.agent_held_saved_ids;
+    }
+    const heldNotes = (Array.isArray(data.agent_held_notes) ? data.agent_held_notes : []).map((note) => normalizeInput(note)).filter(Boolean);
+    if (heldNotes.length) {
+      await db.query(`UPDATE whatsapp_sessions SET session_data = session_data - 'agent_held_notes' WHERE phone = $1`, [phone]).catch(() => null);
+      delete data.agent_held_notes;
+    }
+    // What has waited more than three days for a detail is not raised again.
+    if (retireStaleAgentSubmissions(data)) {
+      await replaceEmployeeSession(phone, 'employee_property_media', data).catch((error) => {
+        logger.warn('Stale agent submissions could not be retired:', error.message || String(error));
+      });
+    }
+    const confirmations = keptSaved.map((item, index) => (index === 0 && !heldSummary
       ? agentSelfIntakeSavedReply({ data, facts: item.facts, storedMedia: item.storedMedia, caption: item.caption })
       : agentAlsoSavedReply(item)));
-    return [...confirmations, notSaved.length ? agentPendingNotice(data) : ''].filter(Boolean).join('\n\n');
+    const pending = notSaved.length ? agentPendingNotice(data) : '';
+    return [
+      heldSummary,
+      heldNotes.join('\n'),
+      ...confirmations,
+      pending,
+      heldSummary ? 'As soon as each one is approved it goes live under your name and I will send you the link.' : ''
+    ].filter(Boolean).join('\n\n');
   }
   lines.push('', 'Nothing is live until a moderator approves it. Type *COMPLETE* when the whole batch is done.');
   return lines.join('\n');
@@ -23763,6 +24023,24 @@ async function processInboundRuntimeUnlocked({
       scheduleEmployeeBatchSummary(phone);
       if (String(employeeIntake.message || '').startsWith('⚠️ Not saved yet')) {
         employeeIntake.message = '';
+      } else if (/^✅ \*(?:Saved|Also saved) —/.test(String(employeeIntake.message || ''))
+        && sessionForMessage.session_data?.whatsapp_agent_self_intake === true
+        && await agentAdvertBurst(phone)) {
+        const held = await holdAgentSavedConfirmations(phone, sessionForMessage.session_data?.property_ids, employeeIntake.propertyId)
+          .catch((error) => {
+            logger.warn('Agent confirmation could not be held:', error.message || String(error));
+            return [];
+          });
+        if (held.length) employeeIntake.message = '';
+      } else if (/^📸 Thank you — I have added /.test(String(employeeIntake.message || ''))
+        && sessionForMessage.session_data?.whatsapp_agent_self_intake === true
+        && await agentAdvertBurst(phone)) {
+        const note = String(employeeIntake.message).replace(/^📸 Thank you — /, '📸 ').split('. It is with our team')[0];
+        const kept = await holdAgentNote(phone, `${note}.`).catch((error) => {
+          logger.warn('Agent note could not be held:', error.message || String(error));
+          return false;
+        });
+        if (kept) employeeIntake.message = '';
       }
     }
     await logIntent({
@@ -25556,7 +25834,18 @@ module.exports.forwardedAdvertMimeType = forwardedAdvertMimeType;
 module.exports.importForwardedAdvert = importForwardedAdvert;
 
 module.exports.__test = {
+  agentAdvertBurst,
+  agentHeldSavedSummary,
+  agentSummaryLabel,
+  agentSummaryPrice,
+  agentWhyReply,
+  AGENT_WHY,
+  retireStaleAgentSubmissions,
   processInboundRuntime,
+  listingPriceSourceFragment,
+  normalizeCaptionPriceNotation,
+  parseListingPriceDraft,
+  explicitDistrictInCaption,
   handleResultsReply,
   recordResultList,
   rememberResultsShown,
