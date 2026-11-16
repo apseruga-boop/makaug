@@ -970,6 +970,8 @@ module.exports = {
   addDays,
   daysBetween,
   listDays,
+  loadCampaign,
+  payingAgents,
   weekStart,
   conversionRates,
   roadTo1000,

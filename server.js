@@ -465,6 +465,22 @@ app.use('/api/admin/ai-agents', adminAiAgentsRoutes);
 app.use('/api/property-seeker', propertySeekerRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/field-agent', fieldAgentRoutes);
+app.use('/api/staff-setup', require('./routes/staff-setup'));
+// One-time staff setup page (token in the query; the page itself holds no secret).
+app.get('/staff-setup', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.set('Referrer-Policy', 'no-referrer');
+  res.set('X-Robots-Tag', 'noindex');
+  res.sendFile(path.join(__dirname, 'assets', 'staff-setup.html'));
+});
+// Calling-screen service worker. Registered with scope /staff-dashboard only,
+// so it never touches public pages; it is network-first and only falls back to
+// its cache when the connection is down.
+app.get('/calling-sw.js', (_req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  res.type('application/javascript');
+  res.sendFile(path.join(__dirname, 'assets', 'calling-sw.js'));
+});
 app.use('/api/staff/home-seekers', require('./routes/staff-home-seekers'));
 app.use('/api/staff', staffRoutes);
 app.use('/api/people', require('./routes/people'));

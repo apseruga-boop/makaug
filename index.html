@@ -8303,6 +8303,9 @@
       </div>
 
       <div id="staff-body" class="hidden space-y-6">
+        <section id="staff-calling-card" data-calling-root="staff">
+          <p class="text-xs text-gray-500">Loading the calling screen…</p>
+        </section>
         <section id="staff-booking-escalations" class="bg-white border border-gray-200 rounded-2xl p-6">
           <h3 class="text-lg font-black text-gray-900">Booking escalations</h3>
           <div id="staff-booking-flags" class="mt-3 text-sm text-gray-600">No open booking escalations.</div>
@@ -9092,6 +9095,7 @@
             <h3 class="text-xl font-bold text-gray-800">Staff Performance</h3>
             <p class="text-xs text-gray-500 mt-1">Loading Staff Performance…</p>
           </div>
+          <div id="admin-calling-control" data-calling-king-root></div>
         </div>
 
         <div id="admin-accounts-control" data-admin-tab-panel="accounts" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
@@ -11185,6 +11189,13 @@
             var shortTermDeskScript = document.createElement("script");
             shortTermDeskScript.src = "/assets/short-term-admin.js?v=20261110-short-stay-id-pending";
             document.body.appendChild(shortTermDeskScript);
+          }
+          // The calling screen is its own module too. Its mount points live
+          // only inside the protected staff and King pages.
+          if (document.getElementById("staff-calling-card") || document.getElementById("admin-calling-control")) {
+            var callingScript = document.createElement("script");
+            callingScript.src = "/assets/calling-screen.js?v=20261116-calling-v1";
+            document.body.appendChild(callingScript);
           }
         };
         document.body.appendChild(script);
