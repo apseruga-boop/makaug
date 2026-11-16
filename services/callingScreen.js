@@ -98,7 +98,8 @@ function eligibility(history = [], task = {}, { now = new Date(), tasks = [] } =
   const open = history.find((a) => a.status === 'shown' || a.status === 'calling');
   if (open) return { ok: false, why: 'open_elsewhere' };
   const defOf = (a) => outcomeDef(tasks.find((t) => t.key === a.task_key) || task, a.outcome) || {};
-  if (done.some((a) => a.outcome === 'do_not_contact' || a.outcome === 'wrong_number')) return { ok: false, why: 'do_not_contact' };
+  // "Do not contact" lives in call_blocks (King can lift it); a wrong number stays out.
+  if (done.some((a) => a.outcome === 'wrong_number')) return { ok: false, why: 'do_not_contact' };
   // Skips: the reason decides what happens next. Wrong number never again;
   // already an agent / not interested leave the new-agents queue; any skip
   // keeps the number off everyone's screen for the rest of the day.
@@ -154,6 +155,7 @@ const SKIP_REASONS = Object.freeze([
   ['busy', 'Busy'],
   ['already_agent', 'Already an agent'],
   ['not_interested', 'Not interested'],
+  ['do_not_contact', 'Do not contact (asked us to stop)'],
   ['other', 'Other']
 ]);
 function skipCodeOf(reason = '') {
@@ -259,6 +261,7 @@ function maskedAttempt(a = {}) {
     name: maskName(a.full_name),
     phone: maskPhoneLast3(a.phone),
     source_kind: a.source_kind,
+    direction: a.direction || 'outbound',
     source_label: a.source_label,
     reason: a.reason,
     status: a.status,
@@ -394,7 +397,7 @@ async function openSession(id) {
 
 // Everything the screen reports: leaving it, breaks (lunch:45 = a 45-minute lunch),
 // idle (idle_end detail = idle ms), open/close and every button pressed.
-const EVENT_KINDS = new Set(['fs_exit', 'fs_enter', 'hidden', 'visible', 'break_start', 'break_end', 'kit_send', 'screen_open', 'screen_close', 'idle_start', 'idle_end', 'action', 'work_on', 'work_off']);
+const EVENT_KINDS = new Set(['inbound_start', 'fs_exit', 'fs_enter', 'hidden', 'visible', 'break_start', 'break_end', 'kit_send', 'screen_open', 'screen_close', 'idle_start', 'idle_end', 'action', 'work_on', 'work_off']);
 
 /**
  * Heartbeat from the screen: running totals (ms) and the events since the last
@@ -458,7 +461,8 @@ async function attemptsFor(keys = []) {
 async function blockedKeys(keys = []) {
   if (!keys.length) return new Set();
   const dnc = await safeRows('SELECT phone_key FROM agent_prospects WHERE phone_key = ANY($1::text[]) AND do_not_contact IS TRUE', [keys]);
-  return new Set(dnc.map((r) => r.phone_key));
+  const blocks = await safeRows('SELECT phone_key FROM call_blocks WHERE phone_key = ANY($1::text[]) AND removed_at IS NULL', [keys]);
+  return new Set([...dnc, ...blocks].map((r) => r.phone_key));
 }
 
 async function agentKeys(keys = []) {
@@ -851,6 +855,7 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   ))[0];
   if (!out) throw httpError(409, 'This call is already wrapped up.');
   await mirrorToProspect(out, def).catch(() => null);
+  if (def.key === 'do_not_contact') await blockNumber(out.phone_key, { by: out.person_key, reason: out.note || 'Asked not to be called', attemptId: out.id });
   return maskedAttempt(out);
 }
 
@@ -878,7 +883,118 @@ async function skip(attemptId, { sessionId, reason = '', reasonCode = '', note =
   if (known) why = known[0] === 'other' ? (extra.length >= 3 ? `Other: ${extra}` : '') : (extra ? `${known[1]}: ${extra}` : known[1]);
   if (why.length < 3) throw httpError(400, code === 'other' ? 'Write why you are skipping.' : 'Pick why you are skipping this number.');
   const out = (await rows("UPDATE call_attempts SET status = 'skipped', skip_reason = $2, wrapped_at = NOW() WHERE id = $1 RETURNING *", [a.id, why]))[0];
+  if (code === 'do_not_contact') await blockNumber(out.phone_key, { by: out.person_key, reason: why, attemptId: out.id });
   return maskedAttempt(out);
+}
+
+// ----------------------------------------------------- do not contact --
+
+async function blockNumber(phoneKey, { by = '', reason = '', attemptId = null } = {}) {
+  await db.query(
+    `INSERT INTO call_blocks (phone_key, reason, blocked_by, attempt_id) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (phone_key) DO UPDATE SET reason = EXCLUDED.reason, blocked_by = EXCLUDED.blocked_by, attempt_id = EXCLUDED.attempt_id, blocked_at = NOW(), removed_at = NULL, removed_by = NULL, removed_note = NULL
+       WHERE call_blocks.removed_at IS NOT NULL`, [phoneKey, String(reason).slice(0, 200), cleanKey(by) || 'staff', attemptId]);
+  // Anything still waiting for this number goes too.
+  await db.query("UPDATE call_attempts SET status = 'released' WHERE phone_key = $1 AND status = 'shown'", [phoneKey]);
+}
+async function blockOf(phoneKey) {
+  return (await safeRows('SELECT reason, blocked_by, blocked_at FROM call_blocks WHERE phone_key = $1 AND removed_at IS NULL', [phoneKey]))[0] || null;
+}
+/** King only. */
+async function unblockNumber(phoneKey, { actor = '', note = '' } = {}) {
+  const r = (await rows("UPDATE call_blocks SET removed_at = NOW(), removed_by = $2, removed_note = $3 WHERE phone_key = $1 AND removed_at IS NULL RETURNING phone_key", [phoneKey, String(actor).slice(0, 80), String(note).slice(0, 200)]))[0];
+  if (!r) throw httpError(404, 'That number is not blocked.');
+  await db.query('UPDATE agent_prospects SET do_not_contact = false WHERE phone_key = $1', [phoneKey]).catch(() => null);
+  return { phone_key: phoneKey, unblocked: true };
+}
+async function listBlocks() {
+  const list = await rows('SELECT b.*, (SELECT full_name FROM call_attempts a WHERE a.phone_key = b.phone_key AND full_name IS NOT NULL ORDER BY shown_at DESC LIMIT 1) AS name FROM call_blocks b WHERE removed_at IS NULL ORDER BY blocked_at DESC LIMIT 300');
+  return list.map((b) => ({ phone_key: b.phone_key, phone: `•••${b.phone_key.slice(-3)}`, name: b.name || '', reason: b.reason, by: b.blocked_by, at: b.blocked_at }));
+}
+
+// ----------------------------------------------------- incoming calls --
+
+/**
+ * They rang us and Ronald answered on the laptop (Phone Link). He taps
+ * "Incoming call" and types the number: it goes on screen as a live call
+ * (direction inbound) and ends in the same wrap-up.
+ */
+async function startInbound(sessionId, { phone = '', fromAttempt = '', name = '', now = new Date() } = {}) {
+  const s = await openSession(sessionId);
+  if (fromAttempt) phone = (await rows('SELECT phone FROM call_attempts WHERE id::text = $1', [String(fromAttempt)]))[0]?.phone || phone;
+  const canonical = canonicalUgPhone(phone);
+  const key = phoneKey9(canonical);
+  if (!key || !/^\+256\d{9}$/.test(canonical)) throw httpError(400, 'Type the number that is calling, like 0772 123 456.');
+  const busy = (await rows("SELECT id FROM call_attempts WHERE session_id = $1 AND status = 'calling'", [sessionId]))[0];
+  if (busy) throw httpError(409, 'Finish the wrap-up for this call first.');
+  await db.query("UPDATE call_attempts SET status = 'released' WHERE (session_id = $1 OR phone_key = $2) AND status = 'shown'", [sessionId, key]);
+  const task = await loadTask(s.task_key);
+  const prev = (await safeRows('SELECT full_name FROM call_attempts WHERE phone_key = $1 AND full_name IS NOT NULL ORDER BY shown_at DESC LIMIT 1', [key]))[0];
+  const block = await blockOf(key);
+  const row = (await rows(
+    `INSERT INTO call_attempts (session_id, person_key, task_key, phone, phone_key, full_name, source_kind, source_label, reason, script_variant, shown_at, tapped_at, status, direction, actor_account, actor_user_id)
+     SELECT $1, $2, $3, $4, $5, $6, 'inbound', $7, $8, $9, $10, $10, 'calling', 'inbound', actor_account, actor_user_id FROM call_sessions WHERE id = $1
+     ON CONFLICT (phone_key) WHERE status IN ('shown', 'calling') DO NOTHING RETURNING *`,
+    [sessionId, s.person_key, task.key, canonical, key, String(name || '').trim().slice(0, 120) || prev?.full_name || null, 'Incoming call (they rang us)',
+      block ? `On the do-not-contact list: ${block.reason || ''}` : null, (task.script_variants || [])[0] || 'cold_call', now]
+  ))[0];
+  if (!row) throw httpError(409, 'A colleague has this number on a call right now.');
+  return { attempt_id: row.id, blocked: Boolean(block) };
+}
+
+// ------------------------------------------------------------- search --
+
+const TXT = (a) => [a.full_name, a.note, a.next_step, a.outcome, a.skip_reason, a.source_label, a.transcript && a.transcript.summary, a.transcript && a.transcript.text].filter(Boolean).join(' ');
+/** Search calls by words in notes, summaries, names, outcomes, or the last digits of the phone. Phones come back masked. */
+async function searchCalls(qText = '', { personKey = '', limit = 40 } = {}) {
+  const raw = String(qText || '').trim().slice(0, 80);
+  if (raw.length < 2) return { q: raw, results: [] };
+  const digits = raw.replace(/\D/g, '');
+  const words = raw.toLowerCase().split(/\s+/).filter((w) => w.length > 1).slice(0, 5);
+  const like = words.map((w) => `%${w.replace(/[%_]/g, '')}%`);
+  const list = await rows(
+    `SELECT id, person_key, task_key, direction, phone_key, full_name, status, outcome, note, next_step, skip_reason, source_label, transcript, callback_at, COALESCE(wrapped_at, tapped_at, shown_at) AS at
+       FROM call_attempts
+      WHERE status IN ('done', 'skipped') AND ($3 = '' OR person_key = $3)
+        AND ((LENGTH($2) >= 3 AND phone_key LIKE '%' || $2 || '%')
+          OR (SELECT bool_and(LOWER(CONCAT_WS(' ', full_name, note, next_step, outcome, skip_reason, source_label, transcript->>'summary', transcript->>'text')) LIKE w) FROM unnest($1::text[]) AS w))
+      ORDER BY COALESCE(wrapped_at, tapped_at, shown_at) DESC LIMIT $4`, [like.length ? like : ['%%'], digits, cleanKey(personKey), limit]);
+  return {
+    q: raw,
+    results: list.map((a) => {
+      const text = TXT(a); const lw = text.toLowerCase(); const w = words.find((x) => lw.includes(x));
+      const i = w ? lw.indexOf(w) : 0;
+      return { id: a.id, at: a.at, by: a.person_key, task: a.task_key, direction: a.direction, phone: `•••${a.phone_key.slice(-3)}`, name: a.full_name || '', outcome: a.status === 'skipped' ? 'skipped' : a.outcome,
+        next_step: a.next_step || '', summary: (a.transcript && a.transcript.summary) || a.note || a.skip_reason || '', snippet: text.slice(Math.max(0, i - 40), i + 100).replace(/\d[\d\s-]{6,}\d/g, '•••'), callback_at: a.callback_at };
+    })
+  };
+}
+
+/** King: what was discussed, closed, still open, and the next steps, for a day / week / month. */
+async function callsSummary({ from, to } = {}) {
+  const start = `${from}T00:00:00+03:00`; const end = `${addDays(to, 1)}T00:00:00+03:00`;
+  const list = await rows(
+    `SELECT id, person_key, task_key, direction, phone_key, full_name, status, outcome, is_close, note, next_step, callback_at, transcript, talk_s, COALESCE(wrapped_at, tapped_at, shown_at) AS at
+       FROM call_attempts WHERE status IN ('done', 'skipped') AND COALESCE(tapped_at, shown_at) >= $1 AND COALESCE(tapped_at, shown_at) < $2 ORDER BY at`, [start, end]);
+  const done = list.filter((a) => a.status === 'done');
+  const by = {}; const outcomes = {};
+  for (const a of done) {
+    const p = by[a.person_key] || (by[a.person_key] = { calls: 0, outbound: 0, inbound: 0, closes: 0, talk_s: 0 });
+    p.calls += 1; p[a.direction === 'inbound' ? 'inbound' : 'outbound'] += 1; if (a.is_close) p.closes += 1; p.talk_s += Number(a.talk_s || 0);
+    outcomes[a.outcome] = (outcomes[a.outcome] || 0) + 1;
+  }
+  const item = (a) => ({ at: a.at, by: a.person_key, direction: a.direction, name: a.full_name || '', phone: `•••${a.phone_key.slice(-3)}`, outcome: a.outcome, summary: (a.transcript && a.transcript.summary) || a.note || '', next_step: a.next_step || '', callback_at: a.callback_at });
+  const finalNo = new Set(['rejected', 'do_not_contact', 'wrong_number', 'not_renewing']);
+  // A number is "open" if its latest call this period set a next step that isn't a close or a final no.
+  const latest = new Map(); for (const a of done) latest.set(a.phone_key, a);
+  return {
+    from, to, calls: done.length, outbound: done.filter((a) => a.direction !== 'inbound').length, inbound: done.filter((a) => a.direction === 'inbound').length,
+    skipped: list.length - done.length, outcomes, by_person: by,
+    discussed: done.filter((a) => (a.transcript && a.transcript.summary) || (a.note && a.note.length > 12)).slice(-40).reverse().map(item),
+    closed: done.filter((a) => a.is_close).reverse().map(item),
+    open: [...latest.values()].filter((a) => !a.is_close && !finalNo.has(a.outcome)).sort((x, y) => new Date(x.callback_at || '2999-01-01') - new Date(y.callback_at || '2999-01-01')).slice(0, 60).map(item),
+    no_next_step: done.filter((a) => !a.is_close && !finalNo.has(a.outcome) && !a.next_step && !a.callback_at).map(item)
+  };
 }
 
 // ------------------------------------------------------ add your own number --
@@ -914,6 +1030,7 @@ async function submitNumber({ personKey, name = '', phone = '', note = '', howKn
     ['a lead already', () => one("SELECT 1 FROM leads l LEFT JOIN contacts c ON c.id = l.contact_id WHERE RIGHT(REGEXP_REPLACE(COALESCE(c.phone, c.whatsapp, l.metadata->>'phone', ''), '[^0-9]', '', 'g'), 9) = $1 LIMIT 1")],
     ['a lister already', () => one("SELECT 1 FROM properties WHERE RIGHT(REGEXP_REPLACE(COALESCE(lister_phone, ''), '[^0-9]', '', 'g'), 9) = $1 LIMIT 1")]
   ];
+  checks.unshift(['on the do-not-contact list', async () => Boolean(await blockOf(key))]);
   let duplicate = '';
   for (const [label, fn] of checks) { if (await fn()) { duplicate = label; break; } }
   const row = (await rows(
@@ -1270,6 +1387,13 @@ async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
 module.exports = {
   SKIP_REASONS,
   HOW_KNOWN,
+  blockNumber,
+  blockOf,
+  unblockNumber,
+  listBlocks,
+  startInbound,
+  searchCalls,
+  callsSummary,
   cleanTranscript,
   closesLoop,
   skipCodeOf,

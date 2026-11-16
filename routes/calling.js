@@ -117,6 +117,24 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
   router.get('/calling/feed', wrap(async (req, res) => res.json({ ok: true, data: await calling.feed(req.query?.person_key) })));
   router.get('/calling/report', wrap(async (req, res) => res.json({ ok: true, data: await calling.report(req.query?.person_key, req.query?.day || undefined) })));
 
+  // Incoming call answered on the laptop: put it on screen as a live call.
+  router.post('/calling/sessions/:id/inbound', wrap(async (req, res) => {
+    const r = await calling.startInbound(req.params.id, { phone: req.body?.phone, fromAttempt: req.body?.from_attempt, name: req.body?.name });
+    await audit(req, 'calling_inbound_started', { session_id: req.params.id, attempt_id: r.attempt_id });
+    return res.json({ ok: true, data: r });
+  }));
+  // SMS from the company SIM (sms: link) and the agent-video unlock.
+  const contact = require('../services/callingContact');
+  router.get('/calling/attempts/:id/contact', wrap(async (req, res) => res.json({ ok: true, data: await contact.videoState(req.params.id) })));
+  router.post('/calling/attempts/:id/sms', wrap(async (req, res) => res.json({ ok: true, data: await contact.logSms(req.params.id, { personKey: req.body?.person_key, lang: req.body?.lang }) })));
+  router.post('/calling/attempts/:id/video-request', wrap(async (req, res) => {
+    const r = await contact.requestVideo(req.params.id, { personKey: req.body?.person_key, videoKey: req.body?.video_key });
+    await audit(req, 'calling_video_requested', { attempt_id: req.params.id, request_id: r.id });
+    return res.json({ ok: true, data: r });
+  }));
+  router.get('/calling/lookup', wrap(async (req, res) => res.json({ ok: true, data: await extras.lookup(req.query?.phone) })));
+  router.get('/calling/search', wrap(async (req, res) => res.json({ ok: true, data: await calling.searchCalls(req.query?.q, { personKey: isKing(req) ? (req.query?.person_key || '') : '' }) })));
+  router.get('/calling/my-money', wrap(async (req, res) => res.json({ ok: true, data: await day.myMoney(req.query?.person_key) })));
   // Money on the number on screen: send the pay link / MoMo code, mark "they paid".
   router.get('/calling/attempts/:id/payment', wrap(async (req, res) => {
     const a = (await require('../config/database').query('SELECT phone_key FROM call_attempts WHERE id = $1', [req.params.id])).rows[0];
@@ -149,6 +167,20 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
   }));
 
   // King only.
+  router.get('/calling/videos', wrap(async (req, res) => res.json({ ok: true, data: await contact.listVideoRequests({ status: req.query?.status || '' }) })));
+  router.post('/calling/videos/:id/decide', wrap(async (req, res) => {
+    const r = await contact.decideVideo(req.params.id, { approve: req.body?.approve === true, actor: actorOf(req), note: req.body?.note });
+    await audit(req, 'calling_video_decided', { request_id: req.params.id, status: r.status });
+    return res.json({ ok: true, data: r });
+  }));
+  router.post('/calling/videos/:id/sent', wrap(async (req, res) => res.json({ ok: true, data: await contact.markVideoSentByHand(req.params.id, { actor: actorOf(req) }) })));
+  router.get('/calling/blocks', wrap(async (req, res) => res.json({ ok: true, data: await calling.listBlocks() })));
+  router.post('/calling/blocks/:phone_key/remove', wrap(async (req, res) => {
+    const r = await calling.unblockNumber(String(req.params.phone_key).replace(/\D/g, '').slice(-9), { actor: actorOf(req), note: req.body?.note });
+    await audit(req, 'calling_block_removed', { phone_key_last3: r.phone_key.slice(-3) });
+    return res.json({ ok: true, data: r });
+  }));
+  router.get('/calling/calls-summary', wrap(async (req, res) => res.json({ ok: true, data: await calling.callsSummary(day.periodRange(req.query?.period || 'day', req.query?.day || calling.kampalaDay())) })));
   router.get('/calling/activity', wrap(async (req, res) => res.json({ ok: true, data: await day.activity({ period: req.query?.period, day: req.query?.day || undefined, personKey: req.query?.person_key || '' }) })));
   router.get('/calling/cashlog', wrap(async (req, res) => res.json({ ok: true, data: await day.cashLog({ period: req.query?.period, day: req.query?.day || undefined }) })));
   router.get('/calling/plans', wrap(async (req, res) => res.json({ ok: true, data: await day.plans({ period: req.query?.period, day: req.query?.day || undefined }) })));

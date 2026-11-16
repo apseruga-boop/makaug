@@ -466,6 +466,12 @@ app.use('/api/property-seeker', propertySeekerRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/field-agent', fieldAgentRoutes);
 app.use('/api/staff-setup', require('./routes/staff-setup'));
+// Agent video sent from the calling screen: count the open, then the film with its ref.
+app.get('/v/:ref', async (req, res) => {
+  const to = await require('./services/callingContact').openRef(req.params.ref).catch(() => null);
+  res.set('Cache-Control', 'no-store');
+  return res.redirect(302, to || '/');
+});
 // One-time staff setup page (token in the query; the page itself holds no secret).
 app.get('/staff-setup', (_req, res) => {
   res.set('Cache-Control', 'no-store');

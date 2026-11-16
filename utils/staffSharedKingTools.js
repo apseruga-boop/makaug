@@ -32,7 +32,10 @@ function isStaffSharedKingTool(path, method = 'GET') {
   // targets and number review stay King-only.
   if (p === '/calling/bootstrap' && m === 'GET') return true;
   if (p === '/calling/sessions' && m === 'POST') return true;
-  if (/^\/calling\/sessions\/[^/]+\/(heartbeat|task|next|end|claim)$/.test(p) && m === 'POST') return true;
+  if (/^\/calling\/sessions\/[^/]+\/(heartbeat|task|next|end|claim|inbound)$/.test(p) && m === 'POST') return true;
+  if (/^\/calling\/attempts\/[^/]+\/contact$/.test(p) && m === 'GET') return true;
+  if (/^\/calling\/attempts\/[^/]+\/(sms|video-request)$/.test(p) && m === 'POST') return true;
+  if (['/calling/search', '/calling/my-money', '/calling/lookup'].includes(p) && m === 'GET') return true;
   if (/^\/calling\/attempts\/[^/]+\/(tap|end|wrapup|skip|pay|paid-claim)$/.test(p) && m === 'POST') return true;
   if (/^\/calling\/attempts\/[^/]+\/payment$/.test(p) && m === 'GET') return true;
   if (['/calling/plan', '/calling/cash'].includes(p) && (m === 'GET' || m === 'POST')) return true;

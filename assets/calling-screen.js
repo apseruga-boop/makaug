@@ -184,6 +184,8 @@
     '.mkc-reason{display:inline-block;margin-top:6px;background:#fef3c7;color:#92400e;border-radius:8px;padding:3px 8px;font-size:12px;font-weight:700}',
     '.mkc-cb{background:#dbeafe;color:#1e3a8a}',
     '.mkc-phone{font-size:40px;font-weight:900;letter-spacing:.02em;margin:14px 0 4px;font-variant-numeric:tabular-nums}',
+    '.mkc-in{background:#2563eb;color:#fff;font-size:17px;font-weight:900;padding:10px 18px;border-radius:12px;box-shadow:0 0 0 3px #bfdbfe}.mkc-pill.in{background:#dbeafe;color:#1e40af}.mkc-hit{border:1px solid #e2e8f0;border-radius:10px;padding:6px 8px;margin:4px 0;cursor:pointer}.mkc-hit mark{background:#fef08a}',
+    '.mkc-learn{border:1px solid #e2e8f0;border-radius:10px;padding:6px 10px;margin:6px 0;font-size:13px;line-height:1.45}.mkc-learn p,.mkc-learn ul,.mkc-learn ol{margin:4px 0;padding-left:16px}.mkc-learn summary{cursor:pointer}.mkc-learn a{color:#047857;font-weight:700}.mkc-lg{background:#fefce8;border-radius:8px;padding:4px 8px;margin:4px 0;font-size:13px}',
     '.mkc-call{display:flex;justify-content:center;width:100%;box-sizing:border-box;font-size:22px;padding:18px;border-radius:16px}',
     '.mkc-timer{font-size:46px;font-weight:900;font-variant-numeric:tabular-nums;color:#047857;text-align:center}',
     '.mkc-hist{margin-top:10px;border-top:1px dashed #e2e8f0;padding-top:8px;font-size:12px;color:#475569}',
@@ -443,7 +445,7 @@
     if (S.phase === 'calling') { toast('End the call before taking a break.', 'bad'); return; }
     if (S.onBreak) { S.onBreak = false; S.breakStart = null; ev('break_end', String(S.breakPlan || '')); S.breakPlan = 0; beat(); renderBreak(); return; }
     modal('<h3 style="margin:0 0 4px;font-weight:900">Take a break</h3><p class="mkc-muted" style="margin:0 0 10px">The clock runs while you are away. Over-running is shown to King.</p>'
-      + '<div class="mkc-outs">' + [['lunch', 30], ['lunch', 45], ['lunch', 60], ['break', 10], ['break', 15]].map(function (b) { return '<button type="button" class="mkc-out" data-brkpick="' + b[0] + ':' + b[1] + '">' + (b[0] === 'lunch' ? '🍽 Lunch ' : '☕ Break ') + b[1] + ' min</button>'; }).join('') + '</div>'
+      + '<div class="mkc-outs">' + [['lunch', 60], ['break', 10], ['break', 15]].map(function (b) { return '<button type="button" class="mkc-out" data-brkpick="' + b[0] + ':' + b[1] + '">' + (b[0] === 'lunch' ? '🍽 Lunch ' : '☕ Break ') + b[1] + ' min</button>'; }).join('') + '</div>'
       + '<button type="button" class="mkc-btn" style="margin-top:10px" data-x>Cancel</button>', function (m, close) {
       q('[data-x]', m).onclick = close;
       qa('[data-brkpick]', m).forEach(function (b) {
@@ -483,6 +485,7 @@
       + '<span class="mkc-net" data-mkc-net style="' + (net.offline ? '' : 'display:none') + '">' + esc(T('offline')) + '</span>'
       + '<div class="mkc-road"><div style="font-size:11px;color:#94a3b8">Road to 1000 · <b style="color:#fff">' + road.paying_now + '</b> paying</div><div class="bar"><i style="width:' + Math.max(1, Math.min(100, road.percent || 0)) + '%"></i></div></div>'
       + '<div class="sp"></div>'
+      + '<button type="button" class="mkc-btn mkc-in" data-mkc-in title="Someone rang the company phone and you answered in Phone Link">📲 Incoming call</button>'
       + '<button type="button" class="mkc-btn sm go" data-mkc-add>➕ Add number</button>'
       + '<button type="button" class="mkc-btn sm ghost" style="color:#fff;border-color:#475569" data-mkc-rep>' + esc(T('report')) + '</button>'
       + '<button type="button" class="mkc-btn sm ghost" style="color:#fff;border-color:#475569" data-mkc-plan>📋 Today\'s plan</button>'
@@ -492,6 +495,7 @@
     renderDash();
     q('[data-mkc-lang-ui]', el).onchange = function (e) { setLang(e.target.value); };
     q('[data-mkc-add]', el).onclick = openAddNumber;
+    q('[data-mkc-in]', el).onclick = openInbound;
     q('[data-mkc-rep]', el).onclick = function () { openReport(S.person); };
     q('[data-mkc-brk]', el).onclick = toggleBreak;
     q('[data-mkc-plan]', el).onclick = function () { openPlan(false); };
@@ -531,8 +535,10 @@
       + '<div class="mkc-dcard"><div class="mkc-hours" title="Calls per hour today (Kampala)">' + hours.map(function (x) { return '<i class="' + (x === nowH ? 'now' : '') + '" style="height:' + Math.max(3, Math.round(40 * (byH[x] || 0) / maxH)) + 'px" title="' + x + ':00 · ' + (byH[x] || 0) + ' calls"></i>'; }).join('') + '</div><div><b>' + (st.this_hour || 0) + '</b><span>this hour</span></div></div>'
       + (S.plan ? '<div class="mkc-dcard" style="min-width:190px;cursor:pointer" data-mkc-planline><div style="flex:1"><b>📋 ' + (S.plan.plan.goal ? esc(String(S.plan.plan.goal).slice(0, 60)) : 'Plan: ' + S.plan.plan.calls_target + ' calls') + '</b><span>' + (S.plan.plan.agreed_by ? 'agreed with ' + esc(S.plan.plan.agreed_by) : 'not agreed with King yet') + '</span></div></div>' : '')
       + '<div class="mkc-dcard" style="min-width:190px"><div style="flex:1"><b>' + ((st.road_to_1000 || {}).paying_now || 0) + ' / 1,000</b><span>paid agents · company goal</span><div class="bar" style="height:8px;background:#e2e8f0;border-radius:99px;margin-top:4px;overflow:hidden"><i style="display:block;height:100%;background:linear-gradient(90deg,#10b981,#f59e0b);width:' + Math.max(1, Math.min(100, (st.road_to_1000 || {}).percent || 0)) + '%"></i></div></div></div>'
+      + myMoneyCard()
       + '<div class="mkc-dcard"><div class="mkc-badges">' + got.map(function (b) { return '<span class="mkc-badge">🏅 ' + esc(b[0]) + '</span>'; }).join('') + (nextB ? '<span class="mkc-badge off">Next: ' + esc(nextB[0]) + '</span>' : '') + '</div></div>';
     var pl = q('[data-mkc-planline]', el); if (pl) pl.onclick = function () { openPlan(false); };
+    var mm = q('[data-mkc-money]', el); if (mm) mm.onclick = openMoney;
   }
   function renderBreak() {
     var el = q('[data-mkc-break]'); if (!el || !S) return;
@@ -559,6 +565,7 @@
       if (!S.cur) { S.phase = 'empty'; } else {
         var a = d.attempt;
         S.phase = a.status === 'calling' ? (a.ended_at ? 'wrapup' : 'calling') : 'shown';
+        if (a.direction === 'inbound' && S.phase === 'calling' && S.coach.answered == null) { S.coach.answered = true; S.wrap.checklist.answered = true; S.tx = S.tx || 'ask'; }
         if (a.tapped_at) S.callStart = new Date(a.tapped_at).getTime();
         if (a.ended_at) S.callEnd = new Date(a.ended_at).getTime();
         S.variant = d.script_variant || S.variant;
@@ -591,8 +598,8 @@
     var body = coachBar();
     var steps = scriptSteps(task);
     if (S.phase === 'shown') {
-      body += '<a class="mkc-btn go mkc-call" href="' + esc(d.tel) + '" data-mkc-tap><i class="fas fa-phone"></i>&nbsp;' + esc(T('call_next')) + '</a>'
-        + '<p class="mkc-muted" style="margin:8px 0 0;text-align:center">' + (isPhone() ? 'Opens the phone app. Come back here when the call ends.' : 'On the laptop: dial this number on the company phone, and press the green button as you dial.') + '</p>'
+      body += '<a class="mkc-btn go mkc-call" href="' + esc(d.tel) + '" data-mkc-tap><i class="fas fa-phone"></i>&nbsp;' + (isPhone() ? esc(T('call_next')) : 'Call from laptop (Phone Link)') + '</a>'
+        + '<p class="mkc-muted" style="margin:8px 0 0;text-align:center">' + (isPhone() ? 'Opens the phone app. Come back here when the call ends.' : '<b>Calling from laptop via company phone</b> · Phone Link opens and rings out from the company Android. Use loudspeaker or the headset. Phone Link not set up? Dial on the company phone instead.') + '</p>'
         + '<div class="mkc-row" style="margin-top:10px;justify-content:center"><button type="button" class="mkc-btn ghost sm" data-mkc-skip>' + esc(T('skip')) + '</button><button type="button" class="mkc-btn ghost sm" data-mkc-tree>History tree</button></div>';
     } else if (S.phase === 'calling') {
       var c = S.coach;
@@ -613,8 +620,8 @@
     } else if (S.phase === 'wrapup') {
       body += '<div class="mkc-timer" style="font-size:28px;color:#334155">Call ' + clock((S.callEnd || Date.now()) - (S.callStart || Date.now())) + '</div><p class="mkc-must">' + esc(T('must')) + '</p>' + wrapHtml(task);
     }
-    el.innerHTML = head + payHtml(a) + body;
-    bindPay(el, a);
+    el.innerHTML = head + payHtml(a) + contactHtml(a) + body;
+    bindPay(el, a); bindContact(el, a);
     bindTx(el);
     bindLastDone(el);
     var tapEl = q('[data-mkc-tap]', el);
@@ -911,10 +918,10 @@
     var nxi = q('[data-mkc-next]', el); if (nxi) w.next = nxi.value;
     qa('[data-mkc-chk]', el).forEach(function (c) { w.checklist[c.getAttribute('data-mkc-chk')] = c.checked; });
   }
-  var SKIP = [['wrong_number', 'Wrong number'], ['no_answer', 'No answer'], ['busy', 'Busy'], ['already_agent', 'Already an agent'], ['not_interested', 'Not interested'], ['other', 'Other…']];
+  var SKIP = [['wrong_number', 'Wrong number'], ['no_answer', 'No answer'], ['busy', 'Busy'], ['already_agent', 'Already an agent'], ['not_interested', 'Not interested'], ['do_not_contact', '⛔ Do not contact'], ['other', 'Other…']];
   function openSkip(a) {
     modal('<h3 style="margin:0 0 4px;font-weight:900">Why skip ' + esc(a.name || a.phone_masked || 'this number') + '?</h3><p class="mkc-muted" style="margin:0">One tap. It goes in the number\'s history tree and King sees every skip.</p>'
-      + '<div class="mkc-skipgrid">' + SKIP.map(function (r) { return '<button type="button" class="mkc-btn' + (r[0] === 'wrong_number' ? ' red' : '') + '" data-r="' + r[0] + '">' + esc(r[1]) + '</button>'; }).join('') + '</div>'
+      + '<div class="mkc-skipgrid">' + SKIP.map(function (r) { return '<button type="button" class="mkc-btn' + (r[0] === 'wrong_number' || r[0] === 'do_not_contact' ? ' red' : '') + '" data-r="' + r[0] + '">' + esc(r[1]) + '</button>'; }).join('') + '</div>'
       + '<div data-other style="display:none"><input class="mkc-input" style="width:100%;box-sizing:border-box" data-reason placeholder="Why? (a few words)"><button class="mkc-btn dark" style="margin-top:8px" data-ok>Skip</button></div>'
       + '<div data-e></div><div class="mkc-row" style="margin-top:10px;justify-content:flex-end"><button class="mkc-btn ghost" data-x>Cancel – call them</button></div>', function (m, close) {
       var send = function (code, note) {
@@ -1091,6 +1098,7 @@
       if (!S) return;
       if (r[4]) S.counts = r[4];
       if (r[0]) S.stats = r[0];
+      if (!S.myAt || Date.now() - S.myAt > 300000) { S.myAt = Date.now(); loadMoney(); }
       if (r[1]) S.feed = r[1];
       if (r[2]) { notifyNew('wa', r[2].items, 'New WhatsApp'); S.wa = r[2].items; }
       if (r[3]) { notifyNew('leads', r[3].items, 'New lead'); S.leads = r[3].items; }
@@ -1102,7 +1110,7 @@
     var el = q('[data-mkc-side]'); if (!el || !S) return;
     var st = S.stats || {}; var feed = S.feed || { items: [] };
     var kinds = { signup: 'Sign-up', payment: 'Paid', reply: 'Reply', callback: 'Callback' };
-    var tabs = [['live', 'Live'], ['wa', 'WhatsApp'], ['leads', 'Leads'], ['team', 'Team']];
+    var tabs = [['live', 'Live'], ['wa', 'WhatsApp'], ['leads', 'Leads'], ['search', '🔎 Search'], ['learn', '📚 Learn'], ['team', 'Team']];
     var html = '<div class="mkc-panel" style="margin-bottom:12px"><div class="mkc-nudge">' + esc(st.next_milestone || feed.nudge || 'Let\'s go.') + '</div>'
       + (st.callbacks_due_now ? '<div class="mkc-nudge" style="background:#dbeafe;color:#1e3a8a">' + st.callbacks_due_now + ' callback' + (st.callbacks_due_now > 1 ? 's' : '') + ' due now. They come first in the queue.</div>' : '')
       + '<div class="mkc-tabs">' + tabs.map(function (t) { return '<button type="button" class="mkc-tab' + (S.side === t[0] ? ' on' : '') + '" data-mkc-side-tab="' + t[0] + '">' + t[1] + (t[0] === 'wa' && S.wa && S.wa.length ? ' ' + S.wa.length : '') + (t[0] === 'leads' && S.leads && S.leads.length ? ' ' + S.leads.length : '') + '</button>'; }).join('') + '</div>';
@@ -1112,6 +1120,10 @@
     } else if (S.side === 'wa') {
       html += '<p class="mkc-muted" style="margin:0 0 6px">Read only. Reply from the company phone; copy a suggested reply from the conversation.</p>'
         + ((S.wa || []).map(function (m) { return '<div class="mkc-wa" data-mkc-wa="' + esc(m.ref) + '"><b>' + esc(m.name || m.phone) + ' <span class="mkc-muted" style="font-weight:600">' + esc(m.name ? m.phone : '') + ' · ' + esc(kDayTime(m.at)) + '</span></b>' + esc(m.text) + (m.called ? '<div class="mkc-muted" style="font-size:11px"><span class="mkc-good">Said Hello ✓</span> · called by ' + esc(personName(m.called.by)) + ': ' + esc(String(m.called.outcome).replace(/_/g, ' ')) + '</div>' : '') + '</div>'; }).join('') || '<div class="mkc-muted">No WhatsApp messages in the last 14 days.</div>');
+    } else if (S.side === 'learn') {
+      html += learnHtml();
+    } else if (S.side === 'search') {
+      html += searchBoxHtml('mine');
     } else if (S.side === 'leads') {
       html += ((S.leads || []).map(function (l) {
         return '<div class="mkc-wa" style="cursor:default"><b>' + esc(l.name || l.phone) + ' <span class="mkc-muted" style="font-weight:600">' + esc(l.phone) + ' · ' + esc(kDayTime(l.at)) + '</span></b><span class="mkc-muted">' + esc(l.source) + '</span> ' + esc(l.text)
@@ -1126,6 +1138,7 @@
     el.innerHTML = html + '</div>';
     qa('[data-mkc-side-tab]', el).forEach(function (b) { b.onclick = function () { S.side = b.getAttribute('data-mkc-side-tab'); renderSide(); }; });
     qa('[data-mkc-wa]', el).forEach(function (b) { b.onclick = function () { openWhatsApp(b.getAttribute('data-mkc-wa')); }; });
+    bindSearch(el);
     qa('[data-mkc-claim]', el).forEach(function (b) {
       b.onclick = function () {
         var parts = b.getAttribute('data-mkc-claim').split('|');
@@ -1186,7 +1199,7 @@
       function draw(pid) {
         return (kids[pid] || []).map(function (n) {
           return '<div class="mkc-node' + (n.follow_up_of ? ' fu' : '') + '">' + (n.follow_up_of ? '<div class="mkc-muted" style="font-size:11px">↳ follow-up of the callback' + (n.on_time === false ? ' <span class="mkc-bad">(late)</span>' : '') + '</div>' : '')
-            + '<b>' + esc(kDayTime(n.shown_at)) + ' · ' + esc(personName(n.by)) + ' · ' + esc(String(n.outcome).replace(/_/g, ' ')) + '</b>'
+            + '<b>' + esc(kDayTime(n.shown_at)) + ' · ' + esc(personName(n.by)) + ' · ' + esc(String(n.outcome).replace(/_/g, ' ')) + '</b>' + (n.direction === 'inbound' ? ' <span class="mkc-pill in">inbound</span>' : '')
             + '<div class="mkc-muted">' + esc(n.task) + ' · shown ' + esc(kTime(n.shown_at)) + (n.tapped_at ? ' · tapped ' + esc(kTime(n.tapped_at)) : ' · not tapped') + (n.talk_s != null ? ' · ' + n.talk_s + ' s' : '') + (n.login ? ' · login ' + esc(n.login) : '') + ' · <i>' + esc(n.proof) + '</i></div>'
             + (n.note ? '<div>' + esc(n.note) + '</div>' : '') + (n.next_step ? '<div><b>Next step:</b> ' + esc(n.next_step) + '</div>' : (n.type === 'call' && n.outcome !== 'skipped' && !/signed_up|paid|renewed|rejected|do_not_contact|wrong_number|no_answer|shown|calling/.test(n.outcome) && !n.callback_at ? '<div class="mkc-bad">No next step</div>' : ''))
             + (n.transcript ? '<div class="mkc-tpl" style="background:#eff6ff;border-color:#bfdbfe;margin:4px 0"><b>Call notes</b> ' + esc(n.transcript.summary || '') + (n.transcript.suggested_next_step ? ' · suggested: ' + esc(n.transcript.suggested_next_step) : '') + (n.transcript.edited ? ' <span class="mkc-muted">(caller changed it)</span>' : ' <span class="mkc-muted">(confirmed)</span>') + '<details><summary class="mkc-muted">Live notes · ' + (n.transcript.words || 0) + ' words · no audio kept</summary><div style="font-size:12px">' + esc(n.transcript.text || '') + '</div></details></div>' : '')
@@ -1198,11 +1211,14 @@
       var wa = (t.whatsapp || []).map(function (w) { return w.n + ' WhatsApp ' + (w.direction === 'inbound' ? 'from them' : 'from us'); }).join(' · ');
       var outreach = (t.outreach || []).map(function (e) { return '<div class="mkc-muted">' + esc(kDayTime(e.at)) + ' · Outreach ' + esc(e.kind) + (e.outcome ? ': ' + esc(String(e.outcome).replace(/_/g, ' ')) : '') + (e.note ? ' – ' + esc(e.note) : '') + '</div>'; }).join('');
       modal('<div class="mkc-row" style="justify-content:space-between"><h3 style="margin:0;font-weight:900">History tree · ' + esc(t.name || '') + ' ' + esc(t.phone_key_masked) + '</h3><button class="mkc-btn sm" data-x>Close</button></div>'
+        + (t.blocked ? '<div class="mkc-bad" style="font-weight:900;margin-top:8px">⛔ Do not contact · since ' + esc(kDayTime(t.blocked.at)) + ' by ' + esc(personName(t.blocked.by)) + (t.blocked.reason ? ' – ' + esc(t.blocked.reason) : '') + ' (only King can remove)</div>' : '')
         + '<div class="mkc-nudge" style="margin-top:8px">Pick up here: ' + esc(t.pick_up) + '</div>'
         + (t.decision && (t.decision.decision || t.decision.next_action) ? '<div class="mkc-tpl"><b>King\'s decision:</b> ' + esc(t.decision.decision || '') + (t.decision.next_action ? ' · next: ' + esc(t.decision.next_action) : '') + (t.decision.due ? ' by ' + esc(String(t.decision.due).slice(0, 10)) : '') + '</div>' : '')
         + (t.said_hello ? '<div class="mkc-good" style="font-weight:900">Said Hello ✓ on WhatsApp ' + esc(kDayTime(t.said_hello.at)) + ' (registered as a client)</div>' : '<div class="mkc-muted">Has not said Hello on WhatsApp yet.</div>')
         + ((t.skips || []).length ? '<div class="mkc-muted">Skipped ' + t.skips.length + '×: ' + t.skips.map(function (k) { return esc(kDayTime(k.at)) + ' ' + esc(personName(k.by)) + ' – ' + esc(k.reason || ''); }).join(' · ') + '</div>' : '')
         + (wa ? '<div class="mkc-muted">' + esc(wa) + '</div>' : '') + outreach
+        + (t.sms || []).map(function (x) { return '<div class="mkc-muted">' + esc(kDayTime(x.at)) + ' · ✉️ SMS sent (our WhatsApp number, ' + (x.lang === 'lg' ? 'Luganda' : 'English') + ') by ' + esc(personName(x.by)) + '</div>'; }).join('')
+        + (t.videos || []).map(function (x) { return '<div class="mkc-muted">' + esc(kDayTime(x.at)) + ' · 🎬 Agent video ' + esc(x.status) + (x.sent_via ? ' (' + esc(x.sent_via.replace(/_/g, ' ')) + ')' : '') + ' · asked by ' + esc(personName(x.by)) + (x.decided_by ? ' · decided by ' + esc(x.decided_by) : '') + (x.opens ? ' · opened ' + x.opens + '×' : '') + '</div>'; }).join('')
         + '<div class="mkc-tree" style="margin-top:8px">' + (draw('root') || '<p class="mkc-muted">No calls yet.</p>') + '</div>', function (m, close) { q('[data-x]', m).onclick = close; });
     }, function (e) { toast(e.message, 'bad'); });
   }
@@ -1259,7 +1275,7 @@
       };
     });
   }
-  function refreshPay() { if (S && S.cur && S.cur.attempt && S.pay && S.pay[S.cur.attempt.id]) loadPay(S.cur.attempt); }
+  function refreshPay() { if (S && S.cur && S.cur.attempt && S.pay && S.pay[S.cur.attempt.id]) loadPay(S.cur.attempt); if (S && S.cur && S.cur.attempt && S.contact && S.contact[S.cur.attempt.id]) loadContact(S.cur.attempt); }
 
   // ------------------------------------------------- the morning plan --
   function planHtml(r, editable) {
@@ -1310,7 +1326,7 @@
         return '<div class="mkc-tpl" style="margin:6px 0"><b>' + esc(a.name) + (a.main ? ' <span class="mkc-pill live">main bank</span>' : '') + '</b>' + (a.last ? ' <span class="mkc-muted">last: ' + esc(a.currency) + ' ' + Number(a.last.balance_ugx).toLocaleString('en-GB') + ' on ' + esc(a.last.day) + '</span>' : '')
           + '<div class="mkc-row" style="margin-top:4px"><label class="mkc-muted">Balance (' + esc(a.currency) + ')<br><input class="mkc-input" inputmode="numeric" style="width:130px" data-cb="' + esc(a.key) + '"></label>'
           + '<label class="mkc-muted">Date<br><input class="mkc-input" type="date" data-cd="' + esc(a.key) + '" value="' + esc(today) + '"></label>'
-          + (a.main ? '' : '<label class="mkc-muted">Moved to main bank today<br><input class="mkc-input" inputmode="numeric" style="width:130px" data-ct="' + esc(a.key) + '" value="0"></label>') + '</div></div>';
+          + (a.main ? '' : '<label class="mkc-muted">Moved out today (to the bank)<br><input class="mkc-input" inputmode="numeric" style="width:130px" data-ct="' + esc(a.key) + '" value="0"></label>') + '</div></div>';
       }).join('');
       var m0 = document.createElement('div');
       modal('<h3 style="margin:0 0 4px;font-weight:900">🔒 End-of-day cash check · ' + esc(today) + '</h3><p class="mkc-muted" style="margin:0 0 6px">Must be done before you close the day. Enter each company account\'s balance, then sign with your initials. It goes to King\'s daily log.</p>'
@@ -1398,6 +1414,211 @@
   // ---------------------------------------------------------------- King --
   var K = { data: null, open: null, nums: null };
   var LIVE_CLASS = { on_call: 'live', wrap_up: 'live', ready: 'live', break: 'warn', away: 'warn', dropped: 'flag' };
+  // ---- v4: my money, search, incoming calls, calls summary, do-not-contact
+  function fmtCountdown(c) { return c ? (c.days > 0 ? c.days + 'd ' : '') + (c.hours || 0) + 'h' : ''; }
+  function loadMoney() {
+    if (!S) return;
+    api('/my-money?person_key=' + encodeURIComponent(S.person)).then(function (m) { if (!S) return; S.my = m; renderDash(); }, function () {});
+  }
+  function myMoneyCard() {
+    var m = S.my; if (!m) return '';
+    return '<div class="mkc-dcard mkc-money" style="cursor:pointer;min-width:200px" data-mkc-money title="My money"><div style="flex:1"><b>' + ugx(m.due_next_payday_ugx) + '</b><span>due on the ' + esc(String(m.next_payday || '').slice(8, 10)) + 'th · in ' + esc(fmtCountdown(m.countdown)) + '</span>'
+      + '<div class="mkc-muted" style="font-size:11px">Earned ' + ugx(m.earned_ugx) + ' · on hold ' + ugx(m.on_hold_ugx) + '</div></div></div>';
+  }
+  function openMoney() {
+    var m = S.my || {};
+    var rows = (m.agents || []).map(function (a) { return '<tr><td>' + esc(a.name) + ' <span class="mkc-muted">' + esc(a.phone || '') + '</span></td><td><span class="mkc-pill' + (a.status === 'eligible' ? ' live' : '') + '">' + esc(a.status_label || a.status) + '</span></td><td>' + ugx(a.amount_ugx) + '</td><td class="mkc-muted">' + esc(a.reason || '') + '</td></tr>'; }).join('');
+    modal('<div class="mkc-row" style="justify-content:space-between"><h3 style="margin:0;font-weight:900">💰 My money</h3><button class="mkc-btn sm" data-x>Close</button></div>'
+      + '<div class="mkc-grid" style="padding:0;margin-top:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">'
+      + [['Earned (confirmed)', m.earned_ugx], ['On hold (' + (m.hold_days || 7) + ' days)', m.on_hold_ugx], ['Due on the ' + String(m.next_payday || '').slice(8, 10) + 'th', m.due_next_payday_ugx], ['Paid to you so far', m.paid_to_date_ugx]].map(function (x) { return '<div class="mkc-dcard"><div><b>' + ugx(x[1]) + '</b><span>' + esc(x[0]) + '</span></div></div>'; }).join('') + '</div>'
+      + '<p class="mkc-muted">Next payday ' + esc(m.next_payday || '') + ' (in ' + esc(fmtCountdown(m.countdown)) + '). Agents count once their first payment is confirmed and has cleared the ' + (m.hold_days || 7) + '-day hold. Same numbers King sees.</p>'
+      + '<h4>Agents counted (' + (m.agents || []).length + ')</h4>' + (rows ? '<div class="mkc-scroll"><table class="mkc-table"><tr><th>Agent</th><th>Status</th><th>Commission</th><th></th></tr>' + rows + '</table></div>' : '<p class="mkc-muted">None yet. Every confirmed paying agent you bring shows up here.</p>'), function (m, close) { q('[data-x]', m).onclick = close; });
+  }
+  function searchBoxHtml(scope) {
+    return '<div data-mkc-search="' + scope + '"><input type="search" class="mkc-input" style="width:100%;box-sizing:border-box" placeholder="Search notes, names, outcomes, last digits…" data-mkc-q value="' + esc((S && S.q) || '') + '"><div data-mkc-hits class="mkc-scroll" style="max-height:420px"></div></div>';
+  }
+  function hitsHtml(r) {
+    var w = String(r.q || '').toLowerCase().split(/\s+/).filter(function (x) { return x.length > 1; });
+    var mark = function (s) { var h = esc(s); w.forEach(function (x) { h = h.replace(new RegExp('(' + x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig'), '<mark>$1</mark>'); }); return h; };
+    return (r.results || []).map(function (h) {
+      return '<div class="mkc-hit" data-mkc-hit="' + esc(h.id) + '"><b>' + esc(h.name || 'Unknown') + ' ' + esc(h.phone) + '</b> ' + (h.direction === 'inbound' ? '<span class="mkc-pill in">inbound</span> ' : '') + '<span class="mkc-pill">' + esc(String(h.outcome || '').replace(/_/g, ' ')) + '</span>'
+        + '<div class="mkc-muted" style="font-size:11px">' + esc(kDayTime(h.at)) + ' · ' + esc(personName(h.by)) + '</div><div>' + mark(h.snippet || h.summary) + '</div>' + (h.next_step ? '<div class="mkc-muted"><b>Next:</b> ' + esc(h.next_step) + '</div>' : '') + '</div>';
+    }).join('') || (r.q ? '<div class="mkc-muted">Nothing found for “' + esc(r.q) + '”.</div>' : '');
+  }
+  function bindSearch(root) {
+    var box = q('[data-mkc-search]', root); if (!box) return;
+    var inp = q('[data-mkc-q]', box); var out = q('[data-mkc-hits]', box); var tmr;
+    var run = function () {
+      var v = inp.value.trim(); if (S) S.q = v;
+      if (v.length < 2) { out.innerHTML = '<div class="mkc-muted" style="margin-top:6px">Type 2+ letters, or the last 3+ digits of a number.</div>'; return; }
+      api('/search?q=' + encodeURIComponent(v)).then(function (r) { out.innerHTML = hitsHtml(r); qa('[data-mkc-hit]', out).forEach(function (b) { b.onclick = function () { openTimeline({ attempt_id: b.getAttribute('data-mkc-hit') }); }; }); }, function (e) { out.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+    };
+    inp.oninput = function () { clearTimeout(tmr); tmr = setTimeout(run, 300); };
+    run();
+  }
+  function openInbound() {
+    if (!S) return;
+    if (S.phase === 'calling' || S.phase === 'wrapup') { toast('Finish the wrap-up for this call first.'); return; }
+    modal('<div class="mkc-row" style="justify-content:space-between"><h3 style="margin:0;font-weight:900">📲 Incoming call</h3><button class="mkc-btn sm" data-x>Close</button></div>'
+      + '<p class="mkc-muted">You answered in Phone Link. Type the number shown in Phone Link, or a name / last digits to pick someone you spoke to before. The timer and notes start when you press Start.</p>'
+      + '<input class="mkc-input" style="width:100%;box-sizing:border-box;font-size:20px" inputmode="tel" placeholder="0772 123 456" data-in-phone>'
+      + '<div class="mkc-row" style="margin-top:6px" data-in-picks></div>'
+      + '<input class="mkc-input" style="width:100%;box-sizing:border-box;margin-top:6px" placeholder="Their name (if new)" data-in-name>'
+      + '<div data-in-who style="margin-top:8px"></div><div data-in-err></div>'
+      + '<button type="button" class="mkc-btn go" style="width:100%;margin-top:10px;font-size:18px" data-in-go>▶ Start incoming call</button>', function (m, close) {
+    q('[data-x]', m).onclick = close;
+    var from = null;
+    var ph = q('[data-in-phone]', m); var who = q('[data-in-who]', m); var tmr;
+    var look = function () {
+      var dg = ph.value.replace(/\D/g, ''); from = null;
+      var pk = q('[data-in-picks]', m);
+      if (dg.length < 9) {
+        who.innerHTML = '';
+        if (ph.value.trim().length < 2) { pk.innerHTML = ''; return; }
+        api('/search?q=' + encodeURIComponent(ph.value.trim())).then(function (r) {
+          var seen = {}; var list = (r.results || []).filter(function (h) { var k = h.name + h.phone; if (seen[k]) return false; seen[k] = 1; return true; }).slice(0, 6);
+          pk.innerHTML = list.map(function (h) { return '<button type="button" class="mkc-btn sm ghost" data-in-pick="' + esc(h.id) + '">' + esc((h.name || 'Unknown') + ' ' + h.phone) + '</button>'; }).join('');
+          qa('[data-in-pick]', pk).forEach(function (b) { b.onclick = function () { from = b.getAttribute('data-in-pick'); qa('[data-in-pick]', pk).forEach(function (x) { x.classList.toggle('dark', x === b); }); who.innerHTML = '<div class="mkc-tpl">Picked ' + esc(b.textContent) + ' · <button type="button" class="mkc-btn sm ghost" data-in-tree>Full history</button></div>'; q('[data-in-tree]', who).onclick = function () { openTimeline({ attempt_id: from }); }; }; });
+        }, function () {});
+        return;
+      }
+      api('/lookup?phone=' + encodeURIComponent(ph.value)).then(function (r) {
+        if (!r.found) { who.innerHTML = '<div class="mkc-tpl">New caller – no history with us. Ask their name and how they heard of makaug.</div>'; return; }
+        var n = q('[data-in-name]', m); if (r.name && !n.value) n.value = r.name;
+        who.innerHTML = (r.blocked ? '<div class="mkc-bad" style="font-weight:900">⛔ On the do-not-contact list' + (r.blocked.reason ? ': ' + esc(r.blocked.reason) : '') + '. They rang us, so you can talk, but do not call them back.</div>' : '')
+          + '<div class="mkc-tpl"><b>' + esc(r.name || 'Known number') + ' ' + esc(r.phone) + '</b> · ' + r.calls + ' call' + (r.calls === 1 ? '' : 's') + (r.inbound ? ' (' + r.inbound + ' inbound)' : '') + (r.said_hello ? ' · said Hello ✓' : '')
+          + (r.last ? '<div>Last: ' + esc(kDayTime(r.last.at)) + ' · ' + esc(personName(r.last.by)) + ' · ' + esc(String(r.last.outcome || '').replace(/_/g, ' ')) + (r.last.summary || r.last.note ? ' – ' + esc(r.last.summary || r.last.note) : '') + '</div>' : '')
+          + (r.last && r.last.next_step ? '<div><b>Next step was:</b> ' + esc(r.last.next_step) + '</div>' : '') + '<div class="mkc-muted">' + esc(r.pick_up || '') + '</div>'
+          + (r.last_attempt_id ? '<button type="button" class="mkc-btn sm ghost" data-in-tree>Full history</button>' : '') + '</div>';
+        var tb = q('[data-in-tree]', who); if (tb) tb.onclick = function () { openTimeline({ attempt_id: r.last_attempt_id }); };
+      }, function () {});
+    };
+    ph.oninput = function () { clearTimeout(tmr); tmr = setTimeout(look, 250); };
+    setTimeout(function () { ph.focus(); }, 30);
+    q('[data-in-go]', m).onclick = function () {
+      var err = q('[data-in-err]', m); err.innerHTML = '';
+      api('/sessions/' + S.id + '/inbound', { method: 'POST', body: { phone: from ? '' : ph.value, from_attempt: from, name: q('[data-in-name]', m).value } }).then(function (r) {
+        ev('inbound_start'); close(); if (r && r.blocked) toast('On the do-not-contact list: talk, but do not call back.'); next();
+      }, function (e) { err.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+    };
+    });
+  }
+  function drawKCalls(host) {
+    var box = q('[data-k-calls]', host); if (!box) return;
+    api('/calls-summary?period=' + K.callsPeriod).then(function (r) {
+      var line = function (i) { return '<div class="mkc-hit" style="cursor:default"><b>' + esc(i.name || 'Unknown') + ' ' + esc(i.phone) + '</b> ' + (i.direction === 'inbound' ? '<span class="mkc-pill in">inbound</span> ' : '') + '<span class="mkc-pill">' + esc(String(i.outcome || '').replace(/_/g, ' ')) + '</span> <span class="mkc-muted">' + esc(kDayTime(i.at)) + ' · ' + esc(personName(i.by)) + '</span>' + (i.summary ? '<div>' + esc(i.summary) + '</div>' : '') + (i.next_step ? '<div><b>Next:</b> ' + esc(i.next_step) + (i.callback_at ? ' · ' + esc(kDayTime(i.callback_at)) : '') + '</div>' : '') + '</div>'; };
+      var col = function (title, list, empty) { return '<div><h4>' + title + ' (' + list.length + ')</h4><div class="mkc-scroll" style="max-height:320px">' + (list.map(line).join('') || '<p class="mkc-muted">' + empty + '</p>') + '</div></div>'; };
+      var ppl = Object.keys(r.by_person).map(function (k) { var p = r.by_person[k]; return '<span class="mkc-pill">' + esc(personName(k)) + ': ' + p.outbound + ' out · ' + p.inbound + ' in · ' + p.closes + ' closed</span>'; }).join(' ');
+      var outs = Object.keys(r.outcomes).map(function (k) { return esc(k.replace(/_/g, ' ')) + ' ' + r.outcomes[k]; }).join(' · ');
+      box.innerHTML = '<div class="mkc-row" style="justify-content:space-between"><h4 style="margin:0">🗂 Calls summary · ' + esc(r.from) + (r.to !== r.from ? ' → ' + esc(r.to) : '') + '</h4>' + periodTabs('data-k-callsper', K.callsPeriod) + '</div>'
+        + '<div style="margin:6px 0"><b>' + r.calls + ' calls</b> (' + r.outbound + ' outbound · ' + r.inbound + ' inbound) · ' + r.skipped + ' skipped · ' + r.closed.length + ' closed' + (r.no_next_step.length ? ' · <span class="mkc-bad">' + r.no_next_step.length + ' with no next step</span>' : '') + '</div>'
+        + '<div class="mkc-muted">' + outs + '</div><div style="margin:4px 0">' + ppl + '</div>'
+        + '<div class="mkc-grid" style="padding:0;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">' + col('✅ Closed', r.closed, 'Nothing closed.') + col('⏳ Open – next steps', r.open, 'No open loops.') + col('💬 What was discussed', r.discussed, 'No call notes.') + '</div>'
+        + '<h4>🔎 Search all calls</h4>' + searchBoxHtml('all');
+      qa('[data-k-callsper]', box).forEach(function (b) { b.onclick = function () { K.callsPeriod = b.getAttribute('data-k-callsper'); drawKCalls(host); }; });
+      bindSearch(box);
+    }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+  }
+  function drawKBlocks(host) {
+    var box = q('[data-k-blocks]', host); if (!box) return;
+    api('/blocks').then(function (list) {
+      box.innerHTML = '<h4 style="margin:0 0 6px">⛔ Do not contact (' + list.length + ')</h4><p class="mkc-muted" style="margin:0 0 6px">Blocked everywhere: queues, callbacks, the Companion\'s list, leads, listings, Outreach and added numbers. Only you can remove one.</p>'
+        + (list.length ? '<div class="mkc-scroll"><table class="mkc-table"><tr><th>Number</th><th>Why</th><th>By</th><th>Since</th><th></th></tr>' + list.map(function (b) { return '<tr><td><b>' + esc(b.name || '') + '</b> ' + esc(b.phone) + '</td><td>' + esc(b.reason || '') + '</td><td>' + esc(personName(b.by)) + '</td><td>' + esc(kDayTime(b.at)) + '</td><td><button type="button" class="mkc-btn sm ghost" data-k-unblock="' + esc(b.phone_key) + '">Remove block</button></td></tr>'; }).join('') + '</table></div>' : '<p class="mkc-muted">Nobody blocked.</p>');
+      qa('[data-k-unblock]', box).forEach(function (b) { b.onclick = function () {
+        if (!window.confirm('Remove the do-not-contact block? They can be called again.')) return;
+        api('/blocks/' + b.getAttribute('data-k-unblock') + '/remove', { method: 'POST', body: { note: 'Removed by King' } }).then(function () { toast('Block removed'); drawKBlocks(host); }, function (e) { toast(e.message); });
+      }; });
+    }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+  }
+  // ---- SMS from the company SIM + agent video unlock
+  function contactHtml(a) {
+    S.contact = S.contact || {};
+    var c = S.contact[a.id];
+    if (c === undefined) { S.contact[a.id] = null; loadContact(a); }
+    if (!c) return '<div class="mkc-pay" data-mkc-contact><span class="mkc-muted">✉️ …</span></div>';
+    var sms = function (lang, label) { return '<a class="mkc-btn sm" style="text-decoration:none" href="sms:' + esc(String(a.phone || '').replace(/\s+/g, '')) + '?body=' + encodeURIComponent(c.sms_text[lang]) + '" data-sms="' + lang + '">' + label + '</a>'; };
+    var v;
+    if (c.locked) v = '<div class="mkc-muted" style="margin-top:6px">🔒 <b>Send agent video</b> – locked until they message our WhatsApp. Text them the number above and ask them to send "Hi".</div>';
+    else if (c.open && c.open.status === 'requested') v = '<div style="margin-top:6px">⏳ <b>Video requested</b> – waiting for King to approve.</div>';
+    else if (c.open && c.open.status === 'approved') v = '<div style="margin-top:6px">✅ Approved – being sent from makaug\'s WhatsApp.</div>';
+    else v = '<div class="mkc-row" style="margin-top:6px"><span class="mkc-good" style="font-weight:800">🔓 They messaged us ' + esc(kDayTime(c.hello.at)) + '</span><select class="mkc-select" style="font-size:12px;padding:4px" data-vid>' + c.videos.map(function (x) { return '<option value="' + esc(x.key) + '">' + esc(x.title) + '</option>'; }).join('') + '</select><button type="button" class="mkc-btn sm dark" data-vreq>🎬 Request video send</button></div>'
+      + (c.sent ? '<div class="mkc-muted">Video sent before (' + c.sent + '×).</div>' : '');
+    return '<div class="mkc-pay" data-mkc-contact style="background:#f8fafc"><div class="mkc-row" style="justify-content:space-between"><b>✉️ Text them our WhatsApp number</b><span class="mkc-muted">' + (c.sms.length ? 'SMS sent ' + esc(kDayTime(c.sms[0].at)) : 'from the company SIM') + '</span></div>'
+      + '<div class="mkc-row" style="margin-top:6px">' + sms('en', 'SMS in English') + sms('lg', 'SMS mu Luganda') + '<button type="button" class="mkc-btn sm ghost" data-smscopy>Copy text</button></div>' + v + '<div data-cerr></div></div>';
+  }
+  function loadContact(a) {
+    api('/attempts/' + a.id + '/contact').then(function (c) {
+      if (!S) return; S.contact[a.id] = c;
+      var box = q('[data-mkc-contact]'); if (box && S.cur && S.cur.attempt.id === a.id) { var tmp = document.createElement('div'); tmp.innerHTML = contactHtml(a); box.replaceWith(tmp.firstChild); bindContact(q('[data-mkc-num]'), a); }
+    }, function () {});
+  }
+  function bindContact(el, a) {
+    var box = q('[data-mkc-contact]', el); if (!box) return;
+    qa('[data-sms]', box).forEach(function (b) { b.addEventListener('click', function () {
+      op('/attempts/' + a.id + '/sms', { person_key: S.person, lang: b.getAttribute('data-sms') }).then(function () { ev('action', 'sms_sent'); toast('SMS logged. Send it in Phone Link / on the phone.'); loadContact(a); }, function () {});
+    }); });
+    var cp = q('[data-smscopy]', box); if (cp) cp.onclick = function () { var c = S.contact[a.id]; copyText((S.lang === 'lg' ? c.sms_text.lg : c.sms_text.en)); };
+    var vr = q('[data-vreq]', box); if (vr) vr.onclick = function () {
+      op('/attempts/' + a.id + '/video-request', { person_key: S.person, video_key: q('[data-vid]', box).value }).then(function () { ev('action', 'video_requested'); toast('Sent to King for approval'); loadContact(a); }, function (e) { q('[data-cerr]', box).innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+    };
+  }
+  function copyText(t) {
+    try { navigator.clipboard.writeText(t).then(function () { toast('Copied'); }, function () { window.prompt('Copy this:', t); }); } catch (_) { window.prompt('Copy this:', t); }
+  }
+  function drawKVideos(host) {
+    var box = q('[data-k-videos]', host); if (!box) return;
+    api('/videos').then(function (list) {
+      var waiting = list.filter(function (r) { return r.status === 'requested' || r.status === 'approved'; });
+      box.innerHTML = '<h4 style="margin:0 0 6px">🎬 Agent video requests (' + waiting.length + ' waiting)</h4><p class="mkc-muted" style="margin:0 0 6px">Only numbers that messaged our WhatsApp first can be requested. Approve sends a ref-tagged link from makaug\'s WhatsApp; if that sender is off, copy it or open WhatsApp and send by hand.</p>'
+        + (list.length ? '<div class="mkc-scroll"><table class="mkc-table"><tr><th>Who</th><th>Video</th><th>Asked by</th><th>Status</th><th></th></tr>' + list.slice(0, 30).map(function (r) {
+          var act = r.status === 'requested' ? '<button type="button" class="mkc-btn sm go" data-kv-ok="' + esc(r.id) + '">Approve & send</button> <button type="button" class="mkc-btn sm ghost" data-kv-no="' + esc(r.id) + '">Reject</button>'
+            : r.status === 'approved' && r.fallback ? '<div class="mkc-muted">' + esc(r.send_reason || 'Not sent automatically') + '</div><a class="mkc-btn sm" target="_blank" rel="noopener" href="' + esc(r.fallback.wa_url) + '">Open WhatsApp</a> <button type="button" class="mkc-btn sm ghost" data-kv-copy="' + esc(r.id) + '">Copy</button> <button type="button" class="mkc-btn sm dark" data-kv-sent="' + esc(r.id) + '">Mark sent</button>' : '';
+          return '<tr><td><b>' + esc(r.name || '') + '</b> ' + esc(r.phone) + '<div class="mkc-muted">messaged us ' + esc(kDayTime(r.hello_at)) + '</div></td><td>' + esc(r.video) + '<div class="mkc-muted">ref ' + esc(r.ref) + (r.opens ? ' · opened ' + r.opens + '×' : '') + '</div></td><td>' + esc(personName(r.by)) + '<div class="mkc-muted">' + esc(kDayTime(r.requested_at)) + '</div></td><td><span class="mkc-pill' + (r.status === 'sent' ? ' live' : r.status === 'rejected' ? ' flag' : ' warn') + '">' + esc(r.status) + '</span>' + (r.sent_via ? '<div class="mkc-muted">' + esc(r.sent_via.replace(/_/g, ' ')) + '</div>' : '') + '</td><td>' + act + '</td></tr>';
+        }).join('') + '</table></div>' : '<p class="mkc-muted">No requests yet.</p>');
+      var dec = function (id, ok) { api('/videos/' + id + '/decide', { method: 'POST', body: { approve: ok } }).then(function (r) { toast(r.status === 'sent' ? 'Sent from makaug WhatsApp' : r.status === 'approved' ? 'Approved – send it by hand (sender off)' : 'Rejected'); drawKVideos(host); }, function (e) { toast(e.message); }); };
+      qa('[data-kv-ok]', box).forEach(function (b) { b.onclick = function () { dec(b.getAttribute('data-kv-ok'), true); }; });
+      qa('[data-kv-no]', box).forEach(function (b) { b.onclick = function () { dec(b.getAttribute('data-kv-no'), false); }; });
+      qa('[data-kv-copy]', box).forEach(function (b) { b.onclick = function () { var r = list.filter(function (x) { return x.id === b.getAttribute('data-kv-copy'); })[0]; if (r) copyText(r.fallback.text); }; });
+      qa('[data-kv-sent]', box).forEach(function (b) { b.onclick = function () { api('/videos/' + b.getAttribute('data-kv-sent') + '/sent', { method: 'POST', body: {} }).then(function () { drawKVideos(host); }, function (e) { toast(e.message); }); }; });
+    }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+  }
+  // ---- Learn: for every new employee
+  function learnHtml() {
+    var L = function (u, t) { return '<a href="' + u + '" target="_blank" rel="noopener">' + t + '</a>'; };
+    var sec = function (title, body, open) { return '<details class="mkc-learn"' + (open ? ' open' : '') + '><summary><b>' + title + '</b></summary><div>' + body + '</div></details>'; };
+    var lg = function (t) { return '<div class="mkc-lg">🗣 <i>' + t + '</i></div>'; };
+    return '<div class="mkc-scroll" style="max-height:560px">'
+      + sec('1. About makaug.com', '<p><b>makaug.com is Uganda\'s property search.</b> We gather every house, plot, rental and short stay we can find online into one search, check them before they go live, and people contact the owner or agent directly, for free.</p>'
+        + '<p><b>Aggregator model:</b> many listings are "found online" (we show where they came from and send people to the original poster). Agents and owners who join get their own listings, their name and phone on them, and the enquiries.</p>'
+        + '<p><b>Prices:</b> agents <b>UGX 50,000 a month</b> (all their listings, short stays included). Owners <b>UGX 20,000 a month</b> per listing. No free trial. Pay by <b>MoMo merchant code 27248497</b>, then send the confirmation on WhatsApp to <b>0780 863 394</b>.</p>'
+        + lg('makaug.com gwe mukutu ogukuŋŋaanya amayumba, ettaka n\'ebisulo byonna mu Uganda mu kifo kimu.') + lg('Ba agent basasula UGX 50,000 buli mwezi; bannannyini mayumba UGX 20,000. Musasule ku MoMo merchant code 27248497.')
+        + '<p>Read: ' + L('https://makaug.com/about', 'About & prices') + ' · ' + L('https://makaug.com/how-it-works', 'How it works') + '</p>', true)
+      + sec('2. How the site works (real examples)', '<ul>'
+        + '<li><b>Search by area:</b> ' + L('https://makaug.com/to-rent/ntinda-kampala', 'To rent in Ntinda') + ' · ' + L('https://makaug.com/for-sale/kololo-kampala', 'For sale in Kololo') + ' · ' + L('https://makaug.com/land', 'Land') + ' · ' + L('https://makaug.com/commercial', 'Commercial') + ' · ' + L('https://makaug.com/student-accommodation', 'Students') + '</li>'
+        + '<li><b>A listing page:</b> ' + L('https://makaug.com/property/1db66e25-2ef4-47dd-9863-ff7ccbc4255f', 'Land for sale in Wakiso, UGX 45M/acre') + ' – photos, price, area, and the contact button.</li>'
+        + '<li><b>An agent profile:</b> ' + L('https://makaug.com/agents/a93b28af-3562-4a36-8bb4-a773287eb045', 'Katamba Bonny') + ' – every listing of one agent in one place. ' + L('https://makaug.com/brokers', 'Find a broker') + ' lists the agents.</li>'
+        + '<li><b>How listing works:</b> ' + L('https://makaug.com/list-property', 'List your property (from UGX 20,000 a month)') + ' – they sign up, add photos and price, pay by MoMo, we check it, it goes live.</li>'
+        + '<li><b>Short stays:</b> ' + L('https://makaug.com/short-term', 'Short stays') + ', e.g. ' + L('https://makaug.com/short-term/bunga-one-bedroom-stay-st-000003', 'a one-bedroom stay in Bunga') + '. Hosts: ' + L('https://makaug.com/short-term/list-your-place', 'list your place') + '.</li></ul>'
+        + lg('Buli kifo kirina olupapula lwakyo: ebifaananyi, ebbeeyi, ekitundu, n\'essimu y\'oyo akitunda.'))
+      + sec('3. Using this calling screen, step by step', '<ol>'
+        + '<li>Agree <b>Today\'s plan</b> with King in the morning and initial it.</li><li>Turn <b>Work mode</b> on. Pick a mode: new agents, payments or keep clients.</li>'
+        + '<li>Read the card: where the number came from and its history. Press <b>Call from laptop (Phone Link)</b>.</li>'
+        + '<li>Did they answer? Say the "I am taking notes" line, then follow the 6 steps in the script. Objections are under the script.</li>'
+        + '<li>Ask them to WhatsApp "Hi" to 0780 863 394. Not on WhatsApp yet? Press <b>Text them our WhatsApp number</b>.</li>'
+        + '<li>Once they have messaged us, <b>Request video send</b> – King approves and makaug\'s WhatsApp sends it.</li>'
+        + '<li>Money: <b>Send pay link</b> or <b>Send MoMo code</b>; if they say they paid, press <b>They say they paid</b>. Admin confirms.</li>'
+        + '<li>End the call, check the wrap-up, always write a <b>next step</b>. Asked not to be called? Pick <b>Don\'t contact again</b>.</li>'
+        + '<li>Someone rang the company phone? Answer in Phone Link and press <b>📲 Incoming call</b>.</li>'
+        + '<li>Breaks: one 60-minute lunch and short 10/15-minute breaks. At 17:00 do the <b>cash check</b> before you close.</li>'
+        + '<li><b>My money</b> card: commission earned, on hold (7 days) and due on the 25th.</li></ol>')
+      + sec('4. FAQs and objections', '<p><b>"It\'s too expensive."</b> One tenant or one sale pays it back many times. UGX 50,000 is less than UGX 1,700 a day.</p>' + lg('Omupangisa omu oba okutunda omulundi gumu kukomyawo ssente zino emirundi mingi.')
+        + '<p><b>"Is there a free trial?"</b> No free trial. You see real listings and enquiries from day one.</p>'
+        + '<p><b>"My listing is already on makaug – who put it there?"</b> We find listings online and show where they came from. Join and it becomes yours, with your name and phone.</p>'
+        + '<p><b>"How do I pay?"</b> MoMo merchant code 27248497, then WhatsApp the confirmation to 0780 863 394.</p>' + lg('Sasula ku MoMo merchant code 27248497, oluvannyuma oweereze obubaka ku WhatsApp 0780 863 394.')
+        + '<p><b>"Send me details."</b> Ask them to WhatsApp "Hi" to 0780 863 394 first (WhatsApp won\'t let us message first), then request the video.</p>'
+        + '<p><b>"I\'m busy."</b> Book a callback with a time; it comes back to you.</p><p><b>"Don\'t call me again."</b> Say sorry and pick <b>Don\'t contact again</b> – the number is blocked everywhere.</p>')
+      + '</div>';
+  }
   function periodTabs(attr, cur) {
     return '<div class="mkc-modes" style="display:inline-flex">' + [['day', 'Day'], ['week', 'Week'], ['month', 'Month']].map(function (x) { return '<button type="button" class="mkc-mode' + (x[0] === cur ? ' on' : '') + '" ' + attr + '="' + x[0] + '" style="color:#0f172a;background:' + (x[0] === cur ? '#fbbf24' : '#e2e8f0') + '">' + x[1] + '</button>'; }).join('') + '</div>';
   }
@@ -1438,7 +1659,7 @@
         var t = p.totals;
         var days = p.days.slice().reverse().map(function (d) {
           return '<tr><td><b>' + esc(d.day) + '</b></td><td>' + (d.login_hm ? 'login ' + esc(d.login_hm) + '<br>' : '') + esc(d.first_open_hm || '–') + '–' + esc(d.last_close_hm || '') + '</td><td>' + hm(d.work_ms) + ' work<div class="mkc-muted">' + hm(d.down_ms) + ' down · ' + hm(d.on_screen_ms) + ' open</div></td><td>' + hm(d.break_ms) + (d.lunch.length ? '<div class="mkc-muted">' + d.lunch.map(function (l) { return esc(l.kind) + ' ' + l.minutes + 'm' + (l.planned_min ? '/' + l.planned_min : '') + (l.over_min ? ' <span class="mkc-bad">+' + l.over_min + '</span>' : ''); }).join(', ') + '</div>' : '') + '</td>'
-            + '<td>' + d.left_screen + '× · ' + hm(d.away_ms) + '</td><td>' + hm(d.idle_ms) + '</td><td>' + d.calls + '</td><td>' + hm(d.talk_s * 1000) + '</td><td>' + d.closes + '</td><td>' + d.pay_sent + ' sent · ' + d.pay_claimed + ' claimed · ' + d.pay_confirmed + ' ✓</td><td>' + ugx(d.commission_ugx) + '</td><td>' + d.actions + '</td>'
+            + '<td>' + d.left_screen + '× · ' + hm(d.away_ms) + '</td><td>' + hm(d.idle_ms) + '</td><td>' + d.calls + (d.inbound ? '<div class="mkc-muted">' + d.outbound + ' out · ' + d.inbound + ' in</div>' : '') + '</td><td>' + hm(d.talk_s * 1000) + '</td><td>' + d.closes + '</td><td>' + d.pay_sent + ' sent · ' + d.pay_claimed + ' claimed · ' + d.pay_confirmed + ' ✓</td><td>' + ugx(d.commission_ugx) + '</td><td>' + d.actions + '</td>'
             + '<td>' + d.flags.map(function (f) { return '<span class="mkc-pill flag">' + esc(f) + '</span>'; }).join(' ') + '</td></tr>'
             + '<tr><td colspan="13" style="padding-top:0">' + timelineBar(d) + '</td></tr>';
         }).join('');
@@ -1530,6 +1751,9 @@
       + '<div class="mkc-panel" style="margin-top:14px" data-k-plans></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-act></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-cashlog></div>'
+      + '<div class="mkc-panel" style="margin-top:14px" data-k-calls></div>'
+      + '<div class="mkc-panel" style="margin-top:14px" data-k-videos></div>'
+      + '<div class="mkc-panel" style="margin-top:14px" data-k-blocks></div>'
       + '<div class="mkc-grid" style="padding:0;margin-top:14px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">'
       + '<div class="mkc-panel"><h4>Numbers staff added (' + (K.nums || []).length + ' to look at)</h4><p class="mkc-muted" style="margin:0 0 6px">Own numbers are already in the caller\'s queue. Tap OK, or Remove to take one out.</p>' + (nums || '<p class="mkc-muted">Nothing waiting.</p>') + '</div>'
       + '<div class="mkc-panel"><h4>Callbacks booked</h4>' + (cbs ? '<div class="mkc-scroll"><table class="mkc-table">' + cbs + '</table></div>' : '<p class="mkc-muted">None booked.</p>') + '</div>'
@@ -1540,7 +1764,8 @@
     q('[data-k-refresh]', host).onclick = function () { renderKing(host); };
     q('[data-k-meet]', host).onclick = openMeeting;
     K.period = K.period || 'day'; K.cashPeriod = K.cashPeriod || 'week';
-    drawKPlans(host); drawKAct(host); drawKCash(host);
+    K.callsPeriod = K.callsPeriod || 'day';
+    drawKPlans(host); drawKAct(host); drawKCash(host); drawKCalls(host); drawKVideos(host); drawKBlocks(host);
     qa('[data-k-sum]', host).forEach(function (b) { b.onclick = function () { var f = (K.sums[Number(b.getAttribute('data-k-sum'))] || {}).figures || {}; modal(reportHtml(f) + '<div class="mkc-row" style="margin-top:12px;justify-content:flex-end"><button class="mkc-btn dark" data-x>Close</button></div>', function (m, close) { q('[data-x]', m).onclick = close; }); }; });
     qa('[data-k-mklink]', host).forEach(function (b) {
       b.onclick = function () {

@@ -162,7 +162,7 @@ async function activity({ period = 'day', day = kampalaDay(), personKey = '' } =
   const ids = sessions.map((s) => s.id);
   const events = ids.length ? await rows('SELECT session_id, kind, detail, at FROM call_session_events WHERE session_id = ANY($1::uuid[]) ORDER BY at', [ids]) : [];
   const attempts = await rows(
-    `SELECT person_key, status, tapped_at, wrapped_at, shown_at, talk_s, is_close, outcome, task_key FROM call_attempts
+    `SELECT person_key, status, tapped_at, wrapped_at, shown_at, talk_s, is_close, outcome, task_key, direction FROM call_attempts
       WHERE COALESCE(tapped_at, shown_at) >= $1 AND COALESCE(tapped_at, shown_at) < $2 AND ($3 = '' OR person_key = $3)`, [start, end, who]);
   const pays = await rows(
     `SELECT p.person_key, p.kind, p.at, c.status AS claim_status FROM call_payment_actions p LEFT JOIN payment_claims c ON c.id = p.claim_id
@@ -173,7 +173,7 @@ async function activity({ period = 'day', day = kampalaDay(), personKey = '' } =
   const cell = (pk, d) => {
     if (!people.has(pk)) people.set(pk, new Map());
     const m = people.get(pk);
-    if (!m.has(d)) m.set(d, { day: d, sessions: 0, first_open: null, last_close: null, on_screen_ms: 0, focus_ms: 0, away_ms: 0, break_ms: 0, breaks: 0, lunch: [], work_ms: 0, down_ms: 0, segments: [], login_at: null, work_switches: 0, left_screen: 0, left: [], idle_ms: 0, idles: [], actions: 0, calls: 0, talk_s: 0, closes: 0, skips: 0, pay_sent: 0, pay_claimed: 0, pay_confirmed: 0, payments: 0, commission_ugx: 0, flags: [] });
+    if (!m.has(d)) m.set(d, { day: d, sessions: 0, first_open: null, last_close: null, on_screen_ms: 0, focus_ms: 0, away_ms: 0, break_ms: 0, breaks: 0, lunch: [], work_ms: 0, down_ms: 0, segments: [], login_at: null, work_switches: 0, left_screen: 0, left: [], idle_ms: 0, idles: [], actions: 0, calls: 0, outbound: 0, inbound: 0, talk_s: 0, closes: 0, skips: 0, pay_sent: 0, pay_claimed: 0, pay_confirmed: 0, payments: 0, commission_ugx: 0, flags: [] });
     return m.get(d);
   };
   for (const s of sessions) {
@@ -239,7 +239,7 @@ async function activity({ period = 'day', day = kampalaDay(), personKey = '' } =
   const rateOf = new Map(callers.map((p) => [p.key, Number(p.rate_pct || 0)]));
   for (const a of attempts) {
     const c = cell(a.person_key, kampalaDay(a.tapped_at || a.shown_at));
-    if (a.tapped_at) { c.calls += 1; c.actions += 1; }
+    if (a.tapped_at) { c.calls += 1; c.actions += 1; c[a.direction === 'inbound' ? 'inbound' : 'outbound'] += 1; }
     if (a.status === 'skipped') c.skips += 1;
     c.talk_s += Number(a.talk_s || 0);
     if (a.is_close) c.closes += 1;
@@ -272,7 +272,7 @@ async function activity({ period = 'day', day = kampalaDay(), personKey = '' } =
     const sum = (k) => list.reduce((n, c) => n + (Number(c[k]) || 0), 0);
     out.push({
       person_key: pk, name: person.name, days: list, missed_days: missed,
-      totals: { days_worked: list.filter((c) => c.sessions).length, work_ms: sum('work_ms'), down_ms: sum('down_ms'), on_screen_ms: sum('on_screen_ms'), focus_ms: sum('focus_ms'), away_ms: sum('away_ms'), break_ms: sum('break_ms'), breaks: sum('breaks'), left_screen: sum('left_screen'), idle_ms: sum('idle_ms'), long_idles: list.reduce((n, c) => n + c.idles.length, 0), calls: sum('calls'), talk_s: sum('talk_s'), closes: sum('closes'), payments: sum('payments'), pay_sent: sum('pay_sent'), pay_claimed: sum('pay_claimed'), pay_confirmed: sum('pay_confirmed'), commission_ugx: sum('commission_ugx'), actions: sum('actions') },
+      totals: { days_worked: list.filter((c) => c.sessions).length, work_ms: sum('work_ms'), down_ms: sum('down_ms'), on_screen_ms: sum('on_screen_ms'), focus_ms: sum('focus_ms'), away_ms: sum('away_ms'), break_ms: sum('break_ms'), breaks: sum('breaks'), left_screen: sum('left_screen'), idle_ms: sum('idle_ms'), long_idles: list.reduce((n, c) => n + c.idles.length, 0), calls: sum('calls'), outbound: sum('outbound'), inbound: sum('inbound'), talk_s: sum('talk_s'), closes: sum('closes'), payments: sum('payments'), pay_sent: sum('pay_sent'), pay_claimed: sum('pay_claimed'), pay_confirmed: sum('pay_confirmed'), commission_ugx: sum('commission_ugx'), actions: sum('actions') },
       flags: list.reduce((n, c) => n + c.flags.length, 0) + missed.length
     });
   }
@@ -342,13 +342,18 @@ async function plans({ period = 'week', day = kampalaDay() } = {}) {
 
 // ----------------------------------------------------------- cash check --
 
+// Only the accounts the caller can see. Absa is never on it (no access).
+// CASH_CHECK_ACCOUNTS=key,key overrides the list; CASH_CHECK_MAIN_ACCOUNT names
+// the main bank (optional: if it isn't on the caller's list he isn't asked for it).
 function mainAccountKey(accounts) {
-  const want = String(process.env.CASH_CHECK_MAIN_ACCOUNT || 'absa_ugx');
-  return (accounts.find((a) => a.key === want) || accounts.find((a) => a.kind === 'bank') || {}).key || null;
+  const want = String(process.env.CASH_CHECK_MAIN_ACCOUNT || '').trim();
+  return want && accounts.some((a) => a.key === want) ? want : null;
 }
 
 async function cashAccounts() {
-  const list = await safeRows("SELECT key, name, kind FROM money_accounts WHERE active AND kind IN ('mobile_money', 'bank') ORDER BY kind DESC, name");
+  const pick = String(process.env.CASH_CHECK_ACCOUNTS || '').split(',').map((x) => x.trim()).filter(Boolean);
+  const all = await safeRows("SELECT key, name, kind FROM money_accounts WHERE active AND kind IN ('mobile_money', 'bank') ORDER BY kind DESC, name");
+  const list = all.filter((a) => (pick.length ? pick.includes(a.key) : a.kind === 'mobile_money') && !/absa/i.test(`${a.key} ${a.name}`));
   const main = mainAccountKey(list);
   return list.map((a) => ({ ...a, main: a.key === main, currency: /usd/i.test(`${a.key} ${a.name}`) ? 'USD' : 'UGX' }));
 }
@@ -420,7 +425,25 @@ async function cashLog({ period = 'week', day = kampalaDay() } = {}) {
   return { period, ...range, accounts, days, missed_days: days.filter((d) => d.missed && d.day < today).map((d) => d.day) };
 }
 
+/** The caller's own commission, from the same numbers as King's Staff Performance. */
+async function myMoney(personKey) {
+  const pk = cleanKey(personKey);
+  const perf = require('./staffPerformance');
+  const sends = await perf.loadSends().catch(() => []);
+  const s = await require('./staffCommission').summary({ sends });
+  const t = (s.totals && s.totals.people && s.totals.people[pk]) || {};
+  const me = (s.staff || []).find((x) => x.person_key === pk) || {};
+  return {
+    person_key: pk, rate_pct: Number(me.rate_pct || s.settings?.default_rate_pct || 0), on_commission: me.active !== false && Number(me.rate_pct || 0) > 0,
+    earned_ugx: t.earned_ugx || 0, on_hold_ugx: t.pending_ugx || 0, due_next_payday_ugx: t.due_next_payday_ugx || 0, paid_to_date_ugx: t.paid_to_date_ugx || 0, clawback_ugx: t.clawback_ugx || 0,
+    hold_days: s.settings?.hold_days, next_payday: s.next_payday, next_payday_at: s.next_payday_at, cutoff: s.cutoff, countdown: s.countdown,
+    counts: { contacted: t.contacted || 0, signed_up: t.signed_up || 0, paid: t.paid || 0, on_hold: t.on_hold || 0, eligible: t.eligible || 0 },
+    agents: (s.agents || []).filter((a) => a.person_key === pk).slice(0, 100).map((a) => ({ name: a.name || 'Agent', phone: a.phone_masked || '', status: a.status, status_label: a.status_label, amount_ugx: (a.lines || []).reduce((n, l) => n + (/clawback/i.test(`${l.status} ${l.reason}`) ? 0 : Number(l.amount_ugx || 0)), 0), due_payday: (a.lines || [])[0]?.due_payday || null, reason: (a.reasons || [])[0] || '' }))
+  };
+}
+
 module.exports = {
+  myMoney,
   FEE_UGX, kampalaHour, periodRange, paymentState, momoText, sendPayment, markClaimed,
   activity, getPlan, savePlan, planResult, plans, cashAccounts, cashStatus, saveCash, cashLog
 };

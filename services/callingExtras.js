@@ -385,7 +385,7 @@ async function timeline({ attemptId = '', phoneKey = '' } = {}) {
   if (attemptId) key = (await rows('SELECT phone_key FROM call_attempts WHERE id::text = $1', [String(attemptId)]))[0]?.phone_key || '';
   if (!/^[0-9]{9}$/.test(key)) throw httpError(404, 'Number not found.');
   const [atts, evs, item, wa] = await Promise.all([
-    rows(`SELECT id, person_key, task_key, full_name, phone, status, outcome, note, callback_at, shown_at, tapped_at, ended_at, wrapped_at, talk_s, skip_reason, flags, actor_account, source_label, next_step, transcript
+    rows(`SELECT id, direction, person_key, task_key, full_name, phone, status, outcome, note, callback_at, shown_at, tapped_at, ended_at, wrapped_at, talk_s, skip_reason, flags, actor_account, source_label, next_step, transcript
             FROM call_attempts WHERE phone_key = $1 AND status IN ('done', 'skipped', 'shown', 'calling') ORDER BY shown_at`, [key]),
     safeRows(`SELECT kind, outcome, note, person_key, created_at FROM outreach_events WHERE phone_key = $1 ORDER BY created_at`, [key]),
     rows('SELECT * FROM pipeline_items WHERE phone_key = $1', [key]),
@@ -397,7 +397,7 @@ async function timeline({ attemptId = '', phoneKey = '' } = {}) {
   for (const a of atts) {
     const parent = openCallback || prevCall;
     const node = {
-      id: a.id, type: 'call', parent: parent ? parent.id : null, by: a.person_key, task: a.task_key, login: a.actor_account,
+      id: a.id, type: 'call', direction: a.direction || 'outbound', parent: parent ? parent.id : null, by: a.person_key, task: a.task_key, login: a.actor_account,
       shown_at: a.shown_at, tapped_at: a.tapped_at, ended_at: a.ended_at, wrapped_at: a.wrapped_at, talk_s: a.talk_s,
       outcome: a.status === 'skipped' ? 'skipped' : (a.outcome || a.status), note: a.note || a.skip_reason || '', flags: a.flags || [],
       callback_at: a.callback_at, follow_up_of: openCallback ? openCallback.id : null,
@@ -413,6 +413,9 @@ async function timeline({ attemptId = '', phoneKey = '' } = {}) {
   return {
     phone_key_masked: maskPhoneLast3(head.phone || key), name: head.full_name || '',
     nodes,
+    sms: (await safeRows('SELECT at, person_key AS by, lang FROM call_sms_log WHERE phone_key = $1 ORDER BY at', [key])),
+    videos: (await safeRows('SELECT requested_at AS at, person_key AS by, video_key, status, decided_by, sent_at, sent_via, opens FROM call_video_requests WHERE phone_key = $1 ORDER BY requested_at', [key])),
+    blocked: (await safeRows('SELECT reason, blocked_by AS by, blocked_at AS at FROM call_blocks WHERE phone_key = $1 AND removed_at IS NULL', [key]))[0] || null,
     outreach: evs.map((e) => ({ at: e.created_at, kind: e.kind, outcome: e.outcome, note: e.note, by: e.person_key })),
     whatsapp: wa,
     said_hello: (() => { const i = wa.find((w) => w.direction === 'inbound'); return i ? { at: i.first, messages: i.n } : null; })(),
@@ -420,6 +423,18 @@ async function timeline({ attemptId = '', phoneKey = '' } = {}) {
     decision: item[0] ? { decision: item[0].decision, next_action: item[0].next_action, due: item[0].next_action_due, archived_at: item[0].archived_at, reason: item[0].archive_reason, history: item[0].history } : null,
     pick_up: last ? (last.callback_at ? `Call back ${new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: TZ }).format(new Date(last.callback_at))} · last: ${last.outcome.replace(/_/g, ' ')}${last.note ? ` – ${last.note}` : ''}` : `Last: ${last.outcome.replace(/_/g, ' ')}${last.note ? ` – ${last.note}` : ''}`) : 'Not called yet'
   };
+}
+
+/** Who is this? For the "Incoming call" box: a short, masked history by phone_key. */
+async function lookup(phone = '') {
+  const key = String(phone || '').replace(/\D/g, '').slice(-9);
+  if (key.length !== 9) return { found: false };
+  let t; try { t = await timeline({ phoneKey: key }); } catch (_) { return { found: false, phone: `•••${key.slice(-3)}` }; }
+  const calls = t.nodes.filter((n) => n.outcome !== 'skipped');
+  const last = calls.slice(-1)[0];
+  return { found: t.nodes.length > 0 || t.outreach.length > 0, phone: t.phone_key_masked, name: t.name, calls: calls.length, inbound: calls.filter((n) => n.direction === 'inbound').length,
+    last: last ? { at: last.wrapped_at || last.shown_at, by: last.by, outcome: last.outcome, note: last.note, next_step: last.next_step, summary: last.transcript && last.transcript.summary } : null,
+    pick_up: t.pick_up, blocked: t.blocked, said_hello: Boolean(t.said_hello), last_attempt_id: (t.nodes.slice(-1)[0] || {}).id || null };
 }
 
 // ------------------------------------------------------------ daily summary --
@@ -484,6 +499,7 @@ async function savedSummaries({ day = kampalaDay() } = {}) {
 }
 
 module.exports = {
+  lookup,
   SETUP_HOURS,
   passwordProblem,
   scopeOf,
