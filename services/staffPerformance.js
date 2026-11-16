@@ -703,8 +703,15 @@ async function getDashboard({ now = new Date() } = {}) {
     source: e.source
   }));
 
+  // Since 16 Nov 2026 the tab is judged on commission (agents closed); films
+  // and targets above stay as secondary information.
+  const commission = await require('./staffCommission').summary({
+    sends: rawSends, now, roadPayingNow: paying.now, goal: Number(campaign.goal_paying_agents) || 1000
+  }).catch((error) => ({ error: error.message }));
+
   return {
     today,
+    commission,
     campaign: {
       key: campaign.key,
       name: campaign.name,
@@ -978,6 +985,7 @@ module.exports = {
   dedupeList,
   parsePastedList,
   getDashboard,
+  loadSends,
   startCall,
   logOutcome,
   recordBlockedSend,
