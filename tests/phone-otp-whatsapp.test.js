@@ -9,6 +9,7 @@ const whatsapp = require('../routes/whatsapp');
 
 async function main() {
   const originalQueue = bridge.queueWhatsappWebBridgeMessage;
+  const originalNeedsLinking = bridge.whatsappSessionNeedsLinking;
   const originalEmail = emailService.sendOtpEmail;
   const originalQuery = db.query;
   const previousBridge = process.env.WHATSAPP_WEB_BRIDGE_ENABLED;
@@ -67,6 +68,58 @@ async function main() {
     assert.strictEqual(noEmail.ok, false);
     assert.strictEqual(noEmail.failureReason, 'phone_otp_delivery_failed');
 
+    // 15 Nov 2026: WhatsApp logged the number out, for six hours and more. A
+    // code queued then could only arrive after it had run out, and the person
+    // was told it was on its way. While the number waits to be linked again a
+    // code is not queued: it goes by email when there is one, and when there
+    // is not, the site is told it could not be sent.
+    bridge.whatsappSessionNeedsLinking = async () => true;
+    queued.length = 0;
+    bridge.queueWhatsappWebBridgeMessage = async (args) => {
+      queued.push(args);
+      return { id: 'bridge-row-logged-out' };
+    };
+    emailed = null;
+    emailService.sendOtpEmail = async (args) => {
+      emailed = args;
+      return { sent: true, provider: 'resend', status: 'sent' };
+    };
+    const loggedOut = await sendPhoneOtp({
+      to: '+256780863394',
+      message: 'your code is 222222',
+      email: 'person@example.com',
+      otp: '222222',
+      expiresMinutes: 10
+    });
+    assert.strictEqual(queued.length, 0, 'a code is not queued for a number that is logged out');
+    assert.strictEqual(loggedOut.ok, true);
+    assert.strictEqual(loggedOut.channel, 'email');
+    assert.strictEqual(emailed.otp, '222222');
+    assert.deepStrictEqual(loggedOut.attempts[0], {
+      channel: 'whatsapp',
+      provider: 'whatsapp_web_bridge',
+      status: 'failed',
+      sent: false,
+      queued: false,
+      error: 'whatsapp_session_not_linked'
+    });
+    emailService.sendOtpEmail = originalEmail;
+    const loggedOutNoEmail = await sendPhoneOtp({
+      to: '+256780863394',
+      message: 'your code is 333333',
+      otp: '333333'
+    });
+    assert.strictEqual(loggedOutNoEmail.ok, false, 'with no email the site is told, and nobody is told a code is coming');
+    assert.strictEqual(loggedOutNoEmail.failureReason, 'phone_otp_delivery_failed');
+    assert.strictEqual(queued.length, 0);
+    // A session that cannot be asked about is taken to be up: a code is queued as before.
+    bridge.whatsappSessionNeedsLinking = async () => { throw new Error('no database'); };
+    const unknown = await sendPhoneOtp({ to: '+256780863394', message: 'your code is 444444', otp: '444444' });
+    assert.strictEqual(unknown.ok, true);
+    assert.strictEqual(unknown.channel, 'whatsapp');
+    assert.strictEqual(queued.length, 1);
+    bridge.whatsappSessionNeedsLinking = originalNeedsLinking;
+
     assert.strictEqual(whatsapp.__test.whatsappListerPhoneMatchesChat('+256780863394', '0780863394'), true);
     assert.strictEqual(whatsapp.__test.whatsappListerPhoneMatchesChat('256780863394', '+256780863394'), true);
     assert.strictEqual(whatsapp.__test.whatsappListerPhoneMatchesChat('+256780863394', '+256700000000'), false);
@@ -115,6 +168,7 @@ async function main() {
     assert.ok(String(queued[0].text).includes('makaug listing verification'));
   } finally {
     bridge.queueWhatsappWebBridgeMessage = originalQueue;
+    bridge.whatsappSessionNeedsLinking = originalNeedsLinking;
     emailService.sendOtpEmail = originalEmail;
     db.query = originalQuery;
     if (previousBridge == null) delete process.env.WHATSAPP_WEB_BRIDGE_ENABLED;

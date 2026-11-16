@@ -79,11 +79,24 @@ function compactNumber(value, divisor, suffix) {
   return `${scaled.toFixed(digits).replace(/\.0+$|(?<=\.\d)0+$/g, '')}${suffix}`;
 }
 
+const STUDENT_PRICE_PERIODS = Object.freeze({
+  mo: 'month', month: 'month', monthly: 'month',
+  sem: 'semester', semester: 'semester',
+  yr: 'year', year: 'year', yearly: 'year',
+  wk: 'week', week: 'week', weekly: 'week'
+});
+
 function meaningfulWhatsappPeriod(row = {}) {
   const type = normalizedListingType(row);
   if (type === 'sale') return '';
   if (type === 'rent') return 'month';
-  if (type === 'student') return 'semester';
+  if (type === 'student') {
+    // By the semester, unless the listing says otherwise. A room at 450K a
+    // month was being shown to students as "450K/semester": a different room
+    // at a quarter of the price.
+    const stored = cleanText(row.price_period || row.period || '').toLowerCase();
+    return STUDENT_PRICE_PERIODS[stored] || 'semester';
+  }
 
   const transaction = cleanText(row.transaction_type || row.transaction || '').toLowerCase();
   const rawPeriod = cleanText(row.price_period || row.period || '').toLowerCase();

@@ -122,9 +122,27 @@ function wroteBackWithoutTheWord(row = {}, activity = {}) {
   return replyAfterPitch(row, activity);
 }
 
+// The word the film asks for, as the assistant itself takes it (routes/whatsapp.js).
+const AGENT_WORD = /^(?:yes\s+)?agent(?:\s+please)?[\s.!]*$/i;
+const LIST_WORD = /^(?:yes\s+)?list(?:\s+please)?[\s.!]*$/i;
+
+/**
+ * They wrote the word, and it was never recorded as a yes: it reached the
+ * assistant before it knew the word, or in the middle of something else.
+ * 15 Nov 2026: two prospects had written AGENT twelve days before. The desk
+ * showed the word in quotes, and beside it "has not said AGENT yet". They said
+ * it. They are a yes, and nobody has called them.
+ */
+function saidTheWordUnrecorded(row = {}, activity = {}) {
+  const wrote = wroteBackWithoutTheWord(row, activity);
+  if (!wrote) return null;
+  return (isOwnerFilm(row) ? LIST_WORD : AGENT_WORD).test(String(wrote.text || '').trim()) ? wrote : null;
+}
+
 function followUpLabel(row = {}, activity = {}) {
   if (row.do_not_contact) return 'Do not contact again';
   const labels = isOwnerFilm(row) ? OWNER_FOLLOW_UP_LABELS : FOLLOW_UP_LABELS;
+  if (saidTheWordUnrecorded(row, activity)) return labels.interested;
   if (wroteBackWithoutTheWord(row, activity)) {
     return isOwnerFilm(row) ? 'Replied — has not said LIST yet' : 'Replied — has not said AGENT yet';
   }
@@ -186,7 +204,10 @@ function loopState(row = {}, activity = {}) {
   if (status === 'signed_up' || row.registered_at || row.agent_id) return 'register_done';
   if (status === 'interested' && row.called_at) return 'called';
   if (status === 'interested') return 'yes';
-  if (status === 'pitched') return wroteBackWithoutTheWord(row, activity) ? 'replied' : 'no_reply';
+  if (status === 'pitched') {
+    if (saidTheWordUnrecorded(row, activity)) return 'yes';
+    return wroteBackWithoutTheWord(row, activity) ? 'replied' : 'no_reply';
+  }
   return 'open';
 }
 
@@ -223,6 +244,14 @@ function prospectNextStep(row = {}, activity = {}) {
   }
   const days = Number(row.days_since_last_touch ?? row.days_since_pitch ?? daysSince(lastTouchAt(row)) ?? 0);
   const dayBit = days === 0 ? 'today' : days === 1 ? '1 day ago' : `${days} days ago`;
+  const saidIt = saidTheWordUnrecorded(row, activity);
+  if (saidIt) {
+    const when = kampalaDayWords(saidIt.at);
+    const word = isOwnerFilm(row) ? 'LIST' : 'AGENT';
+    return isOwnerFilm(row)
+      ? `They wrote ${word}${when ? ` on ${when}` : ''} and nothing has happened since. Call them and help them list it, or list it for them with Agent 007 option 2.`
+      : `They wrote ${word}${when ? ` on ${when}` : ''} and nobody has called them. Call them, then register them with Agent 007 option 1. Mark Called or Registered when you have done it.`;
+  }
   const wrote = wroteBackWithoutTheWord(row, activity);
   if (wrote) {
     const when = kampalaDayWords(wrote.at);
@@ -302,8 +331,9 @@ function publicProspect(row = {}, activity = {}, known) {
     do_not_contact: row.do_not_contact === true,
     can_reach_out_again: row.do_not_contact !== true && !['declined', 'approved'].includes(String(row.status || '')),
     can_recontact: canRecontact(row),
-    can_mark_called: canMarkCalled(row),
-    can_mark_registered: canMarkRegistered(row),
+    // Somebody who wrote the word is a yes, recorded or not: the next step can be marked.
+    can_mark_called: canMarkCalled(row) || Boolean(!isOwnerFilm(row) && !row.called_at && saidTheWordUnrecorded(row, activity)),
+    can_mark_registered: canMarkRegistered(row) || Boolean(!isOwnerFilm(row) && !row.registered_at && saidTheWordUnrecorded(row, activity)),
     called_at: row.called_at || null,
     called_by: row.called_by || null,
     registered_at: row.registered_at || null,
@@ -722,6 +752,18 @@ async function markNextStep(id, { action = '', actor = '' } = {}) {
     error.code = 'do_not_contact';
     throw error;
   }
+  // They wrote the word and it was never recorded as a yes. It is recorded
+  // now, so that calling or registering them can be marked.
+  if (String(existing.status || '') === 'pitched' && existing.phone_key) {
+    const activity = (await activityForPhoneKeys([existing.phone_key])).get(existing.phone_key) || {};
+    if (saidTheWordUnrecorded(existing, activity)) {
+      const yes = await db.query(
+        `UPDATE agent_prospects SET status = 'interested', updated_at = NOW() WHERE id = $1 AND status = 'pitched' RETURNING *`,
+        [id]
+      );
+      if (yes.rows[0]) Object.assign(existing, yes.rows[0]);
+    }
+  }
   if (step === 'called') {
     if (String(existing.status || '') !== 'interested') {
       const error = new Error('Mark Yes first — Called is for someone who wants to join.');
@@ -820,6 +862,7 @@ module.exports = {
   formatAlreadyContactedMessage,
   publicProspect,
   replyAfterPitch,
+  saidTheWordUnrecorded,
   activityForPhoneKeys,
   evaluateOutreachSend,
   recordProspectPitch,

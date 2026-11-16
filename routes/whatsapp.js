@@ -20,6 +20,7 @@ const agentFilm = require('../services/agentFilmReplyService');
 const replyPlaybook = require('../services/whatsappReplyPlaybook');
 const controlRoom = require('../services/agent007ControlRoom');
 const filmLanguages = require('../services/filmLanguageService');
+const filmLinks = require('../services/filmLinkService');
 const ownerFilm = require('../services/ownerFilmReplyService');
 const ownerListing = require('../services/ownerListingCommandService');
 const { handleAgentBookingReply } = require('../services/agentBookingService');
@@ -1264,9 +1265,13 @@ function fastWhatsappRuntimeHints({
   }
 
   if (!intent) {
+    // A message the website wrote is read as the search it stands for and
+    // whatever the visitor added to it, as processMessage reads it. Read word
+    // by word, the site's own "near campus" is a place called Campus.
+    const searchText = websitePrefillSearchText(clean) || clean;
     const searchFilters = sanitizeNaturalSearchFilters(
-      extractNaturalSearchFilters(clean, {}, 'any', {}),
-      clean
+      extractNaturalSearchFilters(searchText, {}, 'any', {}),
+      searchText
     );
     if (searchFilters.hasSignal && (searchFilters.area || searchFilters.useSharedLocation || searchFilters.searchType !== 'any')) {
       intent = 'property_search';
@@ -2277,25 +2282,52 @@ function commercialUseInSearch(input = '') {
  *
  * A pre-filled message is turned into the plain search it stands for, using the
  * category and the area in the page address, before anything tries to guess.
+ *
+ * 15 Nov 2026: from the student page a visitor sent the site's message and
+ * typed a line of their own under it, saying which office the room should be
+ * near. The site's words were kept and theirs were thrown away. "Safe rooms
+ * near campus", which the site wrote, was then read as a place called Campus
+ * ("I could not match Campus"). What the visitor adds is the search; the
+ * site's two sentences only say which kind. `please` is the site's second
+ * sentence, word for word (assets/makaug-app.js, PUBLIC_WHATSAPP_CONTEXTS): a
+ * sentence that is no longer that is one the visitor rewrote, and is theirs.
  */
 const WEBSITE_PREFILL_RULES = [
-  { re: /looking for land or a plot/i, query: 'land for sale' },
-  { re: /looking for a home or investment property/i, query: 'property for sale' },
-  { re: /looking for a rental/i, query: 'property to rent' },
-  { re: /looking for student accommodation/i, query: 'student accommodation' },
-  { re: /looking for commercial property for my business/i, query: 'commercial property' }
+  { re: /looking for land or a plot/i, query: 'land for sale', please: 'Please help me find available land listings, compare details, and contact the seller or broker safely' },
+  { re: /looking for a home or investment property/i, query: 'property for sale', please: 'Please help me find suitable options, confirm availability, and connect me with a trusted owner or broker' },
+  { re: /looking for a rental/i, query: 'property to rent', please: 'Please help me with area, budget, bedrooms, availability, and viewing options' },
+  { re: /looking for student accommodation/i, query: 'student accommodation', please: 'Please help me find safe rooms near campus, with price, distance, rules, and availability' },
+  { re: /looking for commercial property for my business/i, query: 'commercial property', please: 'Please help me with location, size, rent or sale price, and viewing options' }
 ];
 const WEBSITE_PREFILL_NON_AREA_SEGMENTS = new Set([
   'land', 'sale', 'rent', 'students', 'student', 'commercial', 'for-sale', 'to-rent', 'houses', 'homes',
   'properties', 'property', 'brokers', 'agents', 'search', 'plots', 'rentals'
 ]);
+const WEBSITE_PREFILL_PAGE = /\bPage:\s*(?:https?:\/\/)?(?:www\.)?makaug\.com(\/[^\s?#]*)?\S*/i;
+
+/** What the visitor typed themselves, in or around the message the website wrote for them. */
+function websitePrefillOwnWords(text = '', rule = null) {
+  if (!rule) return '';
+  let rest = normalizeInput(text).replace(WEBSITE_PREFILL_PAGE, ' ');
+  const opening = rule.re.exec(rest);
+  if (!opening) return '';
+  rest = rest.slice(opening.index + opening[0].length);
+  const sitesWords = String(rule.please || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+  if (sitesWords) rest = rest.replace(new RegExp(`${sitesWords}\\s*[.!]*`, 'i'), ' ');
+  const own = rest.replace(/\s+/g, ' ').replace(/^[\s.,;:!?-]+|[\s.,;:-]+$/g, '').trim();
+  // The site's sentence cut short ("Please help me.") is still the site's.
+  const sitesPlain = String(rule.please || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (own && sitesPlain.startsWith(own.toLowerCase())) return '';
+  return own;
+}
+
 function websitePrefillSearchText(input = '') {
   const text = normalizeInput(input);
   if (!/^hi makaug\b/i.test(text)) return '';
   const rule = WEBSITE_PREFILL_RULES.find((entry) => entry.re.test(text));
   if (!rule) return '';
   let area = '';
-  const page = text.match(/\bPage:\s*(?:https?:\/\/)?makaug\.com(\/[^\s?#]*)?/i);
+  const page = text.match(WEBSITE_PREFILL_PAGE);
   if (page && page[1]) {
     const segments = page[1].split('/').map((part) => part.trim().toLowerCase()).filter(Boolean);
     const slug = segments.slice(1).find((part) => !WEBSITE_PREFILL_NON_AREA_SEGMENTS.has(part) && /^[a-z][a-z-]*[a-z]$/.test(part));
@@ -2303,7 +2335,11 @@ function websitePrefillSearchText(input = '') {
       area = slug.split('-').filter(Boolean).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     }
   }
-  return area ? `${rule.query} in ${area}` : rule.query;
+  const own = websitePrefillOwnWords(text, rule);
+  // A place the visitor names themselves comes before the one in the page address.
+  const ownNamesPlace = /\b(?:in|at|near|nearby|around|within|from|close to|next to|opposite|behind)\s+[a-z]/i.test(own);
+  const search = area && !ownNamesPlace ? `${rule.query} in ${area}` : rule.query;
+  return own ? `${search}. ${own}` : search;
 }
 
 function inferListingTypeFromStartRequest(input, entities = {}) {
@@ -10618,8 +10654,19 @@ async function handleControlRoomStep({ phone, currentStep, cleanBody, data = {} 
     if (!sendDecision.ok) {
       return close(`I did not send the film.\n\n${sendDecision.message}`, {}, { outreachBlocked: sendDecision.code });
     }
+    const firstContact = await firstContactAllowed(dialable);
+    if (!firstContact.ok) {
+      return close([
+        'I did not send the film.',
+        '',
+        firstContact.why,
+        '',
+        `Ask them to write *Hi* to the makaug number first: https://wa.me/${filmLinks.makaugWhatsappDigits()}?text=Hi`,
+        'Once they have written, send their name and number here again and the film goes straight away.'
+      ].join('\n'), {}, { firstContactRefused: firstContact.code });
+    }
     try {
-      await sendOwnerPitchVideo({ phone: dialable, name: contact.fullName, sentBy: phone, lang: contact.lang });
+      await sendOwnerPitchVideo({ phone: dialable, name: contact.fullName, sentBy: phone, lang: contact.lang, firstContact: !firstContact.wrote && !firstContact.unlimited });
     } catch (error) {
       logger.error('Owner film send failed:', error);
       return stay('I could not send the film just then and nothing went out. Check the number and send the name and phone again.');
@@ -11216,7 +11263,7 @@ async function handleEmployeeWhatsappIntake({
     // needs the film first.
     if (role === 'pitch') {
       await replaceEmployeeSession(phone, 'employee_pitch_contact', data);
-      return { handled: true, nextStep: 'employee_pitch_contact', message: employeePitchContactPrompt(agentMonthlyFeeLabel()) };
+      return { handled: true, nextStep: 'employee_pitch_contact', message: agentFilmPromptFor(phone) };
     }
     // The control room (14 Nov 2026): the owner film, the how-to videos, who
     // still owes, and looking someone up. Their steps are in handleControlRoomStep.
@@ -11288,8 +11335,20 @@ async function handleEmployeeWhatsappIntake({
         message: `I did not send the video.\n\n${sendDecision.message}`
       };
     }
+    // The number writes first to a few new people a day. Everyone else gets
+    // the film by asking for it, through the link.
+    const firstContact = await firstContactAllowed(dialable);
+    if (!firstContact.ok) {
+      await replaceEmployeeSession(phone, 'main_menu', {});
+      return {
+        handled: true,
+        nextStep: 'main_menu',
+        firstContactRefused: firstContact.code,
+        message: `I did not send the video.\n\n${filmLinks.useYourLinkMessage({ why: firstContact.why, name: staffNameForNumber(phone), film: 'joining film' })}`
+      };
+    }
     try {
-      await sendAgentPitchVideo({ phone: dialable, name: contact.fullName, sentBy: phone, lang: contact.lang });
+      await sendAgentPitchVideo({ phone: dialable, name: contact.fullName, sentBy: phone, lang: contact.lang, firstContact: !firstContact.wrote && !firstContact.unlimited });
     } catch (error) {
       logger.error('Agent pitch video send failed:', error);
       return {
@@ -11497,6 +11556,30 @@ async function handleEmployeeWhatsappIntake({
         videoAlreadySent = sendDecision.message;
       }
     }
+    // A payment link to somebody who is not yet an agent and has never written
+    // to the number is the number writing first, film or no film, and is
+    // counted as one of the day's.
+    let writingFirst = false;
+    if (!existingAgent) {
+      const firstContact = await firstContactAllowed(dialable);
+      writingFirst = firstContact.ok && !firstContact.wrote && !firstContact.unlimited;
+      if (!firstContact.ok) {
+        await replaceEmployeeSession(phone, 'main_menu', {});
+        return {
+          handled: true,
+          nextStep: 'main_menu',
+          firstContactRefused: firstContact.code,
+          message: [
+            'I did not send it.',
+            '',
+            firstContact.why,
+            '',
+            `Ask them to write *Hi* to the makaug number first: https://wa.me/${filmLinks.makaugWhatsappDigits()}?text=Hi`,
+            'Once they have written, send their name and number here again and the link goes straight away.'
+          ].join('\n')
+        };
+      }
+    }
     let sent;
     try {
       sent = await sendStaffPayLink({
@@ -11505,7 +11588,8 @@ async function handleEmployeeWhatsappIntake({
         agentId: existingAgent?.id || null,
         allowExempt: existingAgent?.fee_exempt === true,
         includeVideo,
-        requestedBy: phone
+        requestedBy: phone,
+        firstContact: writingFirst
       });
     } catch (error) {
       logger.error('Staff pay link send failed:', error);
@@ -13756,7 +13840,7 @@ function parseNumberToken(rawNumber, suffix) {
   if (!Number.isFinite(amount) || amount <= 0) return null;
   const tail = String(suffix || '').toLowerCase();
   if (tail === 'k' || tail.startsWith('thousand')) amount *= 1_000;
-  if (tail === 'm' || tail.startsWith('million')) amount *= 1_000_000;
+  if (tail === 'm' || tail === 'mn' || tail === 'mln' || tail.startsWith('million')) amount *= 1_000_000;
   if (tail === 'b' || tail === 'bn' || tail.startsWith('billion')) amount *= 1_000_000_000;
   return amount;
 }
@@ -13852,7 +13936,11 @@ function parseBudget(text) {
       canonicalCurrency: ACTIVE_CURRENCY
     };
   }
-  const rx = /(?:(usd|\$|eur|€|gbp|£|zar|r|ugx|ush|shs)\s*)?(\d[\d,\s]*(?:\.\d+)?)\s*(thousand|thousands|million|millions|billion|billions|bn|k|m|b)?\s*(usd|eur|gbp|zar|ugx|ush|shs)?/gi;
+  // The k, m or b after a figure is only that when a word does not carry on
+  // from it. 15 Nov 2026: "a 2 bedroom house ... not exceeding 500k" was read
+  // as a budget of 2 billion, the b of "bedroom", and answered with houses for
+  // sale up to USh 2.0B.
+  const rx = /(?:(usd|\$|eur|€|gbp|£|zar|r|ugx|ush|shs)\s*)?(\d[\d,\s]*(?:\.\d+)?)\s*(?:(thousand|thousands|million|millions|billion|billions|mln|mn|bn|k|m|b)(?![a-z]))?\s*(usd|eur|gbp|zar|ugx|ush|shs)?/gi;
   const candidates = [];
 
   let m;
@@ -13870,7 +13958,7 @@ function parseBudget(text) {
     const before = lower.slice(Math.max(0, (m.index || 0) - 24), m.index || 0);
 
     let score = 0;
-    if (/\b(for|under|max(?:imum)?|budget(?:\s+of)?|up to|around|about|at)\b/i.test(before)) score += 4;
+    if (/\b(for|under|below|max(?:imum)?|budget(?:\s+of)?|up to|upto|around|about|at|within|at most|(?:not|no)\s+(?:exceeding|more than|above|over|beyond)|exceed(?:ing)?|less than)\b/i.test(before)) score += 4;
     if (/\b(per\s*month|a month|monthly|\/month|pm|per\s*week|weekly|\/week|per\s*year|yearly|annually|\/year|semester|\/sem)\b/i.test(context)) score += 2;
     if (curA || curB || m[0].includes('$')) score += 2;
     if (suffix) score += 1;
@@ -13944,6 +14032,29 @@ function parseSearchType(text) {
   return null;
 }
 
+const SEARCH_PLACE_NOT_A_NAME = /^(?:(?:the|my|our|a|an)\s+)?(?:campus|town|city|city cent(?:er|re)|work|work ?place|office|school|college|university|hostel|home|here|there|me|us|road|main road|tarmac|area|place|location)$/i;
+
+/**
+ * The words of a search without the place it is measured from. "Near Acme
+ * Head Office", "next to the petrol station", "opposite the hospital": that
+ * is where to look, not what is wanted. 15 Nov 2026: a student asked for a
+ * room near the head office where they are an intern, and "Office" made it a
+ * search for an office to let.
+ */
+function withoutLandmarkPhrase(text = '') {
+  const clean = normalizeInput(text);
+  try {
+    const proximity = require('../services/landmarkService').parseProximityQuery(clean);
+    const target = normalizeInput(proximity?.target || '');
+    if (!target) return clean;
+    const at = clean.toLowerCase().indexOf(target.toLowerCase());
+    if (at < 0) return clean;
+    return `${clean.slice(0, at)} ${clean.slice(at + target.length)}`.replace(/\s+/g, ' ').trim();
+  } catch (_error) {
+    return clean;
+  }
+}
+
 function parseAreaFromText(text, sessionData = {}) {
   void sessionData;
   const clean = normalizeInput(text);
@@ -13962,10 +14073,14 @@ function parseAreaFromText(text, sessionData = {}) {
   const areaRe = /\b(?:in|at|around|near|within|from)\s+([a-z][a-z\s'-]{2,})/i;
   const areaMatch = cleanedLower.match(areaRe);
   if (areaMatch && areaMatch[1]) {
+    // The place ends where the person starts explaining it: "near the head
+    // office where I'm doing my internship" names the head office.
     let candidate = areaMatch[1]
-      .split(/\b(for|under|max|with|within|around|budget|monthly|per|a month|near me|my location|phone|call|rent|sale|buy)\b/i)[0]
+      .split(/\b(for|under|max|with|within|around|budget|monthly|per|a month|near me|my location|phone|call|rent|sale|buy|where|which|that|because|since|while|when|who|please|thanks|thank you|i am|i'm|im|we are|we're)\b/i)[0]
       .trim();
     candidate = candidate.replace(/[^a-z\s'-]/gi, '').replace(/\s+/g, ' ').trim();
+    // "near campus", "in town", "close to work": a kind of place, not the name of one.
+    if (SEARCH_PLACE_NOT_A_NAME.test(candidate)) candidate = '';
     if (candidate && candidate !== 'uganda') {
       return candidate
         .split(/\s+/)
@@ -14047,7 +14162,11 @@ function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any', 
   // are turned into plain English first, so rent/sale, beds and area all parse.
   const clean = normalizeWhatsappSearchText(text);
   const e = entities && typeof entities === 'object' ? entities : {};
-  const parsedSearchType = parseSearchType(clean);
+  // An office or a shop named only as the place to be near is not a request
+  // for business premises; what else the message says decides the type.
+  const wanted = withoutLandmarkPhrase(clean);
+  const wholeSearchType = parseSearchType(clean);
+  const parsedSearchType = wholeSearchType === 'commercial' && wanted !== clean ? parseSearchType(wanted) : wholeSearchType;
   const entitySearchType = e.listing_type || e.listingType;
   // Somebody asking FOR a petrol station is looking for business premises. A
   // station named as a landmark ("plot behind Total fuel station") is not that.
@@ -14061,7 +14180,7 @@ function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any', 
   );
   const area = sanitizeSearchAreaCandidate(e.area || e.location || e.district || parseAreaFromText(clean, sessionData), clean);
   const bedsMin = Number(e.bedrooms || e.beds || parseBedCount(clean) || 0) || 0;
-  let propertyType = normalizeInput(e.property_type || e.propertyType || parsePropertyType(clean)) || null;
+  let propertyType = normalizeInput(e.property_type || e.propertyType || parsePropertyType(wanted)) || null;
   // "land back home in Wakiso" is a land search, not a house search.
   if (searchType === 'land' && propertyType && /^(house|home|houses|homes)$/i.test(propertyType)) propertyType = null;
   // Distances ("10 miles from"), plot sizes (50x100) and acres are not prices.
@@ -14326,10 +14445,54 @@ function resolveWhatsappSearchLocation(filters = {}, originalText = '') {
   return resolved;
 }
 
-function whatsappSearchLocationBlockReply(filters = {}) {
-  return filters?.location_blocked && filters?.location_resolution
-    ? whatsappLocationPrompt(filters.location_resolution)
-    : null;
+const SEARCH_WHAT_LABEL = Object.freeze({
+  student: 'student rooms',
+  rent: 'places to rent',
+  sale: 'property for sale',
+  land: 'land',
+  commercial: 'commercial property'
+});
+
+/**
+ * Somebody searching named a place the place list does not have: a landmark,
+ * an office, a village too small for the census. They are asked which area it
+ * is in, in the words of a search, and told what they will be shown. The
+ * prompt used when a listing is being saved ("I have not guessed or saved a
+ * district") is about saving, and nothing is being saved here.
+ */
+function whatsappSearchLocationBlockReply(filters = {}, originalText = '') {
+  if (!(filters?.location_blocked && filters?.location_resolution)) return null;
+  const resolution = filters.location_resolution;
+  if (IS_SOUTH_AFRICA || resolution.status === 'ambiguous') return whatsappLocationPrompt(resolution);
+  const query = normalizeInput(resolution.query) || 'that place';
+  // As they wrote it: "ACME", not "Acme".
+  const written = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+'), 'i').exec(normalizeInput(originalText));
+  const named = written ? written[0].replace(/\s+/g, ' ') : query;
+  const suggestions = (resolution.suggestions || [])
+    .filter((candidate) => candidate.area && candidate.district)
+    .slice(0, 3)
+    .map((candidate) => `${candidate.area}, ${candidate.district}`);
+  const what = SEARCH_WHAT_LABEL[normalizeListingType(filters.searchType || 'any')] || 'what is available';
+  return [
+    `📍 I don't have *${named}* on my map yet, so I have not guessed where it is.`,
+    suggestions.length ? `Did you mean: ${suggestions.join(' · ')}?` : '',
+    `Which area or town is it in? For example *Ntinda, Kampala*. I will then show you ${what} there.`
+  ].filter(Boolean).join('\n\n');
+}
+
+/**
+ * The person has been asked where a place is. Everything else they asked for
+ * is kept with the question, so the answer is searched as what they wanted.
+ * 15 Nov 2026: a student asked for a room, was asked for the area, answered
+ * with a district, and was shown three properties for sale in it, one of
+ * them land at USh 500M. The kind of search had been dropped with the place.
+ */
+async function holdSearchForArea(phone, filters = {}, queryText = '') {
+  await patchSessionData(phone, {
+    search_type: normalizeListingType(filters?.searchType || 'any'),
+    pending_search_filters: filters,
+    natural_query_text: normalizeInput(queryText) || null
+  });
 }
 
 function addWhatsappCanonicalLocationFilter(where, values, filters = {}, alias = 'p') {
@@ -14778,7 +14941,7 @@ async function findAffordableWhatsappAreaStats(filters = {}, { includeBudget = t
 }
 
 async function buildAffordabilityAdviceReply({ phone, text, lang, filters = {} }) {
-  const normalizedFilters = {
+  let normalizedFilters = {
     ...filters,
     searchType: inferAffordabilitySearchType(text, filters)
   };
@@ -14795,6 +14958,20 @@ async function buildAffordabilityAdviceReply({ phone, text, lang, filters = {} }
   let rows = await findAffordableWhatsappListings(normalizedFilters, { includeBudget: true });
   let areaStats = await findAffordableWhatsappAreaStats(normalizedFilters, { includeBudget: true });
   let exactMatch = true;
+
+  // "A house" to rent is, as people say it, somewhere to live. A two-bedroom
+  // flat inside the budget answers the question better than a house outside
+  // it, so the word is let go before the budget is.
+  if (!rows.length && ['rent', 'student'].includes(normalizedFilters.searchType)
+    && /^(?:house|houses|home|homes)$/i.test(normalizeInput(normalizedFilters.propertyType))) {
+    const anyHome = { ...normalizedFilters, propertyType: null };
+    const homes = await findAffordableWhatsappListings(anyHome, { includeBudget: true });
+    if (homes.length) {
+      normalizedFilters = anyHome;
+      rows = homes;
+      areaStats = await findAffordableWhatsappAreaStats(anyHome, { includeBudget: true });
+    }
+  }
 
   if (!rows.length && Number(normalizedFilters.maxBudgetUgx || 0) > 0) {
     exactMatch = false;
@@ -19118,6 +19295,137 @@ function staffNameForNumber(value = '') {
   return '';
 }
 
+/** Everyone a film can be credited to: Arthur, the help contact, and the staff saved in King. */
+function filmLinkPeople() {
+  const people = [{ name: 'Arthur', phone: agentFilm.ARTHUR_WHATSAPP }];
+  const help = agentHelpContact();
+  if (help && help.name && help.digits) people.push({ name: help.name, phone: help.digits });
+  try {
+    for (const member of require('../services/whatsappEmployeeIntakeService').savedAgent007StaffList() || []) {
+      if (member && member.name && member.phone) people.push({ name: member.name, phone: member.phone });
+    }
+  } catch (_ignored) { /* the two above */ }
+  return people;
+}
+
+/** Whether this number has ever written to us. Somebody who has is answered, not approached. */
+async function hasWrittenToUs(phone) {
+  const tail = String(phone || '').replace(/\D/g, '').slice(-9);
+  if (tail.length !== 9) return false;
+  const result = await db.query(
+    `SELECT 1 FROM whatsapp_messages
+      WHERE direction = 'inbound'
+        AND RIGHT(regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g'), 9) = $1
+      LIMIT 1`,
+    [tail]
+  );
+  return result.rows.length > 0;
+}
+
+/**
+ * Whether the makaug number may write first to this person now: send a film
+ * to somebody who has never written to it. It may, a few times a day, in
+ * working hours, with time between them (services/filmLinkService.js). When
+ * it cannot be checked the answer is no: a film that should not have gone
+ * cannot be called back.
+ */
+async function firstContactAllowed(phone) {
+  if (!filmLinks.limitsOn()) return { ok: true, wrote: false, unlimited: true };
+  try {
+    if (await hasWrittenToUs(phone)) return { ok: true, wrote: true };
+    const today = (await db.query(
+      `SELECT COUNT(*)::int AS n, MAX(created_at) AS last_at
+         FROM outbound_message_queue
+        WHERE channel = 'whatsapp'
+          AND metadata->>'first_contact' = 'true'
+          AND status IN ('pending', 'retry', 'sent')
+          AND created_at >= (date_trunc('day', NOW() AT TIME ZONE 'Africa/Kampala') AT TIME ZONE 'Africa/Kampala')`
+    )).rows[0] || {};
+    return { ...filmLinks.firstContactDecision({ sentToday: Number(today.n || 0), lastAt: today.last_at || null }), wrote: false };
+  } catch (error) {
+    logger.warn('First-contact check failed:', error.message || String(error));
+    return { ok: false, code: 'not_checked', why: 'I could not check how many new people the makaug number has written to today, so I have not sent it.', wrote: false };
+  }
+}
+
+/** Agent 007 option 3: their own link first, then the name-and-number way. */
+function agentFilmPromptFor(staffPhone, { now = new Date() } = {}) {
+  const note = filmLinks.firstContactNote({ now });
+  return [
+    '🔗 *Your film link*',
+    filmLinks.filmLink(staffNameForNumber(staffPhone)),
+    'Whoever taps it and presses send gets the joining film from this number at once, and it counts for you. Send it by SMS, say it on a call, or put it under their post. There is no limit on these.',
+    '',
+    employeePitchContactPrompt(agentMonthlyFeeLabel()),
+    ...(note ? ['', note] : [])
+  ].join('\n');
+}
+
+/**
+ * "FILM", typed for them by the link a member of staff gave them. The joining
+ * film goes back as the answer, from this number, and they go on the Outreach
+ * list under whoever's link it was. An agent who is already with us is told
+ * so; a second tap inside ten minutes is not a second film.
+ */
+async function handleFilmLinkRequest({ phone, body = '', step = '', contactName = '', conversationControl = null } = {}) {
+  const asked = filmLinks.parseFilmRequest(body, filmLinkPeople());
+  if (!asked) return null;
+  const control = conversationControl || {};
+  if (['off', 'copilot'].includes(String(control.ai_mode || '').toLowerCase())
+    || ['needs_human', 'escalated'].includes(String(control.status || '').toLowerCase())) return null;
+  if (/^employee_/.test(String(step || ''))) return null;
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 9) return null;
+
+  const agent = await findApprovedAgentByPhone(digits).catch(() => null);
+  if (agent) {
+    const first = agentGreetingName(agent, '') || '';
+    return {
+      message: `You are already a makaug agent${first ? `, ${first}` : ''} 🙂 Send me your next property here: photos or a short video, and a caption with what it is, the exact area and the price.`,
+      nextStep: 'main_menu'
+    };
+  }
+
+  const recent = await db.query(
+    `SELECT 1 FROM audit_logs
+      WHERE action = 'explainer_video_sent' AND details->>'kind' = 'agent' AND created_at > NOW() - INTERVAL '10 minutes'
+        AND RIGHT(regexp_replace(COALESCE(details->>'phone', ''), '\\D', '', 'g'), 9) = $1
+      LIMIT 1`,
+    [digits.slice(-9)]
+  ).catch(() => ({ rows: [] }));
+  if (recent.rows.length) {
+    return { message: 'It is on its way 🙂 A video can take a minute to arrive.', nextStep: 'main_menu' };
+  }
+
+  const prospects = require('../services/agentProspectService');
+  const known = await prospects.findProspectByPhone(digits).catch(() => null);
+  const name = normalizeInput(contactName) || normalizeInput(known?.full_name) || '';
+  const who = asked.staff;
+  try {
+    await sendAgentPitchVideo({ phone: digits, name, sentBy: who ? who.phone : 'film_link', lang: asked.lang, askedFirst: true });
+  } catch (error) {
+    // They asked for it, so they are told: not left with an answer to "FILM" as if it were a search.
+    logger.error('Film link send failed:', error);
+    return { message: 'I could not send the film just then. Please send *FILM* again in a minute.', nextStep: 'main_menu' };
+  }
+  // A member of staff trying their own link gets the film, and is not a prospect.
+  const tail = digits.slice(-9);
+  if (filmLinkPeople().some((person) => String(person.phone || '').replace(/\D/g, '').slice(-9) === tail)) {
+    return { silent: true, nextStep: 'main_menu', staff: who ? who.name : '' };
+  }
+  await prospects.recordProspectPitch({
+    fullName: name,
+    phone: digits,
+    pitchedBy: who ? who.phone : '',
+    pitchedByName: who ? who.name : '',
+    // Somebody already on the list keeps how the first film reached them.
+    metadata: { ...(known ? {} : { sent_via: 'film_link' }), asked_first: true, ...(asked.lang ? { film_language: asked.lang } : {}) },
+    allowDuplicate: true
+  }).catch((error) => logger.warn('Film-link prospect not recorded:', error.message || String(error)));
+  // The film and its message are the answer.
+  return { silent: true, nextStep: 'main_menu', staff: who ? who.name : '' };
+}
+
 /** The agent film this number got in the last 30 days, if any: when, from whom, to what name. */
 async function agentFilmSentTo(phone) {
   const tail = String(phone || '').replace(/\D/g, '').slice(-9);
@@ -19876,7 +20184,7 @@ function agentMonthlyFeeLabel() {
  * The caption carries the three things a prospect asks about before anything
  * else: what makaug is, how listing works, and what it costs.
  */
-async function sendAgentPitchVideo({ phone, name = '', sentBy = '', lang = '' } = {}) {
+async function sendAgentPitchVideo({ phone, name = '', sentBy = '', lang = '', askedFirst = false, firstContact = false } = {}) {
   const video = EXPLAINER_VIDEOS.agent;
   // Luganda or Swahili: the twin film and its message. '' is English, as before.
   const filmLang = filmLanguages.filmLanguage(lang);
@@ -19914,6 +20222,10 @@ async function sendAgentPitchVideo({ phone, name = '', sentBy = '', lang = '' } 
       message_kind: 'explainer_video_agent',
       ...(filmLang ? { film_language: filmLang } : {}),
       employee_pitch: true,
+      // Asked for through a film link, or the number writing first to somebody
+      // who has never written to it: the second is counted and limited.
+      ...(askedFirst ? { asked_first: true } : {}),
+      ...(firstContact ? { first_contact: true } : {}),
       // Intentionally unique: an employee re-sending has decided to re-send.
       reply_dedupe_key: `pitch:agent:${digits}:${Date.now()}`
     }
@@ -19927,7 +20239,7 @@ async function sendAgentPitchVideo({ phone, name = '', sentBy = '', lang = '' } 
  * so the staff member is told what actually happened. The reply it asks for
  * (LIST) is answered by handleOwnerFilmReply.
  */
-async function sendOwnerPitchVideo({ phone, name = '', sentBy = '', lang = '' } = {}) {
+async function sendOwnerPitchVideo({ phone, name = '', sentBy = '', lang = '', firstContact = false } = {}) {
   const video = EXPLAINER_VIDEOS.owner;
   const filmLang = filmLanguages.filmLanguage(lang);
   const digits = String(phone || '').replace(/\D/g, '');
@@ -19966,6 +20278,7 @@ async function sendOwnerPitchVideo({ phone, name = '', sentBy = '', lang = '' } 
       message_kind: 'explainer_video_owner',
       ...(filmLang ? { film_language: filmLang } : {}),
       employee_pitch: true,
+      ...(firstContact ? { first_contact: true } : {}),
       reply_dedupe_key: `pitch:owner:${digits}:${Date.now()}`
     }
   });
@@ -20068,7 +20381,8 @@ async function sendStaffPayLink({
   agentId = null,
   allowExempt = false,
   includeVideo = false,
-  requestedBy = ''
+  requestedBy = '',
+  firstContact = false
 } = {}) {
   const payLinks = require('../services/payLinkService');
   const recipient = String(phone || '').replace(/\D/g, '');
@@ -20119,6 +20433,9 @@ async function sendStaffPayLink({
       message_kind: 'agent_pay_link_staff_sent',
       pay_link_code: created.link.code,
       agent_id: agentId || null,
+      // The number writing first to somebody: this message is the one counted
+      // for it, with or without the film before it.
+      ...(firstContact ? { first_contact: true } : {}),
       // Unique per send: a staff member sending it again has decided to.
       reply_dedupe_key: `pay_link:${created.link.code}:${Date.now()}`
     }
@@ -21054,8 +21371,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       language: lang,
       sessionData
     });
-    const locationBlockReply = whatsappSearchLocationBlockReply(affordabilityFilters);
-    if (locationBlockReply) return respond(locationBlockReply, 'search_area');
+    const locationBlockReply = whatsappSearchLocationBlockReply(affordabilityFilters, cleanBody);
+    if (locationBlockReply) {
+      await holdSearchForArea(phone, affordabilityFilters, cleanBody);
+      return respond(locationBlockReply, 'search_area');
+    }
     const reply = await buildAffordabilityAdviceReply({
       phone,
       text: cleanBody,
@@ -21091,8 +21411,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       }
     }
     naturalFilters = resolveWhatsappSearchLocation(naturalFilters, cleanBody);
-    const locationBlockReply = whatsappSearchLocationBlockReply(naturalFilters);
-    if (locationBlockReply) return respond(locationBlockReply, 'search_area');
+    const locationBlockReply = whatsappSearchLocationBlockReply(naturalFilters, cleanBody);
+    if (locationBlockReply) {
+      await holdSearchForArea(phone, naturalFilters, cleanBody);
+      return respond(locationBlockReply, 'search_area');
+    }
 
     if (!naturalFilters.hasSignal) {
       // Let non-search intents, greetings, and free-form support messages continue through the normal router.
@@ -21334,8 +21657,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       }
     }
     naturalFilters = resolveWhatsappSearchLocation(naturalFilters, cleanBody);
-    const locationBlockReply = whatsappSearchLocationBlockReply(naturalFilters);
-    if (locationBlockReply) return respond(locationBlockReply, 'search_area');
+    const locationBlockReply = whatsappSearchLocationBlockReply(naturalFilters, cleanBody);
+    if (locationBlockReply) {
+      await holdSearchForArea(phone, naturalFilters, cleanBody);
+      return respond(locationBlockReply, 'search_area');
+    }
     const likelyPropertySearchIntent = ['property_search', 'looking_for_property_lead'].includes(intentResult?.intent);
     if (likelyPropertySearchIntent || naturalFilters.hasSignal) {
       if (naturalFilters.useSharedLocation) {
@@ -21476,8 +21802,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       }
     }
     naturalFilters = resolveWhatsappSearchLocation(naturalFilters, cleanBody);
-    const locationBlockReply = whatsappSearchLocationBlockReply(naturalFilters);
-    if (locationBlockReply) return respond(locationBlockReply, 'search_area');
+    const locationBlockReply = whatsappSearchLocationBlockReply(naturalFilters, cleanBody);
+    if (locationBlockReply) {
+      await holdSearchForArea(phone, naturalFilters, cleanBody);
+      return respond(locationBlockReply, 'search_area');
+    }
 
     if (naturalFilters.hasSignal && naturalFilters.area) {
       const rows = await findPropertiesByNaturalFilters(naturalFilters);
@@ -21599,8 +21928,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
     if (looksLikeLocationOnlySearch(cleanBody)) {
       const locationFilters = resolveWhatsappSearchLocation({ area: cleanBody }, cleanBody);
-      const locationBlockReply = whatsappSearchLocationBlockReply(locationFilters);
-      if (locationBlockReply) return respond(locationBlockReply, 'search_area');
+      const locationBlockReply = whatsappSearchLocationBlockReply(locationFilters, cleanBody);
+      if (locationBlockReply) {
+        await holdSearchForArea(phone, { ...locationFilters, searchType: 'any' }, cleanBody);
+        return respond(locationBlockReply, 'search_area');
+      }
       const rows = await findPropertiesForWhatsapp('any', locationFilters);
       await patchSessionData(phone, { search_type: 'any', pending_search_filters: null });
       await logPropertySearchRequest({
@@ -21792,7 +22124,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (pendingFilters) {
       naturalFilters = { ...pendingFilters };
       if ((!naturalFilters.area || naturalFilters.location_blocked) && cleanBody.length >= 2) {
-        naturalFilters.area = cleanBody;
+        // The answer may be a sentence ("it is in Kampala, on Jinja Road"): the
+        // place in it is the area. And the landmark nobody could place is let
+        // go, or the search it was to be measured from can never find anything.
+        naturalFilters.area = parseAreaFromText(cleanBody, sessionData) || cleanBody;
+        if (naturalFilters.proximity?.unresolved) naturalFilters.proximity = null;
         naturalFilters.district = null;
         naturalFilters.location_resolution = null;
         naturalFilters.location_status = null;
@@ -21814,7 +22150,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
     if (naturalFilters && naturalFilters.area) {
       naturalFilters = resolveWhatsappSearchLocation(naturalFilters, cleanBody);
-      const locationBlockReply = whatsappSearchLocationBlockReply(naturalFilters);
+      const locationBlockReply = whatsappSearchLocationBlockReply(naturalFilters, cleanBody);
       if (locationBlockReply) {
         await patchSessionData(phone, { pending_search_filters: naturalFilters });
         return respond(locationBlockReply, 'search_area');
@@ -21850,7 +22186,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
     if (cleanBody.length < 2) return respond(t(lang, 'askSearchArea'), 'search_area');
     const locationFilters = resolveWhatsappSearchLocation({ area: cleanBody, searchType }, cleanBody);
-    const locationBlockReply = whatsappSearchLocationBlockReply(locationFilters);
+    const locationBlockReply = whatsappSearchLocationBlockReply(locationFilters, cleanBody);
     if (locationBlockReply) {
       await patchSessionData(phone, { pending_search_filters: locationFilters });
       return respond(locationBlockReply, 'search_area');
@@ -22820,6 +23156,35 @@ async function processInboundRuntimeUnlocked({
     await updateSession(phone, { current_step: ownerCommandReply.resetStep });
     sessionStep = ownerCommandReply.resetStep;
     sessionForMessage.current_step = ownerCommandReply.resetStep;
+  }
+
+  // "FILM", typed for them by a member of staff's link: the joining film goes
+  // back as the answer, and they are on the Outreach list under that person.
+  const filmAsked = await handleFilmLinkRequest({
+    phone,
+    body: effectiveBody,
+    step: sessionStep,
+    contactName,
+    conversationControl
+  }).catch((error) => {
+    logger.warn('Film link request failed:', error.message || String(error));
+    return null;
+  });
+  if (filmAsked) {
+    await updateSession(phone, { current_step: filmAsked.nextStep || 'main_menu' });
+    deferWhatsappWork('WhatsApp film link intent log', () => logIntent({
+      userPhone: phone,
+      waMessageId: inboundMessageId,
+      detectedIntent: 'agent_registration',
+      confidence: 1,
+      language: sessionLang,
+      currentStep: sessionStep,
+      rawText: effectiveBody,
+      transcript: null,
+      entities: { next_step: filmAsked.nextStep || 'main_menu', via: 'film_link', ...(filmAsked.staff ? { staff: filmAsked.staff } : {}) },
+      modelUsed: 'film_link'
+    }));
+    return { message: filmAsked.message || '', nextStep: filmAsked.nextStep || 'main_menu' };
   }
 
   // A reply to the owner film ("Reply LIST here and I will take you through
@@ -24997,5 +25362,12 @@ module.exports.__test = {
   employeeNewerKeptCaptionIndex,
   addEmployeeQueuedMedia,
   agentAlsoSavedReply,
-  ambiguousPlaceBesideDistrict
+  ambiguousPlaceBesideDistrict,
+  websitePrefillOwnWords,
+  withoutLandmarkPhrase,
+  parseAreaFromText,
+  handleFilmLinkRequest,
+  firstContactAllowed,
+  agentFilmPromptFor,
+  filmLinkPeople
 };

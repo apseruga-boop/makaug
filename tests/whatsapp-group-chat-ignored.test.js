@@ -59,7 +59,9 @@ test('"no LID found" is final; "rate-overlimit" means wait, not retry in a secon
   assert.strictEqual(limited.permanent, false);
   assert.strictEqual(limited.reason, 'rate_limited');
   assert.ok(limited.retryDelaySeconds >= 300, 'a rate limit waits minutes, not a second');
-  assert.deepStrictEqual(bridge.classifyBridgeSendError('WAHA POST /api/sendText -> 500: session status is not as expected'), { permanent: false, reason: '', retryDelaySeconds: null });
+  // A session that is down is its own kind of failure: see tests/whatsapp-chats-1115b.test.js.
+  assert.deepStrictEqual(bridge.classifyBridgeSendError('WAHA POST /api/sendText -> 500: session status is not as expected'), { permanent: false, reason: 'session_not_ready', retryDelaySeconds: 300 });
+  assert.deepStrictEqual(bridge.classifyBridgeSendError('WAHA POST /api/sendText -> 500: upstream timed out'), { permanent: false, reason: '', retryDelaySeconds: null });
   assert.deepStrictEqual(bridge.classifyBridgeSendError('WhatsApp send was not confirmed after composer cleared'), { permanent: false, reason: '', retryDelaySeconds: null });
 });
 
@@ -118,7 +120,7 @@ test('a failure report that WhatsApp will repeat is final; a rate limit backs of
     assert.match(update.params[3], /"failure_class":"rate_limited"/);
   });
   await withFakeDb(async (calls) => {
-    await bridge.markWhatsappWebBridgeMessageFailed('q-3', 'WAHA POST /api/sendText -> 500: session status is not as expected', {}, { retryDelaySeconds: 45 });
+    await bridge.markWhatsappWebBridgeMessageFailed('q-3', 'WAHA POST /api/sendText -> 500: upstream timed out', {}, { retryDelaySeconds: 45 });
     const update = calls.find((c) => /UPDATE outbound_message_queue/i.test(c.sql));
     assert.strictEqual(update.params[4], false);
     assert.strictEqual(Number(update.params[2]), 45, 'the bridge may ask for a wait of its own');

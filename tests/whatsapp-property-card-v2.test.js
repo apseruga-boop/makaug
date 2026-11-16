@@ -53,10 +53,17 @@ assert.strictEqual(formatWhatsappPropertyPrice({
   price: 2_500_000,
   price_period: 'once'
 }), 'USh 2.5M/month');
+// A student room is shown at the period it is listed at (15 Nov 2026: a room
+// at 450K a month was being shown to students as "450K/semester"). By the
+// semester only when the listing does not say.
 assert.strictEqual(formatWhatsappPropertyPrice({
   listing_type: 'student',
   price: 850_000,
   price_period: 'month'
+}), 'USh 850K/month');
+assert.strictEqual(formatWhatsappPropertyPrice({
+  listing_type: 'student',
+  price: 850_000
 }), 'USh 850K/semester');
 assert.strictEqual(formatWhatsappPropertyPrice({
   listing_type: 'commercial',
