@@ -108,3 +108,15 @@ test('"Why", the batch summary and staff all settle first; staff can look before
   assert.match(endpoint, /whatsapp_agent_waiting_adverts_settled/);
   assert.doesNotMatch(endpoint, /outbound_message_queue|queueWhatsapp/);
 });
+
+test('a waiting list stored with no send times is put in order by when each one was stored', () => {
+  // The live list on 16 Nov 2026 had none: the house at the front saved, and
+  // three complete adverts behind the villa waiting for its price did not.
+  const src = fs.readFileSync(path.join(__dirname, '../routes/whatsapp.js'), 'utf8');
+  const kept = src.slice(src.indexOf('async function saveReadyKeptSubmissions'), src.indexOf('async function settleAgentWaitingAdverts'));
+  assert.match(kept, /const pendingAt = Number\(data\.pending_caption_sender_ms \|\| 0\) \|\| Date\.parse\(data\.pending_property_media_stored_at \|\| ''\) \|\| 0;/);
+  assert.match(kept, /const entryAt = Number\(entry\.senderMs \|\| 0\) \|\| Date\.parse\(entry\.storedAt \|\| ''\) \|\| 0;/);
+  assert.match(kept, /entry\.media\.length > 0 && entryAt > pendingAt/);
+  const settle = src.slice(src.indexOf('async function settleAgentWaitingAdverts'), src.indexOf('function agentWaitingAdvertsReport'));
+  assert.match(settle, /await saveCompleteOnes\(\);\n  const retired = retireStaleAgentSubmissions\(data\);\n  if \(retired\) \{[\s\S]*?await saveCompleteOnes\(\);/, 'what comes to the front after a stale one is retired is settled too');
+});
