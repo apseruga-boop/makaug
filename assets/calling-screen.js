@@ -194,6 +194,26 @@
     '.mkc-top .sp{flex:1}',
     '.mkc-road{min-width:140px}.mkc-road .bar{height:6px;background:#334155;border-radius:9px;overflow:hidden;margin-top:4px}.mkc-road .bar i{display:block;height:100%;background:#34d399}',
     '.mkc-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) 290px;gap:14px;padding:14px;max-width:1500px;margin:0 auto}',
+    '.mkc-meetcard{background:#f0fdf4;border:2px solid #16a34a;border-radius:16px;padding:16px;color:#14532d}',
+    '.mkc-meetcard h3{margin:0;font-size:19px;font-weight:900;color:#14532d}',
+    '.mkc-meetcard .mm-sub{margin:4px 0 14px;color:#166534;font-size:14px;line-height:1.4}',
+    '.mkc-meetcard .mm-form{display:grid;grid-template-columns:minmax(150px,190px) minmax(220px,1fr) minmax(170px,240px) auto;gap:12px;align-items:end}',
+    '.mkc-meetcard .mm-form label{display:block;font-size:13px;font-weight:800;color:#14532d;text-align:left;margin:0}',
+    '.mkc-meetcard .mm-form input{display:block;width:100%;box-sizing:border-box;margin-top:5px;background:#fff;color:#0f172a;border:1px solid #86efac}',
+    '.mkc-meetcard .mm-form input::placeholder{color:#6b7280}',
+    '.mkc-meetcard .mm-save{min-height:44px;padding:0 24px;background:#15803d;color:#fff;border:0;border-radius:12px;font-weight:800;font-size:15px;cursor:pointer}',
+    '.mkc-meetcard .mm-save:hover{background:#166534}',
+    '.mkc-meetcard .mm-status{margin:14px 0;padding:10px 12px;border-radius:12px;background:#fff;border:1px solid #bbf7d0;color:#1f2937;font-size:14px;line-height:1.4}',
+    '.mkc-meetcard .mm-status.unset{background:#fffbeb;border-color:#fcd34d;color:#78350f}',
+    '.mkc-meetcard .mm-people{display:flex;flex-wrap:wrap;gap:8px;align-items:center}',
+    '.mkc-meetcard .mm-people b{font-size:14px;color:#14532d;margin-right:2px}',
+    '.mkc-meetcard .mm-person{background:#fff;color:#14532d;border:1.5px solid #16a34a;border-radius:999px;padding:7px 14px;font-weight:800;font-size:14px;cursor:pointer}',
+    '.mkc-meetcard .mm-person:hover,.mkc-meetcard .mm-person.on{background:#15803d;color:#fff}',
+    '.mkc-meetcard .mm-hist{margin-top:16px;padding-top:12px;border-top:1px solid #bbf7d0}',
+    '.mkc-panel .mkc-meetcard .mm-hist h4,.mkc-meetcard .mm-hist h4{margin:0 0 6px;font-size:15px;font-weight:900;text-transform:none;letter-spacing:0;color:#14532d}',
+    '.mkc-meetcard .mm-empty{margin:0;color:#374151;font-size:14px}',
+    '.mkc-meetcard .mkc-table{background:#fff}',
+    '@media (max-width:760px){.mkc-meetcard .mm-form{grid-template-columns:1fr}.mkc-meetcard .mm-save{width:100%}}',
     '.mkc-panel{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px}',
     '.mkc-panel h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#64748b}',
     '.mkc-num .name{font-size:22px;font-weight:900}.mkc-num .src{font-size:13px;color:#475569;margin-top:2px}',
@@ -1814,23 +1834,24 @@
     });
   }
   function drawKMeet(host) {
-    var box = q('[data-k-meet]', host); if (!box) return;
+    var box = q('[data-k-meetings]', host); if (!box) return;
     Promise.all([api('/meeting/settings'), api('/meeting/history?limit=40')]).then(function (res) {
       var st = res[0]; var hist = res[1];
-      box.innerHTML = '<h4 style="margin:0 0 6px">🗓 Team meetings</h4>'
-        + '<div class="mkc-row" style="align-items:flex-end;flex-wrap:wrap;gap:8px"><label>Times (Kampala, 24h)<br><input class="mkc-input" data-km-times placeholder="08:30, 16:30" value="' + esc((st.times || []).join(', ')) + '"></label>'
-        + '<label style="flex:1;min-width:240px">Google Meet link (from the calendar invite)<br><input class="mkc-input" style="width:100%;box-sizing:border-box" data-km-url placeholder="https://meet.google.com/abc-defg-hij" value="' + esc(st.meet_url || '') + '"></label>'
-        + '<label>Title<br><input class="mkc-input" data-km-title value="' + esc(st.title || '') + '"></label><button type="button" class="mkc-btn go" data-km-save>Save</button></div>'
-        + '<div class="mkc-muted" style="margin:4px 0 8px" data-km-msg>' + (st.updated_at ? 'Saved by ' + esc(st.updated_by || '') + ' · ' + esc(kDayTime(st.updated_at)) : 'Not set yet. Callers get a notification and their report 10 minutes before each time.') + '</div>'
-        + '<div class="mkc-row" style="gap:6px;flex-wrap:wrap"><span class="mkc-muted">Meeting report for:</span>' + (boot.callers || []).map(function (c) { return '<button type="button" class="mkc-btn sm" data-km-rep="' + esc(c.key) + '">' + esc(c.name) + '</button>'; }).join('') + (st.meet_url ? '<button type="button" class="mkc-btn sm go" data-km-join>▶ Join meeting</button>' : '') + '</div>'
+      var set = (st.times || []).length && st.meet_url;
+      box.innerHTML = '<h3>📅 Team meetings</h3><p class="mm-sub">Set the daily meeting times and the Google Meet link. Callers are reminded and get their report before each one.</p>'
+        + '<div class="mm-form"><label>Times (Kampala, 24h)<input class="mkc-input" data-km-times placeholder="08:30, 16:30" value="' + esc((st.times || []).join(', ')) + '"></label>'
+        + '<label>Google Meet link (from the calendar invite)<input class="mkc-input" data-km-url placeholder="https://meet.google.com/abc-defg-hij" value="' + esc(st.meet_url || '') + '"></label>'
+        + '<label>Title<input class="mkc-input" data-km-title value="' + esc(st.title || '') + '"></label><button type="button" class="mm-save" data-km-save>Save</button></div>'
+        + '<div class="mm-status' + (set ? '' : ' unset') + '" data-km-msg>' + (set ? '✅ Set: ' + esc((st.times || []).join(', ')) + ' Kampala' + (st.updated_at ? ' · saved by ' + esc(st.updated_by || '') + ' · ' + esc(kDayTime(st.updated_at)) : '') : '⚠️ Not set yet — callers get a notification and their report 10 minutes before each meeting.') + '</div>'
+        + '<div class="mm-people"><b>Meeting report for:</b>' + (boot.callers || []).map(function (c) { return '<button type="button" class="mm-person" data-km-rep="' + esc(c.key) + '">' + esc(c.name) + '</button>'; }).join('') + (st.meet_url ? '<button type="button" class="mm-save" style="min-height:36px" data-km-join>▶ Join meeting</button>' : '') + '</div>'
         + '<div data-km-report style="margin-top:8px"></div>'
-        + '<h4 style="margin:12px 0 6px">Meeting notes history</h4>'
+        + '<div class="mm-hist"><h4>Meeting notes history</h4>'
         + (hist.length ? '<div class="mkc-scroll"><table class="mkc-table"><tr><th>When</th><th>Who</th><th>Notes</th><th>Action items</th><th>Report then</th></tr>' + hist.map(function (n) {
           var r = n.report || {}; var t = r.today || {};
           return '<tr><td>' + esc(n.day) + ' ' + esc(n.slot) + (n.joined_at ? '<div class="mkc-muted">joined ' + esc(kDayTime(n.joined_at)) + '</div>' : '') + '</td><td>' + esc(personName(n.person_key)) + '</td><td style="max-width:360px;white-space:pre-wrap">' + esc(String(n.notes || '').slice(0, 600)) + '</td>'
             + '<td>' + ((n.actions || []).map(function (a) { return '<div>• ' + esc(a.text) + (a.phone ? ' <span class="mkc-muted">' + esc(a.phone) + (a.pipeline ? ' → queue' : '') + '</span>' : '') + (a.due ? ' <span class="mkc-muted">by ' + esc(a.due) + '</span>' : '') + '</div>'; }).join('') || '–') + '</td>'
             + '<td class="mkc-muted">' + (t.calls != null ? t.calls + ' calls · ' + (t.closes || 0) + ' closes · ' + (((t.money || {}).confirmed) || 0) + ' paid' : '–') + '</td></tr>';
-        }).join('') + '</table></div>' : '<p class="mkc-muted">No meeting notes yet.</p>');
+        }).join('') + '</table></div>' : '<p class="mm-empty">No meeting notes yet. Notes and action items saved in a meeting show here.</p>') + '</div>';
       q('[data-km-save]', box).onclick = function () {
         api('/meeting/settings', { method: 'POST', body: { times: q('[data-km-times]', box).value, meet_url: q('[data-km-url]', box).value, title: q('[data-km-title]', box).value } })
           .then(function () { toast('Meeting settings saved'); drawKMeet(host); }, function (e) { q('[data-km-msg]', box).innerHTML = '<span class="mkc-bad">' + esc(e.message) + '</span>'; });
@@ -1838,6 +1859,7 @@
       var kj = q('[data-km-join]', box); if (kj) kj.onclick = function () { meetPopup(st.meet_url); };
       qa('[data-km-rep]', box).forEach(function (b) {
         b.onclick = function () {
+          qa('[data-km-rep]', box).forEach(function (x) { x.classList.toggle('on', x === b); });
           var out = q('[data-km-report]', box); out.innerHTML = '<p class="mkc-muted">Building…</p>';
           api('/meeting/report?person_key=' + encodeURIComponent(b.getAttribute('data-km-rep'))).then(function (r) { out.innerHTML = '<div class="mkc-muted" style="margin-bottom:4px"><b>' + esc(r.name) + '</b> · built ' + esc(kDayTime(r.made_at)) + '</div>' + meetReportHtml(r); }, function (e) { out.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
         };
@@ -2071,7 +2093,7 @@
           + '<div class="mkc-scroll"><table class="mkc-table"><tr><th>Day</th><th>Open–close</th><th>Work mode</th><th>Breaks</th><th>Left screen</th><th>Idle</th><th>Calls</th><th>Talk</th><th>Closes</th><th>Payments</th><th>Commission</th><th>Actions</th><th>Flags</th></tr>' + days + '</table></div></div>';
       }).join('');
       box.innerHTML = '<div class="mkc-row" style="justify-content:space-between"><h4 style="margin:0">⏱ Staff activity · ' + esc(r.from) + (r.to !== r.from ? ' → ' + esc(r.to) : '') + '</h4>' + periodTabs('data-k-per', K.period) + '</div>'
-        + '<p class="mkc-muted" style="margin:4px 0 0">Times are Kampala. Bar: <b style="color:#10b981">work mode</b>, <b style="color:#f59e0b">breaks</b>, <b style="color:#ef4444">downtime</b> (work mode off or out of full screen), black tick = login. Flags: late start (after 10:00), downtime 30+ min, leaving the screen 5+ min or 20+ min in total, idle 10+ min, breaks over their time, missed working days.</p>' + (people || '<p class="mkc-muted">No activity in this period.</p>');
+        + '<p class="mkc-muted" style="margin:4px 0 0">Times are Kampala. Bar: <b style="color:#1f2937;white-space:nowrap"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#10b981;vertical-align:-1px"></i> work mode</b>, <b style="color:#1f2937;white-space:nowrap"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f59e0b;vertical-align:-1px"></i> breaks</b>, <b style="color:#1f2937;white-space:nowrap"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#ef4444;vertical-align:-1px"></i> downtime</b> (work mode off or out of full screen), black tick = login. Flags: late start (after 10:00), downtime 30+ min, leaving the screen 5+ min or 20+ min in total, idle 10+ min, breaks over their time, missed working days.</p>' + (people || '<p class="mkc-muted">No activity in this period.</p>');
       qa('[data-k-per]', box).forEach(function (b) { b.onclick = function () { K.period = b.getAttribute('data-k-per'); drawKAct(host); }; });
     }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
   }
@@ -2154,7 +2176,7 @@
       + '<div class="mkc-panel" style="margin-top:14px" data-k-act></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-cashlog></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-calls></div>'
-      + '<div class="mkc-panel" style="margin-top:14px" data-k-meet></div>'
+      + '<div class="mkc-meetcard" style="margin-top:14px" data-k-meetings></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-proofs></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-videos></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-blocks></div>'
