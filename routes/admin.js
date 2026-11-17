@@ -15943,10 +15943,32 @@ async function prepareAgentFeeLink({ agent = {}, actor = 'admin', force = false 
   return { send: true, agentPhone: decision.agentPhone, feeUgx, url, code, cardUrl, methodLine };
 }
 
-/** Queue a prepared payment message for the agent, note that it went, and tell the team. */
-async function queueAgentFeeLink(prepared = {}, { agent = {}, actor = 'admin', sendAt = null, withWelcome = false, heldUntil = null } = {}) {
+/**
+ * Whether what we send this agent waits for them to write first: the makaug
+ * number writes to nobody who has never written to it (16 Nov 2026). Asked only
+ * while that rule is on. When it cannot be told, they have not written.
+ */
+async function agentWaitsForFirstMessage(phone = '') {
+  const bridge = require('../services/whatsappWebBridgeService');
+  if (!bridge.onlyToPeopleWhoWrote()) return false;
+  return !(await bridge.hasWrittenToUs(phone).catch(() => false));
+}
+
+/**
+ * Queue a prepared payment message for the agent, note that it went, and tell
+ * the team. When the agent has never written to the number, everything for them
+ * waits until they do, and the team is told that, with a link to send them,
+ * not that it went; once it goes, they are told again (17 Nov 2026).
+ */
+async function queueAgentFeeLink(prepared = {}, { agent = {}, actor = 'admin', sendAt = null, withWelcome = false, heldUntil = null, waitsForThem = null } = {}) {
   const { agentPhone, feeUgx, url, cardUrl, methodLine } = prepared;
   const feeLabel = `UGX ${Number(feeUgx || 0).toLocaleString('en-GB')}`;
+  const waits = typeof waitsForThem === 'boolean' ? waitsForThem : await agentWaitsForFirstMessage(agentPhone);
+  // The employee who registered them, and the owner. They are told now, whenever the agent's own message goes.
+  const recipients = new Set();
+  if (agent.registered_by_phone) recipients.add(String(agent.registered_by_phone).replace(/\D/g, ''));
+  for (const owner of aiCeo.getConfiguredOwnerPhones()) recipients.add(String(owner).replace(/\D/g, ''));
+  const team = [...recipients].filter((recipient) => recipient.length >= 9);
   await queueWhatsappWebBridgeMessage({
     recipient: agentPhone,
     text: agentWelcome.buildPlanMessage({ agent, methodLine, url, withWelcome }),
@@ -15957,7 +15979,14 @@ async function queueAgentFeeLink(prepared = {}, { agent = {}, actor = 'admin', s
     source: agentReportWhatsappSource(),
     actorId: actor,
     sendAt,
-    metadata: { message_kind: 'agent_fee_link_on_approval', agent_id: agent.id, ...(withWelcome ? { part: 'welcome_plan' } : {}), reply_dedupe_key: `agent_fee_link:${agent.id}` }
+    metadata: {
+      message_kind: 'agent_fee_link_on_approval',
+      agent_id: agent.id,
+      ...(withWelcome ? { part: 'welcome_plan' } : {}),
+      // The last of their welcome. When it goes, these people hear that it has.
+      ...(waits ? { held_for_first_message: true, agent_name: String(agent.full_name || '').trim(), tell_when_sent: team } : {}),
+      reply_dedupe_key: `agent_fee_link:${agent.id}`
+    }
   }).catch(() => null);
 
   await db.query('UPDATE agents SET pay_link_sent_at = NOW() WHERE id = $1', [agent.id]).catch(() => null);
@@ -15966,18 +15995,22 @@ async function queueAgentFeeLink(prepared = {}, { agent = {}, actor = 'admin', s
   // menu, and they were missing from King's list of people asked and gone quiet.
   await payLinks.recordPayLinkSent(db, { code: prepared.code, to: agentPhone, status: 'queued' }).catch(() => null);
 
-  // The employee who registered them, and the owner. They are told now, whenever the agent's own message goes.
   const told = [];
-  const staffNote = (heldUntil
-    ? `💳 *${agent.full_name} is approved.* It is night in Kampala, so their welcome and the payment link go to them at ${agentWelcome.kampalaClock(heldUntil)}.\n\n`
-    : `💳 *${agent.full_name} is approved and the payment link has gone to them.*\n\n`)
+  const waiting = withWelcome
+    ? 'Their welcome, the payment link and any "your property is live" messages are waiting, and go'
+    : 'Their payment link is waiting, and goes';
+  const opening = waits
+    ? `💳 *${agent.full_name} is approved*, but nothing has reached them yet.\n\n`
+      + 'They have never written to the makaug WhatsApp number, and it only writes to people who have written to it first. '
+      + `${waiting} the moment they send it a message.\n\n`
+      + `Send them this to tap and send:\n${require('../services/filmLinkService').helloLink()}\n\n`
+    : (heldUntil
+      ? `💳 *${agent.full_name} is approved.* It is night in Kampala, so their welcome and the payment link go to them at ${agentWelcome.kampalaClock(heldUntil)}.\n\n`
+      : `💳 *${agent.full_name} is approved and the payment link has gone to them.*\n\n`);
+  const staffNote = opening
     + `Amount: ${feeLabel} a month\nNumber: ${agentPhone}\nPaid: not yet\n\n`
-    + 'I will tell you when the payment lands.';
-  const recipients = new Set();
-  if (agent.registered_by_phone) recipients.add(String(agent.registered_by_phone).replace(/\D/g, ''));
-  for (const owner of aiCeo.getConfiguredOwnerPhones()) recipients.add(String(owner).replace(/\D/g, ''));
-  for (const recipient of recipients) {
-    if (recipient.length < 9) continue;
+    + (waits ? 'I will tell you when their messages go, and when the payment lands.' : 'I will tell you when the payment lands.');
+  for (const recipient of team) {
     await queueWhatsappWebBridgeMessage({
       recipient,
       text: staffNote,
@@ -15987,7 +16020,7 @@ async function queueAgentFeeLink(prepared = {}, { agent = {}, actor = 'admin', s
     }).catch(() => null);
     told.push(recipient);
   }
-  return { sent: true, url, fee_ugx: feeUgx, agent_phone: agentPhone, notified: told, ...(heldUntil && sendAt ? { goes_at: new Date(sendAt).toISOString() } : {}) };
+  return { sent: true, url, fee_ugx: feeUgx, agent_phone: agentPhone, notified: told, ...(waits ? { waiting_for_first_message: true } : {}), ...(heldUntil && sendAt ? { goes_at: new Date(sendAt).toISOString() } : {}) };
 }
 
 /** The payment message on its own: for an agent welcomed earlier, or approved without a welcome. */
@@ -16191,9 +16224,11 @@ async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', pr
     ? await prepareAgentFeeLink({ agent: feeLink.agent, actor, force: feeLink.force === true })
       .catch((error) => ({ send: false, reason: 'pay_link_failed', error: error.message || String(error) }))
     : null;
-  const [lang, inChat] = await Promise.all([
+  // waitsForThem: they have never written to the number, so all of it waits until they do.
+  const [lang, inChat, waitsForThem] = await Promise.all([
     agentFilmLanguageFor(agentNumber),
-    preview ? false : agentIsInChat(agentNumber)
+    preview ? false : agentIsInChat(agentNumber),
+    preview ? false : agentWaitsForFirstMessage(agentNumber)
   ]);
   const { messages } = await buildAgentWelcomeMessages(pack, {
     fee: fee?.send ? fee : null,
@@ -16264,14 +16299,24 @@ async function queueAgentWelcomePack({ agentId, previewTo: previewToRaw = '', pr
     queued.plan_id = plan?.id || null;
   } else if (fee) {
     feeResult = fee.send
-      ? await queueAgentFeeLink(fee, { agent: feeLink.agent, actor, sendAt: schedule.plan_at, withWelcome: true, heldUntil: schedule.held_until })
+      ? await queueAgentFeeLink(fee, { agent: feeLink.agent, actor, sendAt: schedule.plan_at, withWelcome: true, heldUntil: schedule.held_until, waitsForThem })
         .catch((error) => ({ sent: false, error: error.message || String(error) }))
       : { sent: false, reason: fee.reason, ...(fee.error ? { error: fee.error } : {}) };
   }
   if (!preview && typeof afterQueued === 'function') {
     await Promise.resolve().then(afterQueued).catch((error) => console.warn('[agent-welcome] follow-up failed:', error.message));
   }
-  return { to, preview, format: 'three_messages', held_until: schedule.held_until, language: lang || 'en', queued, fee_link: feeResult };
+  return {
+    to,
+    preview,
+    format: 'three_messages',
+    held_until: schedule.held_until,
+    language: lang || 'en',
+    queued,
+    fee_link: feeResult,
+    // Staff are told it waits for them, with the link to send them, not that it went.
+    ...(waitsForThem ? { waiting_for_first_message: true, hello_link: require('../services/filmLinkService').helloLink() } : {})
+  };
 }
 
 router.post('/agent-welcome/:agentId/send', async (req, res, next) => {
@@ -16429,5 +16474,6 @@ module.exports.queueAgentWelcomePack = queueAgentWelcomePack;
 module.exports.handSentWelcomeFee = handSentWelcomeFee;
 module.exports._test = {
   ADMIN_REVIEW_STAGES,
-  adminReviewListingPatchFromBody
+  adminReviewListingPatchFromBody,
+  sendAgentFeeLinkOnApproval
 };

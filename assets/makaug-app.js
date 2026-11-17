@@ -14245,7 +14245,7 @@ async function sendAgentWelcome(preview = false) {
   }
   try {
     const res = await apiRequest(`/api/admin/agent-welcome/${encodeURIComponent(agentId)}/send`, { method: "POST", headers: adminAuthHeaders(), body });
-    toast(preview ? `Welcome sent to ${res?.data?.to}.` : (res?.data?.held_until ? `It is night in Kampala: the welcome goes to the agent at ${adminKampalaClock(res.data.held_until)}.` : "Welcome sent to the agent."));
+    toast(preview ? `Welcome sent to ${res?.data?.to}.` : (res?.data?.waiting_for_first_message ? adminWelcomeWaitsNote(res.data).trim() : (res?.data?.held_until ? `It is night in Kampala: the welcome goes to the agent at ${adminKampalaClock(res.data.held_until)}.` : "Welcome sent to the agent.")));
   } catch (error) {
     toast(error?.message || "Couldn't send the welcome pack.");
   }
@@ -37434,14 +37434,15 @@ async function adminSetAgentStatus(agentId, status, payment = null, feeOverride 
     const paid = response?.data?.payment;
     const override = response?.data?.fee_override;
     // At night the payment message waits for the morning with the rest of the welcome: say so, not "sent".
-    const payLinkHeld = Boolean(response?.data?.fee_link?.goes_at);
+    // So it does for an agent who has never written to the number, until they do.
+    const payLinkHeld = Boolean(response?.data?.fee_link?.goes_at || response?.data?.fee_link?.waiting_for_first_message || welcome?.waiting_for_first_message);
     const overrideNote = override
       ? (override.mode === "free_period" ? ` Free offer until ${override.offer_until}.`
         : override.mode === "pay_later" ? (response?.data?.fee_link?.sent ? (payLinkHeld ? " The pay link goes with their welcome." : " Pay link sent on WhatsApp.") : " Pay later — send the pay link from their card.")
         : " Fee waived.")
       : "";
     if (status === "approved") {
-      toast(`Approved.${overrideNote}${!override && response?.data?.fee_link?.sent ? (payLinkHeld ? " The payment link goes with their welcome." : " Payment link sent.") : ""}${paid ? ` Payment recorded — paid until ${paid.period_end}.` : ""}${welcome?.error ? ` Welcome NOT sent: ${welcome.error}` : (welcome?.skipped ? " They were welcomed before, so nothing was sent again." : (welcome?.held_until ? ` It is night in Kampala: their welcome goes at ${adminKampalaClock(welcome.held_until)}.` : " Welcome and how-to-post film sent on WhatsApp."))}`);
+      toast(`Approved.${overrideNote}${!override && response?.data?.fee_link?.sent ? (payLinkHeld ? " The payment link goes with their welcome." : " Payment link sent.") : ""}${paid ? ` Payment recorded — paid until ${paid.period_end}.` : ""}${welcome?.error ? ` Welcome NOT sent: ${welcome.error}` : (welcome?.skipped ? " They were welcomed before, so nothing was sent again." : (welcome?.waiting_for_first_message ? adminWelcomeWaitsNote(welcome) : (welcome?.held_until ? ` It is night in Kampala: their welcome goes at ${adminKampalaClock(welcome.held_until)}.` : " Welcome and how-to-post film sent on WhatsApp.")))}`);
     }
     await refreshBrokersFromApi({ silent: true }).catch(() => {});
     await refreshSharedKingToolsUi();
@@ -38608,12 +38609,21 @@ function adminKampalaClock(value) {
   return `${hour % 12 || 12}${minute === "00" ? "" : `:${minute}`}${hour < 12 ? "am" : "pm"}`;
 }
 
+// An agent who has never written to the makaug number gets nothing from it
+// until they do (16 Nov 2026), so their welcome is waiting, not sent: say so,
+// with the link that lets them write first (17 Nov 2026).
+function adminWelcomeWaitsNote(w = {}) {
+  const link = w?.hello_link || "https://wa.me/256780863394?text=Hi%20makaug";
+  return ` Nothing has reached them yet: they have never written to the makaug WhatsApp number. Their welcome and payment link go the moment they do. Send them ${link} to tap and send.`;
+}
+
 // What the agent was sent when they were approved, in one line for the toast.
 function adminApprovalFollowUpNote(data = {}) {
   const w = data?.welcome;
   const f = data?.fee_link;
-  const welcome = w?.error ? ` Welcome pack NOT sent: ${w.error}.` : (w?.skipped === "already_sent" ? " Welcome pack was sent before." : (w?.held_until ? ` It is night in Kampala: their welcome goes at ${adminKampalaClock(w.held_until)}.` : (w ? " Welcome pack sent on WhatsApp." : "")));
-  const pay = f?.sent ? (f.goes_at ? " The payment link goes with it." : " Payment link sent.") : (f?.reason === "already_sent" ? " Payment link was sent before." : (f?.reason === "already_paid" ? " Already paid." : (f?.reason === "fee_exempt" ? " No fee for this agent." : (f?.error || f?.reason ? ` Payment link NOT sent (${f.error || f.reason}).` : ""))));
+  const waits = Boolean(w?.waiting_for_first_message || f?.waiting_for_first_message);
+  const welcome = w?.error ? ` Welcome pack NOT sent: ${w.error}.` : (w?.skipped === "already_sent" ? " Welcome pack was sent before." : (waits ? adminWelcomeWaitsNote(w || {}) : (w?.held_until ? ` It is night in Kampala: their welcome goes at ${adminKampalaClock(w.held_until)}.` : (w ? " Welcome pack sent on WhatsApp." : ""))));
+  const pay = f?.sent ? (f.goes_at || waits ? " The payment link goes with it." : " Payment link sent.") : (f?.reason === "already_sent" ? " Payment link was sent before." : (f?.reason === "already_paid" ? " Already paid." : (f?.reason === "fee_exempt" ? " No fee for this agent." : (f?.error || f?.reason ? ` Payment link NOT sent (${f.error || f.reason}).` : ""))));
   return `${welcome}${pay}`;
 }
 
