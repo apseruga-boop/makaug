@@ -249,7 +249,7 @@
     '@media (max-width:1100px){#mkc-overlay.mkc-noscript .mkc-grid{grid-template-columns:minmax(0,1fr)}}',
     '@media (max-width:720px){#mkc-overlay.mkc-focus .mkc-grid{grid-template-columns:1fr}.mkc-wrapgrid,.mkc-wrapchecks{grid-template-columns:1fr}.mkc-comm small{display:none}.mkc-replies{grid-template-columns:1fr}}',
     '.mkc-splitsum{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.mkc-splitrows{display:flex;flex-direction:column;gap:6px}.mkc-splitrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.mkc-splitrow input[type=time]{width:110px}.mkc-splitrow select{min-width:170px}',
-    '.mkc-posted{font-size:14px;margin-top:4px;background:#f0f9ff;border:1px solid #bae6fd;color:#0c4a6e;border-radius:8px;padding:6px 8px;line-height:1.35}.mkc-wabtn{background:#16a34a!important;color:#fff!important;border-color:#16a34a!important;font-weight:800}.mkc-hitchip{background:#10b981;color:#fff;border-radius:99px;padding:4px 10px;font-weight:800;font-size:12px;white-space:nowrap}.mkc-intlchip{background:#334155;color:#e2e8f0;border-radius:99px;padding:4px 10px;font-size:11px;white-space:nowrap}.mkc-mode.dry i{background:#94a3b8!important}.mkc-fellback{background:#fef3c7;border:1px solid #fde68a;color:#78350f;border-radius:10px;padding:6px 10px;margin:0 0 6px;font-size:13px}.mkc-sugg{background:#eef2ff;color:#3730a3;border-radius:99px;padding:2px 4px 2px 10px;font-size:12px;margin-left:8px}.mkc-callhelp{margin-top:10px;text-align:left;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:8px 12px;font-size:13px;color:#1e3a8a;line-height:1.4}.mkc-callhelp summary{cursor:pointer;font-weight:800}.mkc-callhelp ol{margin:4px 0 6px 22px;padding:0;list-style:decimal}.mkc-callhelp li{display:list-item}.mkc-callhelp li{margin:2px 0}.mkc-callhelp p{margin:6px 0 0}.mkc-meetcard{background:#f0fdf4;border:2px solid #16a34a;border-radius:16px;padding:16px;color:#14532d}',
+    '.mkc-posted{font-size:14px;margin-top:4px;background:#f0f9ff;border:1px solid #bae6fd;color:#0c4a6e;border-radius:8px;padding:6px 8px;line-height:1.35}.mkc-wabtn{background:#16a34a!important;color:#fff!important;border-color:#16a34a!important;font-weight:800}.mkc-hitchip{background:#10b981;color:#fff;border-radius:99px;padding:4px 10px;font-weight:800;font-size:12px;white-space:nowrap}.mkc-intlchip{background:#334155;color:#e2e8f0;border-radius:99px;padding:4px 10px;font-size:11px;white-space:nowrap}.mkc-mode.dry i{background:#94a3b8!important}.mkc-fellback{background:#fef3c7;border:1px solid #fde68a;color:#78350f;border-radius:10px;padding:6px 10px;margin:0 0 6px;font-size:13px}.mkc-sugg{background:#eef2ff;color:#3730a3;border-radius:99px;padding:2px 4px 2px 10px;font-size:12px;margin-left:8px}.mkc-ev2 h5{margin:0 0 6px;font-size:13px}.mkc-evgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:10px;margin-top:10px}.mkc-evcard{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:10px}.mkc-evsec{margin:6px 0;font-size:13px}.mkc-chart{width:100%;height:auto;display:block}.mkc-evkpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.mkc-evkpi{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:8px 10px}.mkc-evkpi .v{font-size:20px;font-weight:900}.mkc-evkpi .l{font-size:12px;color:#64748b}.mkc-evkpi .s{margin-top:2px}@media(max-width:640px){.mkc-evkpis{grid-template-columns:repeat(2,minmax(0,1fr))}}.mkc-trend{font-size:12px;font-weight:800;margin-left:4px}.mkc-trend.up{color:#16a34a}.mkc-trend.down{color:#dc2626}.mkc-trend.flat{color:#64748b}.mkc-legs{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;font-size:11px;color:#475569}.mkc-leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}.mkc-evtl{list-style:none;margin:0;padding:0;font-size:13px;max-height:320px;overflow:auto}.mkc-evtl li{padding:4px 0;border-bottom:1px solid #f1f5f9}.mkc-evtl li.warn,.mkc-evtl li.bad{color:#b45309}.mkc-evtl li.bad{color:#b91c1c}.mkc-evtl ul{margin:4px 0 0 16px;padding:0;list-style:disc}.mkc-audit{list-style:none;margin:0;padding:0;font-size:13px}.mkc-audit li{padding:3px 0}.mkc-flag{background:#fee2e2;color:#991b1b;border-radius:6px;padding:1px 6px;font-size:12px;font-weight:700}.mkc-table tr.bad td{background:#fff1f2}.mkc-callhelp{margin-top:10px;text-align:left;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:8px 12px;font-size:13px;color:#1e3a8a;line-height:1.4}.mkc-callhelp summary{cursor:pointer;font-weight:800}.mkc-callhelp ol{margin:4px 0 6px 22px;padding:0;list-style:decimal}.mkc-callhelp li{display:list-item}.mkc-callhelp li{margin:2px 0}.mkc-callhelp p{margin:6px 0 0}.mkc-meetcard{background:#f0fdf4;border:2px solid #16a34a;border-radius:16px;padding:16px;color:#14532d}',
     '.mkc-meetcard h3{margin:0;font-size:19px;font-weight:900;color:#14532d}',
     '.mkc-meetcard .mm-sub{margin:4px 0 14px;color:#166534;font-size:14px;line-height:1.4}',
     '.mkc-meetcard .mm-form{display:grid;grid-template-columns:minmax(150px,190px) minmax(220px,1fr) minmax(170px,240px) auto;gap:12px;align-items:end}',
@@ -2658,26 +2658,157 @@
     };
   }
 
-  var EV_LABELS = { fs_exit: 'left full screen', fs_enter: 'back to full screen', hidden: 'switched away', visible: 'came back', break_start: 'break', break_end: 'break over', kit_send: 'sent sales kit', task_switch: 'switched task', started: 'started', ended: 'ended' };
+  // ---- Evidence trail v2: charts with trends, session bars, plain-English timeline, drop-offs, audit.
+  var EV_LABELS = { fs_exit: 'Left full screen', fs_enter: 'Back to full screen', hidden: 'Switched away from the screen', visible: 'Came back to the screen', break_start: 'Started a break', break_end: 'Break over', kit_send: 'Sent a sales-kit item', task_switch: 'Switched task', start: 'Started calling', end: 'Stopped calling', screen_open: 'Opened the calling screen', screen_close: 'Closed the calling screen', idle_start: 'No mouse or keyboard for a while', idle_end: 'Active again', work_on: 'Work mode on', work_off: 'Work mode off', meeting_join: 'Joined the team meeting', meeting_end: 'Left the team meeting', inbound_start: 'Took an incoming call', notes_start: 'Live notes on', notes_stop: 'Live notes off', notes_declined: 'Declined live notes', notes_error: 'Live notes stopped (browser)', wa_share: 'Shared on WhatsApp', housekeeping_on: 'Started housekeeping', housekeeping_off: 'Back to calling', auto_fallback: 'List ran out: moved to the next task', route: 'Script step' };
+  var ACT_LABELS = { 'mkc-tap': 'Tapped Call now', 'mkc-end': 'Ended the call', 'mkc-save': 'Saved the wrap-up', 'mkc-skip': 'Skipped the number', 'mkc-start': 'Pressed Start calling', 'mkc-add': 'Opened Add number', 'mkc-myreport': 'Opened My report', 'mkc-sidefull': 'Opened the side panel', 'mkc-endroute': 'Finished the script', 'mkc-hello': 'Asked them to say Hello on WhatsApp', 'mkc-washare': 'Opened Share on WhatsApp', 'mkc-work': 'Toggled work mode', 'mkc-break': 'Break button', 'mkc-exit': 'Exit button', 'mkc-quick': 'Picked a call-back time', 'mkc-hkgo': 'Opened a housekeeping item', 'mkc-hkdone': 'Finished a housekeeping item', 'mkc-tclose': 'Closed the texts panel', 'mkc-ans': 'Marked answered', 'mkc-rep': 'Opened the report', 'mkc-rbg': 'Opened the report', 'mkc-live': 'Opened the live site', 'mkc-live2': 'Opened the live site preview', 'mkc-tree': 'Opened the history tree', 'mkc-chip': 'Picked a quick option', 'mkc-rback': 'Went back a script step', sms_sent: 'Logged an SMS', video_requested: 'Asked King to approve a video', cash_check_signed: 'Signed the cash check' };
+  var SIDE_TABS = { wa: 'WhatsApp', leads: 'Leads', live: 'Live', search: 'Search', learn: 'Learn', team: 'Team' };
+  function actionText(detail) {
+    var d = String(detail || ''); var parts = d.split(':'); var code = parts[0]; var arg = parts.slice(1).join(':');
+    if (code === 'mkc-pick') return arg === '0' ? 'They picked up' : 'No answer';
+    if (code === 'mkc-reply') return 'Picked script answer ' + (Number(arg) + 1);
+    if (code === 'mkc-out') return 'Chose outcome: ' + arg.replace(/_/g, ' ');
+    if (code === 'mkc-mode') return 'Switched to ' + taskLabel(arg);
+    if (code === 'mkc-side-tab') return 'Opened the ' + (SIDE_TABS[arg] || arg) + ' tab';
+    if (code === 'mkc-tx') return arg === 'stop' ? 'Stopped live notes' : 'Started live notes';
+    if (code === 'mkc-chk') return 'Ticked a checklist item';
+    if (code === 'mkc-stage') return 'Moved the call stage to ' + arg.replace(/_/g, ' ');
+    if (code === 'mkc-tabk') return 'Opened ' + ({ texts: 'Texts', kit: 'Sales kit', script: 'Script' }[arg] || arg);
+    if (ACT_LABELS[code]) return ACT_LABELS[code];
+    if (!/^mkc-/.test(code)) return 'Pressed “' + d.slice(0, 40) + '”';
+    return code.replace(/^mkc-/, '').replace(/[-_]/g, ' ').replace(/^./, function (c) { return c.toUpperCase(); }) + (arg ? ' (' + arg.replace(/_/g, ' ') + ')' : '');
+  }
+  function evText(x) {
+    if (x.kind === 'action') return actionText(x.detail);
+    var t = EV_LABELS[x.kind] || x.kind.replace(/_/g, ' ');
+    if (x.kind === 'task_switch' || x.kind === 'start') return t + ': ' + taskLabel(String(x.detail || '').split(/\s/)[0]);
+    if (x.kind === 'auto_fallback') { var ft = String(x.detail || '').split('>'); return 'List ran out: ' + taskLabel(ft[0]) + ' → ' + taskLabel(ft[1] || ''); }
+    if (x.kind === 'end') return t + (x.detail ? ' (' + ({ exited: 'pressed Exit', dropped: 'dropped', replaced: 'new session started' }[x.detail] || x.detail) + ')' : '');
+    if (x.kind === 'notes_error') return t + (x.detail ? ': ' + ({ 'not-allowed': 'mic not allowed', network: 'no internet' }[x.detail] || x.detail) : '');
+    if (x.kind === 'idle_end') return 'Active again' + (/^\d+$/.test(String(x.detail || '')) ? ' after ' + hm(Number(x.detail)) + ' idle' : '');
+    if (x.kind === 'route') return 'Script step: ' + String(x.detail || '').replace(/[_-]/g, ' ');
+    return t + (x.detail && x.kind !== 'hidden' && x.kind !== 'visible' ? ' (' + String(x.detail).replace(/_/g, ' ') + ')' : (x.detail ? ' · ' + x.detail : ''));
+  }
+  var OUT_COLORS = { no_answer: '#94a3b8', callback: '#38bdf8', call_back: '#38bdf8', interested: '#22c55e', signed_up: '#16a34a', paid: '#16a34a', paid_now: '#16a34a', promised: '#f59e0b', rejected: '#ef4444', wont_pay: '#ef4444', not_interested: '#ef4444', wrong_number: '#a855f7', do_not_contact: '#64748b' };
+  function outColor(k, i) { return OUT_COLORS[k] || ['#0ea5e9', '#8b5cf6', '#14b8a6', '#f97316', '#e11d48', '#84cc16'][i % 6]; }
+  // Trend over finished periods (the current one is still running): last 3 vs the 3 before.
+  function trendArrow(series, key) {
+    var done = (series || []).slice(0, -1); if (done.length < 2) return '';
+    var w = Math.min(3, Math.floor(done.length / 2)); var sum = function (a) { return a.reduce(function (t, r) { return t + (r[key] || 0); }, 0); };
+    var cur = sum(done.slice(-w)); var prev = sum(done.slice(-2 * w, -w));
+    var span = w + ' finished period' + (w === 1 ? '' : 's') + ' vs the ' + w + ' before';
+    if (cur === prev) return '<span class="mkc-trend flat" title="' + span + '">→ steady</span>';
+    var up = cur > prev; var pct = prev ? Math.round(Math.abs(cur - prev) / prev * 100) + '%' : 'new';
+    return '<span class="mkc-trend ' + (up ? 'up' : 'down') + '" title="' + span + '">' + (up ? '▲' : '▼') + ' ' + pct + '</span>';
+  }
+  function periodLabel(k, unit) {
+    var d = new Date(k + 'T12:00:00Z'); var M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (unit === 'month') return M[d.getUTCMonth()];
+    return d.getUTCDate() + ' ' + M[d.getUTCMonth()];
+  }
+  function barChart(series, unit, key, color, fmt) {
+    var W = 560, H = 150, P = 22, n = series.length || 1; var max = Math.max.apply(null, series.map(function (r) { return r[key] || 0; }).concat([1]));
+    var bw = (W - P * 2) / n;
+    var bars = series.map(function (r, i) {
+      var v = r[key] || 0; var h = Math.round((H - P * 2) * v / max); var x = P + i * bw + bw * 0.15; var y = H - P - h;
+      return '<g><rect x="' + x.toFixed(1) + '" y="' + y + '" width="' + (bw * 0.7).toFixed(1) + '" height="' + Math.max(h, v ? 2 : 0) + '" rx="3" fill="' + color + '"' + (i === n - 1 ? '' : ' opacity="0.75"') + '><title>' + esc(periodLabel(r.k, unit)) + ': ' + esc(fmt ? fmt(v) : String(v)) + '</title></rect>'
+        + (v ? '<text x="' + (x + bw * 0.35).toFixed(1) + '" y="' + (y - 3) + '" text-anchor="middle" font-size="10" fill="#334155">' + esc(fmt ? fmt(v) : String(v)) + '</text>' : '')
+        + ((n <= 8 || i % 2 === n % 2 || i === n - 1) ? '<text x="' + (x + bw * 0.35).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="9" fill="#64748b">' + esc(periodLabel(r.k, unit)) + '</text>' : '') + '</g>';
+    }).join('');
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" class="mkc-chart" role="img"><line x1="' + P + '" y1="' + (H - P) + '" x2="' + (W - P) + '" y2="' + (H - P) + '" stroke="#e2e8f0"/>' + bars + '</svg>';
+  }
+  function outcomeChart(series, unit) {
+    var W = 560, H = 150, P = 22, n = series.length || 1; var keys = {};
+    series.forEach(function (r) { Object.keys(r.outcomes || {}).forEach(function (k) { keys[k] = 1; }); }); keys = Object.keys(keys);
+    var max = Math.max.apply(null, series.map(function (r) { return r.calls || 0; }).concat([1])); var bw = (W - P * 2) / n;
+    var bars = series.map(function (r, i) {
+      var y = H - P; var x = P + i * bw + bw * 0.15;
+      return keys.map(function (k, j) { var v = (r.outcomes || {})[k] || 0; if (!v) return ''; var h = (H - P * 2) * v / max; y -= h; return '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + (bw * 0.7).toFixed(1) + '" height="' + h.toFixed(1) + '" fill="' + outColor(k, j) + '"><title>' + esc(periodLabel(r.k, unit)) + ' · ' + esc(k.replace(/_/g, ' ')) + ': ' + v + '</title></rect>'; }).join('')
+        + ((n <= 8 || i % 2 === n % 2 || i === n - 1) ? '<text x="' + (x + bw * 0.35).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="9" fill="#64748b">' + esc(periodLabel(r.k, unit)) + '</text>' : '');
+    }).join('');
+    var legend = keys.map(function (k, j) { return '<span class="mkc-leg"><i style="background:' + outColor(k, j) + '"></i>' + esc(k.replace(/_/g, ' ')) + '</span>'; }).join('');
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" class="mkc-chart" role="img"><line x1="' + P + '" y1="' + (H - P) + '" x2="' + (W - P) + '" y2="' + (H - P) + '" stroke="#e2e8f0"/>' + bars + '</svg><div class="mkc-legs">' + (legend || '<span class="mkc-muted">No calls in this range.</span>') + '</div>';
+  }
+  // Session bars: green = on the screen, amber = switched away, grey = break, red end = dropped.
+  function sessionBars(e) {
+    var ss = e.sessions || []; if (!ss.length) return '<p class="mkc-muted">No sessions today.</p>';
+    var t0 = Math.min.apply(null, ss.map(function (s) { return new Date(s.started_at).getTime(); }));
+    var t1 = Math.max.apply(null, ss.map(function (s) { return new Date(s.ended_at || Date.now()).getTime(); }));
+    t0 = Math.floor(t0 / 3600000) * 3600000; t1 = Math.max(Math.ceil(t1 / 3600000) * 3600000, t0 + 3600000);
+    var W = 560, L = 16, R = 16, row = 18, H = ss.length * row + 26; var X = function (t) { return L + (W - L - R) * (t - t0) / (t1 - t0); };
+    var ticks = ''; for (var h = t0; h <= t1; h += 3600000) ticks += '<line x1="' + X(h).toFixed(1) + '" y1="0" x2="' + X(h).toFixed(1) + '" y2="' + (H - 16) + '" stroke="#f1f5f9"/><text x="' + X(h).toFixed(1) + '" y="' + (H - 4) + '" font-size="9" text-anchor="middle" fill="#64748b">' + esc(kTime(new Date(h).toISOString())) + '</text>';
+    var bars = ss.map(function (s, i) {
+      var a = new Date(s.started_at).getTime(); var b = new Date(s.ended_at || Date.now()).getTime(); var y = i * row + 4;
+      var segs = '<rect x="' + X(a).toFixed(1) + '" y="' + y + '" width="' + Math.max(2, X(b) - X(a)).toFixed(1) + '" height="14" rx="3" fill="#22c55e"><title>' + esc(kTime(s.started_at) + '–' + (s.ended_at ? kTime(s.ended_at) : 'now') + ' · ' + (s.device || '') + ' · login ' + (s.actor_account || '?')) + '</title></rect>';
+      var evs = (e.events || []).filter(function (x) { return x.session_id === s.id; }); var away = null; var brk = null;
+      evs.forEach(function (x) {
+        var t = new Date(x.at).getTime();
+        if (x.kind === 'hidden' && x.detail !== 'in meeting') away = t;
+        if (x.kind === 'visible' && away != null) { segs += '<rect x="' + X(away).toFixed(1) + '" y="' + y + '" width="' + Math.max(1.5, X(t) - X(away)).toFixed(1) + '" height="14" fill="#f59e0b"><title>Away ' + hm(t - away) + '</title></rect>'; away = null; }
+        if (x.kind === 'break_start') brk = t;
+        if (x.kind === 'break_end' && brk != null) { segs += '<rect x="' + X(brk).toFixed(1) + '" y="' + y + '" width="' + Math.max(1.5, X(t) - X(brk)).toFixed(1) + '" height="14" fill="#94a3b8"><title>Break ' + hm(t - brk) + '</title></rect>'; brk = null; }
+      });
+      if (away != null) segs += '<rect x="' + X(away).toFixed(1) + '" y="' + y + '" width="' + Math.max(1.5, X(b) - X(away)).toFixed(1) + '" height="14" fill="#f59e0b"><title>Away until the end</title></rect>';
+      if (s.end_reason === 'dropped') segs += '<rect x="' + (X(b) - 3).toFixed(1) + '" y="' + (y - 2) + '" width="5" height="18" fill="#dc2626"><title>Dropped</title></rect>';
+      return segs;
+    }).join('');
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" class="mkc-chart" role="img" data-k-evbars>' + ticks + bars + '</svg><div class="mkc-legs"><span class="mkc-leg"><i style="background:#22c55e"></i>On the screen</span><span class="mkc-leg"><i style="background:#f59e0b"></i>Switched away</span><span class="mkc-leg"><i style="background:#94a3b8"></i>Break</span><span class="mkc-leg"><i style="background:#dc2626"></i>Dropped</span></div>';
+  }
+  // Plain-English timeline: runs of screen actions fold into one line that opens to show each step.
+  function timelineHtml(e) {
+    var evs = (e.events || []).slice(); var out = []; var run = [];
+    var flush = function () { if (!run.length) return; if (run.length === 1) out.push('<li><b>' + esc(kTime(run[0].at)) + '</b> ' + esc(evText(run[0])) + '</li>'); else out.push('<li><details><summary><b>' + esc(kTime(run[0].at)) + '–' + esc(kTime(run[run.length - 1].at)) + '</b> ' + run.length + ' steps on the screen: ' + esc(run.slice(0, 3).map(evText).join(', ')) + (run.length > 3 ? '…' : '') + '</summary><ul>' + run.map(function (x) { return '<li>' + esc(kTime(x.at)) + ' ' + esc(evText(x)) + '</li>'; }).join('') + '</ul></details></li>'); run = []; };
+    evs.forEach(function (x) {
+      if (x.kind === 'action' || x.kind === 'route' || x.kind === 'notes_start' || x.kind === 'notes_stop') { run.push(x); return; }
+      flush();
+      var warn = x.kind === 'hidden' || x.kind === 'fs_exit' || x.kind === 'screen_close' || (x.kind === 'end' && x.detail === 'dropped');
+      out.push('<li' + (warn ? ' class="warn"' : '') + '><b>' + esc(kTime(x.at)) + '</b> ' + esc(evText(x)) + '</li>');
+    });
+    flush();
+    return out.length ? '<ul class="mkc-evtl" data-k-evtl>' + out.join('') + '</ul>' : '<p class="mkc-muted">Nothing logged today.</p>';
+  }
+  function outcomeCell(a) {
+    if (a.status === 'done') return '<b>' + esc(String(a.outcome || '').replace(/_/g, ' ')) + '</b>' + (a.is_close ? ' <span class="mkc-good">✓ close</span>' : '');
+    if (a.status === 'skipped') return 'Skipped' + (a.skip_reason ? ': ' + esc(a.skip_reason) : '');
+    if (a.status === 'released') return '<span class="mkc-muted">Not called (released when switching)</span>';
+    if (a.status === 'shown') return '<span class="mkc-muted">On screen now</span>';
+    if (a.tapped_at) return '<span class="mkc-flag">⚠ No outcome saved</span>';
+    return '<span class="mkc-flag">⚠ No outcome saved</span><div class="mkc-muted" style="font-size:11px">' + esc(String(a.status || '').replace(/_/g, ' ')) + ' · not tapped</div>';
+  }
   function openEvidence(host, person, keep) {
     var el = q('[data-k-evbox]', host);
     if (!keep && K.open === person && el.innerHTML) { K.open = null; el.innerHTML = ''; return; }
     K.open = person;
     el.innerHTML = '<p class="mkc-muted">Loading evidence…</p>';
     api('/evidence?person_key=' + encodeURIComponent(person)).then(function (e) {
-      var sess = (e.sessions || []).map(function (s) { return '<span class="mkc-pill">' + esc(kTime(s.started_at)) + '–' + esc(s.ended_at ? kTime(s.ended_at) : 'now') + ' · ' + esc(s.device || '') + ' · login: ' + esc(s.actor_account || '') + ' · focus ' + hm(s.focus_ms) + ' · away ' + hm(s.away_ms) + ' · ' + s.exit_count + ' exits' + (s.end_reason ? ' · ' + esc(s.end_reason) : '') + '</span>'; }).join(' ');
-      var evs = (e.events || []).slice(-40).map(function (x) { return '<span class="mkc-pill' + (x.kind === 'hidden' || x.kind === 'fs_exit' ? ' warn' : '') + '">' + esc(kTime(x.at)) + ' ' + esc(EV_LABELS[x.kind] || x.kind) + (x.detail ? ' (' + esc(x.detail) + ')' : '') + '</span>'; }).join(' ');
-      var rowsHtml = (e.attempts || []).map(function (a) {
-        var what = a.status === 'skipped' ? 'skipped: ' + (a.skip_reason || '') : String(a.outcome || a.status).replace(/_/g, ' ');
-        return '<tr><td>' + esc(kTime(a.shown_at)) + '</td><td>' + esc(a.task_key) + '</td><td>' + esc(a.name || '') + ' ' + esc(a.phone) + '</td><td>' + esc(a.tapped_at ? kTime(a.tapped_at) : '–') + '</td><td>' + (a.talk_s == null ? '–' : a.talk_s + ' s') + '</td><td>' + (a.gap_s == null ? '–' : a.gap_s + ' s') + '</td><td>' + esc(what) + '</td><td>' + esc(a.note || '') + (a.next_step ? ' <b>→ ' + esc(a.next_step) + '</b>' : '') + '</td><td>' + (a.flags || []).map(function (f) { return '<span class="mkc-pill flag">' + esc(f.replace(/_/g, ' ')) + '</span>'; }).join('') + '</td><td><button type="button" class="mkc-btn sm" data-k-tree="' + esc(a.id) + '">Tree</button></td></tr>';
+      var unit = K.evUnit || 'day'; var tr = (e.trends || {})[unit] || [];
+      var sm = e.summary || { calls: 0, connected: 0, closes: 0, talk_s: 0 };
+      var trendNote = { day: 'Trend: last 3 full days vs the 3 before', week: 'Trend: last 3 full weeks vs the 3 before', month: 'Trend: last 3 full months vs the 3 before' }[unit];
+      var kpi = function (label, val, key) { return '<div class="mkc-evkpi"><div class="v">' + val + '</div><div class="l">' + label + '</div><div class="s">' + (trendArrow(tr, key) || '<span class="mkc-muted">no trend yet</span>') + '</div></div>'; };
+      var cur = tr[tr.length - 1] || {};
+      var unitName = { day: 'today', week: 'this week', month: 'this month' }[unit];
+      var logins = (e.logins || []).map(function (l) { return '<span class="mkc-pill' + (/moderator/i.test(l.login) ? ' warn' : '') + '">🔑 ' + esc(l.login) + ' · ' + l.sessions + ' session' + (l.sessions === 1 ? '' : 's') + ' · ' + l.calls + ' call' + (l.calls === 1 ? '' : 's') + '</span>'; }).join(' ');
+      var shared = (e.logins || []).some(function (l) { return /moderator/i.test(l.login); });
+      var drops = (e.dropoffs || []).map(function (d) { return '<li class="' + (d.kind === 'no_outcome' || d.kind === 'dropped' ? 'bad' : '') + '"><b>' + esc(kTime(d.at)) + '</b> ' + esc(d.title) + '<div class="mkc-muted">' + esc(d.why) + '</div></li>'; }).join('');
+      var audit = (e.audit || []).map(function (c) { return '<li class="' + (c.ok ? 'ok' : 'bad') + '">' + (c.ok ? '✅' : '⚠️') + ' ' + esc(c.label) + ' <span class="mkc-muted">' + (c.total ? (c.total - c.missing) + '/' + c.total : 'nothing to check yet') + (c.note ? ' · ' + esc(c.note) : '') + '</span></li>'; }).join('');
+      var released = (e.attempts || []).filter(function (a) { return a.status === 'released'; }).length;
+      var rowsHtml = (e.attempts || []).filter(function (a) { return a.status !== 'released'; }).map(function (a) {
+        var fl = (a.flags || []).map(function (f) { return '<span class="mkc-flag">' + esc((e.flag_labels || {})[f] || f) + '</span>'; }).join(' ');
+        return '<tr' + (a.tapped_at && a.status !== 'done' && a.status !== 'skipped' ? ' class="bad"' : '') + '><td>' + esc(kTime(a.tapped_at || a.shown_at)) + '</td><td>' + esc(taskLabel(a.task_key)) + '</td><td>' + esc(a.name || '') + ' <span class="mkc-muted">' + esc(a.phone) + '</span></td><td>' + outcomeCell(a) + '</td><td>' + (a.talk_s == null ? '–' : hm(a.talk_s * 1000)) + '</td><td>' + esc(a.note || '') + (a.next_step ? '<div><b>Next:</b> ' + esc(a.next_step) + '</div>' : '') + (a.transcript_summary ? '<div class="mkc-muted">🎙 ' + esc(a.transcript_summary) + '</div>' : '') + '</td><td class="mkc-muted">' + esc(a.login || 'not recorded') + '</td><td>' + fl + ' <button type="button" class="mkc-btn sm ghost" data-k-tree="' + esc(a.id) + '">Tree</button></td></tr>';
       }).join('');
-      el.innerHTML = '<div class="mkc-panel" style="margin-top:12px;background:#f8fafc"><div class="mkc-row" style="justify-content:space-between"><h4 style="margin:0">Evidence trail · ' + esc(personName(person)) + ' · ' + esc(e.day || '') + '</h4><button type="button" class="mkc-btn sm ghost" data-k-evx>Close</button></div>'
-        + '<p class="mkc-muted">Check these against the company phone\'s call log: every tap has a time.</p>'
-        + '<div style="margin:6px 0">' + (sess || '<span class="mkc-muted">No sessions today.</span>') + '</div>'
-        + (e.summary ? '<div style="margin:6px 0" data-k-evsum><span class="mkc-pill">' + e.summary.calls + ' calls · ' + e.summary.connected + ' spoke · ' + e.summary.closes + ' closed · talk ' + hm((e.summary.talk_s || 0) * 1000) + '</span> ' + Object.keys(e.summary.outcomes || {}).map(function (k) { return '<span class="mkc-pill">' + esc(k.replace(/_/g, ' ')) + ' ' + e.summary.outcomes[k] + '</span>'; }).join(' ') + '</div>' : '')
-        + '<div style="margin:6px 0" data-k-evtime>' + taskTimeHtml(e.task_ms) + '</div><div style="margin:6px 0">' + evs + '</div>'
-        + '<div class="mkc-scroll"><table class="mkc-table"><tr><th>Shown</th><th>Task</th><th>Who</th><th>Tapped</th><th>Talk</th><th>Gap</th><th>Outcome</th><th>Note · next step</th><th>Flags</th></tr>' + (rowsHtml || '<tr><td colspan="9" class="mkc-muted">No calls.</td></tr>') + '</table></div></div>';
+      el.innerHTML = '<div class="mkc-panel mkc-ev2" style="margin-top:12px;background:#f8fafc" data-k-ev2>'
+        + '<div class="mkc-row" style="justify-content:space-between"><h4 style="margin:0">Evidence trail · ' + esc(personName(person)) + ' · ' + esc(e.day || '') + '</h4><button type="button" class="mkc-btn sm ghost" data-k-evx>Close</button></div>'
+        + '<div class="mkc-evsec"><b>Counted for:</b> ' + esc(personName(person)) + ' · <b>Logins used today:</b> ' + (logins || '<span class="mkc-muted">none</span>') + (shared ? '<div class="mkc-flag" style="display:inline-block;margin-top:4px">Shared login used: calls still count for the caller picked on the screen. Give each caller their own login.</div>' : '') + '</div>'
+        + '<div class="mkc-row" style="margin:8px 0;gap:6px" data-k-evunit>' + ['day', 'week', 'month'].map(function (u) { return '<button type="button" class="mkc-chip' + (u === unit ? ' on' : '') + '" data-k-evu="' + u + '">' + ({ day: 'Day by day', week: 'Week by week', month: 'Month by month' }[u]) + '</button>'; }).join('') + '</div>'
+        + '<div class="mkc-evkpis" data-k-evsum>' + kpi('Calls ' + unitName, cur.calls || 0, 'calls') + kpi('Talk time ' + unitName, hm((cur.talk_s || 0) * 1000), 'talk_s') + kpi('Spoke to ' + unitName, cur.connected || 0, 'connected') + kpi('Closes ' + unitName, cur.closes || 0, 'closes') + '</div><div class="mkc-muted" style="font-size:11px;margin-top:3px">' + trendNote + '. ▲ up · ▼ down.</div>'
+        + '<div class="mkc-evgrid"><div class="mkc-evcard"><h5>Calls</h5>' + barChart(tr, unit, 'calls', '#0ea5e9') + '</div><div class="mkc-evcard"><h5>Talk time</h5>' + barChart(tr, unit, 'talk_s', '#8b5cf6', function (v) { return hm(v * 1000); }) + '</div>'
+        + '<div class="mkc-evcard"><h5>Outcomes</h5>' + outcomeChart(tr, unit) + '</div><div class="mkc-evcard"><h5>Closes</h5>' + barChart(tr, unit, 'closes', '#16a34a') + '</div></div>'
+        + '<div class="mkc-evcard" style="margin-top:10px"><h5>Today\'s sessions</h5>' + sessionBars(e) + '<div data-k-evtime style="margin-top:6px">' + taskTimeHtml(e.task_ms) + '</div></div>'
+        + '<div class="mkc-evgrid"><div class="mkc-evcard" data-k-evdrops><h5>Drop-offs ' + ((e.dropoffs || []).length ? '<span class="mkc-flag">' + e.dropoffs.length + '</span>' : '') + '</h5>' + (drops ? '<ul class="mkc-evtl">' + drops + '</ul>' : '<p class="mkc-good">No drop-offs today.</p>') + '</div>'
+        + '<div class="mkc-evcard" data-k-evaudit><h5>Are we tracking everything?</h5><ul class="mkc-audit">' + audit + '</ul></div></div>'
+        + '<div class="mkc-evcard" style="margin-top:10px"><h5>Timeline (plain English)</h5>' + timelineHtml(e) + '</div>'
+        + '<div class="mkc-evcard" style="margin-top:10px"><h5>Every call today</h5><p class="mkc-muted" style="margin:0 0 6px">Check these against the company phone\'s call log: every tap has a time.' + (released ? ' ' + released + ' number' + (released === 1 ? ' was' : 's were') + ' shown but not called (put back when switching task); not listed.' : '') + '</p><div class="mkc-scroll"><table class="mkc-table" data-k-evcalls><tr><th>Time</th><th>Task</th><th>Who</th><th>Outcome</th><th>Talk</th><th>Note · next step</th><th>Login</th><th></th></tr>' + (rowsHtml || '<tr><td colspan="8" class="mkc-muted">No calls.</td></tr>') + '</table></div></div></div>';
       q('[data-k-evx]', el).onclick = function () { K.open = null; el.innerHTML = ''; };
+      qa('[data-k-evu]', el).forEach(function (b) { b.onclick = function () { K.evUnit = b.getAttribute('data-k-evu'); openEvidence(host, person, true); }; });
       qa('[data-k-tree]', el).forEach(function (b) { b.onclick = function () { openTimeline({ attempt_id: b.getAttribute('data-k-tree') }); }; });
     }, function (err) { el.innerHTML = '<div class="mkc-err">' + esc(err.message) + '</div>'; });
   }
