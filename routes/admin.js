@@ -10673,7 +10673,7 @@ router.get('/revenue/agent-trials', async (req, res, next) => {
 
 router.get('/revenue/summary', async (req, res, next) => {
   try {
-    const [summary, settings, claims, listers, links, awaiting, linkStats, reconciliation] = await Promise.all([
+    const [summary, settings, claims, listers, links, awaiting, linkStats, reconciliation, payChase] = await Promise.all([
       revenue.revenueSummary(db),
       billingOps.getSettings(db, { fresh: true }),
       db.query(
@@ -10691,7 +10691,12 @@ router.get('/revenue/summary', async (req, res, next) => {
       // at which "they have not got round to it" becomes "nobody is chasing".
       payLinks.payLinksAwaitingPayment(db, { afterDays: 3, limit: 50 }).catch(() => []),
       payLinks.payLinkSendStats(db, { sinceDays: 30 }).catch(() => null),
-      revenue.moneyReconciliation(db).catch(() => null)
+      revenue.moneyReconciliation(db).catch(() => null),
+      // The "Asked for money" card: one row per person, tiles/charts counted from those rows.
+      require('../services/payChaseService').payChaseOverview(db).catch((error) => {
+        logger.warn('Pay chase overview failed', { error: error.message });
+        return null;
+      })
     ]);
     const { revolut_webhook: revolutWebhook, ...publicSettings } = settings || {};
     // Everyone with money due, agents and private owners on one list: the same
@@ -10711,6 +10716,7 @@ router.get('/revenue/summary', async (req, res, next) => {
         pay_links: links,
         pay_links_awaiting: awaiting,
         pay_link_stats: linkStats,
+        pay_chase: payChase,
         card_payments: {
           ...payLinks.cardSettings(settings),
           configured: revolutMerchant.isConfigured(),

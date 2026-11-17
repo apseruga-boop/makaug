@@ -37734,7 +37734,7 @@ function adminPayLinksBlock(d) {
     const code = adminAttr(l.code);
     const paid = l.status === "paid" ? `Paid ${l.paid_method === "card" ? "by card" : "by MoMo"} ${adminEscape(adminShortDate(l.paid_at))}` : (l.status === "open" ? ((l.opened_by_them ?? Boolean(l.opened_at)) ? "Opened, not paid" : (l.sent_at ? "Sent, not opened" : "Not sent")) : l.status);
     const actions = l.status === "open" ? `<button type="button" onclick="adminSendPayLink('${code}')" class="underline font-bold">WhatsApp it</button> <button type="button" onclick="adminCopyPayLink('${adminAttr(l.url)}')" class="underline">Copy</button> ${l.provider_order_id ? `<button type="button" onclick="adminCheckPayLink('${code}')" class="underline">Check card</button>` : ""} <button type="button" onclick="adminCancelPayLink('${code}')" class="underline text-red-700">Cancel</button>` : "";
-    return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 whitespace-nowrap">${adminEscape(adminShortDate(l.created_at))}</td><td class="py-2 pr-3 font-bold">${adminEscape(who)}<div class="text-[11px] font-normal text-gray-500">${adminEscape(l.code)}${l.sent_to ? ` · to +${adminEscape(l.sent_to)}` : ""}</div></td><td class="py-2 pr-3 whitespace-nowrap">${adminFormatUgx(l.amount_ugx)}<div class="text-[11px] text-gray-500">card ${adminEscape(l.card_text || "")}</div></td><td class="py-2 pr-3 font-bold ${tone[l.status] || ""}">${paid}</td><td class="py-2 text-xs space-x-2 whitespace-nowrap">${actions}</td></tr>`;
+    return `<tr class="border-t border-gray-100 align-top"><td class="py-2 pr-3 whitespace-nowrap">${adminEscape(adminShortDate(l.created_at))}</td><td class="py-2 pr-3 font-bold">${adminEscape(who)}<div class="text-[11px] font-normal text-gray-500">${adminEscape(l.code)}${l.sent_to ? ` · to ···${adminEscape(String(l.sent_to).replace(/\D+/g, "").slice(-3))}` : ""}</div></td><td class="py-2 pr-3 whitespace-nowrap">${adminFormatUgx(l.amount_ugx)}<div class="text-[11px] text-gray-500">card ${adminEscape(l.card_text || "")}</div></td><td class="py-2 pr-3 font-bold ${tone[l.status] || ""}">${paid}</td><td class="py-2 text-xs space-x-2 whitespace-nowrap">${actions}</td></tr>`;
   }).join("");
   return `<div class="rounded-xl border border-gray-200 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-black text-gray-900">💳 Payment links — card or mobile money</h4><button type="button" onclick="adminCreatePayLink({ purpose: 'other' })" class="rounded bg-gray-900 px-3 py-1 text-xs font-bold text-white">New payment link</button></div>
     <p class="text-xs mt-1">${status}</p>
@@ -37744,35 +37744,119 @@ function adminPayLinksBlock(d) {
 }
 
 /**
- * Closing the loop.
- *
- * A link that went out and was never paid makes no noise at all, so nobody
- * could answer "who have we asked for money and heard nothing from" — the
- * table above is sorted newest-first and tells you nothing about who is
- * waiting. This is the worklist: the counts for the month, then everybody
- * whose link has been sitting unpaid for three days or more, longest wait
- * first, each with the next thing to do written out.
+ * "Asked for money" (17 Nov 2026): one row per person, with tiles, charts and
+ * an "is it connected?" check, all counted by the server from the same rows
+ * (services/payChaseService.js). Phones show the last three digits only.
  */
-function adminPayLinkLoopBlock(d) {
-  const stats = d.pay_link_stats || null;
-  const waiting = d.pay_links_awaiting || [];
-  if (!stats && !waiting.length) return "";
-  const counts = stats
-    ? `<p class="text-xs text-gray-600">Last ${stats.since_days} days: <b>${stats.sent}</b> sent · <b class="text-emerald-700">${stats.paid} paid</b> · <b class="text-amber-700">${stats.awaiting_payment} waiting</b>${stats.never_opened ? ` · ${stats.never_opened} never even opened the page` : ""}</p>`
-    : "";
-  if (!waiting.length) {
-    return `<div class="rounded-lg bg-gray-50 p-2 mb-2">${counts}<p class="text-xs text-emerald-700 font-bold">Nothing has been waiting more than three days.</p></div>`;
-  }
-  const rows = waiting.slice(0, 25).map((l) => {
-    const who = l.agent_name || l.payer_name || l.description || l.code;
-    const code = adminAttr(l.code);
-    return `<tr class="border-t border-amber-100 align-top"><td class="py-2 pr-3 font-bold">${adminEscape(who)}<div class="text-[11px] font-normal text-gray-500">${adminEscape(l.code)}${l.sent_to ? ` · to +${adminEscape(l.sent_to)}` : ""}${l.fee_exempt ? " · lists free, paying by choice" : ""}</div></td><td class="py-2 pr-3 whitespace-nowrap">${adminFormatUgx(l.amount_ugx)}</td><td class="py-2 pr-3 whitespace-nowrap font-bold text-amber-700">${Number(l.days_waiting || 0)} day${Number(l.days_waiting) === 1 ? "" : "s"}</td><td class="py-2 pr-3">${adminEscape(l.next_step || "")}</td><td class="py-2 text-xs space-x-2 whitespace-nowrap"><button type="button" onclick="adminSendPayLink('${code}')" class="underline font-bold">Send again</button> <button type="button" onclick="adminCopyPayLink('${adminAttr(l.url)}')" class="underline">Copy</button></td></tr>`;
+var adminPayChaseUnit = "week";
+var adminPayChaseFilter = "waiting";
+const ADMIN_PAYCHASE_CHIPS = {
+  never_opened: ["Never opened", "bg-amber-100 text-amber-900"],
+  opened: ["Opened, not paid", "bg-orange-100 text-orange-900"],
+  paid: ["Paid", "bg-emerald-100 text-emerald-800"],
+  not_due: ["Not due yet", "bg-sky-100 text-sky-800"],
+  exempt: ["Exempt", "bg-violet-100 text-violet-800"],
+  test: ["Test", "bg-gray-200 text-gray-700"]
+};
+function adminPayChaseChip(status) {
+  const c = ADMIN_PAYCHASE_CHIPS[status] || [status, "bg-gray-100 text-gray-700"];
+  return `<span class="inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${c[1]}">${adminEscape(c[0])}</span>`;
+}
+function adminPayChaseUgxShort(n) {
+  const v = Number(n || 0);
+  if (v >= 1000000) return `${(v / 1000000).toFixed(v % 1000000 ? 1 : 0)}M`;
+  if (v >= 1000) return `${Math.round(v / 1000)}k`;
+  return String(v);
+}
+function adminPayChaseBars(series, unit) {
+  const rows = (series && series[unit]) || [];
+  const W = 560, H = 170, L = 26, B = 22, T = 8;
+  const max = Math.max(1, ...rows.map((r) => Math.max(r.asked, r.paid)));
+  const step = rows.length ? (W - L - 4) / rows.length : 0;
+  const bw = Math.max(2, Math.min(14, step / 2 - 1));
+  const y = (v) => T + (H - T - B) * (1 - v / max);
+  const every = unit === "day" ? 5 : 2;
+  const label = (iso) => {
+    const d = new Date(`${iso}T00:00:00Z`);
+    return unit === "month" ? d.toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" }) : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+  };
+  let g = "";
+  for (let v = 0; v <= max; v += Math.max(1, Math.ceil(max / 4))) g += `<line x1="${L}" x2="${W}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="#f1f5f9"/><text x="${L - 4}" y="${(y(v) + 3).toFixed(1)}" font-size="9" text-anchor="end" fill="#94a3b8">${v}</text>`;
+  rows.forEach((r, i) => {
+    const x = L + i * step + step / 2;
+    const tip = `${unit === "month" ? "Month of" : unit === "week" ? "Week of" : ""} ${label(r.start)}: asked ${r.asked} (UGX ${Number(r.asked_ugx).toLocaleString("en-US")}) · paid ${r.paid} (UGX ${Number(r.paid_ugx).toLocaleString("en-US")})`.trim();
+    g += `<g><title>${adminEscape(tip)}</title><rect x="${(x - bw - 0.5).toFixed(1)}" y="${y(r.asked).toFixed(1)}" width="${bw.toFixed(1)}" height="${(H - B - y(r.asked)).toFixed(1)}" rx="1.5" fill="#f59e0b"/><rect x="${(x + 0.5).toFixed(1)}" y="${y(r.paid).toFixed(1)}" width="${bw.toFixed(1)}" height="${(H - B - y(r.paid)).toFixed(1)}" rx="1.5" fill="#16a34a"/><rect x="${(x - step / 2).toFixed(1)}" y="${T}" width="${step.toFixed(1)}" height="${H - T - B}" fill="transparent"/></g>`;
+    if (i % every === (rows.length - 1) % every) g += `<text x="${x.toFixed(1)}" y="${H - 6}" font-size="9" text-anchor="middle" fill="#64748b">${adminEscape(label(r.start))}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" class="w-full h-auto" role="img" aria-label="Asked for money and paid, by ${unit}" data-paychase-chart>${g}<line x1="${L}" x2="${W}" y1="${H - B}" y2="${H - B}" stroke="#cbd5e1"/></svg>`;
+}
+function adminPayChaseAgeing(ageing) {
+  const rows = ageing || [];
+  const W = 560, rowH = 30, H = rows.length * rowH + 4, L = 96, R = 120;
+  const max = Math.max(1, ...rows.map((r) => r.people));
+  const colors = ["#fbbf24", "#f59e0b", "#ea580c", "#dc2626"];
+  const g = rows.map((r, i) => {
+    const w = ((W - L - R) * r.people) / max;
+    const yy = i * rowH + 4;
+    return `<g><title>${adminEscape(`${r.label}: ${r.people} waiting, UGX ${Number(r.ugx).toLocaleString("en-US")}`)}</title><text x="${L - 8}" y="${yy + 15}" font-size="11" text-anchor="end" fill="#334155">${adminEscape(r.label)}</text><rect x="${L}" y="${yy + 3}" width="${Math.max(r.people ? 3 : 0, w).toFixed(1)}" height="18" rx="3" fill="${colors[i] || "#f59e0b"}"/><text x="${(L + Math.max(r.people ? 3 : 0, w) + 6).toFixed(1)}" y="${yy + 16}" font-size="11" font-weight="700" fill="#0f172a">${r.people} · UGX ${adminEscape(adminPayChaseUgxShort(r.ugx))}</text></g>`;
   }).join("");
-  return `<div class="rounded-lg border border-amber-200 bg-amber-50 p-3 mb-3">
-    <h5 class="font-black text-gray-900 text-sm">⏳ Asked for money, nothing back yet — ${waiting.length}</h5>
-    ${counts}
-    <div class="overflow-x-auto mt-2"><table class="w-full text-left text-xs"><thead><tr class="text-gray-500"><th class="py-1 pr-3">Who</th><th class="py-1 pr-3">Amount</th><th class="py-1 pr-3">Waiting</th><th class="py-1 pr-3">Next step</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-  </div>`;
+  return `<svg viewBox="0 0 ${W} ${H}" class="w-full h-auto" role="img" aria-label="How long people have been waiting" data-paychase-ageing>${g}</svg>`;
+}
+function adminPayChaseRow(p) {
+  const code = adminAttr(p.code);
+  const who = [p.kind === "agent" ? "Agent" : p.kind === "owner" ? "Owner" : "Other", p.phone_last3 ? `···${adminEscape(p.phone_last3)}` : "", `asked ${adminEscape(adminShortDate(p.first_asked_at))}`, p.asks > 1 ? `${p.asks} links sent` : ""].filter(Boolean).join(" · ");
+  const extra = [p.agent_status === "suspended" ? `<span class="inline-block rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700">Suspended</span>` : "", p.asks > 1 ? `<span class="inline-block rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-700">×${p.asks}</span>` : ""].join(" ");
+  const waiting = p.status === "opened" || p.status === "never_opened";
+  const primary = p.next_action === "send_again"
+    ? `<button type="button" onclick="adminSendPayLink('${code}')" class="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-bold text-white">Send again</button>`
+    : "";
+  return `<li class="border-t border-gray-100 py-2.5 flex flex-wrap items-start gap-x-3 gap-y-1" data-paychase-row="${adminAttr(p.status)}">
+    <div class="min-w-0 flex-1 basis-56"><div class="flex flex-wrap items-center gap-1.5"><b class="text-sm text-gray-900">${adminEscape(p.name)}</b>${adminPayChaseChip(p.status)}${extra}</div>
+      <div class="text-[11px] text-gray-500">${who}</div>
+      <div class="text-xs text-gray-700 mt-0.5">${adminEscape(p.next_step || "")}</div></div>
+    <div class="text-right whitespace-nowrap"><div class="text-sm font-black ${waiting ? "text-gray-900" : "text-gray-400"}">${adminFormatUgx(waiting ? p.outstanding_ugx : p.amount_ugx)}</div>${waiting ? `<div class="text-[11px] font-bold ${p.days_waiting > 14 ? "text-red-700" : "text-amber-700"}">${Number(p.days_waiting)} day${Number(p.days_waiting) === 1 ? "" : "s"} waiting</div>` : (p.status === "paid" && p.paid_at ? `<div class="text-[11px] text-emerald-700 font-bold">paid ${adminEscape(adminShortDate(p.paid_at))}</div>` : "")}</div>
+    <div class="flex items-center gap-2 w-full sm:w-auto justify-end">${primary}<button type="button" onclick="adminCopyPayLink('${adminAttr(p.url)}')" class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-800">Copy link</button></div>
+  </li>`;
+}
+function adminPayChaseInner(c) {
+  const t = c.tiles || {};
+  const tile = (label, value, sub, tone) => `<div class="rounded-lg border border-gray-200 bg-white p-2.5"><div class="text-[11px] font-bold uppercase tracking-wide text-gray-500">${label}</div><div class="text-xl font-black ${tone}">${value}</div><div class="text-[11px] text-gray-500">${sub}</div></div>`;
+  const left = [t.tests ? `${t.tests} test` : "", t.exempt ? `${t.exempt} exempt` : "", t.not_due ? `${t.not_due} not due yet` : ""].filter(Boolean).join(" · ");
+  const unitBtn = (u, l) => `<button type="button" data-paychase-unit="${u}" onclick="adminPayChaseSet('unit','${u}')" class="rounded px-2 py-0.5 text-[11px] font-bold ${adminPayChaseUnit === u ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700"}">${l}</button>`;
+  const people = c.people || [];
+  const counts = { all: people.length, waiting: t.waiting || 0 };
+  people.forEach((p) => { counts[p.status] = (counts[p.status] || 0) + 1; });
+  const filters = [["waiting", "Waiting"], ["never_opened", "Never opened"], ["opened", "Opened, not paid"], ["not_due", "Not due yet"], ["paid", "Paid"], ["exempt", "Exempt"], ["test", "Test"], ["all", "All"]]
+    .filter(([k]) => k === "waiting" || k === "all" || counts[k])
+    .map(([k, l]) => `<button type="button" data-paychase-filter="${k}" onclick="adminPayChaseSet('filter','${k}')" class="rounded-full border px-2.5 py-1 text-[11px] font-bold ${adminPayChaseFilter === k ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-700"}">${l} ${counts[k] || 0}</button>`).join("");
+  const shown = people.filter((p) => adminPayChaseFilter === "all" || (adminPayChaseFilter === "waiting" ? (p.status === "opened" || p.status === "never_opened") : p.status === adminPayChaseFilter));
+  const checks = ((c.money || {}).items || []).map((i) => `<li class="flex gap-1.5"><span>${i.ok ? "✅" : "⚠️"}</span><span>${adminEscape(i.text)}</span></li>`).join("");
+  return `<div class="flex flex-wrap items-baseline justify-between gap-2"><h5 class="font-black text-gray-900 text-sm">⏳ Asked for money: who paid, who is waiting</h5><span class="text-[11px] text-gray-500">Everyone asked since ${adminEscape(adminShortDate(t.since))} · one row per person · tests left out</span></div>
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-2" data-paychase-tiles>
+      ${tile("Asked", t.requested || 0, "people sent a link", "text-gray-900")}
+      ${tile("Paid", t.paid || 0, "money recorded", "text-emerald-700")}
+      ${tile("Waiting", t.waiting || 0, `${t.never_opened || 0} never opened · ${t.opened_not_paid || 0} opened`, "text-amber-700")}
+      ${tile("Outstanding", adminFormatUgx(t.outstanding_ugx || 0), "from those waiting", "text-gray-900")}
+      ${tile("Conversion", `${t.conversion_pct || 0}%`, "paid ÷ asked (due only)", (t.conversion_pct || 0) >= 50 ? "text-emerald-700" : "text-red-700")}
+    </div>
+    ${left ? `<p class="text-[11px] text-gray-500 mt-1">Asked but not chased: ${adminEscape(left)}.</p>` : ""}
+    <div class="grid gap-2 md:grid-cols-2 mt-2">
+      <div class="rounded-lg border border-gray-200 bg-white p-2.5"><div class="flex flex-wrap items-center justify-between gap-1"><b class="text-xs text-gray-900">Asked vs paid</b><span class="space-x-1">${unitBtn("day", "Day")}${unitBtn("week", "Week")}${unitBtn("month", "Month")}</span></div>${adminPayChaseBars(c.series, adminPayChaseUnit)}<div class="flex gap-3 text-[11px] text-gray-600"><span><i class="inline-block h-2 w-2 rounded-sm bg-amber-500"></i> links sent</span><span><i class="inline-block h-2 w-2 rounded-sm bg-green-600"></i> paid</span></div></div>
+      <div class="rounded-lg border border-gray-200 bg-white p-2.5"><b class="text-xs text-gray-900">How long they have been waiting</b>${adminPayChaseAgeing(c.ageing)}<p class="text-[11px] text-gray-500">People waiting, and what they owe (UGX).</p></div>
+    </div>
+    <div class="rounded-lg border border-gray-200 bg-white p-2.5 mt-2"><b class="text-xs text-gray-900">Is it connected?</b><ul class="mt-1 space-y-0.5 text-xs text-gray-700" data-paychase-checks>${checks}</ul></div>
+    <div class="flex flex-wrap gap-1.5 mt-3" data-paychase-filters>${filters}</div>
+    <ul class="mt-1" data-paychase-list>${shown.map(adminPayChaseRow).join("") || `<li class="py-3 text-xs text-gray-500">Nobody here.</li>`}</ul>`;
+}
+function adminPayChaseSet(kind, value) {
+  if (kind === "unit") adminPayChaseUnit = value; else adminPayChaseFilter = value;
+  const box = document.querySelector("[data-paychase]");
+  if (box && adminRevenueData?.pay_chase) box.innerHTML = adminPayChaseInner(adminRevenueData.pay_chase);
+}
+function adminPayLinkLoopBlock(d) {
+  const c = d.pay_chase || null;
+  if (!c || !(c.people || []).length) return "";
+  return `<div class="rounded-xl border border-amber-200 bg-amber-50/60 p-3 mb-3" data-paychase>${adminPayChaseInner(c)}</div>`;
 }
 
 function adminCreatePayLink(target = {}) {
