@@ -76,8 +76,9 @@ test('onCallSegments: one segment per tapped call, gaps since the last call (bre
   assert.equal(r.calls[1].from, m(20)); assert.equal(r.calls[1].to, m(23));
   assert.equal(r.calls[2].outcome, 'no outcome saved');
   assert.equal(r.calls[2].to, m(90), 'open call without an end is a thin mark at the tap');
-  assert.deepEqual(r.summary, { calls: 3, talk_s: 170, avg_gap_s: (18 * 60 + 36 * 60) / 2, longest_gap_s: 36 * 60, longest_gap_before: m(90) });
-  assert.deepEqual(c.onCallSegments([], []).summary, { calls: 0, talk_s: 0, avg_gap_s: null, longest_gap_s: null, longest_gap_before: null });
+  // A "No answer" stays on the chart but is not a call (17 Nov 2026).
+  assert.deepEqual(r.summary, { calls: 1, not_answered: 1, no_outcome: 1, talk_s: 170, avg_gap_s: (18 * 60 + 36 * 60) / 2, longest_gap_s: 36 * 60, longest_gap_before: m(90) });
+  assert.deepEqual(c.onCallSegments([], []).summary, { calls: 0, not_answered: 0, no_outcome: 0, talk_s: 0, avg_gap_s: null, longest_gap_s: null, longest_gap_before: null });
 });
 
 const db = { skip: !process.env.CALLING_SANDBOX_DB };
@@ -103,7 +104,11 @@ test('evidence carries logins, drop-offs, audit and day/week/month trends', db, 
   assert.equal(today.calls, e.summary.calls, 'today in the chart matches today\'s calls');
   for (const a of e.attempts) assert.ok('login' in a);
   assert.ok(e.on_call && Array.isArray(e.on_call.calls) && typeof e.on_call.summary.calls === 'number');
-  assert.equal(e.on_call.summary.calls, e.attempts.filter((a) => a.tapped_at).length);
+  // Every tapped call is on the chart once, in exactly one of: call, not answered, no outcome saved.
+  const s = e.on_call.summary;
+  assert.equal(s.calls + s.not_answered + s.no_outcome, e.attempts.filter((a) => a.tapped_at).length);
+  assert.equal(s.calls, e.summary.calls, 'the chart chip and the KPI agree');
+  assert.equal(s.not_answered, e.summary.not_answered);
 });
 
 test.after(async () => { if (process.env.CALLING_SANDBOX_DB) await require('../config/database').pool.end().catch(() => null); });

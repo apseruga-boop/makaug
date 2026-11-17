@@ -111,7 +111,9 @@ test('send state: auto sign-up counts as replied; tapped Paid is only a claim', 
   assert.equal(s.paid_claimed, true);
   const spoke = perf.sendState({}, [{ kind: 'call_started', created_at: 'x' }, { kind: 'outcome', outcome: 'no_answer', created_at: 'y' }]);
   assert.equal(spoke.spoke, false);
-  assert.equal(spoke.calls, 1);
+  // A "No answer" is not a call (17 Nov 2026): kept, shown separately.
+  assert.equal(spoke.calls, 0);
+  assert.equal(spoke.not_answered, 1);
 });
 
 test('follow-ups: tapped date, a WhatsApp reply nobody answered, and silence after two days', () => {
