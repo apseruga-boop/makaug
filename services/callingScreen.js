@@ -586,9 +586,12 @@ async function practiceCandidates(task, personKey) {
     `SELECT DISTINCT ON (phone_key) phone_key, phone, full_name, callback_at, outcome FROM call_attempts
       WHERE person_key = $1 AND task_key = $2 AND status = 'done' AND callback_at IS NOT NULL AND callback_at <= NOW() + INTERVAL '${CALLBACK_EARLY_MIN} minutes'
       ORDER BY phone_key, COALESCE(wrapped_at, shown_at) DESC`, [personKey, task.key]);
-  const out = cbs.filter((c) => sandbox.isTestKey(c.phone_key)).map((c) => ({ phone: c.phone, phone_key: c.phone_key, full_name: c.full_name, source_kind: 'callback', source_label: `TEST practice · callback you set (${String(c.outcome || '').replace(/_/g, ' ')})`, reason: 'Practice callback' }));
+  const mine = await safeRows("SELECT id, full_name, phone, phone_key FROM call_number_submissions WHERE person_key = $1 AND status = 'practice' ORDER BY added_at", [personKey]);
+  const mineKeys = new Set(mine.map((m) => m.phone_key));
+  const out = mine.map((m) => ({ phone: m.phone, phone_key: m.phone_key, full_name: m.full_name, source_kind: 'own', source_label: 'Your real test phone · this one really rings (nothing is texted or counted)', reason: 'Real test call', practice_real: true }));
+  out.push(...cbs.filter((c) => sandbox.isTestKey(c.phone_key) || mineKeys.has(c.phone_key)).map((c) => ({ phone: c.phone, phone_key: c.phone_key, full_name: c.full_name, source_kind: 'callback', source_label: `${sandbox.isTestKey(c.phone_key) ? 'TEST practice' : 'Your real test phone'} · callback you set (${String(c.outcome || '').replace(/_/g, ' ')})`, reason: 'Practice callback' })));
   const label = { new_agents: 'TEST practice number · pretend new agent', payments: 'TEST practice number · pretend unpaid sign-up', retention: 'TEST practice number · pretend client to keep' }[task.queue_kind] || 'TEST practice number';
-  for (const n of sandbox.practiceNumbers()) out.push({ ...n, source_kind: 'list', source_label: `${label} – not a real phone, nothing is sent`, reason: 'Practice' });
+  for (const n of sandbox.practiceNumbers()) out.push({ ...n, source_kind: 'list', source_label: `${label} – practice only, can't dial`, reason: 'Practice' });
   return out;
 }
 
@@ -605,7 +608,10 @@ async function eligibleQueue(task, personKey, { now = new Date(), tasks = null, 
     if (dnc.has(c.phone_key)) continue;
     if (task.queue_kind === 'new_agents' && agentSet.has(c.phone_key)) continue;
     const h = hist.get(c.phone_key) || [];
-    const e = eligibility(h, task, { now, tasks: all });
+    let e = eligibility(h, task, { now, tasks: all });
+    // A practice login's own real test phone can be rung again 10 minutes after the last try (to retest).
+    if (!e.ok && c.practice_real && !h.some((x) => ['shown', 'calling'].includes(x.status))
+      && !h.some((x) => new Date(x.wrapped_at || x.shown_at).getTime() > now.getTime() - 10 * 60000)) e = { ok: true, kind: 'fresh' };
     if (!e.ok) continue;
     if (c.callback && e.kind !== 'callback') continue;
     queue.push({ ...c, kind: e.kind, history: h });
@@ -885,7 +891,8 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   ))[0];
   if (!out) throw httpError(409, 'This call is already wrapped up.');
   await mirrorToProspect(out, def).catch(() => null);
-  if (def.key === 'do_not_contact') await blockNumber(out.phone_key, { by: out.person_key, reason: out.note || 'Asked not to be called', attemptId: out.id });
+  // A practice login never writes the real do-not-contact list (its own test phones are real numbers).
+  if (def.key === 'do_not_contact' && (sandbox.isTestKey(out.phone_key) || !(await sandbox.isSandbox(out.person_key)))) await blockNumber(out.phone_key, { by: out.person_key, reason: out.note || 'Asked not to be called', attemptId: out.id });
   return maskedAttempt(out);
 }
 
@@ -955,7 +962,8 @@ async function startInbound(sessionId, { phone = '', fromAttempt = '', name = ''
   const canonical = canonicalUgPhone(phone);
   const key = phoneKey9(canonical);
   if (!key || !/^\+256\d{9}$/.test(canonical)) throw httpError(400, 'Type the number that is calling, like 0772 123 456.');
-  if (await sandbox.isSandbox(s.person_key) && !sandbox.isTestKey(key)) throw httpError(409, 'Practice account (TEST): use a TEST practice number, e.g. 0700 000 101. Real numbers are never used from practice.');
+  if (await sandbox.isSandbox(s.person_key) && !sandbox.isTestKey(key)
+    && !(await safeRows("SELECT 1 FROM call_number_submissions WHERE person_key = $1 AND phone_key = $2 AND status = 'practice' LIMIT 1", [s.person_key, key])).length) throw httpError(409, 'Practice account (TEST): use a TEST practice number, e.g. 0700 000 101. Real numbers are never used from practice.');
   if (!(await sandbox.isSandbox(s.person_key)) && sandbox.isTestKey(key)) throw httpError(400, 'That is a TEST practice number, not a real caller.');
   const busy = (await rows("SELECT id FROM call_attempts WHERE session_id = $1 AND status = 'calling'", [sessionId]))[0];
   if (busy) throw httpError(409, 'Finish the wrap-up for this call first.');
@@ -1045,9 +1053,9 @@ async function submitNumber({ personKey, name = '', phone = '', note = '', howKn
   const callers = await loadCallers();
   const person = callers.find((p) => p.key === cleanKey(personKey));
   if (!person) throw httpError(400, 'Pick who is adding the number.');
-  if (person.sandbox) throw httpError(409, `${sandbox.PRACTICE_MSG} adds the number to the real calling list.`);
   const canonical = canonicalUgPhone(phone);
   const key = phoneKey9(canonical);
+  if (person.sandbox) return addPracticeNumber(person, { canonical, key, name, note, mode });
   if (!/^\+2567\d{8}$/.test(canonical)) throw httpError(400, 'Type a Uganda mobile number, like 0772 123 456.');
   const fullName = String(name || '').trim().slice(0, 120);
   const tasks = await loadTasks({ all: true });
@@ -1085,9 +1093,51 @@ async function submitNumber({ personKey, name = '', phone = '', note = '', howKn
   return { id: row.id, status: 'own', mode: modeKey, phone: maskPhoneLast3(canonical), name: fullName };
 }
 
+/**
+ * Practice login only: a real number of the tester's own (theirs or a friend's)
+ * so the Call button really rings through the phone. It only goes into the
+ * practice queue (status 'practice'), never onto a real list, and a number we
+ * already know (agent, Outreach, list, lead, lister, do-not-contact, a real
+ * caller's own number) is refused, so practice calls never touch a customer.
+ * Texts, WhatsApp, payments and videos stay blocked for the practice login.
+ */
+async function addPracticeNumber(person, { canonical, key, name = '', note = '', mode = 'new_agents' } = {}) {
+  if (sandbox.isTestKey(key)) throw httpError(400, 'That is one of the TEST practice numbers already in your queue. Add a real phone of your own to test a real call.');
+  const digits = String(canonical || '').replace(/\D/g, '');
+  if (key.length !== 9 || digits.length < 9 || digits.length > 15) throw httpError(400, 'Type a phone number, like 0772 123 456 or +44 7700 900123.');
+  const one = async (sql) => (await safeRows(sql, [key])).length > 0;
+  const known = [
+    ['on the do-not-contact list', async () => Boolean(await blockOf(key))],
+    ['an agent', async () => (await agentKeys([key])).has(key)],
+    ['on Outreach', () => one('SELECT 1 FROM agent_prospects WHERE phone_key = $1 LIMIT 1')],
+    ['on a call list', () => one('SELECT 1 FROM outreach_list_numbers WHERE phone_key = $1 AND accepted IS TRUE LIMIT 1')],
+    ['a lead', () => one("SELECT 1 FROM leads l LEFT JOIN contacts c ON c.id = l.contact_id WHERE RIGHT(REGEXP_REPLACE(COALESCE(c.phone, c.whatsapp, l.metadata->>'phone', ''), '[^0-9]', '', 'g'), 9) = $1 LIMIT 1")],
+    ['a lister', () => one("SELECT 1 FROM properties WHERE RIGHT(REGEXP_REPLACE(COALESCE(lister_phone, ''), '[^0-9]', '', 'g'), 9) = $1 LIMIT 1")],
+    ['a real caller\'s number', () => one("SELECT 1 FROM call_number_submissions WHERE phone_key = $1 AND status IN ('own', 'pending') LIMIT 1")],
+    ['called by a real caller', () => one(`SELECT 1 FROM call_attempts WHERE phone_key = $1 AND ${sandbox.REAL_PEOPLE()} LIMIT 1`)]
+  ];
+  for (const [label, fn] of known) {
+    if (await fn()) throw httpError(409, `That number is ${label} already, so it is not used for practice. Add your own phone or a friend's.`);
+  }
+  const tasks = await loadTasks({ all: true });
+  const modeKey = tasks.some((t) => t.key === mode) ? mode : 'new_agents';
+  const have = (await safeRows("SELECT id FROM call_number_submissions WHERE person_key = $1 AND phone_key = $2 AND status = 'practice' LIMIT 1", [person.key, key]))[0];
+  const fullName = String(name || '').trim().slice(0, 120) || 'My test phone';
+  if (have) {
+    await db.query('UPDATE call_number_submissions SET full_name = $2, mode = $3 WHERE id = $1', [have.id, fullName, modeKey]);
+    return { id: have.id, status: 'own', practice: true, mode: modeKey, phone: maskPhoneLast3(canonical), name: fullName };
+  }
+  const row = (await rows(
+    `INSERT INTO call_number_submissions (person_key, full_name, phone, phone_key, note, status, added_by, mode, how_known)
+     VALUES ($1, $2, $3, $4, $5, 'practice', $6, $7, 'practice: real test phone') RETURNING id`,
+    [person.key, fullName, canonical, key, String(note || '').trim().slice(0, 300) || null, person.name || person.key, modeKey]
+  ))[0];
+  return { id: row.id, status: 'own', practice: true, mode: modeKey, phone: maskPhoneLast3(canonical), name: fullName };
+}
+
 async function listSubmissions({ status = 'pending' } = {}) {
   const list = await rows(
-    `SELECT * FROM call_number_submissions WHERE ($1 = 'all' OR status = $1 OR ($1 = 'pending' AND status = 'own' AND reviewed_at IS NULL AND added_at > NOW() - INTERVAL '7 days'))
+    `SELECT * FROM call_number_submissions WHERE status <> 'practice' AND ($1 = 'all' OR status = $1 OR ($1 = 'pending' AND status = 'own' AND reviewed_at IS NULL AND added_at > NOW() - INTERVAL '7 days'))
       ORDER BY added_at DESC LIMIT 200`, [status]);
   return list.map((r) => ({ mode: r.mode || 'new_agents', how_known: r.how_known || '', id: r.id, person_key: r.person_key, name: r.full_name, phone: maskPhoneLast3(r.phone), note: r.note, status: r.status, duplicate_of: r.duplicate_of, added_at: r.added_at, reviewed_by: r.reviewed_by, reviewed_at: r.reviewed_at }));
 }

@@ -84,21 +84,39 @@
   }
   function taskOf(key) { return (boot.tasks || []).filter(function (t) { return t.key === key; })[0] || boot.tasks[0]; }
   function personName(key) { var p = (boot.callers || []).filter(function (c) { return c.key === key; })[0]; return p ? p.name : key; }
-  // Practice login (e.g. "Arthur (test)"): TEST numbers only; the phone, SMS and WhatsApp links never open.
+  // Practice login (e.g. "Arthur (test)"): the TEST numbers never dial. Your own real test phone
+  // (added with ➕ Add number) really rings through the phone; SMS and WhatsApp links never open.
   var practiceOn = false;
   function practiceMode() {
     if (!boot || !boot.sandbox || practiceOn) return;
     practiceOn = true;
     var b = document.createElement('div'); b.className = 'mkc-practice'; b.setAttribute('data-mkc-practice', '');
-    b.textContent = '🧪 PRACTICE ACCOUNT – TEST numbers only. Nothing is dialled or sent, and nothing counts towards money, commission or Road to 1000.';
+    b.textContent = '🧪 PRACTICE – TEST numbers can\'t dial; your own test phone really rings. Nothing is sent or counted.';
     document.body.appendChild(b);
     document.addEventListener('click', function (e) {
       var a = e.target && e.target.closest ? e.target.closest('a[href^="tel:"],a[href^="sms:"],a[href*="wa.me/"],a[href*="whatsapp.com/"]') : null;
       if (!a) return;
+      var href = a.getAttribute('href') || '';
+      var digits = href.replace(/^tel:/, '').replace(/\D/g, '');
+      if (/^tel:/.test(href) && digits.length >= 9 && !/^7000001\d{2}$/.test(digits.slice(-9))) return; // a real test phone: let it ring
       e.preventDefault(); // the screen still logs the tap; only the dialler / SMS / WhatsApp app is not opened
       b.style.opacity = '0'; clearTimeout(b._t); b._t = setTimeout(function () { b.style.opacity = ''; }, 4500);
-      toast('Practice: TEST number – not dialled, nothing sent. In real calls this opens ' + (/^tel:/.test(a.getAttribute('href')) ? 'Phone Link to ring' : /^sms:/.test(a.getAttribute('href')) ? 'Messages with the text' : 'WhatsApp') + '.');
+      toast('Practice: ' + (/^tel:/.test(href) ? 'TEST number, practice only – can\'t dial. Add your own phone with ➕ Add number to test a real call' : 'nothing is sent from the practice account') + '. In real calls this opens ' + (/^tel:/.test(a.getAttribute('href')) ? 'Phone Link to ring' : /^sms:/.test(a.getAttribute('href')) ? 'Messages with the text' : 'WhatsApp') + '.');
     }, true);
+  }
+  // Practice login: how to make the Call button ring through your own phone.
+  function practiceCallHelp(a) {
+    var test = /^7000001\d{2}$/.test(String((a && a.phone) || '').replace(/\D/g, '').slice(-9));
+    return '<details class="mkc-callhelp" data-mkc-callhelp' + (test ? '' : ' open') + '><summary>📱 ' + (test ? 'This is a TEST number (practice only, can\'t dial). Test a real call with your iPhone' : 'Your real test phone: this call really rings') + '</summary>'
+      + (isPhone() ? '<p><b>On this phone:</b> add your number or a friend\'s with <b>➕ Add number</b>, then tap <b>' + esc(T('call_next')) + '</b>: it opens the Phone app and rings for real.</p>' : '')
+      + '<p><b>Mac + iPhone</b> (once):</p><ol>'
+      + '<li>Turn <b>Bluetooth</b> on, on both the iPhone and the Mac.</li>'
+      + '<li>Use the <b>same Apple ID</b> and the <b>same Wi-Fi</b> on both (Apple needs both for calls from the iPhone).</li>'
+      + '<li>On the iPhone: <b>Settings › Phone › Calls on Other Devices</b>: turn it on, and turn on your Mac in the list.</li>'
+      + '<li>On the Mac: open <b>FaceTime › Settings</b> and turn on <b>Calls from iPhone</b>.</li>'
+      + '<li><b>Quick test:</b> tap <b>➕ Add number</b>, add your own number, then tap <b>Call now</b>. The Mac asks to call through your iPhone: say yes. Calling yourself usually goes to voicemail, and that is fine.</li></ol>'
+      + '<p>Then add a friend\'s phone and do a full call: talk, end it, fill in the Wrap up and save. It shows in <b>My report</b>. Nothing is texted or sent, and it never counts towards money, commission or team totals.</p>'
+      + '<p class="mkc-muted">Windows 11: open Phone Link, link the iPhone (Bluetooth) and allow calls; Call now then rings through the iPhone.</p></details>';
   }
   function loadBoot(force) {
     if (!bootPromise || force) {
@@ -231,7 +249,7 @@
     '@media (max-width:1100px){#mkc-overlay.mkc-noscript .mkc-grid{grid-template-columns:minmax(0,1fr)}}',
     '@media (max-width:720px){#mkc-overlay.mkc-focus .mkc-grid{grid-template-columns:1fr}.mkc-wrapgrid,.mkc-wrapchecks{grid-template-columns:1fr}.mkc-comm small{display:none}.mkc-replies{grid-template-columns:1fr}}',
     '.mkc-splitsum{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.mkc-splitrows{display:flex;flex-direction:column;gap:6px}.mkc-splitrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.mkc-splitrow input[type=time]{width:110px}.mkc-splitrow select{min-width:170px}',
-    '.mkc-posted{font-size:14px;margin-top:4px;background:#f0f9ff;border:1px solid #bae6fd;color:#0c4a6e;border-radius:8px;padding:6px 8px;line-height:1.35}.mkc-meetcard{background:#f0fdf4;border:2px solid #16a34a;border-radius:16px;padding:16px;color:#14532d}',
+    '.mkc-posted{font-size:14px;margin-top:4px;background:#f0f9ff;border:1px solid #bae6fd;color:#0c4a6e;border-radius:8px;padding:6px 8px;line-height:1.35}.mkc-callhelp{margin-top:10px;text-align:left;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:8px 12px;font-size:13px;color:#1e3a8a;line-height:1.4}.mkc-callhelp summary{cursor:pointer;font-weight:800}.mkc-callhelp ol{margin:4px 0 6px 22px;padding:0;list-style:decimal}.mkc-callhelp li{display:list-item}.mkc-callhelp li{margin:2px 0}.mkc-callhelp p{margin:6px 0 0}.mkc-meetcard{background:#f0fdf4;border:2px solid #16a34a;border-radius:16px;padding:16px;color:#14532d}',
     '.mkc-meetcard h3{margin:0;font-size:19px;font-weight:900;color:#14532d}',
     '.mkc-meetcard .mm-sub{margin:4px 0 14px;color:#166534;font-size:14px;line-height:1.4}',
     '.mkc-meetcard .mm-form{display:grid;grid-template-columns:minmax(150px,190px) minmax(220px,1fr) minmax(170px,240px) auto;gap:12px;align-items:end}',
@@ -260,7 +278,7 @@
     '.mkc-in{background:#2563eb;color:#fff;font-size:17px;font-weight:900;padding:10px 18px;border-radius:12px;box-shadow:0 0 0 3px #bfdbfe}.mkc-pill.in{background:#dbeafe;color:#1e40af}.mkc-hit{border:1px solid #e2e8f0;border-radius:10px;padding:6px 8px;margin:4px 0;cursor:pointer}.mkc-hit mark{background:#fef08a}',
     '.mkc-learn{border:1px solid #e2e8f0;border-radius:10px;padding:6px 10px;margin:6px 0;font-size:13px;line-height:1.45}.mkc-learn p,.mkc-learn ul,.mkc-learn ol{margin:4px 0;padding-left:16px}.mkc-learn summary{cursor:pointer}.mkc-learn a{color:#047857;font-weight:700}.mkc-lg{background:#fefce8;border-radius:8px;padding:4px 8px;margin:4px 0;font-size:13px}',
     '.mkc-meetbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#ede9fe;border:1px solid #c4b5fd;color:#4c1d95;border-radius:12px;padding:10px 12px;margin:0 0 10px}.mkc-rep{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.mkc-rep>div{border:1px solid #e2e8f0;border-radius:12px;padding:10px;background:#fff}.mkc-rep h5{margin:0 0 6px;font-size:13px;color:#334155}.mkc-rep .big{font-size:22px;font-weight:900}.mkc-rep ul{margin:4px 0 0;padding-left:16px;font-size:12px}.mkc-act{display:grid;grid-template-columns:minmax(0,1fr) 140px 150px 34px;gap:6px;margin:4px 0}.mkc-act input{min-width:0;width:100%;box-sizing:border-box}@media(max-width:700px){.mkc-act{grid-template-columns:1fr 1fr}}',
-    '.mkc-practice{position:fixed;left:50%;transform:translateX(-50%);bottom:10px;z-index:2147483600;background:#7c2d12;color:#fff;font:800 12px/1.35 system-ui,sans-serif;padding:7px 14px;border-radius:99px;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:calc(100vw - 20px);text-align:center;pointer-events:none;transition:opacity .2s}',
+    '.mkc-practice{position:fixed;left:50%;transform:translateX(-50%);bottom:10px;z-index:2147483600;background:#7c2d12;color:#fff;font:800 12px/1.35 system-ui,sans-serif;padding:7px 14px;border-radius:14px;box-shadow:0 4px 14px rgba(0,0,0,.3);width:max-content;max-width:calc(100vw - 20px);box-sizing:border-box;text-align:center;pointer-events:none;transition:opacity .2s}',
     '.mkc-proof{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}.mkc-proof img{max-width:100%;max-height:360px;border:1px solid #e2e8f0;border-radius:10px;display:block}.mkc-drop{border:2px dashed #94a3b8;border-radius:12px;padding:18px;text-align:center;color:#475569;cursor:pointer}.mkc-drop.on{border-color:#047857;background:#ecfdf5}.mkc-fld{display:grid;grid-template-columns:120px 1fr;gap:6px;align-items:center;margin:4px 0}.mkc-fld input,.mkc-fld select{width:100%;box-sizing:border-box}.mkc-ocrbar{height:6px;background:#e2e8f0;border-radius:99px;overflow:hidden}.mkc-ocrbar i{display:block;height:100%;background:#0ea5e9;width:0}@media(max-width:700px){.mkc-proof{grid-template-columns:1fr}.mkc-fld{grid-template-columns:1fr}}',
     '.mkc-call{display:flex;justify-content:center;width:100%;box-sizing:border-box;font-size:22px;padding:18px;border-radius:16px}',
     '.mkc-timer{font-size:46px;font-weight:900;font-variant-numeric:tabular-nums;color:#047857;text-align:center}',
@@ -765,11 +783,12 @@
       + '<div class="name">' + esc(a.name || 'Name not known') + '</div>'
       + '<div class="src">' + esc(a.reason && String(a.source_label || '').indexOf(a.reason) >= 0 ? String(a.source_label).replace(' · ' + a.reason, '') : (a.source_label || '')) + '</div>'
       + (a.reason ? '<span class="mkc-reason' + (a.source_kind === 'callback' ? ' mkc-cb' : '') + '">' + esc(a.reason) + '</span>' : '')
-      + '<div class="mkc-phone">' + esc(prettyPhone(a.phone)) + '</div>';
+      + '<div class="mkc-phone">' + esc(boot.sandbox && a.phone_masked && !/^7000001\d{2}$/.test(String(a.phone || '').replace(/\D/g, '').slice(-9)) ? a.phone_masked : prettyPhone(a.phone)) + '</div>';
     var body = '';
     if (S.phase === 'shown') {
       body = '<a class="mkc-btn go mkc-call" href="' + esc(d.tel) + '" data-mkc-tap title="' + (isPhone() ? 'Opens the phone app' : 'Rings out from the company phone through Phone Link (Bluetooth)') + '"><i class="fas fa-phone"></i>&nbsp;' + (isPhone() ? esc(T('call_next')) : 'Call now') + '</a>'
-        + '<div class="mkc-row" style="margin-top:8px;justify-content:center"><button type="button" class="mkc-btn ghost sm" data-mkc-skip>' + esc(T('skip')) + '</button><button type="button" class="mkc-btn ghost sm" data-mkc-tree>History tree</button></div>';
+        + '<div class="mkc-row" style="margin-top:8px;justify-content:center"><button type="button" class="mkc-btn ghost sm" data-mkc-skip>' + esc(T('skip')) + '</button><button type="button" class="mkc-btn ghost sm" data-mkc-tree>History tree</button></div>'
+        + (boot.sandbox ? practiceCallHelp(a) : '');
     } else if (S.phase === 'calling') {
       body = '<div class="mkc-calling"><span class="dot"></span>' + (S.coach.answered ? 'On the call' : 'Ringing…') + ' <span data-mkc-calltimer>' + clock(Date.now() - (S.callStart || Date.now())) + '</span></div>'
         + '<button type="button" class="mkc-btn red mkc-call" style="margin-top:8px" data-mkc-end>' + esc(T('end')) + '</button>' + txHtml();
@@ -1614,8 +1633,8 @@
   function openAddNumber() {
     var field = function (attr, ph, extra) { return '<input class="mkc-input" style="width:100%;box-sizing:border-box;margin:4px 0" ' + attr + ' placeholder="' + esc(ph) + '"' + (extra || '') + '>'; };
     var cur = S ? S.task : 'new_agents';
-    modal('<h3 style="margin:0 0 4px;font-weight:900">➕ Add a number</h3><p class="mkc-muted" style="margin:0 0 6px">It goes straight into your queue as <b>your own number</b>. Numbers we already have are caught and their history is shown instead.</p>'
-      + field('data-n', 'Name') + field('data-p', 'Phone, e.g. 0772 123 456', ' inputmode="tel"')
+    modal('<h3 style="margin:0 0 4px;font-weight:900">➕ Add a number</h3>' + (boot && boot.sandbox ? '<p class="mkc-muted" style="margin:0 0 6px"><b>Practice:</b> add your own phone or a friend\'s to test a real call. It goes only into your practice queue and really rings when you tap Call now. Customers\' numbers are refused. Nothing is texted or counted.</p>' : '<p class="mkc-muted" style="margin:0 0 6px">It goes straight into your queue as <b>your own number</b>. Numbers we already have are caught and their history is shown instead.</p>')
+      + field('data-n', 'Name') + field('data-p', boot && boot.sandbox ? 'Phone, e.g. 0772 123 456 or +44 7700 900123' : 'Phone, e.g. 0772 123 456', ' inputmode="tel"')
       + '<div class="mkc-row"><label class="mkc-muted" style="flex:1">How you know them<br><select class="mkc-input" style="width:100%" data-h>' + HOW_KNOWN.map(function (h) { return '<option>' + esc(h) + '</option>'; }).join('') + '</select></label>'
       + '<label class="mkc-muted" style="flex:1">Mode<br><select class="mkc-input" style="width:100%" data-md>' + ((boot && boot.tasks) || [{ key: 'new_agents', name: 'Get new agents' }]).map(function (t) { return '<option value="' + esc(t.key) + '"' + (t.key === cur ? ' selected' : '') + '>' + esc(MODE_LABEL[t.key] || t.name) + '</option>'; }).join('') + '</select></label></div>'
       + field('data-t', 'Note (optional), e.g. has 5 rentals in Kira')

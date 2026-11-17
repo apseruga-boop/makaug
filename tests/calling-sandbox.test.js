@@ -41,7 +41,7 @@ test('no real side effects from the practice account', { skip: !DB && 'set CALLI
   const count = async () => Object.fromEntries(Object.entries((await db.query(`SELECT
       (SELECT COUNT(*) FROM payment_claims)::int AS claims, (SELECT COUNT(*) FROM revenue_entries)::int AS revenue,
       (SELECT COUNT(*) FROM call_payment_actions)::int AS pay_actions, (SELECT COUNT(*) FROM call_video_requests)::int AS videos,
-      (SELECT COUNT(*) FROM payment_sms_proofs)::int AS proofs, (SELECT COUNT(*) FROM call_number_submissions)::int AS numbers,
+      (SELECT COUNT(*) FROM payment_sms_proofs)::int AS proofs, (SELECT COUNT(*) FROM call_number_submissions WHERE status <> 'practice')::int AS numbers,
       (SELECT COUNT(*) FROM outreach_list_numbers)::int AS list_numbers, (SELECT COUNT(*) FROM whatsapp_messages WHERE direction <> 'inbound')::int AS wa_out,
       (SELECT COUNT(*) FROM pipeline_items)::int AS pipeline, (SELECT COUNT(*) FROM cash_checks)::int AS cash`)).rows[0]).map(([k, v]) => [k, Number(v)]));
   sbx.clearCache();
@@ -50,6 +50,7 @@ test('no real side effects from the practice account', { skip: !DB && 'set CALLI
   const boot = await c.bootstrap({ userId: u.id, scope: 'caller' });
   assert.equal(boot.locked_person, 'arthurtest'); assert.equal(boot.sandbox, true);
   for (const s of (await db.query("SELECT id FROM call_sessions WHERE person_key = 'arthurtest' AND ended_at IS NULL")).rows) await c.endSession(s.id).catch(() => null);
+  await db.query("DELETE FROM call_number_submissions WHERE person_key = 'arthurtest' AND status = 'practice'");
   const before = await count();
   const roadBefore = await c.roadTo1000();
   const s = (await c.startSession({ personKey: 'arthurtest', taskKey: 'new_agents', device: 'laptop', actorAccount: 'Arthur (test)' })).session;
@@ -67,11 +68,14 @@ test('no real side effects from the practice account', { skip: !DB && 'set CALLI
   await assert.rejects(day.markClaimed(id, { personKey: 'arthurtest' }), /Practice account/);
   await assert.rejects(contact.requestVideo(id, { personKey: 'arthurtest' }), /Practice account/);
   await assert.rejects(proof.submitProof({ attemptId: id, personKey: 'arthurtest', imageDataUrl: 'data:image/png;base64,AAAA', ocrText: 'You have received UGX 50,000 Transaction ID: 99887766554', fields: {} }), /Practice account/);
-  await assert.rejects(c.submitNumber({ personKey: 'arthurtest', name: 'Real Person', phone: '0772 123 456' }), /Practice account/);
+  // A tester's own phone goes only into the practice queue (status 'practice'), never a real list.
+  const own = await c.submitNumber({ personKey: 'arthurtest', name: 'Real Person', phone: '0772 123 456' });
+  assert.equal(own.practice, true); assert.equal(own.phone.replace(/\D/g, '').slice(-3), '456');
+  await db.query("DELETE FROM call_number_submissions WHERE person_key = 'arthurtest' AND status = 'practice'");
   await assert.rejects(extras.claimContact(s.id, { kind: 'lead', ref: 'x' }), /Practice account/);
   await assert.rejects(day.saveCash({ personKey: 'arthurtest', initials: 'AT', entries: [] }), /Practice account/);
   await assert.rejects(meeting.saveNotes('arthurtest', { actions: [{ text: 'Call him', phone: '0772 123 456' }] }), /Practice account/);
-  await assert.rejects(c.startInbound(s.id, { phone: '0772 123 456' }), /TEST practice number/);
+  await assert.rejects(c.startInbound(s.id, { phone: '0772 123 457' }), /TEST practice number/);
   await c.tap(id, { sessionId: s.id }); await c.endCall(id, { sessionId: s.id });
   await c.wrapUp(id, { sessionId: s.id, outcome: 'call_back', note: 'practice', callbackAt: new Date(Date.now() + 25 * 3600e3).toISOString(), nextStep: 'Call back' });
   assert.deepEqual(await count(), before, 'no claim, payment, revenue, video, proof, number, WhatsApp, pipeline or cash row was made');
