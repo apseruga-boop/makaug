@@ -86,7 +86,7 @@ async function dayPlan(personKey, { now = new Date() } = {}) {
   const day = kampalaDay(now);
   const calls = await rows(
     `SELECT task_key, ((EXTRACT(HOUR FROM wrapped_at AT TIME ZONE '${TZ}') * 60) + EXTRACT(MINUTE FROM wrapped_at AT TIME ZONE '${TZ}'))::int AS m
-       FROM call_attempts WHERE person_key = $1 AND status = 'done' AND (wrapped_at AT TIME ZONE '${TZ}')::date = $2::date`, [pk, day]);
+       FROM call_attempts WHERE person_key = $1 AND status = 'done' AND outcome IS DISTINCT FROM 'no_answer' AND (wrapped_at AT TIME ZONE '${TZ}')::date = $2::date`, [pk, day]);
   const hk = await rows(
     `SELECT ((EXTRACT(HOUR FROM created_at AT TIME ZONE '${TZ}') * 60) + EXTRACT(MINUTE FROM created_at AT TIME ZONE '${TZ}'))::int AS m
        FROM call_housekeeping WHERE person_key = $1 AND (created_at AT TIME ZONE '${TZ}')::date = $2::date`, [pk, day]).catch(() => []);

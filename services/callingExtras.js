@@ -265,7 +265,7 @@ async function claimContact(sessionId, { kind = '', ref = '', now = new Date() }
   if (dnc) throw httpError(409, 'This person asked not to be called.');
   if (!(mine && history.length && mine.person_key === s.person_key)) {
     const e = calling.eligibility(history, task, { now, tasks });
-    if (!e.ok && e.why !== 'callback_other_task' && e.why !== 'closed' && e.why !== 'already_called' && e.why !== 'already_spoken' && e.why !== 'cooldown') {
+    if (!e.ok && e.why !== 'callback_other_task' && e.why !== 'closed' && e.why !== 'already_called' && e.why !== 'already_spoken' && e.why !== 'cooldown' && e.why !== 'no_answer_24h') {
       const why = { open_elsewhere: 'Someone else has this number on screen right now.', do_not_contact: 'This person asked not to be called (or the number is wrong).', called_today: 'This number was already called today.', callback_later: 'A callback is already booked for later.', too_many_no_answer: 'Three calls in a row were not answered.' }[e.why] || 'This number cannot be called now.';
       throw httpError(409, why);
     }

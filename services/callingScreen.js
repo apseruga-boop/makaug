@@ -32,6 +32,14 @@ const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
 const TZ = 'Africa/Kampala';
 const DEFAULT_TARGETS = Object.freeze({ calls_per_day: 40, closes_per_day: 2 });
+// "No answer" is not a call (Arthur, 17 Nov 2026): it is kept in the number's history and in
+// Evidence, but never counts toward calls, targets, streaks, leaderboards or King's totals.
+// The number goes back into its queue and comes back 24 hours later.
+const NO_ANSWER = 'no_answer';
+const NO_ANSWER_RETRY_MS = 24 * 3600 * 1000;
+const isNoAnswer = (a) => a && a.status === 'done' && a.outcome === NO_ANSWER;
+const countsAsCall = (a) => a && a.status === 'done' && a.outcome !== NO_ANSWER;
+const COUNTED_SQL = (t = '') => `${t}status = 'done' AND ${t}outcome IS DISTINCT FROM '${NO_ANSWER}'`;
 const SHORT_SPOKE_S = 10;
 const RAPID_TAP_S = 15;
 const SHOWN_EXPIRE_MIN = 30;
@@ -111,8 +119,11 @@ function eligibility(history = [], task = {}, { now = new Date(), tasks = [] } =
   if (skips.some((a) => skipCode(a) === 'wrong_number')) return { ok: false, why: 'do_not_contact' };
   if (task.queue_kind === 'new_agents' && skips.some((a) => ['already_agent', 'not_interested'].includes(skipCode(a)))) return { ok: false, why: 'closed' };
   if (skips.some((a) => kampalaDay(a.wrapped_at || a.shown_at) === today)) return { ok: false, why: 'skipped_today' };
-  if (done.some((a) => kampalaDay(a.wrapped_at || a.shown_at) === today)) {
-    const latestToday = done[0];
+  // A no-answer holds the number for 24 hours (any task), then it is back in its queue.
+  const lastMiss = done.find(isNoAnswer);
+  if (lastMiss && now.getTime() - new Date(lastMiss.wrapped_at || lastMiss.shown_at).getTime() < NO_ANSWER_RETRY_MS) return { ok: false, why: 'no_answer_24h' };
+  if (done.some((a) => !isNoAnswer(a) && kampalaDay(a.wrapped_at || a.shown_at) === today)) {
+    const latestToday = done.find((a) => !isNoAnswer(a));
     const due = latestToday?.callback_at && new Date(latestToday.callback_at).getTime() <= now.getTime() + CALLBACK_EARLY_MIN * 60000;
     if (!due) return { ok: false, why: 'called_today' };
   }
@@ -217,11 +228,13 @@ function streakDays(byDay = {}, today, target = DEFAULT_TARGETS.calls_per_day) {
 }
 
 function summarize(attempts = [], tasks = []) {
-  const done = attempts.filter((a) => a.status === 'done');
+  const all = attempts.filter((a) => a.status === 'done');
+  const done = all.filter(countsAsCall);
   const out = {
     shown: attempts.length,
     tapped: attempts.filter((a) => a.tapped_at).length,
     calls: done.length,
+    not_answered: all.length - done.length,
     connected: done.filter((a) => a.spoke).length,
     closes: done.filter((a) => a.is_close).length,
     skipped: attempts.filter((a) => a.status === 'skipped').length,
@@ -241,6 +254,7 @@ function summarize(attempts = [], tasks = []) {
   const gaps = done.map((a) => Number(a.gap_s)).filter((g) => Number.isFinite(g)).sort((a, b) => a - b);
   out.median_gap_s = gaps.length ? gaps[Math.floor(gaps.length / 2)] : null;
   for (const t of tasks) out.by_task[t.key] = { name: t.name, calls: 0, closes: 0, connected: 0 };
+  for (const a of all) if (isNoAnswer(a)) out.outcomes[a.outcome] = (out.outcomes[a.outcome] || 0) + 1;
   for (const a of done) {
     out.outcomes[a.outcome] = (out.outcomes[a.outcome] || 0) + 1;
     const bt = out.by_task[a.task_key] || (out.by_task[a.task_key] = { name: a.task_key, calls: 0, closes: 0, connected: 0 });
@@ -1053,10 +1067,15 @@ async function callsSummary({ from, to } = {}) {
   const list = await rows(
     `SELECT id, person_key, task_key, direction, phone_key, full_name, status, outcome, is_close, note, next_step, callback_at, transcript, talk_s, COALESCE(wrapped_at, tapped_at, shown_at) AS at
        FROM call_attempts WHERE status IN ('done', 'skipped') AND COALESCE(tapped_at, shown_at) >= $1 AND COALESCE(tapped_at, shown_at) < $2 AND ${sandbox.REAL_PEOPLE()} ORDER BY at`, [start, end]);
-  const done = list.filter((a) => a.status === 'done');
+  const misses = list.filter(isNoAnswer);
+  const done = list.filter(countsAsCall);
   const by = {}; const outcomes = {};
+  for (const a of misses) {
+    const p = by[a.person_key] || (by[a.person_key] = { calls: 0, not_answered: 0, outbound: 0, inbound: 0, closes: 0, talk_s: 0 });
+    p.not_answered += 1; outcomes[a.outcome] = (outcomes[a.outcome] || 0) + 1;
+  }
   for (const a of done) {
-    const p = by[a.person_key] || (by[a.person_key] = { calls: 0, outbound: 0, inbound: 0, closes: 0, talk_s: 0 });
+    const p = by[a.person_key] || (by[a.person_key] = { calls: 0, not_answered: 0, outbound: 0, inbound: 0, closes: 0, talk_s: 0 });
     p.calls += 1; p[a.direction === 'inbound' ? 'inbound' : 'outbound'] += 1; if (a.is_close) p.closes += 1; p.talk_s += Number(a.talk_s || 0);
     outcomes[a.outcome] = (outcomes[a.outcome] || 0) + 1;
   }
@@ -1065,8 +1084,8 @@ async function callsSummary({ from, to } = {}) {
   // A number is "open" if its latest call this period set a next step that isn't a close or a final no.
   const latest = new Map(); for (const a of done) latest.set(a.phone_key, a);
   return {
-    from, to, calls: done.length, outbound: done.filter((a) => a.direction !== 'inbound').length, inbound: done.filter((a) => a.direction === 'inbound').length,
-    skipped: list.length - done.length, outcomes, by_person: by,
+    from, to, calls: done.length, not_answered: misses.length, outbound: done.filter((a) => a.direction !== 'inbound').length, inbound: done.filter((a) => a.direction === 'inbound').length,
+    skipped: list.length - done.length - misses.length, outcomes, by_person: by,
     discussed: done.filter((a) => (a.transcript && a.transcript.summary) || (a.note && a.note.length > 12)).slice(-40).reverse().map(item),
     closed: done.filter((a) => a.is_close).reverse().map(item),
     open: [...latest.values()].filter((a) => !a.is_close && !finalNo.has(a.outcome)).sort((x, y) => new Date(x.callback_at || '2999-01-01') - new Date(y.callback_at || '2999-01-01')).slice(0, 60).map(item),
@@ -1282,7 +1301,7 @@ function sessionTotals(sessions = [], now = new Date()) {
 async function callsByDay(personKey, fromDay, toDay) {
   const list = await rows(
     `SELECT (wrapped_at AT TIME ZONE '${TZ}')::date::text AS day, COUNT(*)::int AS n FROM call_attempts
-      WHERE person_key = $1 AND status = 'done' AND (wrapped_at AT TIME ZONE '${TZ}')::date BETWEEN $2::date AND $3::date GROUP BY 1`,
+      WHERE person_key = $1 AND ${COUNTED_SQL()} AND (wrapped_at AT TIME ZONE '${TZ}')::date BETWEEN $2::date AND $3::date GROUP BY 1`,
     [personKey, fromDay, toDay]
   );
   return Object.fromEntries(list.map((r) => [r.day, r.n]));
@@ -1297,12 +1316,12 @@ async function roadTo1000() {
 
 async function leaderboard(day) {
   const list = await rows(
-    `SELECT person_key, COUNT(*) FILTER (WHERE status = 'done')::int AS calls, COUNT(*) FILTER (WHERE is_close)::int AS closes
+    `SELECT person_key, COUNT(*) FILTER (WHERE ${COUNTED_SQL()})::int AS calls, COUNT(*) FILTER (WHERE status = 'done' AND outcome = '${NO_ANSWER}')::int AS not_answered, COUNT(*) FILTER (WHERE is_close)::int AS closes
        FROM call_attempts WHERE (COALESCE(tapped_at, shown_at) AT TIME ZONE '${TZ}')::date = $1::date AND ${sandbox.REAL_PEOPLE()} GROUP BY person_key ORDER BY closes DESC, calls DESC`,
     [day]
   );
   const callers = await loadCallers();
-  return list.map((r) => ({ person_key: r.person_key, name: callers.find((p) => p.key === r.person_key)?.name || r.person_key, calls: r.calls, closes: r.closes }));
+  return list.map((r) => ({ person_key: r.person_key, name: callers.find((p) => p.key === r.person_key)?.name || r.person_key, calls: r.calls, not_answered: r.not_answered, closes: r.closes }));
 }
 
 async function callbacksDue(personKey, now = new Date()) {
@@ -1339,6 +1358,7 @@ async function stats(personKey, { now = new Date(), sessionId = null } = {}) {
     day,
     targets,
     calls: sum.calls,
+    not_answered: sum.not_answered,
     closes: sum.closes,
     connected: sum.connected,
     talk_s: sum.talk_s,
@@ -1508,7 +1528,7 @@ async function performance({ day = kampalaDay(), now = new Date() } = {}) {
       rate_pct: info.rate_pct || 0,
       targets,
       live: liveStatus(latest, mine, events, now),
-      calls: sum.calls, closes: sum.closes, connected: sum.connected, talk_s: sum.talk_s, avg_talk_s: sum.avg_talk_s,
+      calls: sum.calls, not_answered: sum.not_answered, closes: sum.closes, connected: sum.connected, talk_s: sum.talk_s, avg_talk_s: sum.avg_talk_s,
       shown: sum.shown, tapped: sum.tapped, skipped: sum.skipped, skip_reasons: sum.skip_reasons, median_gap_s: sum.median_gap_s,
       callbacks_booked: sum.callbacks_booked, follow_ups_done: sum.follow_ups_done,
       callbacks_due: cbs.filter((c) => c.person_key === key && c.due_now).length,
@@ -1529,7 +1549,7 @@ async function performance({ day = kampalaDay(), now = new Date() } = {}) {
     day,
     tasks: tasks.map((t) => ({ key: t.key, name: t.name, active: t.active })),
     people,
-    team: { calls: team.calls, closes: team.closes, connected: team.connected, talk_s: team.talk_s, by_task: team.by_task, flagged_calls: team.flagged_calls },
+    team: { calls: team.calls, not_answered: team.not_answered, closes: team.closes, connected: team.connected, talk_s: team.talk_s, by_task: team.by_task, flagged_calls: team.flagged_calls },
     pending_numbers: submissions,
     callbacks: cbs.slice(0, 50),
     flag_labels: FLAG_LABELS,
@@ -1548,7 +1568,7 @@ async function evidence(personKey, day = kampalaDay()) {
     sessions: sessions.map((s) => ({ id: s.id, task_key: s.task_key, started_at: s.started_at, ended_at: s.ended_at, end_reason: s.end_reason, open_ms: Number(s.open_ms), focus_ms: Number(s.focus_ms), away_ms: Number(s.away_ms), break_ms: Number(s.break_ms), exit_count: s.exit_count, device: s.device, actor_account: s.actor_account })),
     events: events.map((e) => ({ session_id: e.session_id, kind: e.kind, detail: e.detail, at: e.at })),
     task_ms: taskTime(sessions, events),
-    summary: (() => { const sm = summarize(attempts, []); return { calls: sm.calls, connected: sm.connected, closes: sm.closes, talk_s: sm.talk_s, outcomes: sm.outcomes, shown: sm.shown, skipped: sm.skipped }; })(),
+    summary: (() => { const sm = summarize(attempts, []); return { calls: sm.calls, not_answered: sm.not_answered, connected: sm.connected, closes: sm.closes, talk_s: sm.talk_s, outcomes: sm.outcomes, shown: sm.shown, skipped: sm.skipped }; })(),
     logins: loginsUsed(sessions, attempts),
     dropoffs: dropOffs(sessions, events, attempts),
     on_call: onCallSegments(attempts, events),
@@ -1567,7 +1587,7 @@ const minutesBetween = (a, b) => Math.round((new Date(b).getTime() - new Date(a)
 function loginsUsed(sessions = [], attempts = []) {
   const m = new Map();
   for (const s of sessions) { const k = s.actor_account || 'not recorded'; const v = m.get(k) || { login: k, sessions: 0, calls: 0 }; v.sessions += 1; m.set(k, v); }
-  for (const a of attempts) { if (a.status !== 'done') continue; const k = a.actor_account || 'not recorded'; const v = m.get(k) || { login: k, sessions: 0, calls: 0 }; v.calls += 1; m.set(k, v); }
+  for (const a of attempts) { if (!countsAsCall(a)) continue; const k = a.actor_account || 'not recorded'; const v = m.get(k) || { login: k, sessions: 0, calls: 0 }; v.calls += 1; m.set(k, v); }
   return [...m.values()].sort((x, y) => y.calls - x.calls || y.sessions - x.sessions);
 }
 
@@ -1601,7 +1621,10 @@ function onCallSegments(attempts = [], events = []) {
   return {
     calls: items,
     summary: {
-      calls: items.length,
+      // Same count as everywhere else: a call is a tapped call with an outcome other than "No answer".
+      calls: items.filter((i) => i.outcome !== NO_ANSWER && i.outcome !== 'no outcome saved' && i.outcome !== 'skipped').length,
+      not_answered: items.filter((i) => i.outcome === NO_ANSWER).length,
+      no_outcome: items.filter((i) => i.outcome === 'no outcome saved' || i.outcome === 'skipped').length,
       talk_s: items.reduce((t, i) => t + (i.talk_s || 0), 0),
       avg_gap_s: gaps.length ? Math.round(gaps.reduce((t, g) => t + g, 0) / gaps.length) : null,
       longest_gap_s: longest ? longest.gap_s : null,
@@ -1680,7 +1703,8 @@ async function evidenceTrends(personKey) {
     const base = await rows(
       `WITH b AS (SELECT generate_series(date_trunc('${unit}', now() AT TIME ZONE '${TZ}') - ($2::int - 1) * interval '1 ${unit}', date_trunc('${unit}', now() AT TIME ZONE '${TZ}'), interval '1 ${unit}') AS k)
        SELECT to_char(b.k, 'YYYY-MM-DD') AS k,
-              COUNT(a.id) FILTER (WHERE a.status = 'done')::int AS calls,
+              COUNT(a.id) FILTER (WHERE ${COUNTED_SQL('a.')})::int AS calls,
+              COUNT(a.id) FILTER (WHERE a.status = 'done' AND a.outcome = '${NO_ANSWER}')::int AS not_answered,
               COALESCE(SUM(a.talk_s) FILTER (WHERE a.status = 'done'), 0)::int AS talk_s,
               COUNT(a.id) FILTER (WHERE a.status = 'done' AND a.spoke)::int AS connected,
               COUNT(a.id) FILTER (WHERE a.status = 'done' AND a.is_close)::int AS closes
@@ -1721,6 +1745,9 @@ async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
 }
 
 module.exports = {
+  countsAsCall,
+  isNoAnswer,
+  NO_ANSWER_RETRY_MS,
   onCallSegments,
   dropOffs,
   trackingAudit,

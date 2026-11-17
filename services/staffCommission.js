@@ -687,7 +687,7 @@ async function loadInputs({ client = db, sends = [] } = {}) {
   ]);
   const claims = [
     ...(await rowsOf(client, `SELECT phone_key, person_key, added_at AS at FROM outreach_list_numbers WHERE accepted IS TRUE AND phone_key = ANY($1::text[])`, [keys])),
-    ...(await rowsOf(client, `SELECT phone_key, person_key, created_at AS at FROM outreach_events WHERE kind IN ('call_started', 'outcome') AND phone_key = ANY($1::text[])`, [keys]))
+    ...(await rowsOf(client, `SELECT phone_key, person_key, created_at AS at FROM outreach_events WHERE kind = 'outcome' AND outcome IS DISTINCT FROM 'no_answer' AND phone_key = ANY($1::text[])`, [keys]))
   ];
   const ids = listings.map((l) => l.id);
   const [images, hashes] = await Promise.all([

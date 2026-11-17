@@ -181,7 +181,7 @@ async function activity({ period = 'day', day = kampalaDay(), personKey = '' } =
   const cell = (pk, d) => {
     if (!people.has(pk)) people.set(pk, new Map());
     const m = people.get(pk);
-    if (!m.has(d)) m.set(d, { day: d, sessions: 0, first_open: null, last_close: null, on_screen_ms: 0, focus_ms: 0, away_ms: 0, break_ms: 0, breaks: 0, lunch: [], work_ms: 0, down_ms: 0, segments: [], login_at: null, work_switches: 0, left_screen: 0, left: [], idle_ms: 0, idles: [], actions: 0, calls: 0, outbound: 0, inbound: 0, talk_s: 0, closes: 0, skips: 0, pay_sent: 0, pay_claimed: 0, pay_confirmed: 0, payments: 0, commission_ugx: 0, flags: [] });
+    if (!m.has(d)) m.set(d, { day: d, sessions: 0, first_open: null, last_close: null, on_screen_ms: 0, focus_ms: 0, away_ms: 0, break_ms: 0, breaks: 0, lunch: [], work_ms: 0, down_ms: 0, segments: [], login_at: null, work_switches: 0, left_screen: 0, left: [], idle_ms: 0, idles: [], actions: 0, calls: 0, not_answered: 0, outbound: 0, inbound: 0, talk_s: 0, closes: 0, skips: 0, pay_sent: 0, pay_claimed: 0, pay_confirmed: 0, payments: 0, commission_ugx: 0, flags: [] });
     return m.get(d);
   };
   for (const s of sessions) {
@@ -250,7 +250,9 @@ async function activity({ period = 'day', day = kampalaDay(), personKey = '' } =
   const rateOf = new Map(callers.map((p) => [p.key, Number(p.rate_pct || 0)]));
   for (const a of attempts) {
     const c = cell(a.person_key, kampalaDay(a.tapped_at || a.shown_at));
-    if (a.tapped_at) { c.calls += 1; c.actions += 1; c[a.direction === 'inbound' ? 'inbound' : 'outbound'] += 1; }
+    // A "No answer" is shown separately and never counts as a call (see callingScreen.countsAsCall).
+    if (a.tapped_at && a.status === 'done' && a.outcome === 'no_answer') { c.not_answered += 1; c.actions += 1; }
+    else if (a.tapped_at) { c.calls += 1; c.actions += 1; c[a.direction === 'inbound' ? 'inbound' : 'outbound'] += 1; }
     if (a.status === 'skipped') c.skips += 1;
     c.talk_s += Number(a.talk_s || 0);
     if (a.is_close) c.closes += 1;
@@ -283,7 +285,7 @@ async function activity({ period = 'day', day = kampalaDay(), personKey = '' } =
     const sum = (k) => list.reduce((n, c) => n + (Number(c[k]) || 0), 0);
     out.push({
       person_key: pk, name: person.name, days: list, missed_days: missed,
-      totals: { days_worked: list.filter((c) => c.sessions).length, work_ms: sum('work_ms'), down_ms: sum('down_ms'), on_screen_ms: sum('on_screen_ms'), focus_ms: sum('focus_ms'), away_ms: sum('away_ms'), break_ms: sum('break_ms'), breaks: sum('breaks'), left_screen: sum('left_screen'), idle_ms: sum('idle_ms'), long_idles: list.reduce((n, c) => n + c.idles.length, 0), calls: sum('calls'), outbound: sum('outbound'), inbound: sum('inbound'), talk_s: sum('talk_s'), closes: sum('closes'), payments: sum('payments'), pay_sent: sum('pay_sent'), pay_claimed: sum('pay_claimed'), pay_confirmed: sum('pay_confirmed'), commission_ugx: sum('commission_ugx'), actions: sum('actions') },
+      totals: { days_worked: list.filter((c) => c.sessions).length, work_ms: sum('work_ms'), down_ms: sum('down_ms'), on_screen_ms: sum('on_screen_ms'), focus_ms: sum('focus_ms'), away_ms: sum('away_ms'), break_ms: sum('break_ms'), breaks: sum('breaks'), left_screen: sum('left_screen'), idle_ms: sum('idle_ms'), long_idles: list.reduce((n, c) => n + c.idles.length, 0), calls: sum('calls'), not_answered: sum('not_answered'), outbound: sum('outbound'), inbound: sum('inbound'), talk_s: sum('talk_s'), closes: sum('closes'), payments: sum('payments'), pay_sent: sum('pay_sent'), pay_claimed: sum('pay_claimed'), pay_confirmed: sum('pay_confirmed'), commission_ugx: sum('commission_ugx'), actions: sum('actions') },
       flags: list.reduce((n, c) => n + c.flags.length, 0) + missed.length
     });
   }
@@ -333,11 +335,11 @@ async function planResult(personKey, day = kampalaDay(), { save = false } = {}) 
   const plan = await getPlan(pk, day);
   const act = (await activity({ period: 'day', day, personKey: pk })).people[0];
   const d = act ? act.days.find((x) => x.day === day) || {} : {};
-  const called = new Set((await rows(`SELECT phone_key FROM call_attempts WHERE person_key = $1 AND tapped_at >= $2 AND tapped_at < $3`,
+  const called = new Set((await rows(`SELECT phone_key FROM call_attempts WHERE person_key = $1 AND tapped_at >= $2 AND tapped_at < $3 AND NOT (status = 'done' AND outcome = 'no_answer')`,
     [pk, `${day}T00:00:00+03:00`, `${addDays(day, 1)}T00:00:00+03:00`])).map((r) => r.phone_key));
   const nums = Array.isArray(plan.numbers) ? plan.numbers : [];
   const result = {
-    calls: d.calls || 0, closes: d.closes || 0, payments: Math.max(d.payments || 0, d.pay_confirmed || 0), pay_claimed: d.pay_claimed || 0,
+    calls: d.calls || 0, not_answered: d.not_answered || 0, closes: d.closes || 0, payments: Math.max(d.payments || 0, d.pay_confirmed || 0), pay_claimed: d.pay_claimed || 0,
     numbers_planned: nums.length, numbers_reached: nums.filter((k) => called.has(k)).length, numbers_missed: nums.filter((k) => !called.has(k)).map(mask),
     calls_hit: (d.calls || 0) >= plan.calls_target, closes_hit: (d.closes || 0) >= plan.closes_target, payments_hit: Math.max(d.payments || 0, d.pay_confirmed || 0) >= (plan.payments_target || 0)
   };

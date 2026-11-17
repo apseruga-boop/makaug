@@ -321,7 +321,9 @@ function sendState(send = {}, events = [], firstReplyAt = null) {
     signed_up_auto: !!send.signed_up_at,
     paid,
     paid_claimed: !paid && tapped.has('paid'),
-    calls: events.filter((e) => e.kind === 'call_started').length,
+    // A "No answer" is not a call (17 Nov 2026): kept in the history, not counted.
+    calls: Math.max(0, events.filter((e) => e.kind === 'call_started').length - events.filter((e) => e.kind === 'outcome' && e.outcome === 'no_answer').length),
+    not_answered: events.filter((e) => e.kind === 'outcome' && e.outcome === 'no_answer').length,
     last_outcome: latest ? latest.outcome : null,
     last_outcome_at: latest ? latest.created_at : null,
     follow_up_on: latest ? toDay(latest.follow_up_on) || null : null
@@ -680,7 +682,8 @@ async function getDashboard({ now = new Date() } = {}) {
       return {
         key: person.key,
         sent: sentList.length,
-        calls: ev.filter((e) => e.kind === 'call_started').length,
+        calls: Math.max(0, ev.filter((e) => e.kind === 'call_started').length - ev.filter((e) => e.kind === 'outcome' && e.outcome === 'no_answer').length),
+        not_answered: ev.filter((e) => e.kind === 'outcome' && e.outcome === 'no_answer').length,
         outcomes: ev.filter((e) => e.kind === 'outcome').length,
         spoke: ev.filter((e) => e.kind === 'outcome' && SPOKE_OUTCOMES.has(e.outcome)).length,
         signed_up: sends.filter((s) => s.person_key === person.key && s.signed_up_at && kampalaDay(s.signed_up_at) === day).length,
