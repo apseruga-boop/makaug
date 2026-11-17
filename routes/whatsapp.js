@@ -8628,7 +8628,8 @@ function agentConversationalAside({ data = {}, cleanBody = '' } = {}) {
   return null;
 }
 
-const AGENT_GREETING = /^\s*(hi|hii+|hey|hello+|helo|yo|hallo|good\s*(morning|afternoon|evening|day)|morning|afternoon|evening|greetings|start|menu|hi there|gyebale ?ko|oli otya)\b[\s.!,👋😊🙏]*$/i;
+// "Hi makaug" too: it is what the link staff send a new agent types for them (17 Nov 2026).
+const AGENT_GREETING = /^\s*(hi|hii+|hey|hello+|helo|yo|hallo|good\s*(morning|afternoon|evening|day)|morning|afternoon|evening|greetings|start|menu|hi there|gyebale ?ko|oli otya)(?:\s+makaug(?:\.com)?)?\b[\s.!,👋😊🙏]*$/i;
 const AGENT_TERMS_AGREE = require('../services/agentTermsService');
 const AGENT_SHARE_REQUEST = /\b(share|my (link|card|profile|page|listings?|properties)|send me (my|the) (link|card|profile)|how do i share|agent card)\b/i;
 
@@ -8885,6 +8886,38 @@ async function handleAgentProfilePhotoReply({ phone, data = {}, candidates = [],
     nextStep: currentStep,
     message: `✅ Done${first ? `, ${first}` : ''} — your new photo is live on your makaug profile.${link ? `\n\n${link}` : ''}\n\nIt can take a minute or two to show for people who already had your page open. Got properties? Send them here the same way.`
   };
+}
+
+/**
+ * Whether a new agent's welcome is still waiting in the queue: they had never
+ * written to the number, which writes first to nobody, so it waited for them.
+ */
+async function agentWelcomeIsWaiting(phone = '') {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 9) return false;
+  const row = (await db.query(
+    `SELECT 1 FROM outbound_message_queue
+      WHERE user_phone = ANY($1::text[])
+        AND channel = 'whatsapp'
+        AND status IN ('pending', 'retry')
+        AND metadata->>'message_kind' = 'agent_welcome'
+      LIMIT 1`,
+    [[digits, `+${digits}`]]
+  ).catch(() => ({ rows: [] }))).rows[0];
+  return Boolean(row);
+}
+
+/**
+ * The answer to a new agent's first "Hi" when their welcome was waiting for it.
+ * The welcome goes with it, in whichever order the bridge sends them, so this
+ * points at it rather than coming first; at night it goes at seven.
+ */
+function agentWelcomeArrivingReply(agent = {}, { now = new Date() } = {}) {
+  const first = agentGreetingName(agent, '');
+  const when = whatsappWebBridgeService.isOutboxQuietHours(now)
+    ? 'It is night in Kampala, so your welcome comes at 7 in the morning'
+    : 'Your welcome is in the messages here';
+  return `👋 Hello ${first || 'there'}, and welcome to makaug! ${when}: your agent ID and page, a one-minute video on how to post, and how to pay.`;
 }
 
 /**
@@ -11498,6 +11531,12 @@ async function handleEmployeeWhatsappIntake({
               cleanBody
             })
           };
+        }
+        // Their welcome waited for them to write, and this is that message: it
+        // goes now, so they are greeted and pointed at it, not handed the menu
+        // on top of it (17 Nov 2026).
+        if (AGENT_GREETING.test(askedText) && await agentWelcomeIsWaiting(phone)) {
+          return { handled: true, nextStep: currentStep, message: agentWelcomeArrivingReply(askingAgent) };
         }
         return {
           handled: true,
@@ -25910,6 +25949,11 @@ router.post('/web-bridge/outbox/:id/sent', asyncRoute(async (req, res) => {
     });
   }
 
+  // A new agent's welcome that waited for them to write has gone: the staff
+  // who were told it was waiting hear that it went (17 Nov 2026).
+  await require('../services/agentWelcomeService').tellTeamHeldWelcomeWent(updated)
+    .catch((error) => logger.warn('A held welcome went; the team could not be told:', error.message || String(error)));
+
   return res.json({ ok: true, data: updated });
 }));
 
@@ -26225,6 +26269,8 @@ module.exports.__test = {
   outstandingAgentPayLink,
   AGENT_PAY_LINK_QUESTION,
   agentMenuReply,
+  AGENT_GREETING,
+  agentWelcomeArrivingReply,
   staffIntakeGreetingReply,
   isSoldAnnouncement,
   soldIsTheAskingPrice,

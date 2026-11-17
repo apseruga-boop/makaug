@@ -551,9 +551,10 @@ test('King previews the messages that will be sent, and says when a welcome is w
   assert.match(app, /the film 20 seconds after the first message\$\{hasPlan \? ", the payment message 25 seconds after that" : ""\}\./);
   assert.match(app, /It is night in Kampala: the welcome goes to the agent at \$\{adminKampalaClock\(res\.data\.held_until\)\}\./, 'a welcome sent by hand at night says it is waiting');
   // At night the payment message waits with the welcome, and King does not call it sent.
-  assert.match(app, /const payLinkHeld = Boolean\(response\?\.data\?\.fee_link\?\.goes_at\);/);
+  // Nor while it waits for an agent who has never written to the number (17 Nov 2026).
+  assert.match(app, /const payLinkHeld = Boolean\(response\?\.data\?\.fee_link\?\.goes_at \|\| response\?\.data\?\.fee_link\?\.waiting_for_first_message \|\| welcome\?\.waiting_for_first_message\);/);
   assert.match(app, /payLinkHeld \? " The payment link goes with their welcome\." : " Payment link sent\."/);
-  assert.match(app, /f\.goes_at \? " The payment link goes with it\." : " Payment link sent\."/);
+  assert.match(app, /f\.goes_at \|\| waits \? " The payment link goes with it\." : " Payment link sent\."/);
   assert.match(source, /heldUntil && sendAt \? \{ goes_at: new Date\(sendAt\)\.toISOString\(\) \} : \{\}/, 'the server says when it goes');
   assert.match(app, /their welcome goes at \$\{adminKampalaClock\(welcome\.held_until\)\}/);
   assert.match(read('index.html'), /Three WhatsApp messages, in this order: approved \(their ID, their page and what to do next\), the one-minute how-to-post film, then how to pay when a payment is due\./);

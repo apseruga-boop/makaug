@@ -436,12 +436,57 @@ function kampalaClock(value) {
   return `${hour % 12 || 12}${minute === '00' ? '' : `:${minute}`}${hour < 12 ? 'am' : 'pm'}`;
 }
 
-/** One line for the member of staff who approved them: sent, or waiting for the morning. */
+/**
+ * What staff are told when a new agent's welcome cannot go yet because they
+ * have never written to the makaug number, which writes first to nobody. On
+ * 17 Nov 2026 a new agent was approved at 16:40, and the owner and the
+ * employee who signed him up were told his welcome and payment link had gone,
+ * while all five of his messages waited for him to write.
+ */
+function welcomeWaitsLine({ link = '' } = {}) {
+  const hello = link || require('./filmLinkService').helloLink();
+  return [
+    'Nothing has reached them yet: they have never written to the makaug WhatsApp number, and it only writes to people who have written to it first.',
+    'Their welcome, how-to video and payment link go the moment they send it a message. Send them this to tap and send:',
+    hello
+  ].join('\n');
+}
+
+/**
+ * The welcome waited for the agent to write; they have, and its last message,
+ * the payment link, has just gone. The staff who were told it was waiting hear
+ * that it went. `row` is the queue row just marked sent; `queue` stands in for
+ * the bridge's queue under test. Returns how many were told.
+ */
+async function tellTeamHeldWelcomeWent(row = {}, { queue = null } = {}) {
+  const meta = (row && row.metadata) || {};
+  if (meta.message_kind !== 'agent_fee_link_on_approval' || meta.held_for_first_message !== true) return 0;
+  const send = queue || require('./whatsappWebBridgeService').queueWhatsappWebBridgeMessage;
+  const name = String(meta.agent_name || '').trim() || 'The new agent';
+  const agentTail = String(row.user_phone || '').replace(/\D/g, '').slice(-9);
+  const team = [...new Set((Array.isArray(meta.tell_when_sent) ? meta.tell_when_sent : [])
+    .map((phone) => String(phone || '').replace(/\D/g, ''))
+    .filter((phone) => phone.length >= 9 && phone.slice(-9) !== agentTail))];
+  let told = 0;
+  for (const recipient of team) {
+    await send({
+      recipient,
+      text: `✅ *${name} has their welcome and payment link now.* They wrote to the makaug number, so what was waiting for them is going out.`,
+      source: String(process.env.AGENT_REPORT_WHATSAPP_SOURCE || 'whatsapp_runtime').trim().toLowerCase() || 'whatsapp_runtime',
+      metadata: { message_kind: 'agent_welcome_went_notice', agent_id: meta.agent_id || null, reply_dedupe_key: `agent_welcome_went:${meta.agent_id || row.id}:${recipient}` }
+    });
+    told += 1;
+  }
+  return told;
+}
+
+/** One line for the member of staff who approved them: sent, waiting for them to write, or waiting for the morning. */
 function welcomeSentLine(welcome = null) {
   if (!welcome) return '';
   if (welcome.error) return `Welcome NOT sent: ${welcome.error}`;
   if (welcome.skipped === 'already_sent') return 'They were welcomed before, so nothing was sent again.';
   if (welcome.skipped) return 'No welcome was sent with this approval.';
+  if (welcome.waiting_for_first_message) return welcomeWaitsLine({ link: welcome.hello_link });
   if (welcome.held_until) return `It is night in Kampala, so their welcome goes at ${kampalaClock(welcome.held_until)}.`;
   return 'Their welcome and the how-to-post video have gone to them on WhatsApp.';
 }
@@ -456,6 +501,8 @@ module.exports = {
   kampalaClock,
   welcomeSchedule,
   welcomeSentLine,
+  welcomeWaitsLine,
+  tellTeamHeldWelcomeWent,
   networkAudience,
   networkExtraCountries,
   targetMonthName,

@@ -73,6 +73,16 @@ function filmLink(name = '', { env = process.env } = {}) {
   return `https://wa.me/${makaugWhatsappDigits(env)}?text=${encodeURIComponent(key ? `FILM ${key}` : 'FILM')}`;
 }
 
+/**
+ * A chat with the makaug number, "Hi makaug" already typed. For somebody the
+ * number may not write to first because they have never written to it: a new
+ * agent whose welcome is waiting taps it, presses send, and everything waiting
+ * for them goes (17 Nov 2026).
+ */
+function helloLink({ env = process.env } = {}) {
+  return `https://wa.me/${makaugWhatsappDigits(env)}?text=${encodeURIComponent('Hi makaug')}`;
+}
+
 // What somebody may put in front of the word: the link types FILM for them,
 // and people say hello first.
 const OPENING = /^(?:(?:hi|hello|hey|hallo|helo|morning|afternoon|evening|good\s+(?:morning|afternoon|evening|day))\s+)*/i;
@@ -238,6 +248,7 @@ module.exports = {
   staffKey,
   filmLinkStaff,
   filmLink,
+  helloLink,
   parseFilmRequest,
   outreachLimits,
   firstContactDecision,
