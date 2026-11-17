@@ -66,11 +66,12 @@ function registerStaffPerformanceRoutes(router, { writeAudit, actorLabel } = {})
       const out = await perf.addListNumbers({
         personKey: req.body?.person_key,
         text: String(req.body?.text || ''),
+        csv: String(req.body?.csv || '').slice(0, 1000000), // parsed in memory, never stored as a file
         listDay: req.body?.list_day,
         addedBy: actorOf(req),
         addedByPerson: String(req.body?.added_by_person || '').slice(0, 40)
       });
-      await audit(req, 'outreach_list_added', { person: out.person_key, list_day: out.list_day, accepted: out.summary.accepted, refused: out.summary.refused });
+      await audit(req, 'outreach_list_added', { person: out.person_key, list_day: out.list_day, accepted: out.summary.accepted, refused: out.summary.refused, from: out.summary.from, rows: out.summary.rows });
       return res.status(201).json({ ok: true, data: out });
     } catch (error) {
       return fail(res, next, error);
