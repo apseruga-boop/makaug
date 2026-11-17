@@ -94,7 +94,7 @@
     b.textContent = '🧪 PRACTICE – TEST numbers can\'t dial; your own test phone really rings. Nothing is sent or counted.';
     document.body.appendChild(b);
     document.addEventListener('click', function (e) {
-      var a = e.target && e.target.closest ? e.target.closest('a[href^="tel:"],a[href^="sms:"],a[href*="wa.me/"],a[href*="whatsapp.com/"]') : null;
+      var a = e.target && e.target.closest ? e.target.closest('a[href^="tel:"],a[href^="sms:"],a[href*="wa.me/"],a[href*="whatsapp.com/"],a[href^="whatsapp:"]') : null;
       if (!a) return;
       var href = a.getAttribute('href') || '';
       var digits = href.replace(/^tel:/, '').replace(/\D/g, '');
@@ -249,7 +249,7 @@
     '@media (max-width:1100px){#mkc-overlay.mkc-noscript .mkc-grid{grid-template-columns:minmax(0,1fr)}}',
     '@media (max-width:720px){#mkc-overlay.mkc-focus .mkc-grid{grid-template-columns:1fr}.mkc-wrapgrid,.mkc-wrapchecks{grid-template-columns:1fr}.mkc-comm small{display:none}.mkc-replies{grid-template-columns:1fr}}',
     '.mkc-splitsum{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.mkc-splitrows{display:flex;flex-direction:column;gap:6px}.mkc-splitrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.mkc-splitrow input[type=time]{width:110px}.mkc-splitrow select{min-width:170px}',
-    '.mkc-posted{font-size:14px;margin-top:4px;background:#f0f9ff;border:1px solid #bae6fd;color:#0c4a6e;border-radius:8px;padding:6px 8px;line-height:1.35}.mkc-callhelp{margin-top:10px;text-align:left;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:8px 12px;font-size:13px;color:#1e3a8a;line-height:1.4}.mkc-callhelp summary{cursor:pointer;font-weight:800}.mkc-callhelp ol{margin:4px 0 6px 22px;padding:0;list-style:decimal}.mkc-callhelp li{display:list-item}.mkc-callhelp li{margin:2px 0}.mkc-callhelp p{margin:6px 0 0}.mkc-meetcard{background:#f0fdf4;border:2px solid #16a34a;border-radius:16px;padding:16px;color:#14532d}',
+    '.mkc-posted{font-size:14px;margin-top:4px;background:#f0f9ff;border:1px solid #bae6fd;color:#0c4a6e;border-radius:8px;padding:6px 8px;line-height:1.35}.mkc-wabtn{background:#16a34a!important;color:#fff!important;border-color:#16a34a!important;font-weight:800}.mkc-hitchip{background:#10b981;color:#fff;border-radius:99px;padding:4px 10px;font-weight:800;font-size:12px;white-space:nowrap}.mkc-intlchip{background:#334155;color:#e2e8f0;border-radius:99px;padding:4px 10px;font-size:11px;white-space:nowrap}.mkc-mode.dry i{background:#94a3b8!important}.mkc-fellback{background:#fef3c7;border:1px solid #fde68a;color:#78350f;border-radius:10px;padding:6px 10px;margin:0 0 6px;font-size:13px}.mkc-sugg{background:#eef2ff;color:#3730a3;border-radius:99px;padding:2px 4px 2px 10px;font-size:12px;margin-left:8px}.mkc-callhelp{margin-top:10px;text-align:left;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:8px 12px;font-size:13px;color:#1e3a8a;line-height:1.4}.mkc-callhelp summary{cursor:pointer;font-weight:800}.mkc-callhelp ol{margin:4px 0 6px 22px;padding:0;list-style:decimal}.mkc-callhelp li{display:list-item}.mkc-callhelp li{margin:2px 0}.mkc-callhelp p{margin:6px 0 0}.mkc-meetcard{background:#f0fdf4;border:2px solid #16a34a;border-radius:16px;padding:16px;color:#14532d}',
     '.mkc-meetcard h3{margin:0;font-size:19px;font-weight:900;color:#14532d}',
     '.mkc-meetcard .mm-sub{margin:4px 0 14px;color:#166534;font-size:14px;line-height:1.4}',
     '.mkc-meetcard .mm-form{display:grid;grid-template-columns:minmax(150px,190px) minmax(220px,1fr) minmax(170px,240px) auto;gap:12px;align-items:end}',
@@ -597,14 +597,41 @@
   function renderSplit() {
     var el = q('[data-mkc-split]'); if (!el || !S) return;
     var P = S.split; if (!P || !P.blocks) { el.innerHTML = ''; return; }
-    el.innerHTML = '<div class="mkc-splitt"><b>Today\'s split</b><span>' + Object.keys(P.totals || {}).filter(function (k) { return k !== 'lunch'; }).map(function (k) { var t = P.totals[k]; return esc(t.label) + ' ' + t.done + '/' + t.target; }).join(' · ') + '</span></div><div class="mkc-blocks">'
+    var sg = suggestedNow();
+    el.innerHTML = '<div class="mkc-splitt"><b>Today\'s split</b><span>' + Object.keys(P.totals || {}).filter(function (k) { return k !== 'lunch'; }).map(function (k) { var t = P.totals[k]; return esc(t.label) + ' ' + t.done + '/' + t.target; }).join(' · ') + '</span>'
+      + '<span class="mkc-muted" style="font-size:11px">A guide: switch tasks any time.</span>'
+      + (sg ? '<span class="mkc-sugg" data-mkc-sugg-wrap>Suggested now: <b>' + esc(sg.label) + '</b> <button type="button" class="mkc-btn sm ghost" data-mkc-sugg="' + esc(sg.key) + '">Switch</button></span>' : '') + '</div><div class="mkc-blocks">'
       + P.blocks.map(function (b) {
         return '<div class="mkc-blk k-' + esc(b.kind) + (b.now ? ' now' : '') + (b.past ? ' past' : '') + '" title="' + esc(b.label) + ' ' + esc(b.start) + '–' + esc(b.end) + '"><b>' + esc(b.start) + '–' + esc(b.end) + (b.now ? ' · now' : '') + '</b><span>' + esc(b.label) + '</span>'
           + (b.kind === 'lunch' ? '<em>🍽</em>' : '<div class="bar"><i style="width:' + blockPct(b) + '%"></i></div><em>' + b.done + '/' + b.target + (b.kind === 'housekeeping' ? ' tasks' : ' calls') + '</em>') + '</div>';
       }).join('') + '</div>';
+    var sb = q('[data-mkc-sugg]', el); if (sb) sb.onclick = function () { goTask(sb.getAttribute('data-mkc-sugg')); };
   }
-  // The queue follows the block for the time of day. A manual mode change wins until the next block.
-  function balance() {
+  // The day split is a guide, not a lock: the caller picks the task. We only suggest the block's task.
+  function balance() { return false; }
+  function suggestedNow() {
+    var b = S.split && S.split.current; if (!b) return null;
+    if (b.kind === 'housekeeping') return S.phase === 'housekeeping' ? null : { key: 'housekeeping', label: 'Housekeeping', b: b };
+    if (!b.tasks || !b.tasks.length) return null;
+    if (S.phase !== 'housekeeping' && b.tasks.indexOf(S.task) >= 0) return null;
+    var have = function (k) { return (boot.tasks || []).some(function (t) { return t.key === k; }); };
+    var want = b.tasks.filter(function (k) { return have(k) && S.counts && S.counts[k] > 0; })[0] || b.tasks.filter(have)[0];
+    return want ? { key: want, label: MODE_LABEL[want] || want, b: b } : null;
+  }
+  function goTask(k) {
+    if (S.phase === 'calling' || S.phase === 'wrapup') { toast('Finish the wrap-up for this call first.', 'bad'); return; }
+    S.fellBack = null;
+    if (k === 'housekeeping') { openHousekeeping(); return; }
+    if (S.phase === 'housekeeping') ev('housekeeping_off', k);
+    if (k === S.task) { next(); renderTop(); return; }
+    switchTask(k);
+  }
+  function openHousekeeping() {
+    if (S.phase === 'calling' || S.phase === 'wrapup') { toast('Finish the wrap-up for this call first.', 'bad'); return; }
+    if (S.phase === 'shown' && S.id) api('/sessions/' + S.id + '/task', { method: 'POST', body: { task_key: S.task } }).catch(function () {}); // let the shown number go back
+    ev('housekeeping_on'); S.phase = 'housekeeping'; S.cur = null; S.hk = null; loadHk(); renderNum(); renderScript(); renderTop();
+  }
+  function oldBalance() {
     var P = S.split; var b = P && P.current;
     if (!b || S.manual === b.id) return false;
     if (b.kind === 'housekeeping') { S.phase = 'housekeeping'; S.cur = null; loadHk(); renderNum(); renderScript(); return true; }
@@ -646,7 +673,7 @@
       q('[data-mkc-hknote]', row).onclick = function () { var n = q('.mkc-hknote', row); n.style.display = n.style.display === 'none' ? 'flex' : 'none'; q('[data-mkc-hknotein]', row).focus(); };
       q('[data-mkc-hknotesave]', row).onclick = function () { send('note', q('[data-mkc-hknotein]', row).value.trim()); };
     });
-    var back = q('[data-mkc-hkback]', el); if (back) back.onclick = function () { var b = S.split && S.split.current; S.manual = b ? b.id : 'x'; next(); };
+    var back = q('[data-mkc-hkback]', el); if (back) back.onclick = function () { ev('housekeeping_off', S.task); next(); renderTop(); };
   }
   function renderTop() {
     var el = q('[data-mkc-top]'); if (!el || !S) return;
@@ -657,8 +684,10 @@
     el.innerHTML = '<button type="button" class="mkc-work' + (S.work ? ' on' : '') + '" data-mkc-work aria-pressed="' + (S.work ? 'true' : 'false') + '"><span class="knob"></span><b>' + (S.work ? 'WORK MODE ON' : 'WORK MODE OFF') + '</b><small>' + (S.work ? 'work time counting' : 'downtime <span data-mkc-down>' + clock(S.totals.down_ms || 0) + '</span>') + '</small></button>'
       + '<div class="who">' + esc(personName(S.person)) + '<small>Work time <span data-mkc-worktime>' + clock(S.totals.open_ms) + '</span>' + fsLink + '</small></div>'
       + commHtml()
-      + (S.split && S.split.current ? '<span class="mkc-blockchip">⏱ ' + esc(S.split.current.label) + ' · ' + S.split.current.done + '/' + S.split.current.target + '</span>' : '')
-      + '<div class="mkc-modes" role="tablist" aria-label="Mode">' + boot.tasks.map(function (t) { var n = S.counts && S.counts[t.key]; return '<button type="button" role="tab" class="mkc-mode' + (t.key === S.task ? ' on' : '') + '" data-mkc-mode="' + esc(t.key) + '">' + esc(MODE_LABEL[t.key] || t.name) + '<i title="numbers waiting">' + (n == null ? '…' : n) + '</i></button>'; }).join('') + '</div>'
+      + (st.calls_hit ? '<span class="mkc-hitchip" data-mkc-hit>🎯 Target hit – keep going</span>' : '')
+      + '<div class="mkc-modes" role="tablist" aria-label="Task">' + boot.tasks.map(function (t) { var n = S.counts && S.counts[t.key]; return '<button type="button" role="tab" class="mkc-mode' + (t.key === S.task && S.phase !== 'housekeeping' ? ' on' : '') + (n === 0 ? ' dry' : '') + '" data-mkc-mode="' + esc(t.key) + '" title="' + (n == null ? '' : n + ' numbers left today') + '">' + esc(MODE_LABEL[t.key] || t.name) + '<i title="numbers left">' + (n == null ? '…' : n) + '</i></button>'; }).join('')
+        + '<button type="button" role="tab" class="mkc-mode' + (S.phase === 'housekeeping' ? ' on' : '') + '" data-mkc-mode="housekeeping" title="Follow-ups: ID, photos, unpaid promises">🧹 Housekeeping<i>' + (S.counts && S.counts.housekeeping != null ? S.counts.housekeeping : '…') + '</i></button></div>'
+      + (S.counts && S.counts.international ? '<span class="mkc-intlchip" title="Not Ugandan numbers: never offered to call. Follow up on WhatsApp.">🌍 ' + S.counts.international + ' international – WhatsApp only</span>' : '')
       + '<select data-mkc-lang-ui aria-label="Language"><option value="en"' + (S.lang === 'en' ? ' selected' : '') + '>English</option><option value="lg"' + (S.lang === 'lg' ? ' selected' : '') + '>Luganda</option></select>'
       + '<span class="mkc-net" data-mkc-net style="' + (net.offline ? '' : 'display:none') + '">' + esc(T('offline')) + '</span>'
       + '<div class="mkc-road"><div style="font-size:11px;color:#94a3b8">Road to 1000 · <b style="color:#fff">' + road.paying_now + '</b> paying</div><div class="bar"><i style="width:' + Math.max(1, Math.min(100, road.percent || 0)) + '%"></i></div></div>'
@@ -671,7 +700,7 @@
       + '<button type="button" class="mkc-btn sm ghost" style="color:#fff;border-color:#475569" data-mkc-plan>📋 Today\'s plan</button>'
       + '<button type="button" class="mkc-btn sm amber" data-mkc-brk>' + (S.lang === 'lg' ? esc(T('brk')) : 'Lunch / break') + '</button>'
       + '<button type="button" class="mkc-btn sm red" data-mkc-exit>' + esc(T('exit')) + '</button>';
-    qa('[data-mkc-mode]', el).forEach(function (b) { b.onclick = function () { var k = b.getAttribute('data-mkc-mode'); if (k !== S.task) switchTask(k); }; });
+    qa('[data-mkc-mode]', el).forEach(function (b) { b.onclick = function () { goTask(b.getAttribute('data-mkc-mode')); }; });
     renderDash();
     q('[data-mkc-lang-ui]', el).onchange = function (e) { setLang(e.target.value); };
     q('[data-mkc-add]', el).onclick = openAddNumber;
@@ -687,7 +716,13 @@
     q('[data-mkc-exit]', el).onclick = exitSession;
     var fs = q('[data-mkc-fs]', el); if (fs) fs.onclick = function (e) { e.preventDefault(); document.documentElement.requestFullscreen().catch(function () {}); };
   }
-  var MODE_LABEL = { new_agents: 'Get new agents', payments: 'Get payments in', retention: 'Keep clients' };
+  var MODE_LABEL = { new_agents: 'Get new agents', payments: 'Get payments in', retention: 'Client retention' };
+  function taskLabel(k) { return k === 'housekeeping' ? 'Housekeeping' : (MODE_LABEL[k] || k); }
+  function taskTimeHtml(ms, cls) {
+    var ks = Object.keys(ms || {}).filter(function (k) { return ms[k] >= 1000; }).sort(function (x, y) { return ms[y] - ms[x]; });
+    if (!ks.length) return '<span class="mkc-muted">No task time yet</span>';
+    return ks.map(function (k) { return '<span class="mkc-pill ' + (cls || '') + '" data-mkc-tasktime="' + esc(k) + '">⏱ ' + esc(taskLabel(k)) + ' ' + hm(ms[k]) + '</span>'; }).join(' ');
+  }
   function ugx(n) { return 'UGX ' + Number(n || 0).toLocaleString('en-GB'); }
   function ring(v, max, color, label) {
     var r = 26, c = 2 * Math.PI * r, pct = Math.max(0, Math.min(1, max ? v / max : 0));
@@ -712,13 +747,14 @@
     var badges = badgesFor(st, tg);
     var got = badges.filter(function (b) { return b[1]; });
     var nextB = badges.filter(function (b) { return !b[1]; })[0];
-    el.innerHTML = '<div class="mkc-dcard">' + ring(st.calls || 0, tg.calls_per_day, (st.calls_hit ? '#10b981' : '#0ea5e9'), 'Calls vs target') + '<div><b>' + (toGo ? toGo + ' to go' : 'Target hit!') + '</b><span>calls today</span></div></div>'
+    el.innerHTML = '<div class="mkc-dcard">' + ring(st.calls || 0, tg.calls_per_day, (st.calls_hit ? '#10b981' : '#0ea5e9'), 'Calls vs target') + '<div><b>' + (toGo ? toGo + ' to go' : 'Target hit – keep going') + '</b><span>calls today' + (toGo ? '' : ' · numbers keep coming') + '</span></div></div>'
       + '<div class="mkc-dcard">' + ring(st.closes || 0, tg.closes_per_day, '#f59e0b', 'Closes vs target') + '<div><b>' + (st.closes || 0) + ' closed</b><span>target ' + tg.closes_per_day + '</span></div></div>'
       + '<div class="mkc-dcard mkc-money"><div><b>' + (money.on_commission ? ugx(money.earned_ugx) : ugx((money.payments_closed || 0) * 50000)) + '</b><span>' + (money.on_commission ? 'earned today (est. ' + money.rate_pct + '%)' : 'payments in today') + '</span></div><div><b style="color:#b45309">' + (money.on_commission ? ugx(money.at_stake_ugx) : (money.payments_pending || 0) + ' to pay') + '</b><span>at stake: sign-ups / promises</span></div></div>'
       + '<div class="mkc-dcard"><div><b>' + hm((st.talk_s || 0) * 1000) + '</b><span>time on calls</span></div><div><b>' + (st.streak_days || 0) + '🔥</b><span>day streak</span></div><div><b>' + (st.queue_left == null ? '–' : st.queue_left) + '</b><span>' + esc(T('left')) + '</span></div></div>'
       + '<div class="mkc-dcard"><div class="mkc-hours" title="Calls per hour today (Kampala)">' + hours.map(function (x) { return '<i class="' + (x === nowH ? 'now' : '') + '" style="height:' + Math.max(3, Math.round(40 * (byH[x] || 0) / maxH)) + 'px" title="' + x + ':00 · ' + (byH[x] || 0) + ' calls"></i>'; }).join('') + '</div><div><b>' + (st.this_hour || 0) + '</b><span>this hour</span></div></div>'
       + (S.plan ? '<div class="mkc-dcard" style="min-width:190px;cursor:pointer" data-mkc-planline><div style="flex:1"><b>📋 ' + (S.plan.plan.goal ? esc(String(S.plan.plan.goal).slice(0, 60)) : 'Plan: ' + S.plan.plan.calls_target + ' calls') + '</b><span>' + (S.plan.plan.agreed_by ? 'agreed with ' + esc(S.plan.plan.agreed_by) : 'not agreed with King yet') + '</span></div></div>' : '')
       + '<div class="mkc-dcard" style="min-width:190px"><div style="flex:1"><b>' + ((st.road_to_1000 || {}).paying_now || 0) + ' / 1,000</b><span>paid agents · company goal</span><div class="bar" style="height:8px;background:#e2e8f0;border-radius:99px;margin-top:4px;overflow:hidden"><i style="display:block;height:100%;background:linear-gradient(90deg,#10b981,#f59e0b);width:' + Math.max(1, Math.min(100, (st.road_to_1000 || {}).percent || 0)) + '%"></i></div></div></div>'
+      + '<div class="mkc-dcard" style="min-width:220px" data-mkc-taskcard><div style="flex:1"><b>Time per task today</b><div style="margin-top:4px">' + taskTimeHtml(st.task_ms) + '</div></div></div>'
       + myMoneyCard()
       + '<div class="mkc-dcard"><div class="mkc-badges">' + got.map(function (b) { return '<span class="mkc-badge">🏅 ' + esc(b[0]) + '</span>'; }).join('') + (nextB ? '<span class="mkc-badge off">Next: ' + esc(nextB[0]) + '</span>' : '') + '</div></div>';
     var pl = q('[data-mkc-planline]', el); if (pl) pl.onclick = function () { openPlan(false); };
@@ -733,7 +769,7 @@
     if (S.phase === 'calling' || S.phase === 'wrapup') { toast('Finish the wrap-up for this call first.', 'bad'); renderTop(); return; }
     if (!auto) { var cb0 = S.split && S.split.current; S.manual = cb0 ? cb0.id : 'manual'; }
     api('/sessions/' + S.id + '/task', { method: 'POST', body: { task_key: key } }).then(function () {
-      S.task = key; S.variant = null; S.lastDone = null; next(); refreshSide();
+      S.task = key; S.variant = null; S.lastDone = null; S.fellBack = null; next(); refreshSide(); renderTop();
     }, function (e) { toast(e.message, 'bad'); renderTop(); });
   }
 
@@ -747,13 +783,26 @@
     if (balance()) { setFocus(); renderSplit(); return; }
     if (outbox().length) { S.phase = 'offline_wait'; renderNum(); flush(); return; }
     renderNum();
-    api('/sessions/' + S.id + '/next', { method: 'POST', body: {} }).then(function (d) {
+    var prefer = S.preferNext || ''; S.preferNext = null;
+    if (prefer && S.preferTask && S.preferTask !== S.task) {
+      var to = S.preferTask; S.preferTask = null; S.preferNext = prefer;
+      api('/sessions/' + S.id + '/task', { method: 'POST', body: { task_key: to } }).then(function () { if (!S) return; S.task = to; S.fellBack = null; renderTop(); next(); }, function () { if (S) { S.preferTask = null; next(); } });
+      return;
+    }
+    S.preferTask = null;
+    api('/sessions/' + S.id + '/next', { method: 'POST', body: { prefer_submission: prefer } }).then(function (d) {
       if (!S) return;
+      if (d && d.task_key && d.task_key !== S.task) {
+        var from = d.fell_back_from ? d.fell_back_from.name : taskLabel(S.task);
+        S.task = d.task_key; S.variant = null;
+        if (d.fell_back_from) { S.fellBack = { from: from, to: taskLabel(d.task_key) }; toast('📭 ' + from + ' ran out: now ' + taskLabel(d.task_key) + '.'); }
+        loadCounts(); renderTop(); refreshSide();
+      }
       S.cur = d && d.attempt ? d : null;
       if (!S.cur) { S.phase = 'empty'; } else {
         var a = d.attempt;
         S.phase = a.status === 'calling' ? (a.ended_at ? 'wrapup' : 'calling') : 'shown';
-        if (a.direction === 'inbound' && S.phase === 'calling' && S.coach.answered == null) { S.coach.answered = true; S.wrap.checklist.answered = true; S.tx = S.tx || 'ask'; var R0 = routeFor(); if (R0) S.route.node = R0.start; }
+        if (a.direction === 'inbound' && S.phase === 'calling' && S.coach.answered == null) { S.coach.answered = true; S.wrap.checklist.answered = true; if (txSupported() && !TX) startTx(true); var R0 = routeFor(); if (R0) S.route.node = R0.start; }
         if (a.tapped_at) S.callStart = new Date(a.tapped_at).getTime();
         if (a.ended_at) S.callEnd = new Date(a.ended_at).getTime();
         S.variant = d.script_variant || S.variant;
@@ -762,6 +811,7 @@
       if (S.loadT0) { S.lastGapMs = Date.now() - S.loadT0; S.loadT0 = null; }
     }, function (e) { if (S) { S.phase = isNetErr(e) ? 'offline_wait' : 'error'; S.error = e.message; if (S.phase === 'offline_wait') setNet(true); renderNum(); } });
   }
+  function loadCounts() { if (!S) return; api('/counts?person_key=' + encodeURIComponent(S.person)).then(function (c) { if (S) { S.counts = c; renderTop(); } }, function () {}); }
   function renderNum() {
     var el = q('[data-mkc-num]'); if (!el || !S) return;
     var task = taskOf(S.task);
@@ -775,11 +825,15 @@
     }
     if (S.phase === 'error') { el.innerHTML = '<div class="mkc-err">' + esc(S.error) + '</div><button class="mkc-btn go" style="margin-top:10px" data-mkc-retry>Try again</button>'; q('[data-mkc-retry]', el).onclick = next; return; }
     if (S.phase === 'empty') {
-      el.innerHTML = lastDoneHtml() + '<h4>' + esc(task.name) + '</h4><div style="font-size:20px;font-weight:900">Nobody left to call for this task right now.</div><p class="mkc-muted">Everyone on the list was called today, has a callback booked for later, or asked not to be called. Switch task above, or add a number you found.</p><button class="mkc-btn" data-mkc-retry>Check again</button>';
-      q('[data-mkc-retry]', el).onclick = next; bindLastDone(el); return;
+      var intl = S.counts && S.counts.international;
+      el.innerHTML = lastDoneHtml() + '<h4>' + esc(taskLabel(task.key)) + '</h4><div style="font-size:20px;font-weight:900" data-mkc-alldry>Every calling list is empty right now.</div><p class="mkc-muted">Everyone was called today, has a callback booked for later, or asked not to be called. New numbers come in through the day: Check again, add a number you found, or do housekeeping.</p>'
+        + (intl ? '<p class="mkc-muted">🌍 ' + intl + ' international numbers are kept out of calls: WhatsApp only.</p>' : '')
+        + '<div class="mkc-row"><button class="mkc-btn" data-mkc-retry>Check again</button><button class="mkc-btn go" data-mkc-hkgo>🧹 Housekeeping</button><button class="mkc-btn" data-mkc-addgo>➕ Add number</button></div>';
+      q('[data-mkc-retry]', el).onclick = function () { loadCounts(); next(); }; q('[data-mkc-hkgo]', el).onclick = openHousekeeping; q('[data-mkc-addgo]', el).onclick = openAddNumber; bindLastDone(el); return;
     }
     var d = S.cur; var a = d.attempt;
     var head = (S.phase === 'shown' ? lastDoneHtml() : '')
+      + (S.fellBack ? '<div class="mkc-fellback" data-mkc-fellback>📭 <b>' + esc(S.fellBack.from) + '</b> ran out, so these are <b>' + esc(S.fellBack.to) + '</b> numbers.</div>' : '')
       + '<h4>' + esc(MODE_LABEL[task.key] || task.name) + (d.resumed ? ' · picked up where you left off' : '') + '</h4>'
       + '<div class="name">' + esc(a.name || 'Name not known') + '</div>'
       + '<div class="src">' + esc(a.reason && String(a.source_label || '').indexOf(a.reason) >= 0 ? String(a.source_label).replace(' · ' + a.reason, '') : (a.source_label || '')) + '</div>'
@@ -788,11 +842,12 @@
     var body = '';
     if (S.phase === 'shown') {
       body = '<a class="mkc-btn go mkc-call" href="' + esc(d.tel) + '" data-mkc-tap title="' + (isPhone() ? 'Opens the phone app' : 'Rings out from the company phone through Phone Link (Bluetooth)') + '"><i class="fas fa-phone"></i>&nbsp;' + (isPhone() ? esc(T('call_next')) : 'Call now') + '</a>'
-        + '<div class="mkc-row" style="margin-top:8px;justify-content:center"><button type="button" class="mkc-btn ghost sm" data-mkc-skip>' + esc(T('skip')) + '</button><button type="button" class="mkc-btn ghost sm" data-mkc-tree>History tree</button></div>'
+        + '<div class="mkc-row" style="margin-top:8px;justify-content:center"><button type="button" class="mkc-btn ghost sm" data-mkc-skip>' + esc(T('skip')) + '</button><button type="button" class="mkc-btn ghost sm" data-mkc-tree>History tree</button><button type="button" class="mkc-btn sm mkc-wabtn" data-mkc-washare>🟢 Share on WhatsApp</button></div>'
         + (boot.sandbox ? practiceCallHelp(a) : '');
     } else if (S.phase === 'calling') {
       body = '<div class="mkc-calling"><span class="dot"></span>' + (S.coach.answered ? 'On the call' : 'Ringing…') + ' <span data-mkc-calltimer>' + clock(Date.now() - (S.callStart || Date.now())) + '</span></div>'
-        + '<button type="button" class="mkc-btn red mkc-call" style="margin-top:8px" data-mkc-end>' + esc(T('end')) + '</button>' + txHtml();
+        + '<button type="button" class="mkc-btn red mkc-call" style="margin-top:8px" data-mkc-end>' + esc(T('end')) + '</button>'
+        + '<div class="mkc-row" style="margin-top:6px;justify-content:center"><button type="button" class="mkc-btn sm mkc-wabtn" data-mkc-washare>🟢 Share on WhatsApp</button></div>' + txHtml();
     } else if (S.phase === 'wrapup') {
       body = '<div class="mkc-calling" style="background:#f1f5f9;color:#334155"><span class="dot" style="background:#64748b;animation:none"></span>Call ended · ' + clock((S.callEnd || Date.now()) - (S.callStart || Date.now())) + '</div>';
     }
@@ -806,9 +861,12 @@
     if (tapEl) tapEl.onclick = function (e) {
       if (!S.work) { e.preventDefault(); toast('Turn work mode on to call.', 'bad'); setWork(true, 'to call'); return; }
       // The tel: link opens the dialler by itself; we only log the time.
-      S.callStart = Date.now(); S.phase = 'calling'; S.lastDone = null; renderNum(); renderScript();
+      S.callStart = Date.now(); S.phase = 'calling'; S.lastDone = null;
+      if (txSupported() && !TX) startTx(true); // live notes start with the call (your mic only)
+      renderNum(); renderScript();
       op('/attempts/' + a.id + '/tap', { session_id: S.id }).catch(function (e) { toast(e.message, 'bad'); });
     };
+    qa('[data-mkc-washare]', el).forEach(function (b) { b.onclick = function () { openShare(a); }; });
     var endIt = endCallNow;
     var endEl = q('[data-mkc-end]', el); if (endEl) endEl.onclick = endIt;
     qa('[data-mkc-ans]', el).forEach(function (b2) {
@@ -851,7 +909,7 @@
     if (!full) return '<div class="mkc-ctx" style="padding:6px 10px">' + tags + '</div>';
     var posted = /^What they posted: /.test(c.reason || '') ? String(c.reason).replace(/^What they posted: /, '') : '';
     var list = h.map(function (x) {
-      return '<li><b>' + esc(kDayTime(x.at)) + '</b> · ' + esc(personName(x.by)) + ' · <b>' + esc(x.skipped ? 'skipped' : x.what) + '</b>' + (x.note ? ' – ' + esc(x.note) : '') + (x.next_step ? ' <span class="mkc-good">→ next: call ' + esc(kDayTime(x.next_step)) + '</span>' : '') + '</li>';
+      return '<li><b>' + esc(kDayTime(x.at)) + '</b> · ' + esc(personName(x.by)) + ' · <b>' + esc(x.skipped ? 'skipped' : x.what) + '</b>' + (x.summary && x.summary !== x.note ? ' – ' + esc(x.summary) : (x.note ? ' – ' + esc(x.note) : '')) + (x.next_text ? ' <span class="mkc-good" data-mkc-histnext>→ ' + esc(x.next_text) + '</span>' : '') + (x.next_step ? ' <span class="mkc-good">→ call ' + esc(kDayTime(x.next_step)) + '</span>' : '') + '</li>';
     }).join('');
     return '<div class="mkc-ctx">' + tags
       + '<div style="font-size:13px;margin-top:2px"><b>Where from:</b> ' + esc(c.source_label || '–') + (c.reason && !posted ? ' · <b>Why now:</b> ' + esc(c.reason) : '') + '</div>'
@@ -868,14 +926,12 @@
   var TX = null;
   function txSupported() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition) && !isPhone(); }
   function txHtml() {
-    if (!txSupported()) return '';
-    if (S.tx === 'ask') return '<div class="mkc-coach-q" style="background:#eff6ff;border-color:#bfdbfe"><b>Say first: “I am taking notes of this call so we get your details right. Is that OK?”</b>'
-      + '<div class="mkc-row" style="justify-content:center;margin-top:8px"><button type="button" class="mkc-btn go" data-mkc-tx="yes">They said OK – start notes</button><button type="button" class="mkc-btn" data-mkc-tx="no">No – no notes</button></div>'
-      + '<p class="mkc-muted" style="margin:6px 0 0;font-size:12px">Put the phone on loudspeaker next to the laptop (or use Phone Link). Only text is saved, never audio.</p></div>';
-    if (S.tx === 'on') return '<div class="mkc-tpl" style="background:#eff6ff;border-color:#bfdbfe;margin-top:6px"><b><span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2563eb;margin-right:6px"></span>Live notes on</b> <button type="button" class="mkc-btn sm" data-mkc-tx="stop">Stop</button><div class="mkc-muted" style="font-size:12px;max-height:60px;overflow:auto" data-mkc-txlive>' + esc(TX && TX.text ? TX.text.slice(-300) : 'Listening…') + '</div></div>';
-    if (S.tx === 'declined') return '<p class="mkc-muted" style="text-align:center;margin:6px 0 0">No live notes (they said no).</p>';
+    if (!txSupported()) return '<p class="mkc-muted" style="text-align:center;margin:6px 0 0;font-size:12px">Live notes work in Chrome or Edge on the laptop' + (isPhone() ? ' (not on the phone while it is on a call)' : '') + '.</p>';
+    if (S.tx === 'on') return '<div class="mkc-tpl" style="background:#eff6ff;border-color:#bfdbfe;margin-top:6px" data-mkc-txon><b><span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2563eb;margin-right:6px"></span>Live notes on · your mic only</b> <button type="button" class="mkc-btn sm" data-mkc-tx="stop">Stop</button>'
+      + '<div class="mkc-muted" style="font-size:11px">Use a headset so only your voice is picked up. Only text is kept, never audio.</div><div class="mkc-muted" style="font-size:12px;max-height:60px;overflow:auto" data-mkc-txlive>' + esc(TX && TX.text ? TX.text.slice(-300) : 'Listening…') + '</div></div>';
+    if (S.tx === 'error') return '<p class="mkc-muted" style="text-align:center;margin:6px 0 0">' + esc(S.txErr || 'Live notes stopped.') + ' <button type="button" class="mkc-btn sm" data-mkc-tx="yes">Try again</button></p>';
     if (S.tx === 'done') return '';
-    return '<div style="text-align:center;margin-top:6px"><button type="button" class="mkc-btn sm" style="border:2px solid #2563eb;color:#1d4ed8;background:#fff" data-mkc-tx="ask">🎙 Live notes (loudspeaker)</button></div>';
+    return '<div style="text-align:center;margin-top:6px"><button type="button" class="mkc-btn sm" style="border:2px solid #2563eb;color:#1d4ed8;background:#fff" data-mkc-tx="yes">🎙 Start live notes</button></div>';
   }
   function bindTx(el) {
     qa('[data-mkc-tx]', el).forEach(function (b) {
@@ -888,8 +944,9 @@
       };
     });
   }
-  function startTx() {
+  function startTx(auto) {
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR || !txSupported()) return;
     try {
       var r = new SR(); r.continuous = true; r.interimResults = true; r.lang = S.lang === 'lg' ? 'en-UG' : 'en-UG';
       TX = { text: '', start: Date.now(), sr: r, stopped: false };
@@ -898,10 +955,17 @@
         for (var i = e.resultIndex; i < e.results.length; i++) { if (e.results[i].isFinal) TX.text += e.results[i][0].transcript.trim() + '. '; else interim += e.results[i][0].transcript; }
         var live = q('[data-mkc-txlive]'); if (live) live.textContent = (TX.text + interim).slice(-300);
       };
-      r.onerror = function (e) { if (e && e.error === 'not-allowed') { toast('Microphone blocked: allow it for live notes.', 'bad'); S.tx = null; TX = null; renderNum(); } };
+      r.onerror = function (e) {
+        var code = e && e.error;
+        if (code === 'no-speech' || code === 'aborted') return; // silence: it restarts on its own
+        if (TX) TX.stopped = true;
+        S.tx = 'error'; S.txErr = code === 'not-allowed' || code === 'service-not-allowed' ? 'Microphone blocked: click the 🎤 in the address bar and allow it.' : code === 'network' ? 'Live notes need the internet (Chrome/Edge send speech to their service).' : 'Live notes stopped (' + code + ').';
+        ev('notes_error', code || ''); if (S.phase === 'calling') renderNum();
+      };
       r.onend = function () { if (TX && !TX.stopped) { try { r.start(); } catch (x) { /* ignore */ } } };
       r.start();
-      S.tx = 'on'; S.wrap.checklist.transcribed = 'consented'; ev('notes_start', 'consent given'); renderNum(); renderScript();
+      S.tx = 'on'; S.wrap.checklist.transcribed = auto ? 'auto' : 'manual'; ev('notes_start', auto ? 'auto with call' : 'manual');
+      if (!auto) { renderNum(); renderScript(); }
     } catch (x) { toast('Live notes are not available in this browser.', 'bad'); }
   }
   function stopTx() {
@@ -957,7 +1021,8 @@
     var e = S.route && S.route.end;
     if (e && has(e.outcome)) {
       var path = routePath();
-      sg = { outcome: e.outcome, next: e.next || '', summary: e.note + (path ? ' (' + path + ')' : ''), auto: true, route: true, when: e.when ? { quick: e.when, at: quickDate(e.when) } : null };
+      var heard = TX && TX.text && sg && sg.summary && !sg.auto ? ' · From the notes: ' + sg.summary : '';
+      sg = { outcome: e.outcome, next: e.next || '', summary: e.note + (path ? ' (' + path + ')' : '') + heard, auto: true, route: true, when: e.when ? { quick: e.when, at: quickDate(e.when) } : null };
       w.note = sg.summary.slice(0, 900);
       if (e.checks) { (boot.close_checks[task.key] || []).forEach(function (_c, i) { w.checklist['close_' + i] = true; }); task.checklist.forEach(function (c) { if (c.required) w.checklist[c.key] = true; }); }
       if (e.hello) { w.checklist.asked_hello = true; w.checklist.wa_hi = true; }
@@ -1037,7 +1102,7 @@
       + (path ? '<div class="mkc-wrappath">🧭 ' + esc(path) + '</div>' : '')
       + (S.suggest && S.suggest.outcome && S.suggest.outcome === w.outcome ? '<div class="mkc-wrapsug">✨ Filled in from the call. Check it and save.</div>' : '')
       + '<div class="mkc-outs wrap">' + outs + '</div>';
-    if (!o) return html + '<div data-mkc-wraperr></div><p class="mkc-muted" style="margin:6px 0 0">Tap what happened. <b>No answer</b> saves straight away.</p></div>';
+    if (!o) return html + '<div data-mkc-wraperr></div><div class="mkc-row" style="margin:6px 0 0;align-items:center;flex-wrap:nowrap;gap:8px"><p class="mkc-muted" style="margin:0;flex:1">Tap what happened. <b>No answer</b> saves straight away.</p><button type="button" class="mkc-btn sm mkc-wabtn" style="flex:0 0 auto" data-mkc-washare>🟢 Share on WhatsApp</button></div></div>';
     if (o.close) {
       html += '<div class="mkc-wrapchecks"><b>' + esc(T('close_title')) + '</b>'
         + (boot.close_checks[task.key] || []).map(function (c, i) { var same = task.checklist.filter(function (x) { return x.required && sameText(x.label, c); })[0]; return '<label><input type="checkbox" data-mkc-chk="close_' + i + '"' + (same ? ' data-mkc-also="' + esc(same.key) + '"' : '') + (w.checklist['close_' + i] ? ' checked' : '') + '><span>' + esc(c) + '</span></label>'; }).join('')
@@ -1058,7 +1123,7 @@
     html += '<div class="mkc-wrapgrid">' + f + '</div>';
     if (o.spoke && !o.close) html += '<button type="button" class="mkc-hello sm' + (w.checklist.asked_hello ? ' on' : '') + '" data-mkc-hello>' + (w.checklist.asked_hello ? '✓' : '☐') + ' Asked them to say “Hello” on WhatsApp to ' + esc(boot.whatsapp_display) + '</button>';
     if (TX && TX.text) html += '<details class="mkc-muted" style="font-size:12px"><summary>Live notes (' + TX.text.split(/\s+/).length + ' words, no audio kept)</summary>' + esc(TX.text.slice(0, 1200)) + '</details>';
-    return html + '<div data-mkc-wraperr></div><button type="button" class="mkc-btn go mkc-call mkc-save" data-mkc-save>✓ Save &amp; call next ›</button></div>';
+    return html + '<div data-mkc-wraperr></div><div class="mkc-row" style="flex-wrap:nowrap;gap:6px"><button type="button" class="mkc-btn sm mkc-wabtn" style="flex:0 0 auto" data-mkc-washare>🟢 Share on WhatsApp</button><button type="button" class="mkc-btn go mkc-call mkc-save" style="flex:1" data-mkc-save>✓ Save &amp; call next ›</button></div></div>';
   }
   function localInput(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
   function quickDate(k) {
@@ -1073,6 +1138,7 @@
   function bestChip() { var bt = S.cur && S.cur.context && S.cur.context.best_time; return bt && bt.hour != null ? [['best', pad(bt.hour) + ':00 (their best time)']] : []; }
   function bindWrap(el, task, a) {
     var w = S.wrap;
+    qa('[data-mkc-washare]', el).forEach(function (b) { b.onclick = function () { openShare(a); }; });
     qa('[data-mkc-out]', el).forEach(function (b) {
       b.onclick = function () {
         saveWrapInputs(el); w.outcome = b.getAttribute('data-mkc-out');
@@ -1630,6 +1696,42 @@
     m.addEventListener('click', function (e) { if (e.target === m) close(); });
     bind(m, close);
   }
+  // ---- Share on WhatsApp: the films and documents, sent from the caller's own WhatsApp (wa.me or
+  // WhatsApp Desktop). Inbound-first: WhatsApp only lets us message people who wrote to us, so it
+  // stays locked until they have said "Hi" to our number. Nothing is sent from the server here.
+  function openShare(a) {
+    if (!a) return;
+    // Only the number on screen for this call carries the full phone; a masked one cannot be shared.
+    var digits = /•/.test(String(a.phone || '')) ? '' : String(a.phone || '').replace(/\D/g, '');
+    if (!digits) { toast('Number not available to share.', 'bad'); return; }
+    var draw = function (m, c) {
+      var body;
+      if (!c) body = '<p class="mkc-muted">Checking if they have messaged our WhatsApp…</p>';
+      else if (c.locked) {
+        body = '<div class="mkc-tpl" style="background:#fef3c7;border-color:#fde68a" data-mkc-walocked><b>🔒 Locked until they say “Hi”</b><div style="margin-top:4px">WhatsApp only lets us message people who wrote to us first. Ask them to send <b>Hi</b> to <b>' + esc(boot.whatsapp_display) + '</b>, then tap “They said Hi”.</div></div>'
+          + '<div class="mkc-row" style="margin-top:8px"><a class="mkc-btn sm" href="sms:+' + esc(digits) + '?body=' + encodeURIComponent((c.sms_text && c.sms_text.en) || '') + '">✉️ Text them our WhatsApp number</a><button type="button" class="mkc-btn sm go" data-wa-recheck>🔄 They said Hi – check again</button></div>'
+          + '<p class="mkc-muted" style="font-size:12px;margin-top:8px">What you can send once they have said Hi:</p><ul style="margin:0 0 0 18px;font-size:13px">' + boot.sales_kit.map(function (k) { return '<li>' + esc(k.title) + ' <span class="mkc-muted">(' + esc(k.lang) + ')</span></li>'; }).join('') + '</ul>';
+      } else {
+        body = '<p class="mkc-good" style="font-weight:800;margin:0 0 6px">🔓 They messaged us' + (c.hello && c.hello.at ? ' ' + esc(kDayTime(c.hello.at)) : '') + '. Pick what to send:</p>'
+          + boot.sales_kit.map(function (k) {
+            var text = (k.text || (k.title + ' – ' + k.url));
+            return '<div class="mkc-kit" data-wa-item="' + esc(k.key) + '"><div><b>' + esc(k.title) + '</b><div class="mkc-muted">' + esc(k.lang) + ' · ' + esc(k.kind) + '</div></div><div class="mkc-row" style="flex-wrap:nowrap">'
+              + '<a class="mkc-btn sm go" target="_blank" rel="noopener" data-wa-send="' + esc(k.key) + '" href="https://wa.me/' + esc(digits) + '?text=' + encodeURIComponent(text) + '">WhatsApp</a>'
+              + '<a class="mkc-btn sm" data-wa-send="' + esc(k.key) + '" href="whatsapp://send?phone=' + esc(digits) + '&text=' + encodeURIComponent(text) + '" title="Opens the WhatsApp Desktop app">Desktop app</a></div></div>';
+          }).join('');
+      }
+      q('[data-wa-body]', m).innerHTML = body;
+      var rc = q('[data-wa-recheck]', m); if (rc) rc.onclick = function () { q('[data-wa-body]', m).innerHTML = '<p class="mkc-muted">Checking…</p>'; load(m); };
+      qa('[data-wa-send]', m).forEach(function (l) { l.addEventListener('click', function () { ev('wa_share', l.getAttribute('data-wa-send')); }); });
+    };
+    var load = function (m) { api('/attempts/' + a.id + '/contact').then(function (c) { if (S) { S.contact = S.contact || {}; S.contact[a.id] = c; } draw(m, c); }, function (e) { q('[data-wa-body]', m).innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; }); };
+    modal('<h3 style="margin:0 0 4px;font-weight:900">🟢 Share on WhatsApp</h3><p class="mkc-muted" style="margin:0 0 8px">To ' + esc(a.name || 'this number') + ' · ' + esc('•••' + digits.slice(-3)) + '. It opens your WhatsApp with the message ready: check it and press send.</p><div data-wa-body></div><div class="mkc-row" style="margin-top:10px;justify-content:flex-end"><button type="button" class="mkc-btn" data-x>Close</button></div>', function (m, close) {
+      q('[data-x]', m).onclick = close;
+      m.setAttribute('data-mkc-share', '');
+      var c0 = S && S.contact && S.contact[a.id];
+      draw(m, c0 || null); load(m);
+    });
+  }
   var HOW_KNOWN = ['Friend or referral', 'Saw their listing', 'Sign board', 'Social media', 'Met them', 'Other'];
   function openAddNumber() {
     var field = function (attr, ph, extra) { return '<input class="mkc-input" style="width:100%;box-sizing:border-box;margin:4px 0" ' + attr + ' placeholder="' + esc(ph) + '"' + (extra || '') + '>'; };
@@ -1639,9 +1741,9 @@
       + '<div class="mkc-row"><label class="mkc-muted" style="flex:1">How you know them<br><select class="mkc-input" style="width:100%" data-h>' + HOW_KNOWN.map(function (h) { return '<option>' + esc(h) + '</option>'; }).join('') + '</select></label>'
       + '<label class="mkc-muted" style="flex:1">Mode<br><select class="mkc-input" style="width:100%" data-md>' + ((boot && boot.tasks) || [{ key: 'new_agents', name: 'Get new agents' }]).map(function (t) { return '<option value="' + esc(t.key) + '"' + (t.key === cur ? ' selected' : '') + '>' + esc(MODE_LABEL[t.key] || t.name) + '</option>'; }).join('') + '</select></label></div>'
       + field('data-t', 'Note (optional), e.g. has 5 rentals in Kira')
-      + '<div data-e></div><div class="mkc-row" style="margin-top:10px;justify-content:flex-end"><button type="button" class="mkc-btn" data-x>Close</button><button type="button" class="mkc-btn go" data-ok>Add to my queue</button></div>', function (m, close) {
+      + '<div data-e></div><div class="mkc-row" style="margin-top:10px;justify-content:flex-end"><button type="button" class="mkc-btn" data-x>Close</button><button type="button" class="mkc-btn" data-ok>Add to my queue</button><button type="button" class="mkc-btn go" data-ok-next title="Becomes the very next number you call">📞 Add &amp; call next</button></div>', function (m, close) {
       q('[data-x]', m).onclick = close;
-      q('[data-ok]', m).onclick = function () {
+      var submit = function (callNext) {
         var mode = q('[data-md]', m).value;
         api('/numbers', { method: 'POST', body: { person_key: S ? S.person : pick.person, name: q('[data-n]', m).value, phone: q('[data-p]', m).value, note: q('[data-t]', m).value, how_known: q('[data-h]', m).value, mode: mode } }).then(function (d) {
           if (d.status === 'exists') {
@@ -1651,11 +1753,22 @@
               + (hist ? '<div style="margin-top:4px"><b>History</b><ul style="margin:4px 0 0 18px;padding:0">' + hist + '</ul></div>' : '<div class="mkc-muted">Not called yet. It is already in a queue.</div>') + '</div>';
             return;
           }
+          if (callNext && S && S.id) {
+            S.preferNext = d.id;
+            if (S.phase === 'calling' || S.phase === 'wrapup') { S.preferTask = d.mode || mode; toast('✓ Added: it is the next number after this call.'); close(); return; }
+            var to = d.mode || S.task;
+            if (S.phase === 'housekeeping') ev('housekeeping_off', to);
+            close(); toast('✓ Added: calling it next.');
+            api('/sessions/' + S.id + '/task', { method: 'POST', body: { task_key: to } }).then(function () { S.task = to; S.fellBack = null; next(); renderTop(); refreshSide(); loadCounts(); }, function (e) { toast(e.message, 'bad'); });
+            return;
+          }
           q('[data-e]', m).innerHTML = '<div class="mkc-nudge">✓ Added to your queue (' + esc(MODE_LABEL[d.mode] || d.mode) + ') as your own number.</div>';
           q('[data-p]', m).value = ''; q('[data-n]', m).value = ''; q('[data-t]', m).value = '';
-          if (S) { if (S.phase === 'empty' && mode === S.task) next(); api('/counts?person_key=' + encodeURIComponent(S.person)).then(function (c) { S.counts = c; renderTop(); }, function () {}); }
+          if (S) { if (S.phase === 'empty' && mode === S.task) next(); loadCounts(); }
         }, function (e) { q('[data-e]', m).innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
       };
+      q('[data-ok]', m).onclick = function () { submit(false); };
+      q('[data-ok-next]', m).onclick = function () { submit(true); };
     });
   }
   function box(big, small, good) { return '<div class="mkc-panel" style="padding:10px;min-width:90px"><b class="' + (good ? 'mkc-good' : '') + '" style="font-size:22px">' + big + '</b><div class="mkc-muted">' + small + '</div></div>'; }
@@ -1664,7 +1777,7 @@
     var flags = Object.keys(r.flags || {}).map(function (k) { return '<span class="mkc-pill flag">' + esc((r.flag_labels || {})[k] || k) + ': ' + r.flags[k] + '</span>'; }).join('') || '<span class="mkc-pill live">No flags</span>';
     var outs = Object.keys(r.outcomes || {}).map(function (k) { return '<span class="mkc-pill">' + esc(k.replace(/_/g, ' ')) + ' ' + r.outcomes[k] + '</span>'; }).join('');
     var tasks = Object.keys(r.by_task || {}).map(function (k) { var t = r.by_task[k]; return '<tr><td>' + esc(t.name) + '</td><td>' + t.calls + '</td><td>' + t.connected + '</td><td>' + t.closes + '</td></tr>'; }).join('');
-    var calls = (r.calls_list || []).map(function (c) { return '<tr><td>' + esc(kTime(c.at)) + '</td><td>' + esc(c.name) + ' ' + esc(c.phone) + '</td><td>' + esc(String(c.outcome).replace(/_/g, ' ')) + '</td><td>' + (c.talk_s == null ? '–' : c.talk_s + ' s') + '</td><td>' + esc(c.note) + '</td></tr>'; }).join('');
+    var calls = (r.calls_list || []).map(function (c) { return '<tr><td>' + esc(kTime(c.at)) + '</td><td>' + esc(c.name) + ' ' + esc(c.phone) + '</td><td>' + esc(String(c.outcome).replace(/_/g, ' ')) + '</td><td>' + (c.talk_s == null ? '–' : c.talk_s + ' s') + '</td><td>' + esc(c.summary || c.note) + (c.live_notes ? ' <span class="mkc-pill" title="Live notes were on">🎙</span>' : '') + '</td><td>' + esc(c.next_step || '') + '</td></tr>'; }).join('');
     var due = (r.due_tomorrow || []).map(function (d) { return '<li>' + esc(kTime(d.at)) + ' · ' + esc(d.name) + ' ' + esc(d.phone) + ' (' + esc(String(d.outcome).replace(/_/g, ' ')) + ')</li>'; }).join('');
     return '<h3 style="margin:0;font-weight:900">Daily summary · ' + esc(r.name) + '</h3><p class="mkc-muted">' + esc(r.day) + ' · made automatically from the calling log, saved for King</p>'
       + '<div class="mkc-row" style="margin:10px 0">' + box(r.calls + '/' + tg.calls_per_day, 'calls', r.calls_hit) + box(r.closes + '/' + tg.closes_per_day, 'closes', r.closes_hit) + box(r.connected, 'spoke to') + box(r.payments_chased || 0, 'payments chased') + box(hm((r.talk_s || 0) * 1000), 'talk time') + '</div>'
@@ -1673,8 +1786,9 @@
       + '<p style="font-size:13px">Payments promised ' + (r.payments_promised || 0) + ' · paid or renewed ' + (r.payments_paid || 0) + ' · callbacks booked ' + (r.callbacks_booked || 0) + ' · skipped ' + (r.skipped || 0) + ' · average call ' + (r.avg_talk_s || 0) + ' s</p>'
       + '<div style="margin:6px 0">' + outs + '</div><div style="margin:6px 0">' + flags + '</div>'
       + '<h4 style="margin:10px 0 4px">Due tomorrow (' + esc(r.tomorrow || '') + ')</h4>' + (due ? '<ul style="margin:0;padding-left:18px;font-size:13px">' + due + '</ul>' : '<p class="mkc-muted">Nothing booked for tomorrow yet.</p>')
+      + '<h4 style="margin:10px 0 4px">Time per task</h4><div data-mkc-reptasktime>' + taskTimeHtml(r.task_ms) + '</div>'
       + '<table class="mkc-table" style="margin-top:8px"><tr><th>Task</th><th>Calls</th><th>Spoke</th><th>Closed</th></tr>' + tasks + '</table>'
-      + (calls ? '<h4 style="margin:10px 0 4px">Every call</h4><div class="mkc-scroll"><table class="mkc-table"><tr><th>Time</th><th>Who</th><th>Outcome</th><th>Talk</th><th>Note</th></tr>' + calls + '</table></div>' : '');
+      + (calls ? '<h4 style="margin:10px 0 4px">Every call</h4><div class="mkc-scroll"><table class="mkc-table"><tr><th>Time</th><th>Who</th><th>Outcome</th><th>Talk</th><th>Summary</th><th>Next step</th></tr>' + calls + '</table></div>' : '');
   }
   function openReport(person) {
     api('/summary?person_key=' + encodeURIComponent(person)).then(function (r) {
@@ -1788,6 +1902,14 @@
         + '<h4>🔎 Search all calls</h4>' + searchBoxHtml('all');
       qa('[data-k-callsper]', box).forEach(function (b) { b.onclick = function () { K.callsPeriod = b.getAttribute('data-k-callsper'); drawKCalls(host); }; });
       bindSearch(box);
+    }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+  }
+  function drawKIntl(host) {
+    var box = q('[data-k-intl]', host); if (!box) return;
+    box.innerHTML = '<p class="mkc-muted">Loading international numbers…</p>';
+    api('/international').then(function (list) {
+      box.innerHTML = '<h4 style="margin:0 0 6px">🌍 International – WhatsApp only (' + list.length + ')</h4><p class="mkc-muted" style="margin:0 0 6px">Not Ugandan numbers. They are never offered to call (callers ring Ugandan lines only). Follow them up on WhatsApp. Nothing was deleted.</p>'
+        + (list.length ? '<div class="mkc-scroll"><table class="mkc-table"><tr><th>Name</th><th>Number</th><th>From</th><th>Queue</th></tr>' + list.map(function (n) { return '<tr><td>' + esc(n.name || '') + '</td><td>' + esc(n.phone) + '</td><td>' + esc(n.source || '') + '</td><td>' + esc(personName(n.person_key)) + ' · ' + esc(taskLabel(n.task)) + '</td></tr>'; }).join('') + '</table></div>' : '<p class="mkc-muted">None right now.</p>');
     }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
   }
   function drawKBlocks(host) {
@@ -2388,6 +2510,7 @@
       + '<span class="mkc-pill ' + (LIVE_CLASS[live.state] || '') + '">' + esc(live.label || '') + '</span></div>'
       + '<div class="mkc-kpis"><div class="' + (p.calls_hit ? 'mkc-good' : '') + '"><b>' + p.calls + '/' + tg.calls_per_day + '</b>calls</div><div class="' + (p.closes_hit ? 'mkc-good' : '') + '"><b>' + p.closes + '/' + tg.closes_per_day + '</b>closes</div><div><b>' + p.connected + '</b>spoke</div><div><b>' + (p.avg_talk_s || 0) + ' s</b>avg call</div><div><b>' + (p.callbacks_due || 0) + (p.callbacks_overdue ? '<span class="mkc-bad"> +' + p.callbacks_overdue + ' late</span>' : '') + '</b>callbacks</div></div>'
       + '<div style="margin:4px 0">' + tasks + '</div>'
+      + '<div style="margin:4px 0" data-k-tasktime="' + esc(p.person_key) + '">' + taskTimeHtml(p.task_ms) + ' <span class="mkc-pill">📞 talk ' + hm((p.talk_s || 0) * 1000) + '</span></div>'
       + '<div class="mkc-muted" style="font-size:12px">Work ' + hm(w.open_ms) + ' · focused ' + hm(w.focus_ms) + ' · away ' + hm(w.away_ms) + ' · ' + (w.exits || 0) + ' exits · ' + (w.breaks || 0) + ' breaks</div>'
       + '<div style="margin:4px 0">' + (flags || '<span class="mkc-pill live">No flags</span>') + (p.skipped ? '<span class="mkc-pill warn" title="Skips today by reason">Skipped ' + p.skipped + ': ' + esc(Object.keys(p.skip_reasons || {}).map(function (k) { return k.replace(/_/g, ' ') + ' ' + p.skip_reasons[k]; }).join(', ')) + '</span>' : '') + '</div>'
       + '<div class="mkc-row" style="justify-content:space-between">' + spark + '<span><button type="button" class="mkc-btn sm" data-k-ev="' + esc(p.person_key) + '">Evidence</button> <button type="button" class="mkc-btn sm ghost" data-k-rep="' + esc(p.person_key) + '">Report</button></span></div></div>';
@@ -2423,6 +2546,7 @@
       + '<div class="mkc-panel" style="margin-top:14px" data-k-proofs></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-videos></div>'
       + '<div class="mkc-panel" style="margin-top:14px" data-k-blocks></div>'
+      + '<div class="mkc-panel" style="margin-top:14px" data-k-intl></div>'
       + '<div class="mkc-grid" style="padding:0;margin-top:14px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">'
       + '<div class="mkc-panel"><h4>Numbers staff added (' + (K.nums || []).length + ' to look at)</h4><p class="mkc-muted" style="margin:0 0 6px">Own numbers are already in the caller\'s queue. Tap OK, or Remove to take one out.</p>' + (nums || '<p class="mkc-muted">Nothing waiting.</p>') + '</div>'
       + '<div class="mkc-panel"><h4>Callbacks booked</h4>' + (cbs ? '<div class="mkc-scroll"><table class="mkc-table">' + cbs + '</table></div>' : '<p class="mkc-muted">None booked.</p>') + '</div>'
@@ -2434,7 +2558,7 @@
     q('[data-k-meet]', host).onclick = openMeeting;
     K.period = K.period || 'day'; K.cashPeriod = K.cashPeriod || 'week';
     K.callsPeriod = K.callsPeriod || 'day';
-    drawKPlans(host); drawKAct(host); drawKCash(host); drawKCalls(host); drawKMeet(host); drawKSplit(host); drawKProofs(host); drawKVideos(host); drawKBlocks(host);
+    drawKPlans(host); drawKAct(host); drawKCash(host); drawKCalls(host); drawKMeet(host); drawKSplit(host); drawKProofs(host); drawKVideos(host); drawKBlocks(host); drawKIntl(host);
     qa('[data-k-sum]', host).forEach(function (b) { b.onclick = function () { var f = (K.sums[Number(b.getAttribute('data-k-sum'))] || {}).figures || {}; modal(reportHtml(f) + '<div class="mkc-row" style="margin-top:12px;justify-content:flex-end"><button class="mkc-btn dark" data-x>Close</button></div>', function (m, close) { q('[data-x]', m).onclick = close; }); }; });
     qa('[data-k-mklink]', host).forEach(function (b) {
       b.onclick = function () {
@@ -2545,12 +2669,14 @@
       var evs = (e.events || []).slice(-40).map(function (x) { return '<span class="mkc-pill' + (x.kind === 'hidden' || x.kind === 'fs_exit' ? ' warn' : '') + '">' + esc(kTime(x.at)) + ' ' + esc(EV_LABELS[x.kind] || x.kind) + (x.detail ? ' (' + esc(x.detail) + ')' : '') + '</span>'; }).join(' ');
       var rowsHtml = (e.attempts || []).map(function (a) {
         var what = a.status === 'skipped' ? 'skipped: ' + (a.skip_reason || '') : String(a.outcome || a.status).replace(/_/g, ' ');
-        return '<tr><td>' + esc(kTime(a.shown_at)) + '</td><td>' + esc(a.task_key) + '</td><td>' + esc(a.name || '') + ' ' + esc(a.phone) + '</td><td>' + esc(a.tapped_at ? kTime(a.tapped_at) : '–') + '</td><td>' + (a.talk_s == null ? '–' : a.talk_s + ' s') + '</td><td>' + (a.gap_s == null ? '–' : a.gap_s + ' s') + '</td><td>' + esc(what) + '</td><td>' + esc(a.note || '') + '</td><td>' + (a.flags || []).map(function (f) { return '<span class="mkc-pill flag">' + esc(f.replace(/_/g, ' ')) + '</span>'; }).join('') + '</td><td><button type="button" class="mkc-btn sm" data-k-tree="' + esc(a.id) + '">Tree</button></td></tr>';
+        return '<tr><td>' + esc(kTime(a.shown_at)) + '</td><td>' + esc(a.task_key) + '</td><td>' + esc(a.name || '') + ' ' + esc(a.phone) + '</td><td>' + esc(a.tapped_at ? kTime(a.tapped_at) : '–') + '</td><td>' + (a.talk_s == null ? '–' : a.talk_s + ' s') + '</td><td>' + (a.gap_s == null ? '–' : a.gap_s + ' s') + '</td><td>' + esc(what) + '</td><td>' + esc(a.note || '') + (a.next_step ? ' <b>→ ' + esc(a.next_step) + '</b>' : '') + '</td><td>' + (a.flags || []).map(function (f) { return '<span class="mkc-pill flag">' + esc(f.replace(/_/g, ' ')) + '</span>'; }).join('') + '</td><td><button type="button" class="mkc-btn sm" data-k-tree="' + esc(a.id) + '">Tree</button></td></tr>';
       }).join('');
       el.innerHTML = '<div class="mkc-panel" style="margin-top:12px;background:#f8fafc"><div class="mkc-row" style="justify-content:space-between"><h4 style="margin:0">Evidence trail · ' + esc(personName(person)) + ' · ' + esc(e.day || '') + '</h4><button type="button" class="mkc-btn sm ghost" data-k-evx>Close</button></div>'
         + '<p class="mkc-muted">Check these against the company phone\'s call log: every tap has a time.</p>'
-        + '<div style="margin:6px 0">' + (sess || '<span class="mkc-muted">No sessions today.</span>') + '</div><div style="margin:6px 0">' + evs + '</div>'
-        + '<div class="mkc-scroll"><table class="mkc-table"><tr><th>Shown</th><th>Task</th><th>Who</th><th>Tapped</th><th>Talk</th><th>Gap</th><th>Outcome</th><th>Note</th><th>Flags</th></tr>' + (rowsHtml || '<tr><td colspan="9" class="mkc-muted">No calls.</td></tr>') + '</table></div></div>';
+        + '<div style="margin:6px 0">' + (sess || '<span class="mkc-muted">No sessions today.</span>') + '</div>'
+        + (e.summary ? '<div style="margin:6px 0" data-k-evsum><span class="mkc-pill">' + e.summary.calls + ' calls · ' + e.summary.connected + ' spoke · ' + e.summary.closes + ' closed · talk ' + hm((e.summary.talk_s || 0) * 1000) + '</span> ' + Object.keys(e.summary.outcomes || {}).map(function (k) { return '<span class="mkc-pill">' + esc(k.replace(/_/g, ' ')) + ' ' + e.summary.outcomes[k] + '</span>'; }).join(' ') + '</div>' : '')
+        + '<div style="margin:6px 0" data-k-evtime>' + taskTimeHtml(e.task_ms) + '</div><div style="margin:6px 0">' + evs + '</div>'
+        + '<div class="mkc-scroll"><table class="mkc-table"><tr><th>Shown</th><th>Task</th><th>Who</th><th>Tapped</th><th>Talk</th><th>Gap</th><th>Outcome</th><th>Note · next step</th><th>Flags</th></tr>' + (rowsHtml || '<tr><td colspan="9" class="mkc-muted">No calls.</td></tr>') + '</table></div></div>';
       q('[data-k-evx]', el).onclick = function () { K.open = null; el.innerHTML = ''; };
       qa('[data-k-tree]', el).forEach(function (b) { b.onclick = function () { openTimeline({ attempt_id: b.getAttribute('data-k-tree') }); }; });
     }, function (err) { el.innerHTML = '<div class="mkc-err">' + esc(err.message) + '</div>'; });

@@ -458,7 +458,7 @@ async function summaryExtras(personKey, day = kampalaDay()) {
     payments_chased: done.filter((a) => a.task_key === 'payments').length,
     payments_promised: done.filter((a) => a.outcome === 'promised').length,
     payments_paid: done.filter((a) => a.outcome === 'paid' || a.outcome === 'renewed').length,
-    calls_list: done.map((a) => ({ at: a.wrapped_at, name: a.full_name || '', phone: maskPhoneLast3(a.phone), task: a.task_key, outcome: a.outcome, talk_s: a.talk_s, note: a.note || '' })),
+    calls_list: done.map((a) => ({ at: a.wrapped_at, name: a.full_name || '', phone: maskPhoneLast3(a.phone), task: a.task_key, outcome: a.outcome, talk_s: a.talk_s, note: a.note || '', next_step: a.next_step || '', summary: (a.transcript && a.transcript.summary) || '', live_notes: Boolean(a.transcript && a.transcript.text) })),
     due_tomorrow: due.map((d) => ({ at: d.callback_at, name: d.full_name || '', phone: maskPhoneLast3(d.phone), outcome: d.outcome, task: d.task_key })),
     tomorrow
   };

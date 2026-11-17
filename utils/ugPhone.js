@@ -24,6 +24,14 @@ function canonicalUgPhone(value) {
   return raw;
 }
 
+// A Ugandan number: +256 and nine digits, a local 0 and nine digits (07xx / 03xx / 04xx), or nine
+// digits starting 7 or 3 typed without the 0. Anything else (e.g. +44, +254) is international:
+// callers can't ring it from a Ugandan line, so it is WhatsApp only.
+function isUgandanPhone(value) {
+  const d = digits(value);
+  return /^256\d{9}$/.test(d) || /^0\d{9}$/.test(d) || /^[37]\d{8}$/.test(d);
+}
+
 // Public logs and reports show +256•••959, never the full number.
 function maskPhoneLast3(value) {
   const d = digits(value);
@@ -31,4 +39,4 @@ function maskPhoneLast3(value) {
   return `+256•••${d.slice(-3)}`;
 }
 
-module.exports = { digits, phoneKey9, canonicalUgPhone, maskPhoneLast3 };
+module.exports = { digits, phoneKey9, canonicalUgPhone, maskPhoneLast3, isUgandanPhone };

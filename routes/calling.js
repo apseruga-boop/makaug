@@ -59,7 +59,7 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
     return res.json({ ok: true, data: { task_key: s.task_key } });
   }));
 
-  router.post('/calling/sessions/:id/next', wrap(async (req, res) => res.json({ ok: true, data: await calling.nextNumber(req.params.id) })));
+  router.post('/calling/sessions/:id/next', wrap(async (req, res) => res.json({ ok: true, data: await calling.nextNumber(req.params.id, { preferSubmission: req.body?.prefer_submission || '' }) })));
 
   router.post('/calling/sessions/:id/end', wrap(async (req, res) => {
     // From 17:00 Kampala the day can't be closed until the cash check is signed.
@@ -92,6 +92,7 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
     return res.json({ ok: true, data: out });
   }));
 
+  router.get('/calling/international', wrap(async (req, res) => res.json({ ok: true, data: await calling.internationalNumbers({ personKey: isKing(req) ? (req.query?.person_key || '') : (req.query?.person_key || '__none__') }) })));
   router.get('/calling/counts', wrap(async (req, res) => res.json({ ok: true, data: await calling.queueCounts(req.query?.person_key) })));
   router.post('/calling/attempts/:id/skip', wrap(async (req, res) => res.json({ ok: true, data: await calling.skip(req.params.id, { sessionId: sid(req), reason: req.body?.reason, reasonCode: req.body?.reason_code, note: req.body?.note }) })));
 

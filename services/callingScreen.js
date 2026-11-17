@@ -27,7 +27,7 @@ const CALLBACK_MIN_HOURS = 24;
 const perf = require('./staffPerformance');
 const { staffSenderChoices, maskPhoneLast3 } = require('./outreachSenderName');
 const sandbox = require('./callingSandbox');
-const { phoneKey9, canonicalUgPhone } = require('../utils/ugPhone');
+const { phoneKey9, canonicalUgPhone, isUgandanPhone } = require('../utils/ugPhone');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
 const TZ = 'Africa/Kampala';
@@ -412,7 +412,7 @@ async function openSession(id) {
 // Everything the screen reports: leaving it, breaks (lunch:45 = a 45-minute lunch),
 // idle (idle_end detail = idle ms), open/close and every button pressed.
 const IN_MEETING = 'in meeting';
-const EVENT_KINDS = new Set(['inbound_start', 'fs_exit', 'fs_enter', 'hidden', 'visible', 'break_start', 'break_end', 'kit_send', 'screen_open', 'screen_close', 'idle_start', 'idle_end', 'action', 'work_on', 'work_off', 'meeting_join', 'meeting_end']);
+const EVENT_KINDS = new Set(['inbound_start', 'fs_exit', 'fs_enter', 'hidden', 'visible', 'break_start', 'break_end', 'kit_send', 'screen_open', 'screen_close', 'idle_start', 'idle_end', 'action', 'work_on', 'work_off', 'meeting_join', 'meeting_end', 'notes_start', 'notes_stop', 'notes_declined', 'notes_error', 'wa_share', 'housekeeping_on', 'housekeeping_off', 'auto_fallback']);
 
 /**
  * Heartbeat from the screen: running totals (ms) and the events since the last
@@ -492,9 +492,17 @@ async function agentKeys(keys = []) {
   return set;
 }
 
-/** Candidates in queue order for one task and caller. Each: phone, phone_key, name, source. */
-async function candidatesFor(task, personKey, { today = kampalaDay(), limit = 400 } = {}) {
+/**
+ * Candidates in queue order for one task and caller. Each: phone, phone_key, name, source.
+ * International numbers (not Ugandan) are never offered to call: they are WhatsApp only
+ * and listed for King separately (internationalNumbers). A practice login's own test phone is the one exception.
+ */
+async function candidatesFor(task, personKey, opts = {}) {
   if (await sandbox.isSandbox(personKey)) return practiceCandidates(task, personKey);
+  return (await rawCandidates(task, personKey, opts)).filter((c) => isUgandanPhone(c.phone));
+}
+
+async function rawCandidates(task, personKey, { today = kampalaDay(), limit = 400 } = {}) {
   const cfg = task.config || {};
   const out = [];
   // Due callbacks for this task come first, the caller's own before anyone else's.
@@ -595,7 +603,7 @@ async function practiceCandidates(task, personKey) {
       ORDER BY phone_key, COALESCE(wrapped_at, shown_at) DESC`, [personKey, task.key]);
   const mine = await safeRows("SELECT id, full_name, phone, phone_key FROM call_number_submissions WHERE person_key = $1 AND status = 'practice' ORDER BY added_at", [personKey]);
   const mineKeys = new Set(mine.map((m) => m.phone_key));
-  const out = mine.map((m) => ({ phone: m.phone, phone_key: m.phone_key, full_name: m.full_name, source_kind: 'own', source_label: 'Your real test phone · this one really rings (nothing is texted or counted)', reason: 'Real test call', practice_real: true }));
+  const out = mine.map((m) => ({ submission_id: m.id, phone: m.phone, phone_key: m.phone_key, full_name: m.full_name, source_kind: 'own', source_label: 'Your real test phone · this one really rings (nothing is texted or counted)', reason: 'Real test call', practice_real: true }));
   out.push(...cbs.filter((c) => sandbox.isTestKey(c.phone_key) || mineKeys.has(c.phone_key)).map((c) => ({ phone: c.phone, phone_key: c.phone_key, full_name: c.full_name, source_kind: 'callback', source_label: `${sandbox.isTestKey(c.phone_key) ? 'TEST practice' : 'Your real test phone'} · callback you set (${String(c.outcome || '').replace(/_/g, ' ')})`, reason: 'Practice callback' })));
   const label = { new_agents: 'TEST practice number · pretend new agent', payments: 'TEST practice number · pretend unpaid sign-up', retention: 'TEST practice number · pretend client to keep' }[task.queue_kind] || 'TEST practice number';
   for (const n of sandbox.practiceNumbers()) out.push({ ...n, source_kind: 'list', source_label: `${label} – practice only, can't dial`, reason: 'Practice' });
@@ -720,16 +728,34 @@ function present(attempt, task, history = [], { callerName = '', withPhone = tru
  * number is claimed; the unique index on open numbers means two callers can
  * never take the same one, so on a clash we simply try the next.
  */
-async function nextNumber(sessionId, { now = new Date() } = {}) {
-  const s = await openSession(sessionId);
+async function nextNumber(sessionId, { now = new Date(), preferSubmission = '', fallback = true } = {}) {
+  let s = await openSession(sessionId);
   const tasks = await loadTasks({ all: true });
-  const task = tasks.find((t) => t.key === s.task_key);
+  let task = tasks.find((t) => t.key === s.task_key);
   const callers = await loadCallers();
   const callerName = callers.find((p) => p.key === s.person_key)?.name || s.person_key;
   const current = (await rows("SELECT * FROM call_attempts WHERE session_id = $1 AND status IN ('shown', 'calling') ORDER BY shown_at DESC LIMIT 1", [sessionId]))[0];
   if (current) return { ...present(current, task, await historyFor(current.phone_key), { callerName, hello: await helloFor(current.phone_key), bestTime: await bestTimeFor(current.phone_key) }), resumed: true, left: null };
   await tidy(now);
-  const queue = await eligibleQueue(task, s.person_key, { now, tasks });
+  let queue = await eligibleQueue(task, s.person_key, { now, tasks });
+  let fellBackFrom = null;
+  // Never run dry: when this task's list is empty, move to the next task that still has numbers.
+  if (!queue.length && fallback) {
+    for (const t of tasks.filter((x) => x.active !== false && x.key !== task.key)) {
+      const q2 = await eligibleQueue(t, s.person_key, { now, tasks });
+      if (!q2.length) continue;
+      fellBackFrom = task;
+      s = await switchTask(sessionId, t.key);
+      await db.query("INSERT INTO call_session_events (session_id, kind, detail, at) VALUES ($1, 'auto_fallback', $2, $3)", [sessionId, `${fellBackFrom.key}>${t.key}`, now]);
+      task = t; queue = q2; break;
+    }
+  }
+  // "Add & call next": the number just added goes to the front.
+  if (preferSubmission) {
+    const i = queue.findIndex((c) => c.submission_id && String(c.submission_id) === String(preferSubmission));
+    if (i > 0) queue = [queue[i], ...queue.slice(0, i), ...queue.slice(i + 1)];
+  }
+  const extra = fellBackFrom ? { task_key: task.key, fell_back_from: { key: fellBackFrom.key, name: fellBackFrom.name } } : { task_key: task.key };
   for (const c of queue) {
     const variant = variantFor(task, c, c.history);
     const row = (await rows(
@@ -738,9 +764,9 @@ async function nextNumber(sessionId, { now = new Date() } = {}) {
        ON CONFLICT (phone_key) WHERE status IN ('shown', 'calling') DO NOTHING RETURNING *`,
       [sessionId, s.person_key, task.key, canonicalUgPhone(c.phone), c.phone_key, c.full_name || null, c.source_kind, c.source_label || null, c.reason || null, variant, c.prospect_id || null, c.list_number_id || null, c.agent_id || null, now]
     ))[0];
-    if (row) return { ...present(row, task, await historyFor(row.phone_key), { callerName, hello: await helloFor(row.phone_key), bestTime: await bestTimeFor(row.phone_key) }), resumed: false, left: queue.length - 1 };
+    if (row) return { ...present(row, task, await historyFor(row.phone_key), { callerName, hello: await helloFor(row.phone_key), bestTime: await bestTimeFor(row.phone_key) }), resumed: false, left: queue.length - 1, ...extra };
   }
-  return { attempt: null, left: 0, empty_message: emptyMessage(task) };
+  return { attempt: null, left: 0, empty_message: emptyMessage(task), all_empty: fallback, ...extra };
 }
 
 function emptyMessage(task) {
@@ -1063,6 +1089,7 @@ async function submitNumber({ personKey, name = '', phone = '', note = '', howKn
   const canonical = canonicalUgPhone(phone);
   const key = phoneKey9(canonical);
   if (person.sandbox) return addPracticeNumber(person, { canonical, key, name, note, mode });
+  if (!isUgandanPhone(phone) && /^\+\d{10,15}$/.test(canonical)) throw httpError(400, 'International number: WhatsApp only. Calls go to Ugandan numbers only, so it is not added to a calling queue.');
   if (!/^\+2567\d{8}$/.test(canonical)) throw httpError(400, 'Type a Uganda mobile number, like 0772 123 456.');
   const fullName = String(name || '').trim().slice(0, 120);
   const tasks = await loadTasks({ all: true });
@@ -1196,6 +1223,44 @@ async function daySessions(personKey, day) {
   );
 }
 
+/**
+ * Time on each task (ms), from the session events: 'start' and 'task_switch' name the task,
+ * housekeeping_on/off mark housekeeping, breaks pause the clock. A session ends at ended_at,
+ * or at its last heartbeat (or now, if the screen is still open).
+ */
+function taskTime(sessions = [], events = [], now = new Date()) {
+  const out = {};
+  const add = (k, ms) => { if (k && ms > 0) out[k] = (out[k] || 0) + ms; };
+  for (const s of sessions) {
+    const evs = events.filter((e) => String(e.session_id) === String(s.id)).sort((a, b) => new Date(a.at) - new Date(b.at));
+    const fresh = !s.ended_at && now.getTime() - new Date(s.last_heartbeat_at).getTime() < DROPPED_AFTER_MS;
+    const stop = new Date(s.ended_at || (fresh ? now : s.last_heartbeat_at || s.started_at)).getTime();
+    let task = s.task_key; let base = task; let hk = false; let paused = false;
+    let t = new Date(s.started_at).getTime();
+    for (const e of evs) {
+      const at = Math.min(new Date(e.at).getTime(), stop);
+      const cur = hk ? 'housekeeping' : task;
+      if (e.kind === 'start') { task = base = String(e.detail || task); continue; }
+      if (!['task_switch', 'housekeeping_on', 'housekeeping_off', 'break_start', 'break_end'].includes(e.kind)) continue;
+      if (!paused) add(cur, at - t);
+      t = at;
+      if (e.kind === 'task_switch') { task = base = String(e.detail || task).split(/\s/)[0]; hk = false; }
+      else if (e.kind === 'housekeeping_on') hk = true;
+      else if (e.kind === 'housekeeping_off') { hk = false; task = base; }
+      else if (e.kind === 'break_start') paused = true;
+      else if (e.kind === 'break_end') paused = false;
+    }
+    if (!paused) add(hk ? 'housekeeping' : task, stop - t);
+  }
+  return out;
+}
+
+async function dayTaskTime(sessions = [], now = new Date()) {
+  if (!sessions.length) return {};
+  const events = await rows("SELECT session_id, kind, detail, at FROM call_session_events WHERE session_id = ANY($1::uuid[]) AND kind IN ('start', 'task_switch', 'housekeeping_on', 'housekeeping_off', 'break_start', 'break_end') ORDER BY at", [sessions.map((x) => x.id)]);
+  return taskTime(sessions, events, now);
+}
+
 function sessionTotals(sessions = [], now = new Date()) {
   const t = { sessions: sessions.length, open_ms: 0, focus_ms: 0, away_ms: 0, break_ms: 0, oncall_hidden_ms: 0, exits: 0, breaks: 0, first_start: null, last_end: null };
   for (const s of sessions) {
@@ -1258,6 +1323,7 @@ async function stats(personKey, { now = new Date(), sessionId = null } = {}) {
     dayAttempts(key, day), targetsFor(key, day), callsByDay(key, addDays(day, -30), day), leaderboard(day), roadTo1000(), callbacksDue(key, now)
   ]);
   const sum = summarize(attempts, tasks);
+  const taskMs = await dayTaskTime(await daySessions(key, day), now);
   let left = null;
   if (sessionId) {
     const s = (await rows('SELECT task_key FROM call_sessions WHERE id = $1', [sessionId]))[0];
@@ -1277,6 +1343,7 @@ async function stats(personKey, { now = new Date(), sessionId = null } = {}) {
     closes_hit: sum.closes >= targets.closes_per_day,
     queue_left: left,
     by_task: sum.by_task,
+    task_ms: taskMs,
     flagged_calls: sum.flagged_calls,
     streak_days: streakDays(byDay, day, targets.calls_per_day),
     next_milestone: nextMilestone(sum.calls, sum.closes, targets),
@@ -1315,7 +1382,32 @@ async function queueCounts(personKey, { now = new Date() } = {}) {
   const active = tasks.filter((t) => t.active !== false);
   const out = {};
   for (const t of active) out[t.key] = (await eligibleQueue(t, key, { now, tasks, limit: 300 })).length;
+  out.housekeeping = (await planner().housekeeping(key).catch(() => ({ items: [] }))).items.length;
+  out.international = (await internationalNumbers({ personKey: key, limit: 300 })).length;
   return out;
+}
+
+const planner = () => require('./callingPlanner');
+
+/**
+ * International numbers sitting in the calling lists: kept out of every queue (callers ring
+ * Ugandan numbers only) and listed here for WhatsApp follow-up. Nothing is deleted.
+ */
+async function internationalNumbers({ personKey = '', limit = 200, now = new Date() } = {}) {
+  const tasks = (await loadTasks({ all: true })).filter((t) => t.active !== false);
+  const people = personKey ? [cleanKey(personKey)] : (await loadCallers()).filter((p) => !p.sandbox).map((p) => p.key);
+  const seen = new Map();
+  for (const pk of people) {
+    for (const t of tasks) {
+      for (const c of await rawCandidates(t, pk, { today: kampalaDay(now), limit: 400 })) {
+        if (isUgandanPhone(c.phone) || sandbox.isTestKey(c.phone_key)) continue;
+        const k = String(c.phone || '').replace(/\D/g, '');
+        if (!k || seen.has(k)) continue;
+        seen.set(k, { name: maskName(c.full_name) || '', phone: `•••${k.slice(-3)}`, source: c.source_label || c.source_kind, task: t.key, person_key: pk, label: 'International – WhatsApp only' });
+      }
+    }
+  }
+  return [...seen.values()].slice(0, Math.max(1, Math.min(500, Number(limit) || 200)));
 }
 
 async function feed(personKey, { now = new Date() } = {}) {
@@ -1355,6 +1447,7 @@ async function report(personKey, day = kampalaDay(), { now = new Date() } = {}) 
     calls_hit: sum.calls >= targets.calls_per_day,
     closes_hit: sum.closes >= targets.closes_per_day,
     work: sessionTotals(sessions, now),
+    task_ms: await dayTaskTime(sessions, now),
     flag_labels: FLAG_LABELS,
     evidence: attempts.map(maskedAttempt),
     made_at: now.toISOString()
@@ -1418,6 +1511,7 @@ async function performance({ day = kampalaDay(), now = new Date() } = {}) {
       callbacks_overdue: cbs.filter((c) => c.person_key === key && c.overdue_days > 0).length,
       flags: sum.flags, flagged_calls: sum.flagged_calls,
       by_task: sum.by_task,
+      task_ms: await dayTaskTime(ses, now),
       outcomes: sum.outcomes,
       work: sessionTotals(ses, now),
       last_7_days: perf.listDays(addDays(day, -6), day).map((d) => ({ day: d, calls: week[d] || 0 })),
@@ -1449,6 +1543,8 @@ async function evidence(personKey, day = kampalaDay()) {
     attempts: attempts.map(maskedAttempt),
     sessions: sessions.map((s) => ({ id: s.id, task_key: s.task_key, started_at: s.started_at, ended_at: s.ended_at, end_reason: s.end_reason, open_ms: Number(s.open_ms), focus_ms: Number(s.focus_ms), away_ms: Number(s.away_ms), break_ms: Number(s.break_ms), exit_count: s.exit_count, device: s.device, actor_account: s.actor_account })),
     events: events.map((e) => ({ session_id: e.session_id, kind: e.kind, detail: e.detail, at: e.at })),
+    task_ms: taskTime(sessions, events),
+    summary: (() => { const sm = summarize(attempts, []); return { calls: sm.calls, connected: sm.connected, closes: sm.closes, talk_s: sm.talk_s, outcomes: sm.outcomes }; })(),
     flag_labels: FLAG_LABELS
   };
 }
@@ -1478,6 +1574,8 @@ async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
 }
 
 module.exports = {
+  taskTime,
+  internationalNumbers,
   roadTo1000,
   callbacksDue,
   SKIP_REASONS,
