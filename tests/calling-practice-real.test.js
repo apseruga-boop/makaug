@@ -24,7 +24,7 @@ test('practice login: own real test phone rings, is recorded, and stays out of r
   assert.equal(added.practice, true);
   assert.match(added.phone, /123$/); assert.doesNotMatch(added.phone, /7700 ?900/);
 
-  const s = (await c.startSession({ personKey: 'arthurtest', taskKey: 'payments', device: 'laptop', actorAccount: 'Arthur (test)' })).session;
+  const s = (await c.startSession({ personKey: 'arthurtest', taskKey: 'payments', device: 'laptop', actorAccount: 'Arthur (test)', isKing: true })).session;
   const d = await c.nextNumber(s.id);
   assert.equal(d.attempt.phone, '+447700900123', 'own real test phone comes first, in any mode');
   assert.equal(d.tel, 'tel:+447700900123');
@@ -40,7 +40,7 @@ test('practice login: own real test phone rings, is recorded, and stays out of r
 
   // "Do not contact" on a tester's real phone never lands on the real do-not-contact list.
   await c.submitNumber({ personKey: 'arthurtest', name: 'Friend', phone: '+44 7700 900124', mode: 'new_agents', addedBy: 't' });
-  const s2 = (await c.startSession({ personKey: 'arthurtest', taskKey: 'new_agents', device: 'laptop', actorAccount: 'Arthur (test)' })).session;
+  const s2 = (await c.startSession({ personKey: 'arthurtest', taskKey: 'new_agents', device: 'laptop', actorAccount: 'Arthur (test)', isKing: true })).session;
   const d2 = await c.nextNumber(s2.id);
   assert.equal(d2.attempt.phone, '+447700900124');
   await c.tap(d2.attempt.id, { sessionId: s2.id }); await c.endCall(d2.attempt.id, { sessionId: s2.id });

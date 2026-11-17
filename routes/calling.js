@@ -44,7 +44,7 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
   router.get('/calling/bootstrap', wrap(async (req, res) => res.json({ ok: true, data: await calling.bootstrap({ userId: actorId(req), scope: scope(req), isKing: isKing(req) }) })));
 
   router.post('/calling/sessions', wrap(async (req, res) => {
-    const out = await calling.startSession({ personKey: req.body?.person_key, taskKey: req.body?.task_key, device: req.body?.device, actorAccount: actorOf(req), actorUserId: actorId(req) });
+    const out = await calling.startSession({ personKey: req.body?.person_key, taskKey: req.body?.task_key, device: req.body?.device, actorAccount: actorOf(req), actorUserId: actorId(req), isKing: isKing(req) });
     await audit(req, 'calling_session_started', { session_id: out.session.id, person: out.person.key, task: out.task.key });
     return res.status(201).json({ ok: true, data: { session_id: out.session.id, person_key: out.person.key, task_key: out.task.key, started_at: out.session.started_at } });
   }));

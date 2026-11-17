@@ -74,7 +74,7 @@ test('wrapUp refuses a call back under 24 hours (scratch DB)', { skip: !process.
   const db = require('../config/database');
   const c = require('../services/callingScreen');
   for (const r of (await db.query("SELECT id FROM call_sessions WHERE person_key = 'arthurtest' AND ended_at IS NULL")).rows) await c.endSession(r.id).catch(() => null);
-  const s = (await c.startSession({ personKey: 'arthurtest', taskKey: 'payments', device: 'laptop', actorAccount: 'Arthur (test)' })).session;
+  const s = (await c.startSession({ personKey: 'arthurtest', taskKey: 'payments', device: 'laptop', actorAccount: 'Arthur (test)', isKing: true })).session;
   const a = (await c.nextNumber(s.id)).attempt;
   assert.ok(a, 'a practice number is free');
   await c.tap(a.id, { sessionId: s.id }); await c.endCall(a.id, { sessionId: s.id });

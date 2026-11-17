@@ -377,6 +377,7 @@
       try { saved = JSON.parse(localStorage.getItem('makaug_calling_pick') || '{}'); } catch (e) { saved = {}; }
       pick.task = pick.task || saved.task || (boot.tasks[0] && boot.tasks[0].key);
       pick.person = boot.locked_person || pick.person || saved.person || '';
+      if (pick.person && !(boot.callers || []).some(function (p) { return p.key === pick.person; })) pick.person = ''; // e.g. a remembered practice account
       var tasks = boot.tasks.map(function (t) {
         return '<button type="button" class="mkc-task' + (t.key === pick.task ? ' on' : '') + '" data-mkc-task="' + esc(t.key) + '"><b>' + esc(t.name) + '</b><span>' + esc(t.description) + '</span></button>';
       }).join('');
