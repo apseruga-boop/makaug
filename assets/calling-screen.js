@@ -249,7 +249,7 @@
     '@media (max-width:1100px){#mkc-overlay.mkc-noscript .mkc-grid{grid-template-columns:minmax(0,1fr)}}',
     '@media (max-width:720px){#mkc-overlay.mkc-focus .mkc-grid{grid-template-columns:1fr}.mkc-wrapgrid,.mkc-wrapchecks{grid-template-columns:1fr}.mkc-comm small{display:none}.mkc-replies{grid-template-columns:1fr}}',
     '.mkc-splitsum{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.mkc-splitrows{display:flex;flex-direction:column;gap:6px}.mkc-splitrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.mkc-splitrow input[type=time]{width:110px}.mkc-splitrow select{min-width:170px}',
-    '.mkc-posted{font-size:14px;margin-top:4px;background:#f0f9ff;border:1px solid #bae6fd;color:#0c4a6e;border-radius:8px;padding:6px 8px;line-height:1.35}.mkc-wabtn{background:#16a34a!important;color:#fff!important;border-color:#16a34a!important;font-weight:800}.mkc-hitchip{background:#10b981;color:#fff;border-radius:99px;padding:4px 10px;font-weight:800;font-size:12px;white-space:nowrap}.mkc-intlchip{background:#334155;color:#e2e8f0;border-radius:99px;padding:4px 10px;font-size:11px;white-space:nowrap}.mkc-mode.dry i{background:#94a3b8!important}.mkc-fellback{background:#fef3c7;border:1px solid #fde68a;color:#78350f;border-radius:10px;padding:6px 10px;margin:0 0 6px;font-size:13px}.mkc-sugg{background:#eef2ff;color:#3730a3;border-radius:99px;padding:2px 4px 2px 10px;font-size:12px;margin-left:8px}.mkc-ev2 h5{margin:0 0 6px;font-size:13px}.mkc-evgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:10px;margin-top:10px}.mkc-evcard{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:10px}.mkc-evsec{margin:6px 0;font-size:13px}.mkc-chart{width:100%;height:auto;display:block}.mkc-evkpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.mkc-evkpi{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:8px 10px}.mkc-evkpi .v{font-size:20px;font-weight:900}.mkc-evkpi .l{font-size:12px;color:#64748b}.mkc-evkpi .s{margin-top:2px}@media(max-width:640px){.mkc-evkpis{grid-template-columns:repeat(2,minmax(0,1fr))}}.mkc-trend{font-size:12px;font-weight:800;margin-left:4px}.mkc-trend.up{color:#16a34a}.mkc-trend.down{color:#dc2626}.mkc-trend.flat{color:#64748b}.mkc-legs{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;font-size:11px;color:#475569}.mkc-leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}.mkc-evtl{list-style:none;margin:0;padding:0;font-size:13px;max-height:320px;overflow:auto}.mkc-evtl li{padding:4px 0;border-bottom:1px solid #f1f5f9}.mkc-evtl li.warn,.mkc-evtl li.bad{color:#b45309}.mkc-evtl li.bad{color:#b91c1c}.mkc-evtl ul{margin:4px 0 0 16px;padding:0;list-style:disc}.mkc-audit{list-style:none;margin:0;padding:0;font-size:13px}.mkc-audit li{padding:3px 0}.mkc-flag{background:#fee2e2;color:#991b1b;border-radius:6px;padding:1px 6px;font-size:12px;font-weight:700}.mkc-table tr.bad td{background:#fff1f2}.mkc-callhelp{margin-top:10px;text-align:left;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:8px 12px;font-size:13px;color:#1e3a8a;line-height:1.4}.mkc-callhelp summary{cursor:pointer;font-weight:800}.mkc-callhelp ol{margin:4px 0 6px 22px;padding:0;list-style:decimal}.mkc-callhelp li{display:list-item}.mkc-callhelp li{margin:2px 0}.mkc-callhelp p{margin:6px 0 0}.mkc-meetcard{background:#f0fdf4;border:2px solid #16a34a;border-radius:16px;padding:16px;color:#14532d}',
+    '.mkc-posted{font-size:14px;margin-top:4px;background:#f0f9ff;border:1px solid #bae6fd;color:#0c4a6e;border-radius:8px;padding:6px 8px;line-height:1.35}.mkc-wabtn{background:#16a34a!important;color:#fff!important;border-color:#16a34a!important;font-weight:800}.mkc-hitchip{background:#10b981;color:#fff;border-radius:99px;padding:4px 10px;font-weight:800;font-size:12px;white-space:nowrap}.mkc-intlchip{background:#334155;color:#e2e8f0;border-radius:99px;padding:4px 10px;font-size:11px;white-space:nowrap}.mkc-mode.dry i{background:#94a3b8!important}.mkc-fellback{background:#fef3c7;border:1px solid #fde68a;color:#78350f;border-radius:10px;padding:6px 10px;margin:0 0 6px;font-size:13px}.mkc-sugg{background:#eef2ff;color:#3730a3;border-radius:99px;padding:2px 4px 2px 10px;font-size:12px;margin-left:8px}.mkc-ev2 h5{margin:0 0 6px;font-size:13px}.mkc-evgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:10px;margin-top:10px}.mkc-evcard{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:10px}.mkc-evsec{margin:6px 0;font-size:13px}.mkc-chart{width:100%;height:auto;display:block}.mkc-oncall{cursor:pointer;stroke-width:1.5}.mkc-evbarswrap{overflow-x:auto;-webkit-overflow-scrolling:touch}@media(max-width:640px){.mkc-evbars{min-width:560px}}.mkc-evkpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.mkc-evkpi{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:8px 10px}.mkc-evkpi .v{font-size:20px;font-weight:900}.mkc-evkpi .l{font-size:12px;color:#64748b}.mkc-evkpi .s{margin-top:2px}@media(max-width:640px){.mkc-evkpis{grid-template-columns:repeat(2,minmax(0,1fr))}}.mkc-trend{font-size:12px;font-weight:800;margin-left:4px}.mkc-trend.up{color:#16a34a}.mkc-trend.down{color:#dc2626}.mkc-trend.flat{color:#64748b}.mkc-legs{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;font-size:11px;color:#475569}.mkc-leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}.mkc-evtl{list-style:none;margin:0;padding:0;font-size:13px;max-height:320px;overflow:auto}.mkc-evtl li{padding:4px 0;border-bottom:1px solid #f1f5f9}.mkc-evtl li.warn,.mkc-evtl li.bad{color:#b45309}.mkc-evtl li.bad{color:#b91c1c}.mkc-evtl ul{margin:4px 0 0 16px;padding:0;list-style:disc}.mkc-audit{list-style:none;margin:0;padding:0;font-size:13px}.mkc-audit li{padding:3px 0}.mkc-flag{background:#fee2e2;color:#991b1b;border-radius:6px;padding:1px 6px;font-size:12px;font-weight:700}.mkc-table tr.bad td{background:#fff1f2}.mkc-callhelp{margin-top:10px;text-align:left;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:8px 12px;font-size:13px;color:#1e3a8a;line-height:1.4}.mkc-callhelp summary{cursor:pointer;font-weight:800}.mkc-callhelp ol{margin:4px 0 6px 22px;padding:0;list-style:decimal}.mkc-callhelp li{display:list-item}.mkc-callhelp li{margin:2px 0}.mkc-callhelp p{margin:6px 0 0}.mkc-meetcard{background:#f0fdf4;border:2px solid #16a34a;border-radius:16px;padding:16px;color:#14532d}',
     '.mkc-meetcard h3{margin:0;font-size:19px;font-weight:900;color:#14532d}',
     '.mkc-meetcard .mm-sub{margin:4px 0 14px;color:#166534;font-size:14px;line-height:1.4}',
     '.mkc-meetcard .mm-form{display:grid;grid-template-columns:minmax(150px,190px) minmax(220px,1fr) minmax(170px,240px) auto;gap:12px;align-items:end}',
@@ -2728,6 +2728,15 @@
     var legend = keys.map(function (k, j) { return '<span class="mkc-leg"><i style="background:' + outColor(k, j) + '"></i>' + esc(k.replace(/_/g, ' ')) + '</span>'; }).join('');
     return '<svg viewBox="0 0 ' + W + ' ' + H + '" class="mkc-chart" role="img"><line x1="' + P + '" y1="' + (H - P) + '" x2="' + (W - P) + '" y2="' + (H - P) + '" stroke="#e2e8f0"/>' + bars + '</svg><div class="mkc-legs">' + (legend || '<span class="mkc-muted">No calls in this range.</span>') + '</div>';
   }
+  function callTip(c) {
+    var ms = function (sec) { sec = Math.round(sec); return sec < 60 ? sec + 's' : Math.floor(sec / 60) + 'm ' + pad(sec % 60) + 's'; };
+    return kTime(c.from) + '–' + kTime(c.to) + ' · ' + (c.talk_s == null ? 'talk not saved' : c.talk_s === 0 ? 'no talk' : 'talk ' + ms(c.talk_s)) + ' · ' + String(c.outcome || '').replace(/_/g, ' ') + ' · ' + (c.gap_s == null ? 'first call today' : 'gap since last call ' + hm(c.gap_s * 1000));
+  }
+  function onCallSummary(e) {
+    var m = e.on_call && e.on_call.summary; if (!m || !m.calls) return '<div class="mkc-muted" style="margin-top:6px" data-k-oncallsum>No calls tapped today.</div>';
+    return '<div class="mkc-row" style="margin-top:6px;gap:6px;flex-wrap:wrap" data-k-oncallsum><span class="mkc-pill">📞 ' + m.calls + ' call' + (m.calls === 1 ? '' : 's') + '</span><span class="mkc-pill">🗣 talk ' + hm(m.talk_s * 1000) + '</span>'
+      + '<span class="mkc-pill">⏱ average gap ' + (m.avg_gap_s == null ? '–' : hm(m.avg_gap_s * 1000)) + '</span><span class="mkc-pill' + (m.longest_gap_s >= 900 ? ' warn' : '') + '">⏳ longest gap ' + (m.longest_gap_s == null ? '–' : hm(m.longest_gap_s * 1000) + ' (before ' + kTime(m.longest_gap_before) + ')') + '</span><span class="mkc-muted" style="font-size:11px">Gaps: from one call ending to the next Call now tap; breaks not counted.</span></div>';
+  }
   // Session bars: green = on the screen, amber = switched away, grey = break, red end = dropped.
   function sessionBars(e) {
     var ss = e.sessions || []; if (!ss.length) return '<p class="mkc-muted">No sessions today.</p>';
@@ -2748,10 +2757,16 @@
         if (x.kind === 'break_end' && brk != null) { segs += '<rect x="' + X(brk).toFixed(1) + '" y="' + y + '" width="' + Math.max(1.5, X(t) - X(brk)).toFixed(1) + '" height="14" fill="#94a3b8"><title>Break ' + hm(t - brk) + '</title></rect>'; brk = null; }
       });
       if (away != null) segs += '<rect x="' + X(away).toFixed(1) + '" y="' + y + '" width="' + Math.max(1.5, X(b) - X(away)).toFixed(1) + '" height="14" fill="#f59e0b"><title>Away until the end</title></rect>';
+      ((e.on_call && e.on_call.calls) || []).forEach(function (c, ci) {
+        if (c.session_id !== s.id) return;
+        var ca = new Date(c.from).getTime(); var cb = new Date(c.to).getTime();
+        segs += '<rect class="mkc-oncall" data-k-call="' + ci + '" x="' + X(ca).toFixed(1) + '" y="' + (y + 2) + '" width="' + Math.max(2.5, X(cb) - X(ca)).toFixed(1) + '" height="10" rx="1.5" fill="#1d4ed8"><title>' + esc(callTip(c)) + '</title></rect>';
+        if (c.wrapped_at) { var wx = X(new Date(c.wrapped_at).getTime()); segs += '<line x1="' + wx.toFixed(1) + '" y1="' + (y - 1) + '" x2="' + wx.toFixed(1) + '" y2="' + (y + 15) + '" stroke="#0f172a" stroke-width="0.8" opacity="0.7"><title>Wrap-up saved ' + esc(kTime(c.wrapped_at)) + '</title></line>'; }
+      });
       if (s.end_reason === 'dropped') segs += '<rect x="' + (X(b) - 3).toFixed(1) + '" y="' + (y - 2) + '" width="5" height="18" fill="#dc2626"><title>Dropped</title></rect>';
       return segs;
     }).join('');
-    return '<svg viewBox="0 0 ' + W + ' ' + H + '" class="mkc-chart" role="img" data-k-evbars>' + ticks + bars + '</svg><div class="mkc-legs"><span class="mkc-leg"><i style="background:#22c55e"></i>On the screen</span><span class="mkc-leg"><i style="background:#f59e0b"></i>Switched away</span><span class="mkc-leg"><i style="background:#94a3b8"></i>Break</span><span class="mkc-leg"><i style="background:#dc2626"></i>Dropped</span></div>';
+    return '<div class="mkc-evbarswrap"><svg viewBox="0 0 ' + W + ' ' + H + '" class="mkc-chart mkc-evbars" role="img" data-k-evbars>' + ticks + bars + '</svg></div><div class="mkc-legs"><span class="mkc-leg"><i style="background:#22c55e"></i>On the screen</span><span class="mkc-leg"><i style="background:#1d4ed8"></i>On a call</span><span class="mkc-leg"><i style="background:#0f172a;width:2px"></i>Wrap-up saved</span><span class="mkc-leg"><i style="background:#f59e0b"></i>Switched away</span><span class="mkc-leg"><i style="background:#94a3b8"></i>Break</span><span class="mkc-leg"><i style="background:#dc2626"></i>Dropped</span></div>' + onCallSummary(e) + '<div class="mkc-muted" style="font-size:12px;min-height:16px" data-k-callinfo>' + (((e.on_call && e.on_call.calls) || []).length ? 'Tap or hover a blue call to see its details.' : '') + '</div>';
   }
   // Plain-English timeline: runs of screen actions fold into one line that opens to show each step.
   function timelineHtml(e) {
@@ -2774,12 +2789,39 @@
     if (a.tapped_at) return '<span class="mkc-flag">⚠ No outcome saved</span>';
     return '<span class="mkc-flag">⚠ No outcome saved</span><div class="mkc-muted" style="font-size:11px">' + esc(String(a.status || '').replace(/_/g, ' ')) + ' · not tapped</div>';
   }
-  function openEvidence(host, person, keep) {
+  // Evidence stays live: refreshes every 30 s while open and the tab is visible; paused when hidden.
+  var EV_REFRESH_MS = 30000;
+  function stopEvAuto() { if (K.evTimer) { clearInterval(K.evTimer); K.evTimer = null; } }
+  function evPanelOpen(host, person) { var el = q('[data-k-evbox]', host); return !!(el && K.open === person && document.body.contains(el) && q('[data-k-ev2]', el)); }
+  function startEvAuto(host, person) {
+    stopEvAuto();
+    K.evTimer = setInterval(function () {
+      if (!evPanelOpen(host, person)) { stopEvAuto(); return; }
+      if (document.hidden || K.evBusy) return;
+      openEvidence(host, person, true, true);
+    }, EV_REFRESH_MS);
+    if (!K.evVisBound) {
+      K.evVisBound = true;
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden || !K.evHost || !K.open || !evPanelOpen(K.evHost, K.open)) return;
+        if (Date.now() - (K.evAt || 0) >= EV_REFRESH_MS) openEvidence(K.evHost, K.open, true, true);
+      });
+    }
+  }
+  function clockSecs(d) { try { return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Africa/Kampala' }).format(d); } catch (x) { return ''; } }
+  function openEvidence(host, person, keep, silent) {
     var el = q('[data-k-evbox]', host);
-    if (!keep && K.open === person && el.innerHTML) { K.open = null; el.innerHTML = ''; return; }
-    K.open = person;
-    el.innerHTML = '<p class="mkc-muted">Loading evidence…</p>';
+    if (!keep && K.open === person && el.innerHTML) { K.open = null; el.innerHTML = ''; stopEvAuto(); return; }
+    K.open = person; K.evHost = host;
+    // Keep what King was looking at across a refresh: opened timeline groups, the chosen call, the chart scroll.
+    var prev = silent ? { open: qa('[data-k-evtl] details', el).map(function (d) { return d.open; }), call: K.evCall, sx: (q('.mkc-evbarswrap', el) || {}).scrollLeft || 0 } : null;
+    if (!silent) el.innerHTML = '<p class="mkc-muted">Loading evidence…</p>';
+    K.evBusy = true;
+    var lbl = q('[data-k-evupd]', el); if (lbl && silent) lbl.textContent = 'Updating…';
     api('/evidence?person_key=' + encodeURIComponent(person)).then(function (e) {
+      K.evBusy = false;
+      if (K.open !== person) return;
+      K.evAt = Date.now();
       var unit = K.evUnit || 'day'; var tr = (e.trends || {})[unit] || [];
       var sm = e.summary || { calls: 0, connected: 0, closes: 0, talk_s: 0 };
       var trendNote = { day: 'Trend: last 3 full days vs the 3 before', week: 'Trend: last 3 full weeks vs the 3 before', month: 'Trend: last 3 full months vs the 3 before' }[unit];
@@ -2796,7 +2838,7 @@
         return '<tr' + (a.tapped_at && a.status !== 'done' && a.status !== 'skipped' ? ' class="bad"' : '') + '><td>' + esc(kTime(a.tapped_at || a.shown_at)) + '</td><td>' + esc(taskLabel(a.task_key)) + '</td><td>' + esc(a.name || '') + ' <span class="mkc-muted">' + esc(a.phone) + '</span></td><td>' + outcomeCell(a) + '</td><td>' + (a.talk_s == null ? '–' : hm(a.talk_s * 1000)) + '</td><td>' + esc(a.note || '') + (a.next_step ? '<div><b>Next:</b> ' + esc(a.next_step) + '</div>' : '') + (a.transcript_summary ? '<div class="mkc-muted">🎙 ' + esc(a.transcript_summary) + '</div>' : '') + '</td><td class="mkc-muted">' + esc(a.login || 'not recorded') + '</td><td>' + fl + ' <button type="button" class="mkc-btn sm ghost" data-k-tree="' + esc(a.id) + '">Tree</button></td></tr>';
       }).join('');
       el.innerHTML = '<div class="mkc-panel mkc-ev2" style="margin-top:12px;background:#f8fafc" data-k-ev2>'
-        + '<div class="mkc-row" style="justify-content:space-between"><h4 style="margin:0">Evidence trail · ' + esc(personName(person)) + ' · ' + esc(e.day || '') + '</h4><button type="button" class="mkc-btn sm ghost" data-k-evx>Close</button></div>'
+        + '<div class="mkc-row" style="justify-content:space-between"><h4 style="margin:0">Evidence trail · ' + esc(personName(person)) + ' · ' + esc(e.day || '') + '</h4><span class="mkc-row" style="gap:6px;align-items:center"><span class="mkc-muted" style="font-size:12px" data-k-evupd title="Refreshes every 30 seconds while this is open; paused when the tab is hidden">🟢 Updated ' + esc(clockSecs(new Date())) + ' Kampala · auto every 30s</span><button type="button" class="mkc-btn sm ghost" data-k-evrefresh title="Refresh now">⟳ Refresh</button><button type="button" class="mkc-btn sm ghost" data-k-evx>Close</button></span></div>'
         + '<div class="mkc-evsec"><b>Counted for:</b> ' + esc(personName(person)) + ' · <b>Logins used today:</b> ' + (logins || '<span class="mkc-muted">none</span>') + (shared ? '<div class="mkc-flag" style="display:inline-block;margin-top:4px">Shared login used: calls still count for the caller picked on the screen. Give each caller their own login.</div>' : '') + '</div>'
         + '<div class="mkc-row" style="margin:8px 0;gap:6px" data-k-evunit>' + ['day', 'week', 'month'].map(function (u) { return '<button type="button" class="mkc-chip' + (u === unit ? ' on' : '') + '" data-k-evu="' + u + '">' + ({ day: 'Day by day', week: 'Week by week', month: 'Month by month' }[u]) + '</button>'; }).join('') + '</div>'
         + '<div class="mkc-evkpis" data-k-evsum>' + kpi('Calls ' + unitName, cur.calls || 0, 'calls') + kpi('Talk time ' + unitName, hm((cur.talk_s || 0) * 1000), 'talk_s') + kpi('Spoke to ' + unitName, cur.connected || 0, 'connected') + kpi('Closes ' + unitName, cur.closes || 0, 'closes') + '</div><div class="mkc-muted" style="font-size:11px;margin-top:3px">' + trendNote + '. ▲ up · ▼ down.</div>'
@@ -2807,10 +2849,19 @@
         + '<div class="mkc-evcard" data-k-evaudit><h5>Are we tracking everything?</h5><ul class="mkc-audit">' + audit + '</ul></div></div>'
         + '<div class="mkc-evcard" style="margin-top:10px"><h5>Timeline (plain English)</h5>' + timelineHtml(e) + '</div>'
         + '<div class="mkc-evcard" style="margin-top:10px"><h5>Every call today</h5><p class="mkc-muted" style="margin:0 0 6px">Check these against the company phone\'s call log: every tap has a time.' + (released ? ' ' + released + ' number' + (released === 1 ? ' was' : 's were') + ' shown but not called (put back when switching task); not listed.' : '') + '</p><div class="mkc-scroll"><table class="mkc-table" data-k-evcalls><tr><th>Time</th><th>Task</th><th>Who</th><th>Outcome</th><th>Talk</th><th>Note · next step</th><th>Login</th><th></th></tr>' + (rowsHtml || '<tr><td colspan="8" class="mkc-muted">No calls.</td></tr>') + '</table></div></div></div>';
-      q('[data-k-evx]', el).onclick = function () { K.open = null; el.innerHTML = ''; };
+      q('[data-k-evx]', el).onclick = function () { K.open = null; el.innerHTML = ''; stopEvAuto(); };
+      var rf = q('[data-k-evrefresh]', el); if (rf) rf.onclick = function () { openEvidence(host, person, true, true); };
+      var calls = (e.on_call && e.on_call.calls) || []; var info = q('[data-k-callinfo]', el);
+      qa('[data-k-call]', el).forEach(function (r) { var show = function () { K.evCall = r.getAttribute('data-k-call'); var c = calls[Number(r.getAttribute('data-k-call'))]; if (c && info) info.innerHTML = '<b>📞 ' + esc(callTip(c)) + '</b>'; qa('[data-k-call]', el).forEach(function (x) { x.setAttribute('stroke', x === r ? '#facc15' : 'none'); }); }; r.addEventListener('click', show); r.addEventListener('mouseenter', show); });
+      if (prev) {
+        qa('[data-k-evtl] details', el).forEach(function (d, i) { if (prev.open[i]) d.open = true; });
+        var wrapEl = q('.mkc-evbarswrap', el); if (wrapEl) wrapEl.scrollLeft = prev.sx;
+        var selEl = prev.call != null ? q('[data-k-call="' + prev.call + '"]', el) : null; if (selEl) selEl.dispatchEvent(new Event('click'));
+      }
+      startEvAuto(host, person);
       qa('[data-k-evu]', el).forEach(function (b) { b.onclick = function () { K.evUnit = b.getAttribute('data-k-evu'); openEvidence(host, person, true); }; });
       qa('[data-k-tree]', el).forEach(function (b) { b.onclick = function () { openTimeline({ attempt_id: b.getAttribute('data-k-tree') }); }; });
-    }, function (err) { el.innerHTML = '<div class="mkc-err">' + esc(err.message) + '</div>'; });
+    }, function (err) { K.evBusy = false; if (silent && q('[data-k-ev2]', el)) { var l = q('[data-k-evupd]', el); if (l) l.textContent = '⚠ Could not refresh (' + err.message + '). Retrying in 30s.'; return; } el.innerHTML = '<div class="mkc-err">' + esc(err.message) + '</div>'; });
   }
 
   // ---------------------------------------------------------------- mount --

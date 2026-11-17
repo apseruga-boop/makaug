@@ -1551,6 +1551,7 @@ async function evidence(personKey, day = kampalaDay()) {
     summary: (() => { const sm = summarize(attempts, []); return { calls: sm.calls, connected: sm.connected, closes: sm.closes, talk_s: sm.talk_s, outcomes: sm.outcomes, shown: sm.shown, skipped: sm.skipped }; })(),
     logins: loginsUsed(sessions, attempts),
     dropoffs: dropOffs(sessions, events, attempts),
+    on_call: onCallSegments(attempts, events),
     audit: trackingAudit(sessions, events, attempts),
     trends: await evidenceTrends(key),
     flag_labels: FLAG_LABELS
@@ -1568,6 +1569,45 @@ function loginsUsed(sessions = [], attempts = []) {
   for (const s of sessions) { const k = s.actor_account || 'not recorded'; const v = m.get(k) || { login: k, sessions: 0, calls: 0 }; v.sessions += 1; m.set(k, v); }
   for (const a of attempts) { if (a.status !== 'done') continue; const k = a.actor_account || 'not recorded'; const v = m.get(k) || { login: k, sessions: 0, calls: 0 }; v.calls += 1; m.set(k, v); }
   return [...m.values()].sort((x, y) => y.calls - x.calls || y.sessions - x.sessions);
+}
+
+/**
+ * When the caller was actually on a call: one segment per tapped call (Call now tap to call end), the gap since the
+ * previous call ended (break time not counted), and a day summary (calls, talk, average and longest gap).
+ */
+function onCallSegments(attempts = [], events = []) {
+  const ms = (v) => (v ? new Date(v).getTime() : null);
+  const breaks = [];
+  const bs = events.filter((e) => e.kind === 'break_start' || e.kind === 'break_end').sort((a, b) => ms(a.at) - ms(b.at));
+  let open = null;
+  for (const e of bs) { if (e.kind === 'break_start') open = ms(e.at); else if (open != null) { breaks.push([open, ms(e.at)]); open = null; } }
+  const breakIn = (a, b) => breaks.reduce((t, [x, y]) => t + Math.max(0, Math.min(b, y) - Math.max(a, x)), 0);
+  const calls = attempts.filter((a) => a.tapped_at).sort((a, b) => ms(a.tapped_at) - ms(b.tapped_at));
+  let prevEnd = null;
+  const items = calls.map((a) => {
+    const from = ms(a.tapped_at);
+    const talkEnd = a.talk_s != null ? from + Number(a.talk_s) * 1000 : null;
+    const to = Math.max(from, ms(a.ended_at) || talkEnd || ms(a.wrapped_at) || from);
+    const gap = prevEnd == null ? null : Math.max(0, Math.round((from - prevEnd - breakIn(prevEnd, from)) / 1000));
+    prevEnd = Math.max(prevEnd || 0, ms(a.wrapped_at) || to);
+    return {
+      attempt_id: a.id, session_id: a.session_id, from: new Date(from).toISOString(), to: new Date(to).toISOString(),
+      wrapped_at: a.wrapped_at || null, talk_s: a.talk_s == null ? null : Number(a.talk_s),
+      outcome: a.status === 'done' ? a.outcome : (a.status === 'skipped' ? 'skipped' : 'no outcome saved'), gap_s: gap
+    };
+  });
+  const gaps = items.map((i) => i.gap_s).filter((g) => g != null);
+  const longest = items.reduce((m, i) => (i.gap_s != null && (!m || i.gap_s > m.gap_s) ? i : m), null);
+  return {
+    calls: items,
+    summary: {
+      calls: items.length,
+      talk_s: items.reduce((t, i) => t + (i.talk_s || 0), 0),
+      avg_gap_s: gaps.length ? Math.round(gaps.reduce((t, g) => t + g, 0) / gaps.length) : null,
+      longest_gap_s: longest ? longest.gap_s : null,
+      longest_gap_before: longest ? longest.from : null
+    }
+  };
 }
 
 /** When and why work stopped: dropped sessions, closed pages, long time away, long gaps between calls, calls left without an outcome. */
@@ -1681,6 +1721,7 @@ async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
 }
 
 module.exports = {
+  onCallSegments,
   dropOffs,
   trackingAudit,
   loginsUsed,

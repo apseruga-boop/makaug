@@ -60,6 +60,26 @@ test('trackingAudit: flags missing outcomes, logins, talk time and dropped sessi
   assert.equal(by['Script steps tracked on connected calls'].ok, false);
 });
 
+test('onCallSegments: one segment per tapped call, gaps since the last call (breaks not counted), summary', () => {
+  const attempts = [
+    { id: 'a2', session_id: 's1', status: 'done', outcome: 'interested', tapped_at: m(20), ended_at: m(23), wrapped_at: m(24), talk_s: 170 },
+    { id: 'a1', session_id: 's1', status: 'done', outcome: 'no_answer', tapped_at: m(0), ended_at: m(1), wrapped_at: m(2), talk_s: 0 },
+    { id: 'a3', session_id: 's2', status: 'abandoned', tapped_at: m(90), ended_at: null, wrapped_at: null, talk_s: null },
+    { id: 'x', session_id: 's1', status: 'skipped', tapped_at: null, shown_at: m(30) }
+  ];
+  const events = [{ kind: 'break_start', at: m(40) }, { kind: 'break_end', at: m(70) }];
+  const r = c.onCallSegments(attempts, events);
+  assert.deepEqual(r.calls.map((x) => x.attempt_id), ['a1', 'a2', 'a3'], 'tapped calls only, in time order');
+  assert.equal(r.calls[0].gap_s, null, 'first call has no gap');
+  assert.equal(r.calls[1].gap_s, 18 * 60, 'gap from wrap-up saved (m2) to next tap (m20)');
+  assert.equal(r.calls[2].gap_s, (90 - 24 - 30) * 60, 'the 30 min break is not counted');
+  assert.equal(r.calls[1].from, m(20)); assert.equal(r.calls[1].to, m(23));
+  assert.equal(r.calls[2].outcome, 'no outcome saved');
+  assert.equal(r.calls[2].to, m(90), 'open call without an end is a thin mark at the tap');
+  assert.deepEqual(r.summary, { calls: 3, talk_s: 170, avg_gap_s: (18 * 60 + 36 * 60) / 2, longest_gap_s: 36 * 60, longest_gap_before: m(90) });
+  assert.deepEqual(c.onCallSegments([], []).summary, { calls: 0, talk_s: 0, avg_gap_s: null, longest_gap_s: null, longest_gap_before: null });
+});
+
 const db = { skip: !process.env.CALLING_SANDBOX_DB };
 
 test('heartbeat keeps script steps and unknown screen events instead of dropping them', db, async () => {
@@ -82,6 +102,8 @@ test('evidence carries logins, drop-offs, audit and day/week/month trends', db, 
   const today = e.trends.day[e.trends.day.length - 1];
   assert.equal(today.calls, e.summary.calls, 'today in the chart matches today\'s calls');
   for (const a of e.attempts) assert.ok('login' in a);
+  assert.ok(e.on_call && Array.isArray(e.on_call.calls) && typeof e.on_call.summary.calls === 'number');
+  assert.equal(e.on_call.summary.calls, e.attempts.filter((a) => a.tapped_at).length);
 });
 
 test.after(async () => { if (process.env.CALLING_SANDBOX_DB) await require('../config/database').pool.end().catch(() => null); });
