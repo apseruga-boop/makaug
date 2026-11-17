@@ -21,6 +21,7 @@
  * Phones are only ever shown as the last three digits.
  */
 
+const { parseCompanionCsv } = require('../utils/companionCsv');
 const db = require('../config/database');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 const {
@@ -372,11 +373,11 @@ function followUpsDue(sends = [], today) {
  */
 function dedupeList(lines = [], known = {}) {
   const seen = new Set();
-  return lines.map((line) => {
+  return lines.map((line, i) => {
     const name = String(line.name || '').trim().slice(0, 120);
     const digits = String(line.phone || '').replace(/\D/g, '');
     const key = prospectPhoneKey(digits);
-    const base = { name, phone: digits, phone_key: key };
+    const base = { name, phone: digits, phone_key: key, what_they_posted: String(line.what_they_posted || '').slice(0, 500), list_source: String(line.source || '').slice(0, 60), list_order: i + 1 };
     if (key.length !== 9 || digits.length > 15) return { ...base, accepted: false, refused_reason: 'invalid' };
     if (seen.has(key)) return { ...base, accepted: false, refused_reason: 'duplicate_list', refused_detail: 'twice in this paste' };
     seen.add(key);
@@ -854,12 +855,20 @@ async function knownKeysFor(keys) {
  * Add a day's numbers to one person's stream. Every line is kept; the ones
  * that must not be sent are kept as refused, with the reason.
  */
-async function addListNumbers({ personKey = '', text = '', listDay = '', addedBy = '', addedByPerson = '' } = {}) {
+async function addListNumbers({ personKey = '', text = '', csv = '', listDay = '', addedBy = '', addedByPerson = '' } = {}) {
   const people = await loadPeople([]);
   const person = personKeyFor(personKey, people);
   if (!person) throw httpError(400, 'Pick whose list this is.');
-  const lines = parsePastedList(text);
-  if (!lines.length) throw httpError(400, 'Paste at least one number, one a line.');
+  let lines;
+  if (csv) {
+    const parsed = parseCompanionCsv(csv);
+    if (parsed.error) throw httpError(400, parsed.error);
+    lines = parsed.lines;
+    if (!lines.length) throw httpError(400, 'The CSV has a header row but no numbers.');
+  } else {
+    lines = parsePastedList(text);
+    if (!lines.length) throw httpError(400, 'Paste at least one number, one a line.');
+  }
   const day = /^\d{4}-\d{2}-\d{2}$/.test(String(listDay || '')) ? String(listDay) : kampalaDay();
   const keys = lines.map((l) => prospectPhoneKey(l.phone));
   const known = await knownKeysFor(keys);
@@ -868,20 +877,22 @@ async function addListNumbers({ personKey = '', text = '', listDay = '', addedBy
   for (const line of sorted) {
     try {
       const row = (await db.query(
-        `INSERT INTO outreach_list_numbers (campaign_key, person_key, list_day, full_name, phone, phone_key, accepted, refused_reason, refused_detail, added_by, added_by_person, lead_source)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        `INSERT INTO outreach_list_numbers (campaign_key, person_key, list_day, full_name, phone, phone_key, accepted, refused_reason, refused_detail, added_by, added_by_person, lead_source, what_they_posted, list_source, list_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
          RETURNING id, accepted, refused_reason`,
         [CAMPAIGN_KEY, person, day, line.name || null, line.phone || '', line.phone_key || '', line.accepted,
-          line.refused_reason || null, line.refused_detail || null, addedBy || null, addedByPerson || null, line.lead_source || null]
+          line.refused_reason || null, line.refused_detail || null, addedBy || null, addedByPerson || null, line.lead_source || null,
+          line.what_they_posted || null, line.list_source || null, line.list_order || null]
       )).rows[0];
       saved.push({ ...line, id: row.id });
     } catch (error) {
       // Someone else's list took the number a moment ago: keep it as refused.
       if (line.accepted && String(error.code) === '23505') {
         await db.query(
-          `INSERT INTO outreach_list_numbers (campaign_key, person_key, list_day, full_name, phone, phone_key, accepted, refused_reason, refused_detail, added_by, added_by_person)
-           VALUES ($1, $2, $3, $4, $5, $6, false, 'duplicate_list', 'added to another list at the same time', $7, $8)`,
-          [CAMPAIGN_KEY, person, day, line.name || null, line.phone, line.phone_key, addedBy || null, addedByPerson || null]
+          `INSERT INTO outreach_list_numbers (campaign_key, person_key, list_day, full_name, phone, phone_key, accepted, refused_reason, refused_detail, added_by, added_by_person, what_they_posted, list_source, list_order)
+           VALUES ($1, $2, $3, $4, $5, $6, false, 'duplicate_list', 'added to another list at the same time', $7, $8, $9, $10, $11)`,
+          [CAMPAIGN_KEY, person, day, line.name || null, line.phone, line.phone_key, addedBy || null, addedByPerson || null,
+            line.what_they_posted || null, line.list_source || null, line.list_order || null]
         );
         saved.push({ ...line, accepted: false, refused_reason: 'duplicate_list' });
       } else {
@@ -889,10 +900,11 @@ async function addListNumbers({ personKey = '', text = '', listDay = '', addedBy
       }
     }
   }
-  const summary = { accepted: 0, refused: {} };
+  const summary = { rows: saved.length, from: csv ? 'csv' : 'paste', accepted: 0, refused: {}, invalid: 0 };
   for (const s of saved) {
     if (s.accepted) summary.accepted += 1;
     else summary.refused[s.refused_reason] = (summary.refused[s.refused_reason] || 0) + 1;
+    if (!s.accepted && s.refused_reason === 'invalid') summary.invalid += 1;
   }
   return {
     person_key: person,
@@ -903,6 +915,8 @@ async function addListNumbers({ personKey = '', text = '', listDay = '', addedBy
       phone_masked: maskPhoneLast3(s.phone_key),
       accepted: s.accepted,
       found_online: s.lead_source === 'found_online',
+      what_they_posted: s.what_they_posted || '',
+      source: s.list_source || '',
       refused: s.accepted ? '' : (REFUSED_LABELS[s.refused_reason] || s.refused_reason) + (s.refused_detail ? ` (${s.refused_detail})` : '')
     }))
   };
@@ -993,6 +1007,7 @@ module.exports = {
   recordBlockedSend,
   latestOutcomes,
   addListNumbers,
+  parseCompanionCsv,
   listNumberToDial,
   saveSettings
 };

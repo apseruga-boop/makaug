@@ -186,7 +186,7 @@ function moneyScore(c = {}) {
   if (c.source_kind === 'lead' || c.source_kind === 'whatsapp') return 85;
   if (c.source_kind === 'listing') return c.found_online ? 66 : 72;
   if (c.source_kind === 'prospect') return c.prospect_pitched ? 75 : 60;
-  if (c.source_kind === 'list') return c.found_online ? 67 : 70; // the Companion's daily list
+  if (c.source_kind === 'list') return 70; // the Companion's daily list: one score, so list day and upload order decide
   if (c.found_online) return 65;
   return 50;
 }
@@ -509,11 +509,12 @@ async function candidatesFor(task, personKey, { today = kampalaDay(), limit = 40
   for (const r of own) out.push({ phone: r.phone, phone_key: r.phone_key, full_name: r.full_name, source_kind: 'own', source_label: `Own number · added by you${r.how_known ? ` · ${r.how_known}` : ''}`, reason: r.note || '', submission_id: r.id });
   if (task.queue_kind === 'new_agents') {
     const list = await safeRows(
-      `SELECT id, full_name, phone, phone_key, lead_source, list_day::text AS list_day FROM outreach_list_numbers
-        WHERE accepted IS TRUE AND person_key = $1 AND list_day <= $2::date ORDER BY list_day DESC, added_at LIMIT $3`,
+      // Earliest list day first (today's list before a batch loaded with a later day), then upload order.
+      `SELECT id, full_name, phone, phone_key, lead_source, list_day::text AS list_day, what_they_posted, list_source FROM outreach_list_numbers
+        WHERE accepted IS TRUE AND person_key = $1 AND list_day <= $2::date ORDER BY list_day ASC, added_at ASC, list_order ASC NULLS LAST LIMIT $3`,
       [personKey, today, limit]
     );
-    for (const r of list) out.push({ phone: r.phone, phone_key: r.phone_key, full_name: r.full_name, source_kind: 'list', source_label: `Your list ${r.list_day}${r.lead_source === 'found_online' ? ' · found online' : r.lead_source === 'staff_added' ? ' · added by you' : ''}`, list_number_id: r.id, found_online: r.lead_source === 'found_online' });
+    for (const r of list) out.push({ phone: r.phone, phone_key: r.phone_key, full_name: r.full_name, source_kind: 'list', source_label: `Your list ${r.list_day}${r.list_source ? ` · ${r.list_source.replace(/_/g, ' ')}` : ''}${r.lead_source === 'found_online' ? ' · found online' : r.lead_source === 'staff_added' ? ' · added by you' : ''}`, reason: r.what_they_posted ? `What they posted: ${r.what_they_posted}` : '', list_number_id: r.id, found_online: r.lead_source === 'found_online' });
     const prospects = await safeRows(
       `SELECT id, full_name, phone, phone_key, status, pitched_at, pitched_by_name, video_kind, metadata FROM agent_prospects
         WHERE COALESCE(do_not_contact, false) = false AND COALESCE(status, '') NOT IN ('signed_up', 'approved', 'registered')
@@ -624,11 +625,15 @@ async function historyFor(phoneKey) {
     `SELECT created_at, outcome, note, person_key FROM outreach_events WHERE phone_key = $1 AND kind = 'outcome' ORDER BY created_at DESC LIMIT 4`,
     [phoneKey]
   );
+  const listed = await safeRows(
+    `SELECT added_at, person_key, list_day::text AS list_day, what_they_posted, list_source FROM outreach_list_numbers
+      WHERE phone_key = $1 AND accepted IS TRUE ORDER BY added_at DESC LIMIT 2`, [phoneKey]);
   return [
     ...list.map((a) => (a.status === 'skipped'
       ? { at: a.wrapped_at || a.shown_at, by: a.person_key, what: 'skipped', note: a.skip_reason || '', task: a.task_key, skipped: true }
       : { at: a.wrapped_at, by: a.person_key, what: `${a.outcome.replace(/_/g, ' ')}${a.talk_s != null ? ` · ${a.talk_s}s` : ''}`, outcome: a.outcome, note: a.note || '', task: a.task_key, next_step: a.callback_at || null, next_text: a.next_step || '', summary: a.tx_summary || '' })),
-    ...events.map((e) => ({ at: e.created_at, by: e.person_key || '', what: `Outreach: ${String(e.outcome || '').replace(/_/g, ' ')}`, note: e.note || '', task: 'outreach' }))
+    ...events.map((e) => ({ at: e.created_at, by: e.person_key || '', what: `Outreach: ${String(e.outcome || '').replace(/_/g, ' ')}`, note: e.note || '', task: 'outreach' })),
+    ...listed.map((l) => ({ at: l.added_at, by: l.person_key || '', what: `Put on the list for ${l.list_day}${l.list_source ? ` · ${String(l.list_source).replace(/_/g, ' ')}` : ''}`, note: l.what_they_posted ? `What they posted: ${l.what_they_posted}` : '', task: 'outreach', list: true }))
   ].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 30);
 }
 

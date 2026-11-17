@@ -24083,8 +24083,12 @@ function staffPerfRender(scope) {
         <label class="text-xs font-semibold">For<select name="person_key" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm">${people.map((p) => `<option value="${adminAttr(p.key)}" ${p.key === streamPerson?.key ? "selected" : ""}>${adminEscape(p.name)}</option>`).join("")}</select></label>
         <label class="text-xs font-semibold">Day<input name="list_day" type="date" value="${adminAttr(data.today)}" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"></label>
         <div class="flex items-end"><button type="submit" class="w-full rounded-lg bg-emerald-700 text-white px-4 py-2 text-xs font-bold">Add to list</button></div>
-        <label class="text-xs font-semibold md:col-span-3">Paste numbers, one a line (name optional)<textarea name="text" rows="3" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="Kato Brian, 0772 …&#10;0701 …"></textarea></label>
-        ${state.lastPaste ? `<div class="md:col-span-3 text-xs" data-perf-paste-result><p class="font-bold">${state.lastPaste.summary.accepted} added to ${adminEscape(staffPerfName(data, state.lastPaste.person_key))}’s list${Object.keys(state.lastPaste.summary.refused).length ? `, ${Object.values(state.lastPaste.summary.refused).reduce((a, b) => a + b, 0)} refused` : ""}.</p>${state.lastPaste.lines.filter((l) => !l.accepted).map((l) => `<p class="text-red-800">✗ ${adminEscape(l.name || "")} ${adminEscape(l.phone_masked)} — ${adminEscape(l.refused)}</p>`).join("")}</div>` : ""}
+        <div class="md:col-span-3 rounded-xl border border-dashed border-emerald-300 bg-white p-2 flex flex-wrap items-center gap-2" data-perf-csv-box>
+          <label class="rounded-lg bg-gray-900 text-white px-3 py-2 text-xs font-bold cursor-pointer">⬆ Upload CSV<input type="file" accept=".csv,text/csv,text/plain" class="hidden" data-perf-csv onchange="staffPerfUploadCsv(this, '${scope}')"></label>
+          <span class="text-[11px] text-gray-600">The Companion’s file: <b>name, phone, what_they_posted, source</b> (header row). Same checks as pasting. The file is read once and not kept.</span>
+        </div>
+        <label class="text-xs font-semibold md:col-span-3">…or paste numbers, one a line (name optional)<textarea name="text" rows="3" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" placeholder="Kato Brian, 0772 …&#10;0701 …"></textarea></label>
+        ${state.lastPaste ? staffPerfPasteResult(data, state.lastPaste) : ""}
       </form>
     </section>
 
@@ -24213,6 +24217,46 @@ async function staffPerfSaveOutcome(event, id, reload) {
     await staffPerfReloadAfter(reload);
   } catch (error) {
     alert(error?.message || "Could not save that.");
+  }
+}
+
+function staffPerfPasteResult(data, r) {
+  const sum = r.summary || { accepted: 0, refused: {} };
+  const refused = Object.entries(sum.refused || {});
+  const total = refused.reduce((a, [, n]) => a + n, 0);
+  const labels = { duplicate_sent: "Already sent a film", duplicate_list: "Already on someone’s list", existing_agent: "Already an agent", do_not_contact: "Do not contact", invalid: "Not a phone number (invalid)" };
+  return `<div class="md:col-span-3 text-xs rounded-xl border border-gray-200 bg-white p-3" data-perf-paste-result>
+    <p class="font-black text-gray-900 text-sm">${sum.from === "csv" ? "CSV upload" : "Paste"} for ${adminEscape(staffPerfName(data, r.person_key))} · ${adminEscape(r.list_day || "")}${sum.rows ? ` · ${sum.rows} rows` : ""}</p>
+    <div class="flex flex-wrap gap-2 my-2">
+      <span class="rounded-lg bg-emerald-100 text-emerald-900 px-2 py-1 font-bold">✓ ${sum.accepted} added</span>
+      <span class="rounded-lg ${total ? "bg-red-100 text-red-900" : "bg-gray-100 text-gray-700"} px-2 py-1 font-bold">✗ ${total} refused</span>
+      <span class="rounded-lg ${sum.invalid ? "bg-amber-100 text-amber-900" : "bg-gray-100 text-gray-700"} px-2 py-1 font-bold">${sum.invalid || 0} invalid</span>
+    </div>
+    ${refused.length ? `<ul class="mb-1 text-gray-800">${refused.map(([k, n]) => `<li>• ${adminEscape(labels[k] || k)}: <b>${n}</b></li>`).join("")}</ul>` : ""}
+    <details${total && total <= 12 ? " open" : ""}><summary class="cursor-pointer font-bold text-gray-700">Refused numbers</summary>${(r.lines || []).filter((l) => !l.accepted).map((l) => `<p class="text-red-800">✗ ${adminEscape(l.name || "")} ${adminEscape(l.phone_masked)} — ${adminEscape(l.refused)}</p>`).join("") || `<p class="text-gray-500">None.</p>`}</details>
+  </div>`;
+}
+
+async function staffPerfUploadCsv(input, scope) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  if (file.size > 900000) { alert("That file is too big (max about 900 KB, 2000 rows)."); input.value = ""; return; }
+  const form = input.closest("form");
+  const data = Object.fromEntries(new FormData(form).entries());
+  try {
+    const csv = await file.text(); // read in memory only; nothing is stored
+    const res = await apiRequest("/api/admin/staff-performance/lists", {
+      method: "POST", headers: adminAuthHeaders(),
+      body: { person_key: data.person_key, list_day: data.list_day, csv, added_by_person: staffPerfMe() }
+    });
+    const state = staffPerfState(scope);
+    state.lastPaste = res?.data || null;
+    state.stream = data.person_key;
+    await staffPerfLoad(scope);
+  } catch (error) {
+    alert(error?.message || "Could not upload that file.");
+  } finally {
+    input.value = "";
   }
 }
 

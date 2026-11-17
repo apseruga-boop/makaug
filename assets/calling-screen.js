@@ -231,7 +231,7 @@
     '@media (max-width:1100px){#mkc-overlay.mkc-noscript .mkc-grid{grid-template-columns:minmax(0,1fr)}}',
     '@media (max-width:720px){#mkc-overlay.mkc-focus .mkc-grid{grid-template-columns:1fr}.mkc-wrapgrid,.mkc-wrapchecks{grid-template-columns:1fr}.mkc-comm small{display:none}.mkc-replies{grid-template-columns:1fr}}',
     '.mkc-splitsum{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.mkc-splitrows{display:flex;flex-direction:column;gap:6px}.mkc-splitrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.mkc-splitrow input[type=time]{width:110px}.mkc-splitrow select{min-width:170px}',
-    '.mkc-meetcard{background:#f0fdf4;border:2px solid #16a34a;border-radius:16px;padding:16px;color:#14532d}',
+    '.mkc-posted{font-size:14px;margin-top:4px;background:#f0f9ff;border:1px solid #bae6fd;color:#0c4a6e;border-radius:8px;padding:6px 8px;line-height:1.35}.mkc-meetcard{background:#f0fdf4;border:2px solid #16a34a;border-radius:16px;padding:16px;color:#14532d}',
     '.mkc-meetcard h3{margin:0;font-size:19px;font-weight:900;color:#14532d}',
     '.mkc-meetcard .mm-sub{margin:4px 0 14px;color:#166534;font-size:14px;line-height:1.4}',
     '.mkc-meetcard .mm-form{display:grid;grid-template-columns:minmax(150px,190px) minmax(220px,1fr) minmax(170px,240px) auto;gap:12px;align-items:end}',
@@ -829,11 +829,13 @@
       + '<span class="tag nohello">' + (c.calls_before ? 'Called ' + c.calls_before + '× before' : 'First call') + '</span>'
       + (c.skips_before ? '<span class="tag nohello">Skipped ' + c.skips_before + '×</span>' : '');
     if (!full) return '<div class="mkc-ctx" style="padding:6px 10px">' + tags + '</div>';
+    var posted = /^What they posted: /.test(c.reason || '') ? String(c.reason).replace(/^What they posted: /, '') : '';
     var list = h.map(function (x) {
       return '<li><b>' + esc(kDayTime(x.at)) + '</b> · ' + esc(personName(x.by)) + ' · <b>' + esc(x.skipped ? 'skipped' : x.what) + '</b>' + (x.note ? ' – ' + esc(x.note) : '') + (x.next_step ? ' <span class="mkc-good">→ next: call ' + esc(kDayTime(x.next_step)) + '</span>' : '') + '</li>';
     }).join('');
     return '<div class="mkc-ctx">' + tags
-      + '<div style="font-size:13px;margin-top:2px"><b>Where from:</b> ' + esc(c.source_label || '–') + (c.reason ? ' · <b>Why now:</b> ' + esc(c.reason) : '') + '</div>'
+      + '<div style="font-size:13px;margin-top:2px"><b>Where from:</b> ' + esc(c.source_label || '–') + (c.reason && !posted ? ' · <b>Why now:</b> ' + esc(c.reason) : '') + '</div>'
+      + (posted ? '<div class="mkc-posted" data-mkc-posted><b>What they posted:</b> ' + esc(posted) + '</div>' : '')
       + (c.last_call ? '<div style="font-size:14px;margin-top:4px;background:#fff7ed;border-radius:8px;padding:6px 8px"><b>Last call:</b> ' + esc(kDayTime(c.last_call.at)) + ' · ' + esc(c.last_call.by === S.person ? 'you' : personName(c.last_call.by)) + ' · <b>' + esc(String(c.last_call.outcome || '').replace(/_/g, ' ')) + '</b>' + (c.last_call.note ? ' – ' + esc(c.last_call.note) : '') + (c.last_call.next_text ? '<div><b>Next step set:</b> ' + esc(c.last_call.next_text) + '</div>' : '') + (c.last_call.summary ? '<div class="mkc-muted">Call notes: ' + esc(c.last_call.summary) + '</div>' : '') + '</div>' : '')
       + (c.best_time ? '<div style="font-size:13px;margin-top:4px">⏰ <b>Best time:</b> ' + (c.best_time.label ? esc(c.best_time.label) + ' · answered ' + c.best_time.answered + ' of ' + c.best_time.tries + ' calls' : 'no answer yet in ' + c.best_time.tries + ' tries (tried at ' + esc(c.best_time.missed_hours.map(function (h) { return pad(h) + ':00'; }).join(', ')) + ') – try another time of day') + '</div>' : '')
       + (c.said_hello ? '<div class="mkc-good" style="font-size:13px">Sent us Hello on WhatsApp ' + esc(kDayTime(c.said_hello.at)) + '</div>' : '')
