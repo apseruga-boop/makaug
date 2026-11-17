@@ -283,7 +283,9 @@ function maskedAttempt(a = {}) {
     transcript_summary: a.transcript ? a.transcript.summary || '' : null,
     skip_reason: a.skip_reason,
     checklist: a.checklist,
-    flags: a.flags || []
+    flags: a.flags || [],
+    login: a.actor_account || '',
+    session_id: a.session_id
   };
 }
 
@@ -412,7 +414,7 @@ async function openSession(id) {
 // Everything the screen reports: leaving it, breaks (lunch:45 = a 45-minute lunch),
 // idle (idle_end detail = idle ms), open/close and every button pressed.
 const IN_MEETING = 'in meeting';
-const EVENT_KINDS = new Set(['inbound_start', 'fs_exit', 'fs_enter', 'hidden', 'visible', 'break_start', 'break_end', 'kit_send', 'screen_open', 'screen_close', 'idle_start', 'idle_end', 'action', 'work_on', 'work_off', 'meeting_join', 'meeting_end', 'notes_start', 'notes_stop', 'notes_declined', 'notes_error', 'wa_share', 'housekeeping_on', 'housekeeping_off', 'auto_fallback']);
+const EVENT_KINDS = new Set(['inbound_start', 'fs_exit', 'fs_enter', 'hidden', 'visible', 'break_start', 'break_end', 'kit_send', 'screen_open', 'screen_close', 'idle_start', 'idle_end', 'action', 'work_on', 'work_off', 'meeting_join', 'meeting_end', 'notes_start', 'notes_stop', 'notes_declined', 'notes_error', 'wa_share', 'housekeeping_on', 'housekeeping_off', 'auto_fallback', 'route', 'work_off']);
 
 /**
  * Heartbeat from the screen: running totals (ms) and the events since the last
@@ -422,7 +424,9 @@ async function heartbeat(id, { totals = {}, events = [], now = new Date() } = {}
   const s = await openSession(id);
   const wall = Math.max(0, now.getTime() - new Date(s.started_at).getTime()) + 5000;
   const n = (v) => Math.max(0, Math.min(wall, Math.round(Number(v) || 0)));
-  const list = (Array.isArray(events) ? events : []).slice(0, 200).filter((e) => EVENT_KINDS.has(e?.kind));
+  // Unknown kinds are kept as an 'action' (kind:detail) so nothing the screen reports is lost silently.
+  const list = (Array.isArray(events) ? events : []).slice(0, 300).filter((e) => e && e.kind)
+    .map((e) => (EVENT_KINDS.has(e.kind) ? e : { ...e, kind: 'action', detail: `${String(e.kind).slice(0, 40)}:${String(e.detail || '')}` }));
   for (const e of list) {
     const at = e.at && !Number.isNaN(new Date(e.at).getTime()) ? new Date(Math.min(now.getTime(), Math.max(new Date(s.started_at).getTime(), new Date(e.at).getTime()))) : now;
     await db.query('INSERT INTO call_session_events (session_id, kind, detail, at) VALUES ($1, $2, $3, $4)', [id, e.kind, String(e.detail || '').slice(0, 200), at]);
@@ -1544,9 +1548,112 @@ async function evidence(personKey, day = kampalaDay()) {
     sessions: sessions.map((s) => ({ id: s.id, task_key: s.task_key, started_at: s.started_at, ended_at: s.ended_at, end_reason: s.end_reason, open_ms: Number(s.open_ms), focus_ms: Number(s.focus_ms), away_ms: Number(s.away_ms), break_ms: Number(s.break_ms), exit_count: s.exit_count, device: s.device, actor_account: s.actor_account })),
     events: events.map((e) => ({ session_id: e.session_id, kind: e.kind, detail: e.detail, at: e.at })),
     task_ms: taskTime(sessions, events),
-    summary: (() => { const sm = summarize(attempts, []); return { calls: sm.calls, connected: sm.connected, closes: sm.closes, talk_s: sm.talk_s, outcomes: sm.outcomes }; })(),
+    summary: (() => { const sm = summarize(attempts, []); return { calls: sm.calls, connected: sm.connected, closes: sm.closes, talk_s: sm.talk_s, outcomes: sm.outcomes, shown: sm.shown, skipped: sm.skipped }; })(),
+    logins: loginsUsed(sessions, attempts),
+    dropoffs: dropOffs(sessions, events, attempts),
+    audit: trackingAudit(sessions, events, attempts),
+    trends: await evidenceTrends(key),
     flag_labels: FLAG_LABELS
   };
+}
+
+// ---- Evidence trail v2: trends, drop-offs, logins and a tracking audit (pure helpers are tested) ----
+const LONG_GAP_MIN = 15;
+const LONG_AWAY_MIN = 5;
+const minutesBetween = (a, b) => Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60000);
+
+/** Which logins were used, so a shared login (e.g. Moderator 1) shows next to the caller the calls count for. */
+function loginsUsed(sessions = [], attempts = []) {
+  const m = new Map();
+  for (const s of sessions) { const k = s.actor_account || 'not recorded'; const v = m.get(k) || { login: k, sessions: 0, calls: 0 }; v.sessions += 1; m.set(k, v); }
+  for (const a of attempts) { if (a.status !== 'done') continue; const k = a.actor_account || 'not recorded'; const v = m.get(k) || { login: k, sessions: 0, calls: 0 }; v.calls += 1; m.set(k, v); }
+  return [...m.values()].sort((x, y) => y.calls - x.calls || y.sessions - x.sessions);
+}
+
+/** When and why work stopped: dropped sessions, closed pages, long time away, long gaps between calls, calls left without an outcome. */
+function dropOffs(sessions = [], events = [], attempts = [], now = new Date()) {
+  const out = [];
+  for (const s of sessions) {
+    const evs = events.filter((e) => String(e.session_id) === String(s.id)).sort((a, b) => new Date(a.at) - new Date(b.at));
+    if (s.end_reason === 'dropped') out.push({ at: s.ended_at || s.last_heartbeat_at, kind: 'dropped', title: 'Session dropped', why: `The screen stopped checking in (no signal for ${Math.round(DROPPED_AFTER_MS / 60000)}+ minutes): laptop asleep, browser closed or internet lost.`, session_id: s.id });
+    if (s.end_reason === 'replaced') out.push({ at: s.ended_at, kind: 'replaced', title: 'Session replaced', why: 'A new session was started (another tab or device), so this one was closed.', session_id: s.id });
+    let away = null; let onBreak = false;
+    for (const e of evs) {
+      if (e.kind === 'screen_close' && /page closed/.test(e.detail || '')) out.push({ at: e.at, kind: 'page_closed', title: 'Page closed', why: 'The calling page was closed or reloaded.', session_id: s.id });
+      if (e.kind === 'break_start') onBreak = true;
+      if (e.kind === 'break_end') onBreak = false;
+      if (e.kind === 'hidden' && e.detail !== IN_MEETING && !onBreak) away = e;
+      if (e.kind === 'visible' && away) {
+        const mins = minutesBetween(away.at, e.at);
+        if (mins >= LONG_AWAY_MIN) out.push({ at: away.at, kind: 'away', title: `Away from the screen ${mins} min`, why: away.detail === 'on a call' ? 'Switched away during a call.' : 'Switched to another window or app, not on a break.', minutes: mins, session_id: s.id });
+        away = null;
+      }
+    }
+    const done = attempts.filter((a) => String(a.session_id) === String(s.id)).sort((a, b) => new Date(a.shown_at) - new Date(b.shown_at));
+    for (let i = 1; i < done.length; i++) {
+      const prevEnd = done[i - 1].wrapped_at || done[i - 1].ended_at || done[i - 1].shown_at;
+      const mins = minutesBetween(prevEnd, done[i].shown_at);
+      if (mins < LONG_GAP_MIN) continue;
+      const breakIn = evs.some((e) => e.kind === 'break_start' && new Date(e.at) >= new Date(prevEnd) && new Date(e.at) <= new Date(done[i].shown_at));
+      const hk = evs.some((e) => e.kind === 'housekeeping_on' && new Date(e.at) >= new Date(prevEnd) && new Date(e.at) <= new Date(done[i].shown_at));
+      if (!breakIn && !hk) out.push({ at: prevEnd, kind: 'gap', title: `Long gap: ${mins} min between calls`, why: 'No call, break or housekeeping logged in between.', minutes: mins, session_id: s.id });
+    }
+  }
+  // One line per drop-off: a closed page that then dropped or was replaced is the same event.
+  for (let i = out.length - 1; i >= 0; i--) {
+    const d = out[i];
+    if (d.kind !== 'dropped' && d.kind !== 'replaced') continue;
+    const pc = out.find((x) => x.kind === 'page_closed' && x.session_id === d.session_id && Math.abs(new Date(d.at) - new Date(x.at)) < 5 * 60000);
+    if (pc) { pc.title = d.kind === 'dropped' ? 'Page closed, session dropped' : 'Page closed, then restarted'; pc.why = d.kind === 'dropped' ? 'The calling page was closed and did not come back.' : 'The page was closed or reloaded and a new session started straight after.'; out.splice(i, 1); }
+  }
+  for (const a of attempts) {
+    if (a.tapped_at && !['done', 'skipped'].includes(a.status)) out.push({ at: a.tapped_at, kind: 'no_outcome', title: 'Call with no outcome saved', why: a.status === 'abandoned' ? 'The session ended before the wrap-up was saved.' : 'Still open: wrap-up not saved yet.', attempt_id: a.id });
+  }
+  return out.sort((a, b) => new Date(a.at) - new Date(b.at));
+}
+
+/** Are we tracking everything? Each check says what is missing so gaps are visible. */
+function trackingAudit(sessions = [], events = [], attempts = []) {
+  const done = attempts.filter((a) => a.status === 'done');
+  const tapped = attempts.filter((a) => a.tapped_at);
+  const spoke = done.filter((a) => a.spoke);
+  const kinds = new Set(events.map((e) => e.kind));
+  const check = (label, missing, total, note = '') => ({ label, ok: missing === 0, missing, total, note });
+  return [
+    check('Every call has an outcome', tapped.filter((a) => !['done', 'skipped'].includes(a.status)).length, tapped.length),
+    check('Every tapped call has an end time', tapped.filter((a) => !a.ended_at && a.status !== 'calling').length, tapped.length),
+    check('Every call records the login used', done.filter((a) => !a.actor_account).length, done.length),
+    check('Every session records the login and device', sessions.filter((s) => !s.actor_account || !s.device).length, sessions.length),
+    check('Every session closed properly (not dropped)', sessions.filter((s) => s.end_reason === 'dropped').length, sessions.length, 'Dropped = no signal from the screen for 3+ minutes.'),
+    check('Talk time saved on connected calls', spoke.filter((a) => a.talk_s == null).length, spoke.length),
+    check('Screen focus tracked (switched away / came back)', sessions.length && !kinds.has('start') ? sessions.length : 0, sessions.length),
+    check('Script steps tracked on connected calls', spoke.length && !kinds.has('route') ? spoke.length : 0, spoke.length, 'Script answers are logged as steps.'),
+    check('Live notes on connected calls (laptop)', spoke.filter((a) => !a.transcript).length, spoke.length, 'Needs Chrome/Edge on the laptop and mic permission; off on phones.')
+  ];
+}
+
+/** Calls, talk time, conversations, closes and outcomes for the last days, weeks and months (Kampala time), oldest first. */
+async function evidenceTrends(personKey) {
+  const spans = { day: 14, week: 8, month: 6 };
+  const out = {};
+  for (const [unit, n] of Object.entries(spans)) {
+    const base = await rows(
+      `WITH b AS (SELECT generate_series(date_trunc('${unit}', now() AT TIME ZONE '${TZ}') - ($2::int - 1) * interval '1 ${unit}', date_trunc('${unit}', now() AT TIME ZONE '${TZ}'), interval '1 ${unit}') AS k)
+       SELECT to_char(b.k, 'YYYY-MM-DD') AS k,
+              COUNT(a.id) FILTER (WHERE a.status = 'done')::int AS calls,
+              COALESCE(SUM(a.talk_s) FILTER (WHERE a.status = 'done'), 0)::int AS talk_s,
+              COUNT(a.id) FILTER (WHERE a.status = 'done' AND a.spoke)::int AS connected,
+              COUNT(a.id) FILTER (WHERE a.status = 'done' AND a.is_close)::int AS closes
+         FROM b LEFT JOIN call_attempts a ON a.person_key = $1 AND date_trunc('${unit}', COALESCE(a.tapped_at, a.shown_at) AT TIME ZONE '${TZ}') = b.k
+        GROUP BY b.k ORDER BY b.k`, [personKey, n]);
+    const outs = await rows(
+      `SELECT to_char(date_trunc('${unit}', COALESCE(tapped_at, shown_at) AT TIME ZONE '${TZ}'), 'YYYY-MM-DD') AS k, outcome, COUNT(*)::int AS n
+         FROM call_attempts WHERE person_key = $1 AND status = 'done'
+          AND COALESCE(tapped_at, shown_at) >= (date_trunc('${unit}', now() AT TIME ZONE '${TZ}') - ($2::int - 1) * interval '1 ${unit}') AT TIME ZONE '${TZ}'
+        GROUP BY 1, 2`, [personKey, n]);
+    out[unit] = base.map((r) => ({ ...r, outcomes: Object.fromEntries(outs.filter((o) => o.k === r.k).map((o) => [o.outcome, o.n])) }));
+  }
+  return out;
 }
 
 async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
@@ -1574,6 +1681,10 @@ async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
 }
 
 module.exports = {
+  dropOffs,
+  trackingAudit,
+  loginsUsed,
+  evidenceTrends,
   taskTime,
   internationalNumbers,
   roadTo1000,
