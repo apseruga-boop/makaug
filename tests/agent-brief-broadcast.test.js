@@ -15,14 +15,17 @@ const CAPTION = [
 ].join('\n');
 const VIDEO = 'https://makaug.com/assets/marketing/morning-brief/makaug-morning-brief-2026-11-12-abcd1234.mp4';
 
-// A database with approved agents, one STOP, and whatever is already queued.
-function fakeDb({ agents, optedOut = [], queuedAgentIds = [], heldRows = 0 } = {}) {
+// A database with approved agents, one STOP, whatever is already queued, and
+// who has written to us lately (everyone, unless the test says otherwise).
+function fakeDb({ agents, optedOut = [], queuedAgentIds = [], heldRows = 0, wroteLately = null } = {}) {
   const calls = [];
+  const lately = (wroteLately || agents.map((a) => a.number)).map((n) => String(n).replace(/\D/g, '').slice(-9));
   return {
     calls,
     query: async (sql, params = []) => {
       calls.push({ sql, params });
       if (/FROM agents/.test(sql)) return { rows: agents };
+      if (/FROM whatsapp_messages/.test(sql)) return { rows: (params[0] || []).filter((key) => lately.includes(key)).map((key) => ({ key })) };
       if (/FROM whatsapp_user_profiles/.test(sql)) return { rows: optedOut.map((phone) => ({ phone })) };
       if (/SELECT DISTINCT metadata->>'agent_id'/.test(sql)) return { rows: queuedAgentIds.map((agent_id) => ({ agent_id })) };
       if (/UPDATE outbound_message_queue/.test(sql)) return { rowCount: heldRows, rows: Array.from({ length: heldRows }, (_, i) => ({ id: i + 1 })) };
@@ -66,6 +69,20 @@ test('recipients: approved agents, never Promise, not anyone who replied STOP, n
   assert.deepStrictEqual(skipped.map((r) => [r.id, r.reason]).sort(), [['a2', 'never_send'], ['a4', 'replied_stop']]);
 });
 
+test('only agents who wrote to us in the last seven days get it; whoever writes is back on (17 Nov 2026)', async () => {
+  const db = fakeDb({ agents: AGENTS, wroteLately: ['0772 111 001'] });
+  const { recipients, skipped } = await svc.listRecipients(db, { excludeKeys: ['780863394'] });
+  assert.deepStrictEqual(recipients.map((r) => r.id), ['a1']);
+  assert.deepStrictEqual(skipped.map((r) => [r.id, r.reason]).sort(), [['a2', 'never_send'], ['a3', 'no_reply_in_7_days'], ['a4', 'no_reply_in_7_days']]);
+  const q = db.calls.find((c) => /FROM whatsapp_messages/.test(c.sql));
+  assert.match(q.sql, /direction = 'inbound'/);
+  assert.match(q.sql, /<> 'call'/, 'a call is not writing');
+  assert.match(q.sql, /NOW\(\) - \(\$2 \|\| ' days'\)::interval/);
+  assert.strictEqual(q.params[1], '7');
+  assert.strictEqual(svc.REPLIED_WITHIN_DAYS, 7);
+  assert.ok(svc.STAGGER_MS >= 120000, 'two minutes apart at least');
+});
+
 test('"never opted in" is not "said STOP": only a recorded opt-out leaves an agent out', async () => {
   const db = fakeDb({ agents: AGENTS, optedOut: ['+256703111004'] });
   await svc.listRecipients(db, { excludeKeys: ['780863394'] });
@@ -75,14 +92,14 @@ test('"never opted in" is not "said STOP": only a recorded opt-out leaves an age
   assert.match(q.sql, /marketing_opt_out_at IS NOT NULL/);
 });
 
-test('schedule: one message per agent at 7:00am, 15 seconds apart, never twice', async () => {
+test('schedule: one message per agent from 7:00am, about two minutes apart and never on the dot, never twice', async () => {
   const db = fakeDb({ agents: AGENTS, queuedAgentIds: ['a3'] });
   const sent = [];
   const queue = async (msg) => { sent.push(msg); return { id: `q${sent.length}` }; };
   const now = new Date('2026-11-11T15:00:00Z');
   const r = await svc.scheduleBrief({
     db, queue, date: '2026-11-12', slot: 'morning', videoUrl: VIDEO, caption: CAPTION,
-    source: 'whatsapp_runtime', actorId: 'admin', excludeKeys: ['780863394'], now
+    source: 'whatsapp_runtime', actorId: 'admin', excludeKeys: ['780863394'], now, jitter: () => 0.5
   });
   assert.strictEqual(r.key, 'agent_brief:2026-11-12:morning');
   assert.strictEqual(r.send_at, '2026-11-12T04:00:00.000Z');
@@ -90,7 +107,8 @@ test('schedule: one message per agent at 7:00am, 15 seconds apart, never twice',
   assert.strictEqual(r.already_queued, 1);
   assert.deepStrictEqual(r.skipped.map((s) => s.id), ['a2']);
   assert.deepStrictEqual(sent.map((m) => m.recipient), ['256772111001', '256703111004']);
-  assert.deepStrictEqual(sent.map((m) => new Date(m.sendAt).toISOString()), ['2026-11-12T04:00:00.000Z', '2026-11-12T04:00:15.000Z']);
+  // 120 seconds, plus up to 30 more chosen at random (here half of it).
+  assert.deepStrictEqual(sent.map((m) => new Date(m.sendAt).toISOString()), ['2026-11-12T04:00:00.000Z', '2026-11-12T04:02:15.000Z']);
   for (const m of sent) {
     assert.strictEqual(m.mediaType, 'video');
     assert.strictEqual(m.mediaUrl, VIDEO);
