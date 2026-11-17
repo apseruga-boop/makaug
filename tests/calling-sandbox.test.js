@@ -53,7 +53,7 @@ test('no real side effects from the practice account', { skip: !DB && 'set CALLI
   await db.query("DELETE FROM call_number_submissions WHERE person_key = 'arthurtest' AND status = 'practice'");
   const before = await count();
   const roadBefore = await c.roadTo1000();
-  const s = (await c.startSession({ personKey: 'arthurtest', taskKey: 'new_agents', device: 'laptop', actorAccount: 'Arthur (test)' })).session;
+  const s = (await c.startSession({ personKey: 'arthurtest', taskKey: 'new_agents', device: 'laptop', actorAccount: 'Arthur (test)', isKing: true })).session;
   const seen = [];
   let a = null;
   for (let i = 0; i < 4; i += 1) {

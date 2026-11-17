@@ -379,10 +379,17 @@ async function closeSession(id, reason, { at = new Date() } = {}) {
   return s;
 }
 
-async function startSession({ personKey, taskKey, device = '', actorAccount = '', actorUserId = '', now = new Date() } = {}) {
+async function startSession({ personKey, taskKey, device = '', actorAccount = '', actorUserId = '', isKing = false, now = new Date() } = {}) {
   const callers = await loadCallers();
   const person = callers.find((p) => p.key === cleanKey(personKey));
   if (!person) throw httpError(400, 'Pick who is calling.');
+  if (!isKing) {
+    // A caller's own login only calls as them; the practice account is only for its own login (or King),
+    // so real calls from a shared login can never land on "Arthur (test)" and go uncounted.
+    const me = callers.find((p) => p.user_id && actorUserId && String(p.user_id) === String(actorUserId));
+    if (me && me.key !== person.key) throw httpError(403, `You are signed in as ${me.name}. Calls from this login go to ${me.name}.`);
+    if (!me && person.sandbox) throw httpError(403, `${person.name} is the practice account: its calls are not counted. Pick your own name, or better, sign in with your own login.`);
+  }
   const task = await loadTask(taskKey);
   await tidy(now);
   for (const s of await rows('SELECT id FROM call_sessions WHERE person_key = $1 AND ended_at IS NULL', [person.key])) await closeSession(s.id, 'replaced', { at: now });
@@ -1451,7 +1458,8 @@ async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
   const me = callers.find((p) => p.user_id && userId && String(p.user_id) === String(userId)) || null;
   return {
     tasks: tasks.map((t) => ({ key: t.key, name: t.name, description: t.description, queue_kind: t.queue_kind, checklist: t.checklist, outcomes: t.outcomes, script_variants: t.script_variants })),
-    callers: callers.map((p) => ({ key: p.key, name: p.name, sandbox: Boolean(p.sandbox) || undefined })),
+    // The practice account is offered only to King and to its own login.
+    callers: callers.filter((p) => !p.sandbox || isKing || (me && me.key === p.key)).map((p) => ({ key: p.key, name: p.name, sandbox: Boolean(p.sandbox) || undefined })),
     locked_person: me ? me.key : null,
     sandbox: Boolean(me && me.sandbox),
     scripts: { variants: scripts.VARIANTS, objections: scripts.OBJECTIONS, greetings: scripts.GREETINGS, luganda_status: 'Ronald to check', routes: callRoutes.ROUTES, pickup: callRoutes.PICKUP },
