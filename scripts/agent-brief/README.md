@@ -39,5 +39,5 @@ The output is 1080×1920 at 30 fps and 30 seconds long: a 2-second title card, f
 
 1. Add the video under `assets/marketing/morning-brief/` with a random suffix, and ship it.
 2. `POST /api/admin/agent-broadcast/brief/preview` with `{ date, slot, video_url, caption, to: [Arthur, Ronald] }` sends it to them first.
-3. `POST /api/admin/agent-broadcast/brief/schedule` with `{ date, slot, video_url, caption, confirm: "SEND_TO_ALL_AGENTS" }` sends it to every approved agent. A morning brief waits in the queue until 7:00am Kampala time, and the messages go 15 seconds apart. Agents who replied STOP are left out, and so is anyone Arthur said never to message. No agent gets the same brief twice.
+3. `POST /api/admin/agent-broadcast/brief/schedule` with `{ date, slot, video_url, caption, confirm: "SEND_TO_ALL_AGENTS" }` sends it to every approved agent who has written to us in the last seven days (an agent who goes quiet drops off, and is back the day they write). A morning brief waits in the queue until 7:00am Kampala time, and the messages go about two minutes apart. Agents who replied STOP are left out, and so is anyone Arthur said never to message. No agent gets the same brief twice.
 4. `GET /api/admin/agent-broadcast/brief?date=…&slot=…` shows who it goes to and where it stands. `POST /api/admin/agent-broadcast/brief/hold` withdraws whatever has not gone yet.

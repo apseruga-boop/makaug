@@ -11,14 +11,16 @@
  *
  * The video and caption are made outside the server (scripts/agent-brief) and the
  * video is served from makaug.com. This file decides who gets a brief and when:
- *   - every approved agent with a WhatsApp number, so new agents are included the
- *     day they are approved;
+ *   - every approved agent with a WhatsApp number who has written to us in the
+ *     last seven days (AGENT_BRIEF_REPLIED_WITHIN_DAYS), so an agent who goes
+ *     quiet drops off and is back the day they write again;
  *   - not anyone who replied STOP (whatsapp_user_profiles: opted out, with the time they said it);
  *   - not the agents Arthur said never to message (NEVER_SEND);
  *   - never twice: one message per agent per brief, keyed by date and slot;
  *   - at a set time. The queue's next_attempt_at holds each message until then, so
  *     a Morning Brief goes at 7:00am whether or not anyone is at a computer. The
- *     sends are 15 seconds apart.
+ *     sends are about two minutes apart (AGENT_BRIEF_STAGGER_SECONDS), each a
+ *     little later or sooner than the last, never on the dot.
  * Until it goes, a brief can be held: hold() withdraws every message still waiting.
  */
 
@@ -34,7 +36,13 @@ const SLOTS = Object.freeze(['morning', 'afternoon', 'evening']);
 const NEVER_SEND = Object.freeze(['promise ahimbisibwe']);
 const KAMPALA_UTC_OFFSET_HOURS = 3; // East Africa Time has no daylight saving.
 const MORNING_HOUR = 7;
-const STAGGER_MS = 15 * 1000;
+// 17 Nov 2026: five briefs went out 15 seconds apart at 7:00am, and the number
+// was restricted for six hours. The brief now goes only to agents who have
+// written to us in the last seven days (Arthur's rule: whoever answers is back
+// on the list), about two minutes apart, never on the dot.
+const REPLIED_WITHIN_DAYS = Math.max(1, Number(process.env.AGENT_BRIEF_REPLIED_WITHIN_DAYS) || 7);
+const STAGGER_MS = Math.max(15, Number(process.env.AGENT_BRIEF_STAGGER_SECONDS) || 120) * 1000;
+const JITTER_MS = 30 * 1000;
 const MAX_AHEAD_MS = 48 * 60 * 60 * 1000;
 const HELD_ERROR = 'brief_held_by_admin';
 const CAPTION_MAX = 1024; // WhatsApp's limit for a caption
@@ -160,10 +168,27 @@ async function optedOutKeys(db) {
   return new Set(rows.map((row) => phoneKey(row.phone)).filter((key) => key.length === 9));
 }
 
+/** The agents (by the last nine digits of their number) who wrote to us in the last `days` days. A call is not writing. */
+async function repliedRecentlyKeys(db, keys = [], days = REPLIED_WITHIN_DAYS) {
+  const wanted = [...new Set((keys || []).map(phoneKey).filter((key) => key.length === 9))];
+  if (!wanted.length) return new Set();
+  const rows = (await db.query(
+    `SELECT DISTINCT RIGHT(regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g'), 9) AS key
+       FROM whatsapp_messages
+      WHERE direction = 'inbound'
+        AND COALESCE(message_type, '') <> 'call'
+        AND created_at > NOW() - ($2 || ' days')::interval
+        AND RIGHT(regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g'), 9) = ANY($1::text[])`,
+    [wanted, String(days)]
+  )).rows;
+  return new Set(rows.map((row) => String(row.key || '')));
+}
+
 /** Who gets a brief, and who does not and why. */
 async function listRecipients(db, { excludeKeys = [], excludeAgentIds = [] } = {}) {
   const all = await agentHowToPost.listRecipients(db, { excludeKeys });
   const optedOut = await optedOutKeys(db);
+  const recent = await repliedRecentlyKeys(db, all.map((row) => row.number));
   const excluded = new Set((excludeAgentIds || []).map(String));
   const recipients = [];
   const skipped = [];
@@ -171,6 +196,7 @@ async function listRecipients(db, { excludeKeys = [], excludeAgentIds = [] } = {
     if (NEVER_SEND.includes(cleanName(row.name))) skipped.push({ ...row, reason: 'never_send' });
     else if (excluded.has(String(row.id))) skipped.push({ ...row, reason: 'excluded' });
     else if (optedOut.has(phoneKey(row.number))) skipped.push({ ...row, reason: 'replied_stop' });
+    else if (!recent.has(phoneKey(row.number))) skipped.push({ ...row, reason: `no_reply_in_${REPLIED_WITHIN_DAYS}_days` });
     else recipients.push(row);
   }
   return { recipients, skipped };
@@ -201,7 +227,7 @@ function sendTime({ date, slot, sendAt, now }) {
 }
 
 /**
- * Queue the brief for every recipient, to go at the send time, 15 seconds apart.
+ * Queue the brief for every recipient, to go at the send time, about two minutes apart.
  * `queue` is queueWhatsappWebBridgeMessage, passed in so tests can stub it.
  */
 async function scheduleBrief({
@@ -216,7 +242,8 @@ async function scheduleBrief({
   actorId,
   excludeKeys = [],
   excludeAgentIds = [],
-  now = new Date()
+  now = new Date(),
+  jitter = Math.random
 }) {
   const key = briefKey({ date, slot });
   const s = String(slot || 'morning').trim().toLowerCase();
@@ -232,7 +259,7 @@ async function scheduleBrief({
       results.push({ id: agent.id, name: agent.name, status: 'already_queued' });
       continue;
     }
-    const goesAt = new Date(at.getTime() + slotIndex * STAGGER_MS);
+    const goesAt = new Date(at.getTime() + slotIndex * STAGGER_MS + (slotIndex ? Math.round(jitter() * JITTER_MS) : 0));
     slotIndex += 1;
     try {
       const row = await queue({
@@ -341,6 +368,9 @@ module.exports = {
   SLOTS,
   NEVER_SEND,
   STAGGER_MS,
+  JITTER_MS,
+  REPLIED_WITHIN_DAYS,
+  repliedRecentlyKeys,
   HELD_ERROR,
   briefKey,
   kampalaTime,
