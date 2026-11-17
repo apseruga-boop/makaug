@@ -249,7 +249,7 @@
     '@media (max-width:1100px){#mkc-overlay.mkc-noscript .mkc-grid{grid-template-columns:minmax(0,1fr)}}',
     '@media (max-width:720px){#mkc-overlay.mkc-focus .mkc-grid{grid-template-columns:1fr}.mkc-wrapgrid,.mkc-wrapchecks{grid-template-columns:1fr}.mkc-comm small{display:none}.mkc-replies{grid-template-columns:1fr}}',
     '.mkc-splitsum{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.mkc-splitrows{display:flex;flex-direction:column;gap:6px}.mkc-splitrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.mkc-splitrow input[type=time]{width:110px}.mkc-splitrow select{min-width:170px}',
-    '.mkc-posted{font-size:14px;margin-top:4px;background:#f0f9ff;border:1px solid #bae6fd;color:#0c4a6e;border-radius:8px;padding:6px 8px;line-height:1.35}.mkc-wabtn{background:#16a34a!important;color:#fff!important;border-color:#16a34a!important;font-weight:800}.mkc-hitchip{background:#10b981;color:#fff;border-radius:99px;padding:4px 10px;font-weight:800;font-size:12px;white-space:nowrap}.mkc-intlchip{background:#334155;color:#e2e8f0;border-radius:99px;padding:4px 10px;font-size:11px;white-space:nowrap}.mkc-mode.dry i{background:#94a3b8!important}.mkc-fellback{background:#fef3c7;border:1px solid #fde68a;color:#78350f;border-radius:10px;padding:6px 10px;margin:0 0 6px;font-size:13px}.mkc-sugg{background:#eef2ff;color:#3730a3;border-radius:99px;padding:2px 4px 2px 10px;font-size:12px;margin-left:8px}.mkc-ev2 h5{margin:0 0 6px;font-size:13px}.mkc-evgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:10px;margin-top:10px}.mkc-evcard{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:10px}.mkc-evsec{margin:6px 0;font-size:13px}.mkc-chart{width:100%;height:auto;display:block}.mkc-oncall{cursor:pointer;stroke-width:1.5}.mkc-evbarswrap{overflow-x:auto;-webkit-overflow-scrolling:touch}@media(max-width:640px){.mkc-evbars{min-width:560px}}.mkc-evkpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.mkc-evkpi{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:8px 10px}.mkc-evkpi .v{font-size:20px;font-weight:900}.mkc-evkpi .l{font-size:12px;color:#64748b}.mkc-evkpi .s{margin-top:2px}@media(max-width:640px){.mkc-evkpis{grid-template-columns:repeat(2,minmax(0,1fr))}}.mkc-trend{font-size:12px;font-weight:800;margin-left:4px}.mkc-trend.up{color:#16a34a}.mkc-trend.down{color:#dc2626}.mkc-trend.flat{color:#64748b}.mkc-legs{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;font-size:11px;color:#475569}.mkc-leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}.mkc-evtl{list-style:none;margin:0;padding:0;font-size:13px;max-height:320px;overflow:auto}.mkc-evtl li{padding:4px 0;border-bottom:1px solid #f1f5f9}.mkc-evtl li.warn,.mkc-evtl li.bad{color:#b45309}.mkc-evtl li.bad{color:#b91c1c}.mkc-evtl ul{margin:4px 0 0 16px;padding:0;list-style:disc}.mkc-audit{list-style:none;margin:0;padding:0;font-size:13px}.mkc-audit li{padding:3px 0}.mkc-flag{background:#fee2e2;color:#991b1b;border-radius:6px;padding:1px 6px;font-size:12px;font-weight:700}.mkc-table tr.bad td{background:#fff1f2}.mkc-callhelp{margin-top:10px;text-align:left;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:8px 12px;font-size:13px;color:#1e3a8a;line-height:1.4}.mkc-callhelp summary{cursor:pointer;font-weight:800}.mkc-callhelp ol{margin:4px 0 6px 22px;padding:0;list-style:decimal}.mkc-callhelp li{display:list-item}.mkc-callhelp li{margin:2px 0}.mkc-callhelp p{margin:6px 0 0}.mkc-meetcard{background:#f0fdf4;border:2px solid #16a34a;border-radius:16px;padding:16px;color:#14532d}',
+    '.mkc-posted{font-size:14px;margin-top:4px;background:#f0f9ff;border:1px solid #bae6fd;color:#0c4a6e;border-radius:8px;padding:6px 8px;line-height:1.35}.mkc-wabtn{background:#16a34a!important;color:#fff!important;border-color:#16a34a!important;font-weight:800}.mkc-hitchip{background:#10b981;color:#fff;border-radius:99px;padding:4px 10px;font-weight:800;font-size:12px;white-space:nowrap}.mkc-intlchip{background:#334155;color:#e2e8f0;border-radius:99px;padding:4px 10px;font-size:11px;white-space:nowrap}.mkc-mode.dry i{background:#94a3b8!important}.mkc-fellback{background:#fef3c7;border:1px solid #fde68a;color:#78350f;border-radius:10px;padding:6px 10px;margin:0 0 6px;font-size:13px}.mkc-sugg{background:#eef2ff;color:#3730a3;border-radius:99px;padding:2px 4px 2px 10px;font-size:12px;margin-left:8px}.mkc-ev2 h5{margin:0 0 6px;font-size:13px}.mkc-evgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:10px;margin-top:10px}.mkc-evcard{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:10px}.mkc-evsec{margin:6px 0;font-size:13px}.mkc-chart{width:100%;height:auto;display:block}.mkc-oncall{pointer-events:none}.mkc-hit{cursor:pointer}.mkc-evbarsbox{position:relative}.mkc-evtip{position:absolute;left:0;top:0;z-index:5;pointer-events:none;transition:none;will-change:transform;background:#0f172a;color:#fff;font-size:12px;font-weight:700;line-height:1.3;padding:6px 8px;border-radius:8px;max-width:300px;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.25)}.mkc-evtip[hidden]{display:none}.mkc-evbarswrap{overflow-x:auto;-webkit-overflow-scrolling:touch}@media(max-width:640px){.mkc-evbars{min-width:560px}}.mkc-evkpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.mkc-evkpi{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:8px 10px}.mkc-evkpi .v{font-size:20px;font-weight:900}.mkc-evkpi .l{font-size:12px;color:#64748b}.mkc-evkpi .s{margin-top:2px}@media(max-width:640px){.mkc-evkpis{grid-template-columns:repeat(2,minmax(0,1fr))}}.mkc-trend{font-size:12px;font-weight:800;margin-left:4px}.mkc-trend.up{color:#16a34a}.mkc-trend.down{color:#dc2626}.mkc-trend.flat{color:#64748b}.mkc-legs{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;font-size:11px;color:#475569}.mkc-leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}.mkc-evtl{list-style:none;margin:0;padding:0;font-size:13px;max-height:320px;overflow:auto}.mkc-evtl li{padding:4px 0;border-bottom:1px solid #f1f5f9}.mkc-evtl li.warn,.mkc-evtl li.bad{color:#b45309}.mkc-evtl li.bad{color:#b91c1c}.mkc-evtl ul{margin:4px 0 0 16px;padding:0;list-style:disc}.mkc-audit{list-style:none;margin:0;padding:0;font-size:13px}.mkc-audit li{padding:3px 0}.mkc-flag{background:#fee2e2;color:#991b1b;border-radius:6px;padding:1px 6px;font-size:12px;font-weight:700}.mkc-table tr.bad td{background:#fff1f2}.mkc-callhelp{margin-top:10px;text-align:left;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:8px 12px;font-size:13px;color:#1e3a8a;line-height:1.4}.mkc-callhelp summary{cursor:pointer;font-weight:800}.mkc-callhelp ol{margin:4px 0 6px 22px;padding:0;list-style:decimal}.mkc-callhelp li{display:list-item}.mkc-callhelp li{margin:2px 0}.mkc-callhelp p{margin:6px 0 0}.mkc-meetcard{background:#f0fdf4;border:2px solid #16a34a;border-radius:16px;padding:16px;color:#14532d}',
     '.mkc-meetcard h3{margin:0;font-size:19px;font-weight:900;color:#14532d}',
     '.mkc-meetcard .mm-sub{margin:4px 0 14px;color:#166534;font-size:14px;line-height:1.4}',
     '.mkc-meetcard .mm-form{display:grid;grid-template-columns:minmax(150px,190px) minmax(220px,1fr) minmax(170px,240px) auto;gap:12px;align-items:end}',
@@ -2737,37 +2737,110 @@
     return '<div class="mkc-row" style="margin-top:6px;gap:6px;flex-wrap:wrap" data-k-oncallsum><span class="mkc-pill">📞 ' + m.calls + ' call' + (m.calls === 1 ? '' : 's') + '</span><span class="mkc-pill">🗣 talk ' + hm(m.talk_s * 1000) + '</span>'
       + '<span class="mkc-pill">⏱ average gap ' + (m.avg_gap_s == null ? '–' : hm(m.avg_gap_s * 1000)) + '</span><span class="mkc-pill' + (m.longest_gap_s >= 900 ? ' warn' : '') + '">⏳ longest gap ' + (m.longest_gap_s == null ? '–' : hm(m.longest_gap_s * 1000) + ' (before ' + kTime(m.longest_gap_before) + ')') + '</span><span class="mkc-muted" style="font-size:11px">Gaps: from one call ending to the next Call now tap; breaks not counted.</span></div>';
   }
-  // Session bars: green = on the screen, amber = switched away, grey = break, red end = dropped.
+  // Session bars: green = on the screen, amber = switched away, grey = break, red end = dropped, blue = on a call.
+  // Details come from an in-memory list (K.evTips) shown by one delegated pointer handler (bindEvBars): no per-element
+  // listeners, no native <title> delay, no fetch, no re-render on hover.
   function sessionBars(e) {
-    var ss = e.sessions || []; if (!ss.length) return '<p class="mkc-muted">No sessions today.</p>';
+    var ss = e.sessions || []; K.evTips = []; K.evGeo = {};
+    if (!ss.length) return '<p class="mkc-muted">No sessions today.</p>';
+    var tip = function (t) { K.evTips.push(t); return K.evTips.length - 1; };
     var t0 = Math.min.apply(null, ss.map(function (s) { return new Date(s.started_at).getTime(); }));
     var t1 = Math.max.apply(null, ss.map(function (s) { return new Date(s.ended_at || Date.now()).getTime(); }));
     t0 = Math.floor(t0 / 3600000) * 3600000; t1 = Math.max(Math.ceil(t1 / 3600000) * 3600000, t0 + 3600000);
     var W = 560, L = 16, R = 16, row = 18, H = ss.length * row + 26; var X = function (t) { return L + (W - L - R) * (t - t0) / (t1 - t0); };
-    var ticks = ''; for (var h = t0; h <= t1; h += 3600000) ticks += '<line x1="' + X(h).toFixed(1) + '" y1="0" x2="' + X(h).toFixed(1) + '" y2="' + (H - 16) + '" stroke="#f1f5f9"/><text x="' + X(h).toFixed(1) + '" y="' + (H - 4) + '" font-size="9" text-anchor="middle" fill="#64748b">' + esc(kTime(new Date(h).toISOString())) + '</text>';
+    var f = function (v) { return v.toFixed(1); };
+    var ticks = ''; for (var h = t0; h <= t1; h += 3600000) ticks += '<line x1="' + f(X(h)) + '" y1="0" x2="' + f(X(h)) + '" y2="' + (H - 16) + '" stroke="#f1f5f9"/><text x="' + f(X(h)) + '" y="' + (H - 4) + '" font-size="9" text-anchor="middle" fill="#64748b">' + esc(kTime(new Date(h).toISOString())) + '</text>';
+    var allCalls = (e.on_call && e.on_call.calls) || [];
+    var hits = '';
+    // Busy day: widen the chart (it scrolls sideways) so most calls get at least 8 px to land on.
+    var starts = {}; allCalls.forEach(function (c) { (starts[c.session_id] = starts[c.session_id] || []).push(X(new Date(c.from).getTime())); });
+    var gapsU = []; Object.keys(starts).forEach(function (k) { var a2 = starts[k].sort(function (p1, p2) { return p1 - p2; }); for (var gi = 1; gi < a2.length; gi++) gapsU.push(a2[gi] - a2[gi - 1]); });
+    gapsU.sort(function (p1, p2) { return p1 - p2; });
+    var p10 = gapsU.length ? gapsU[Math.floor(gapsU.length * 0.1)] : 99;
+    var minW = Math.min(3200, Math.max(560, Math.ceil(W * 8 / Math.max(p10, 0.1))));
+    var wide = minW > 740;
+    // A wide chart is drawn at its real pixel size (1 unit = 1 px): rows and labels keep their height.
+    if (wide) { W = minW; ticks = ''; for (var h2 = t0; h2 <= t1; h2 += 3600000) ticks += '<line x1="' + f(X(h2)) + '" y1="0" x2="' + f(X(h2)) + '" y2="' + (H - 16) + '" stroke="#f1f5f9"/><text x="' + f(X(h2)) + '" y="' + (H - 4) + '" font-size="9" text-anchor="middle" fill="#64748b">' + esc(kTime(new Date(h2).toISOString())) + '</text>'; for (var h3 = t0 + 1800000; h3 < t1; h3 += 3600000) ticks += '<text x="' + f(X(h3)) + '" y="' + (H - 4) + '" font-size="8" text-anchor="middle" fill="#94a3b8">' + esc(kTime(new Date(h3).toISOString())) + '</text>'; }
     var bars = ss.map(function (s, i) {
       var a = new Date(s.started_at).getTime(); var b = new Date(s.ended_at || Date.now()).getTime(); var y = i * row + 4;
-      var segs = '<rect x="' + X(a).toFixed(1) + '" y="' + y + '" width="' + Math.max(2, X(b) - X(a)).toFixed(1) + '" height="14" rx="3" fill="#22c55e"><title>' + esc(kTime(s.started_at) + '–' + (s.ended_at ? kTime(s.ended_at) : 'now') + ' · ' + (s.device || '') + ' · login ' + (s.actor_account || '?')) + '</title></rect>';
+      var segs = '<rect x="' + f(X(a)) + '" y="' + y + '" width="' + f(Math.max(2, X(b) - X(a))) + '" height="14" rx="3" fill="#22c55e" data-tip="' + tip('Session ' + kTime(s.started_at) + '–' + (s.ended_at ? kTime(s.ended_at) : 'now') + ' · ' + (s.device || '') + ' · login ' + (s.actor_account || '?')) + '"/>';
       var evs = (e.events || []).filter(function (x) { return x.session_id === s.id; }); var away = null; var brk = null;
       evs.forEach(function (x) {
         var t = new Date(x.at).getTime();
         if (x.kind === 'hidden' && x.detail !== 'in meeting') away = t;
-        if (x.kind === 'visible' && away != null) { segs += '<rect x="' + X(away).toFixed(1) + '" y="' + y + '" width="' + Math.max(1.5, X(t) - X(away)).toFixed(1) + '" height="14" fill="#f59e0b"><title>Away ' + hm(t - away) + '</title></rect>'; away = null; }
+        if (x.kind === 'visible' && away != null) { segs += '<rect x="' + f(X(away)) + '" y="' + y + '" width="' + f(Math.max(1.5, X(t) - X(away))) + '" height="14" fill="#f59e0b" data-tip="' + tip('Switched away ' + kTime(new Date(away).toISOString()) + '–' + kTime(x.at) + ' · ' + hm(t - away)) + '"/>'; away = null; }
         if (x.kind === 'break_start') brk = t;
-        if (x.kind === 'break_end' && brk != null) { segs += '<rect x="' + X(brk).toFixed(1) + '" y="' + y + '" width="' + Math.max(1.5, X(t) - X(brk)).toFixed(1) + '" height="14" fill="#94a3b8"><title>Break ' + hm(t - brk) + '</title></rect>'; brk = null; }
+        if (x.kind === 'break_end' && brk != null) { segs += '<rect x="' + f(X(brk)) + '" y="' + y + '" width="' + f(Math.max(1.5, X(t) - X(brk))) + '" height="14" fill="#94a3b8" data-tip="' + tip('Break ' + kTime(new Date(brk).toISOString()) + '–' + kTime(x.at) + ' · ' + hm(t - brk)) + '"/>'; brk = null; }
       });
-      if (away != null) segs += '<rect x="' + X(away).toFixed(1) + '" y="' + y + '" width="' + Math.max(1.5, X(b) - X(away)).toFixed(1) + '" height="14" fill="#f59e0b"><title>Away until the end</title></rect>';
-      ((e.on_call && e.on_call.calls) || []).forEach(function (c, ci) {
-        if (c.session_id !== s.id) return;
-        var ca = new Date(c.from).getTime(); var cb = new Date(c.to).getTime();
-        segs += '<rect class="mkc-oncall" data-k-call="' + ci + '" x="' + X(ca).toFixed(1) + '" y="' + (y + 2) + '" width="' + Math.max(2.5, X(cb) - X(ca)).toFixed(1) + '" height="10" rx="1.5" fill="#1d4ed8"><title>' + esc(callTip(c)) + '</title></rect>';
-        if (c.wrapped_at) { var wx = X(new Date(c.wrapped_at).getTime()); segs += '<line x1="' + wx.toFixed(1) + '" y1="' + (y - 1) + '" x2="' + wx.toFixed(1) + '" y2="' + (y + 15) + '" stroke="#0f172a" stroke-width="0.8" opacity="0.7"><title>Wrap-up saved ' + esc(kTime(c.wrapped_at)) + '</title></line>'; }
+      if (away != null) segs += '<rect x="' + f(X(away)) + '" y="' + y + '" width="' + f(Math.max(1.5, X(b) - X(away))) + '" height="14" fill="#f59e0b" data-tip="' + tip('Switched away until the end') + '"/>';
+      // Calls in this session, in time order; each gets an invisible hit area of at least 8 units (≈8–11 px),
+      // stretched over its wrap-up tick and clipped halfway to its neighbours so hits never overlap.
+      var mine = []; allCalls.forEach(function (c, ci) { if (c.session_id === s.id) mine.push({ c: c, ci: ci, x0: X(new Date(c.from).getTime()), x1: X(new Date(c.to).getTime()), xw: c.wrapped_at ? X(new Date(c.wrapped_at).getTime()) : null }); });
+      mine.sort(function (p, q2) { return p.x0 - q2.x0; });
+      mine.forEach(function (m, k) {
+        var w = Math.max(2.5, m.x1 - m.x0); var end = Math.max(m.x0 + w, m.xw || 0);
+        segs += '<rect class="mkc-oncall" data-k-call="' + m.ci + '" x="' + f(m.x0) + '" y="' + (y + 2) + '" width="' + f(w) + '" height="10" rx="1.5" fill="#1d4ed8"/>';
+        if (m.xw != null) segs += '<line x1="' + f(m.xw) + '" y1="' + (y - 1) + '" x2="' + f(m.xw) + '" y2="' + (y + 15) + '" stroke="#0f172a" stroke-width="0.8" opacity="0.7"/>';
+        var mid = (m.x0 + end) / 2; var hl = Math.min(m.x0, mid - 4); var hr = Math.max(end, mid + 4);
+        var prevM = mine[k - 1]; var nextM = mine[k + 1];
+        if (prevM) hl = Math.max(hl, (Math.max(prevM.x0 + 2.5, prevM.x1, prevM.xw || 0) + m.x0) / 2);
+        if (nextM) hr = Math.min(hr, (end + nextM.x0) / 2);
+        hl = Math.min(hl, m.x0); hr = Math.max(hr, m.x0 + w);
+        K.evGeo[m.ci] = { x: m.x0, y: y + 2, w: w };
+        hits += '<rect class="mkc-hit" data-k-callhit="' + m.ci + '" data-tip="' + tip('📞 ' + callTip(m.c) + (m.c.wrapped_at ? ' · wrap-up saved ' + kTime(m.c.wrapped_at) : '')) + '" x="' + f(hl) + '" y="' + (y - 2) + '" width="' + f(Math.max(1, hr - hl)) + '" height="18" fill="transparent" pointer-events="all"/>';
       });
-      if (s.end_reason === 'dropped') segs += '<rect x="' + (X(b) - 3).toFixed(1) + '" y="' + (y - 2) + '" width="5" height="18" fill="#dc2626"><title>Dropped</title></rect>';
+      if (s.end_reason === 'dropped') segs += '<rect x="' + f(X(b) - 3) + '" y="' + (y - 2) + '" width="5" height="18" fill="#dc2626" data-tip="' + tip('Dropped at ' + kTime(s.ended_at)) + '"/>';
       return segs;
     }).join('');
-    return '<div class="mkc-evbarswrap"><svg viewBox="0 0 ' + W + ' ' + H + '" class="mkc-chart mkc-evbars" role="img" data-k-evbars>' + ticks + bars + '</svg></div><div class="mkc-legs"><span class="mkc-leg"><i style="background:#22c55e"></i>On the screen</span><span class="mkc-leg"><i style="background:#1d4ed8"></i>On a call</span><span class="mkc-leg"><i style="background:#0f172a;width:2px"></i>Wrap-up saved</span><span class="mkc-leg"><i style="background:#f59e0b"></i>Switched away</span><span class="mkc-leg"><i style="background:#94a3b8"></i>Break</span><span class="mkc-leg"><i style="background:#dc2626"></i>Dropped</span></div>' + onCallSummary(e) + '<div class="mkc-muted" style="font-size:12px;min-height:16px" data-k-callinfo>' + (((e.on_call && e.on_call.calls) || []).length ? 'Tap or hover a blue call to see its details.' : '') + '</div>';
+    return (wide ? '<div class="mkc-muted" style="font-size:11px;margin:0 0 4px">Busy day: the chart is wider so every call is easy to point at. Scroll sideways ↔</div>' : '')
+      + '<div class="mkc-evbarsbox" data-k-evbarsbox><div class="mkc-evbarswrap"><svg viewBox="0 0 ' + W + ' ' + H + '" class="mkc-chart mkc-evbars" role="img" data-k-evbars' + (wide ? ' style="width:' + Math.round(W * 1.3) + 'px;height:' + Math.round(H * 1.3) + 'px;max-width:none;min-width:0"' : '') + '>' + ticks + bars
+      + '<rect data-k-hl x="0" y="0" width="0" height="10" fill="none" stroke="#facc15" stroke-width="1.6" pointer-events="none" visibility="hidden"/>' + hits + '</svg></div>'
+      + '<div class="mkc-evtip" data-k-tip hidden></div></div>'
+      + '<div class="mkc-legs"><span class="mkc-leg"><i style="background:#22c55e"></i>On the screen</span><span class="mkc-leg"><i style="background:#1d4ed8"></i>On a call</span><span class="mkc-leg"><i style="background:#0f172a;width:2px"></i>Wrap-up saved</span><span class="mkc-leg"><i style="background:#f59e0b"></i>Switched away</span><span class="mkc-leg"><i style="background:#94a3b8"></i>Break</span><span class="mkc-leg"><i style="background:#dc2626"></i>Dropped</span></div>' + onCallSummary(e) + '<div class="mkc-muted" style="font-size:12px;min-height:16px" data-k-callinfo>' + (allCalls.length ? 'Tap or hover a blue call to see its details.' : '') + '</div>';
   }
+  // One delegated pointer handler for the whole chart, throttled to one update per animation frame.
+  function bindEvBars(el) {
+    var box = q('[data-k-evbarsbox]', el); if (!box) return;
+    var svg = q('[data-k-evbars]', box); var tipEl = q('[data-k-tip]', box); var hl = q('[data-k-hl]', box); var info = q('[data-k-callinfo]', el);
+    var cur = -1; var last = null; var raf = 0; var pinned = false; var dirty = false;
+    var apply = function () {
+      if (!last) return;
+      var t = last.target && last.target.closest ? last.target.closest('[data-tip]') : null;
+      if (!t) { if (!pinned) hide(); return; }
+      var idx = Number(t.getAttribute('data-tip'));
+      var r = box.getBoundingClientRect(); var x = last.x - r.left; var y = last.y - r.top;
+      if (idx !== cur) {
+        cur = idx; tipEl.textContent = K.evTips[idx] || ''; tipEl.hidden = false;
+        var ci = t.getAttribute('data-k-callhit'); var g = ci != null ? K.evGeo[ci] : null;
+        if (g) { hl.setAttribute('x', g.x - 0.8); hl.setAttribute('y', g.y - 0.8); hl.setAttribute('width', g.w + 1.6); hl.setAttribute('height', 11.6); hl.setAttribute('visibility', 'visible'); K.evCall = ci; if (info) info.textContent = K.evTips[idx]; } else hl.setAttribute('visibility', 'hidden');
+      }
+      var left = x > r.width * 0.6;
+      tipEl.style.transform = 'translate3d(' + Math.round(left ? x - 12 : x + 14) + 'px,' + Math.round(y + 16) + 'px,0)' + (left ? ' translateX(-100%)' : '');
+      K.evHover = { x: last.x, y: last.y };
+    };
+    var hide = function () { cur = -1; tipEl.hidden = true; hl.setAttribute('visibility', 'hidden'); K.evHover = null; };
+    // Frame throttle: the first move in a frame (or onto a new segment) updates at once; other moves in the same
+    // frame are folded into one reposition on the next animation frame.
+    var tick = function () { if (dirty) { dirty = false; apply(); raf = requestAnimationFrame(tick); } else raf = 0; };
+    svg.addEventListener('pointermove', function (ev) {
+      if (ev.pointerType === 'touch') return;
+      last = { x: ev.clientX, y: ev.clientY, target: ev.target };
+      // A new segment under the pointer always shows at once; moves within the same segment only reposition, once per frame.
+      var tt = ev.target && ev.target.closest ? ev.target.closest('[data-tip]') : null;
+      var changed = (tt ? Number(tt.getAttribute('data-tip')) : -1) !== cur;
+      if (raf && !changed) { dirty = true; return; }
+      dirty = false; apply(); if (!raf) raf = requestAnimationFrame(tick);
+    }, { passive: true });
+    svg.addEventListener('pointerleave', function () { last = null; dirty = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } if (!pinned) hide(); K.evHovering = false; flushEvPending(); });
+    svg.addEventListener('pointerenter', function (ev) { if (ev.pointerType !== 'touch') K.evHovering = true; });
+    // Tap (mobile) or click: show at once and keep it until the next tap elsewhere.
+    svg.addEventListener('pointerdown', function (ev) { last = { x: ev.clientX, y: ev.clientY, target: ev.target }; cur = -1; apply(); pinned = !!(last.target.closest && last.target.closest('[data-tip]')); });
+    box.__restore = function (pt, call) {
+      if (pt) { var t = document.elementFromPoint(pt.x, pt.y); if (t && svg.contains(t)) { last = { x: pt.x, y: pt.y, target: t }; apply(); return; } }
+      if (call != null) { var h = q('[data-k-callhit="' + call + '"]', svg); if (h) { var b = h.getBoundingClientRect(); last = { x: b.left + b.width / 2, y: b.top + b.height / 2, target: h }; apply(); pinned = true; } }
+    };
+  }
+  function flushEvPending() { var p = K.evPending; if (p && !K.evHovering) { K.evPending = null; p(); } }
   // Plain-English timeline: runs of screen actions fold into one line that opens to show each step.
   function timelineHtml(e) {
     var evs = (e.events || []).slice(); var out = []; var run = [];
@@ -2809,19 +2882,25 @@
     }
   }
   function clockSecs(d) { try { return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Africa/Kampala' }).format(d); } catch (x) { return ''; } }
-  function openEvidence(host, person, keep, silent) {
+  function openEvidence(host, person, keep, silent, data) {
     var el = q('[data-k-evbox]', host);
     if (!keep && K.open === person && el.innerHTML) { K.open = null; el.innerHTML = ''; stopEvAuto(); return; }
     K.open = person; K.evHost = host;
     // Keep what King was looking at across a refresh: opened timeline groups, the chosen call, the chart scroll.
-    var prev = silent ? { open: qa('[data-k-evtl] details', el).map(function (d) { return d.open; }), call: K.evCall, sx: (q('.mkc-evbarswrap', el) || {}).scrollLeft || 0 } : null;
+    var prev = silent ? { open: qa('[data-k-evtl] details', el).map(function (d) { return d.open; }), call: K.evCall, hover: K.evHover, sx: (q('.mkc-evbarswrap', el) || {}).scrollLeft || 0 } : null;
     if (!silent) el.innerHTML = '<p class="mkc-muted">Loading evidence…</p>';
     K.evBusy = true;
     var lbl = q('[data-k-evupd]', el); if (lbl && silent) lbl.textContent = 'Updating…';
-    api('/evidence?person_key=' + encodeURIComponent(person)).then(function (e) {
+    (data ? Promise.resolve(data) : api('/evidence?person_key=' + encodeURIComponent(person))).then(function (e) {
       K.evBusy = false;
       if (K.open !== person) return;
       K.evAt = Date.now();
+      // Auto-refresh keeps the DOM when nothing changed, and never rebuilds under the pointer: it waits for pointerleave.
+      var sig = JSON.stringify(e) + '|' + (K.evUnit || 'day');
+      var lbl0 = q('[data-k-evupd]', el);
+      if (silent && sig === K.evSig && q('[data-k-ev2]', el)) { if (lbl0) lbl0.textContent = '🟢 Updated ' + clockSecs(new Date()) + ' Kampala · auto every 30s'; startEvAuto(host, person); return; }
+      if (silent && K.evHovering && !data && q('[data-k-ev2]', el)) { if (lbl0) lbl0.textContent = '🟡 New data · shows when you move off the chart'; K.evPending = function () { openEvidence(host, person, true, true, e); }; return; }
+      K.evSig = sig; K.evPending = null;
       var unit = K.evUnit || 'day'; var tr = (e.trends || {})[unit] || [];
       var sm = e.summary || { calls: 0, connected: 0, closes: 0, talk_s: 0 };
       var trendNote = { day: 'Trend: last 3 full days vs the 3 before', week: 'Trend: last 3 full weeks vs the 3 before', month: 'Trend: last 3 full months vs the 3 before' }[unit];
@@ -2851,12 +2930,11 @@
         + '<div class="mkc-evcard" style="margin-top:10px"><h5>Every call today</h5><p class="mkc-muted" style="margin:0 0 6px">Check these against the company phone\'s call log: every tap has a time.' + (released ? ' ' + released + ' number' + (released === 1 ? ' was' : 's were') + ' shown but not called (put back when switching task); not listed.' : '') + '</p><div class="mkc-scroll"><table class="mkc-table" data-k-evcalls><tr><th>Time</th><th>Task</th><th>Who</th><th>Outcome</th><th>Talk</th><th>Note · next step</th><th>Login</th><th></th></tr>' + (rowsHtml || '<tr><td colspan="8" class="mkc-muted">No calls.</td></tr>') + '</table></div></div></div>';
       q('[data-k-evx]', el).onclick = function () { K.open = null; el.innerHTML = ''; stopEvAuto(); };
       var rf = q('[data-k-evrefresh]', el); if (rf) rf.onclick = function () { openEvidence(host, person, true, true); };
-      var calls = (e.on_call && e.on_call.calls) || []; var info = q('[data-k-callinfo]', el);
-      qa('[data-k-call]', el).forEach(function (r) { var show = function () { K.evCall = r.getAttribute('data-k-call'); var c = calls[Number(r.getAttribute('data-k-call'))]; if (c && info) info.innerHTML = '<b>📞 ' + esc(callTip(c)) + '</b>'; qa('[data-k-call]', el).forEach(function (x) { x.setAttribute('stroke', x === r ? '#facc15' : 'none'); }); }; r.addEventListener('click', show); r.addEventListener('mouseenter', show); });
+      bindEvBars(el);
       if (prev) {
         qa('[data-k-evtl] details', el).forEach(function (d, i) { if (prev.open[i]) d.open = true; });
         var wrapEl = q('.mkc-evbarswrap', el); if (wrapEl) wrapEl.scrollLeft = prev.sx;
-        var selEl = prev.call != null ? q('[data-k-call="' + prev.call + '"]', el) : null; if (selEl) selEl.dispatchEvent(new Event('click'));
+        var bx = q('[data-k-evbarsbox]', el); if (bx && bx.__restore) bx.__restore(prev.hover, prev.call);
       }
       startEvAuto(host, person);
       qa('[data-k-evu]', el).forEach(function (b) { b.onclick = function () { K.evUnit = b.getAttribute('data-k-evu'); openEvidence(host, person, true); }; });
