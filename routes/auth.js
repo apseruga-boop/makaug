@@ -132,11 +132,20 @@ function otpDeliveryUnavailableResponse({ channel = 'email', purpose = 'login', 
   const reset = purpose === 'reset_password';
   const supportWhatsapp = process.env.SUPPORT_WHATSAPP || process.env.WHATSAPP_SUPPORT_PHONE || '+256780863394';
   const supportEmail = process.env.SUPPORT_EMAIL || 'info@makaug.com';
+  // The number only writes to people who have written to it (16 Nov 2026), so
+  // a code for somebody who never has cannot be sent. Say so, and what to do:
+  // say hi first, then ask again (18 Nov 2026).
+  const neverWrote = !isEmail && error?.reason === 'they_have_not_written_to_the_number';
+  const supportDigits = String(supportWhatsapp).replace(/\D/g, '');
+  const supportLocal = /^256\d{9}$/.test(supportDigits) ? `0${supportDigits.slice(3, 6)} ${supportDigits.slice(6)}` : supportWhatsapp;
   return {
     ok: false,
-    error: isEmail
-      ? `${reset ? 'Password reset' : 'Verification'} email could not be sent right now. Try WhatsApp if your Uganda number is on the account, or contact makaug on WhatsApp.`
-      : `${reset ? 'Password reset' : 'Verification'} code could not be sent to your WhatsApp right now. Try email if your account has one, or contact makaug on WhatsApp.`,
+    error: neverWrote
+      ? `WhatsApp only lets makaug message people who have written to it first. Send "Hi" to makaug on WhatsApp (${supportLocal}) from this number, then ask for the code again. Or use your email.`
+      : (isEmail
+        ? `${reset ? 'Password reset' : 'Verification'} email could not be sent right now. Try WhatsApp if your Uganda number is on the account, or contact makaug on WhatsApp.`
+        : `${reset ? 'Password reset' : 'Verification'} code could not be sent to your WhatsApp right now. Try email if your account has one, or contact makaug on WhatsApp.`),
+    ...(neverWrote ? { say_hi_link: `https://wa.me/${supportDigits}?text=Hi%20makaug` } : {}),
     retry_channels: ['email', 'phone'],
     support: {
       whatsapp: supportWhatsapp,
@@ -705,6 +714,7 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', pr
       }
       const sendError = new Error('Failed to send OTP');
       sendError.status = 400;
+      if (deliveryResult.failureReason === 'they_have_not_written_to_the_number') sendError.reason = deliveryResult.failureReason;
       throw sendError;
     }
     await logNotification(db, {

@@ -47623,6 +47623,11 @@ if (typeof document !== "undefined") {
 
 // After an agent signs up on the website: say plainly that the application is
 // in and what happens next, before they land on the dashboard.
+//
+// First, say hi on WhatsApp (18 Nov 2026). The makaug number only writes to
+// people who have written to it, so "We WhatsApp you" was a promise it could not
+// keep: an agent approved without having written never got their welcome. One
+// who says hi first gets it the moment they are approved.
 function showBrokerApplicationReceived({ firstName = "", phone = "" } = {}) {
   document.getElementById("broker-application-received")?.remove();
   const esc = (v) => String(v || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -47638,12 +47643,14 @@ function showBrokerApplicationReceived({ firstName = "", phone = "" } = {}) {
       <h2 id="broker-application-received-title" style="margin:8px 0 4px;font-size:20px;font-weight:900;color:#14532d;">Application received${firstName ? `, ${esc(firstName)}` : ""}</h2>
       <p style="margin:0 0 12px;color:#4b5563;">Your makaug agent account is set up and waiting for our review.</p>
       <ol style="margin:0 0 14px;padding-left:22px;line-height:1.55;list-style:decimal;">
-        <li><strong>We WhatsApp you</strong>${phone ? ` on ${esc(phone)}` : ""}, usually the same day, to check your details.</li>
+        <li><strong>Say hi to makaug on WhatsApp</strong>${phone ? ` from ${esc(phone)}` : ""}, with the green button below. WhatsApp only lets us message people who have written to us first, so this is how your welcome reaches you.</li>
+        <li><strong>We check your details</strong>, usually the same day.</li>
         <li><strong>UGX 50,000 a month.</strong> Short stays are included. We send a payment link. Nothing is charged automatically. Pay by Mobile Money — MoMo Merchant Code: <strong>${esc(momoMerchantCode())}</strong>. ${esc(momoPayUssdText())}</li>
-        <li><strong>You're approved</strong> — you get your welcome pack and the how-to-post guide, and your listings can go live.</li>
+        <li><strong>You're approved</strong> — your welcome pack and the how-to-post guide come on WhatsApp, and your listings can go live.</li>
       </ol>
       <p style="margin:0 0 16px;font-size:12px;color:#6b7280;">You can already fill in your profile from your dashboard. Questions? WhatsApp us on 0780 863394.</p>
-      <button type="button" data-close style="width:100%;min-height:48px;border:0;border-radius:12px;background:#15803d;color:#fff;font-weight:800;font-size:15px;">Go to my dashboard</button>
+      <a href="https://wa.me/${MAKAUG_SUPPORT_WHATSAPP}?text=Hi%20makaug" target="_blank" rel="noopener" data-say-hi data-whatsapp-static="true" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:48px;margin:0 0 10px;border-radius:12px;background:#25D366;color:#063b1b;font-weight:800;font-size:15px;text-decoration:none;">💬 Say hi on WhatsApp</a>
+      <button type="button" data-close style="width:100%;min-height:48px;border:2px solid #15803d;border-radius:12px;background:#fff;color:#15803d;font-weight:800;font-size:15px;">Go to my dashboard</button>
     </div>`;
   const close = () => wrap.remove();
   wrap.querySelector("[data-close]")?.addEventListener("click", close);
@@ -47652,7 +47659,7 @@ function showBrokerApplicationReceived({ firstName = "", phone = "" } = {}) {
     if (event.key === "Escape") { close(); document.removeEventListener("keydown", onKey); }
   });
   document.body.appendChild(wrap);
-  setTimeout(() => wrap.querySelector("[data-close]")?.focus(), 30);
+  setTimeout(() => wrap.querySelector("[data-say-hi]")?.focus(), 30);
 }
 
 async function submitAccountAccessOtp() {
