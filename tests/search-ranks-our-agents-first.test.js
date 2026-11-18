@@ -70,7 +70,7 @@ test('the alias is respected, so it can be used wherever the table is joined', (
 test('every WhatsApp search path ranks, and none is left on newest-first', () => {
   const source = require('fs').readFileSync(require.resolve('../routes/whatsapp'), 'utf8');
   const ranked = (source.match(/ORDER BY \$\{searchOrderBySql\('p'\)\}/g) || []).length;
-  assert.strictEqual(ranked, 4, 'two result queries and two nearby candidate pools');
+  assert.strictEqual(ranked, 5, 'two result queries, two nearby candidate pools, and the rooms that name a university');
 
   // Nothing in a property search may still sort purely by recency. The one
   // remaining use is findPendingOwnerForwardMediaTarget, which is matching a
