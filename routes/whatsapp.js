@@ -5162,10 +5162,28 @@ async function findEmployeeApprovedAgents(query = '') {
 async function approvedAgentBatchLine(name = '', agentPhone = '') {
   const who = normalizeInput(name) || 'The agent';
   const told = `${who} is already an approved agent. Each property goes live when a moderator approves it, and ${who} gets a WhatsApp message for each one then.`;
-  const waits = whatsappWebBridgeService.onlyToPeopleWhoWrote()
-    && !(await whatsappWebBridgeService.hasWrittenToUs(agentPhone));
-  if (!waits) return told;
+  if (!(await neverWroteToUs(agentPhone))) return told;
   return `${told}\n\n${who} has never written to the makaug WhatsApp number, which only writes to people who have written to it first, so those messages will wait until they do. Send them this to tap and send:\n${filmLinks.helloLink()}`;
+}
+
+/**
+ * The end of a batch for a new agent who is not approved yet. Their welcome
+ * goes when they are approved, and reaches them then only if they have written
+ * to the makaug number, which writes first to nobody. So the employee is given
+ * the link to send them now: they say hello first, and the welcome goes the
+ * moment they are approved (18 Nov 2026).
+ */
+async function pendingAgentBatchLine(name = '', agentPhone = '') {
+  const who = normalizeInput(name) || 'The agent';
+  const waiting = `${who} has not been notified yet. The agent profile card is waiting for founder approval.`;
+  if (!(await neverWroteToUs(agentPhone))) return waiting;
+  return `${waiting}\n\n👋 ${who} has never written to the makaug WhatsApp number, which only writes to people who have written to it first. Send them this to tap and send now, and their welcome goes the moment they are approved:\n${filmLinks.helloLink()}`;
+}
+
+/** Whether the makaug number may not write to this phone yet: the rule is on and they never have. */
+async function neverWroteToUs(phone = '') {
+  return whatsappWebBridgeService.onlyToPeopleWhoWrote()
+    && !(await whatsappWebBridgeService.hasWrittenToUs(phone));
 }
 
 async function ensurePendingEmployeeAgent(details = {}, identityDocument = {}, options = {}) {
@@ -8489,6 +8507,29 @@ async function findApprovedAgentByPhone(phone) {
   return agent;
 }
 
+/** A new agent on this number whose application is still with the team. */
+async function findPendingAgentByPhone(phone) {
+  const key = agentPhoneKey(phone);
+  if (!key || key.length < 9) return null;
+  try {
+    const result = await db.query(
+      `SELECT id, makaug_agent_number, full_name, greeting_name, company_name, phone, whatsapp, status
+         FROM agents
+        WHERE status = 'pending'
+          AND removed_at IS NULL
+          AND (RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = $1
+            OR RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = $1)
+        ORDER BY updated_at DESC
+        LIMIT 1`,
+      [key]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    logger.warn('Pending agent lookup by phone failed:', error.message || String(error));
+    return null;
+  }
+}
+
 /** The session an agent posting their own stock works in. */
 function agentSelfIntakeSessionData(agent) {
   return {
@@ -8982,6 +9023,17 @@ function agentWelcomeArrivingReply(agent = {}, { now = new Date() } = {}) {
     ? 'It is night in Kampala, so your welcome comes at 7 in the morning'
     : 'Your welcome is in the messages here';
   return `👋 Hello ${first || 'there'}, and welcome to makaug! ${when}: your agent ID and page, a one-minute video on how to post, and how to pay.`;
+}
+
+/**
+ * The answer to a new agent's "Hi" while their application is still with the
+ * team. The number writes first to nobody, so this hello is what lets their
+ * welcome reach them: it goes the moment they are approved (18 Nov 2026). It
+ * used to be the customer menu.
+ */
+function pendingAgentHelloReply(agent = {}) {
+  const first = agentGreetingName(agent, '');
+  return `👋 Hello ${first || 'there'}, thanks for saying hi! Your makaug agent application is with our team. The moment you are approved, your welcome comes here: your agent page, a one-minute video on how to post, and how to pay.`;
 }
 
 /**
@@ -11609,6 +11661,12 @@ async function handleEmployeeWhatsappIntake({
           message: agentMenuReply({ agent: askingAgent, greet: true })
         };
       }
+      // A new agent saying hello before they are approved: told their welcome
+      // comes the moment they are, not handed the customer menu (18 Nov 2026).
+      if (AGENT_GREETING.test(askedText)) {
+        const pendingAgent = await findPendingAgentByPhone(phone);
+        if (pendingAgent) return { handled: true, nextStep: currentStep, message: pendingAgentHelloReply(pendingAgent) };
+      }
       // Not an agent, but one of ours. The customer menu is for customers.
       const staffReply = staffIntakeGreetingReply({ phone, session, cleanBody });
       if (staffReply) return { handled: true, nextStep: currentStep, message: staffReply };
@@ -12894,7 +12952,7 @@ async function handleEmployeeWhatsappIntake({
       const notificationLine = pendingAgentNotification
         ? `\n\n${String(data.agent?.status || '').toLowerCase() === 'approved'
           ? await approvedAgentBatchLine(subjectName, agentPhone)
-          : `${subjectName} has not been notified yet. The agent profile card is waiting for founder approval.`}`
+          : await pendingAgentBatchLine(subjectName, agentPhone)}`
         : '';
       // The ID was promised, not sent. Say so at the end of the batch too, so it
       // is not forgotten between the promise and the moderator's review.
@@ -26466,6 +26524,9 @@ module.exports.__test = {
   EMPLOYEE_MEDIA_FAILURE_RE,
   EMPLOYEE_VOICE_NOTE_REPLY,
   cleanDisplayName,
+  pendingAgentBatchLine,
+  findPendingAgentByPhone,
+  pendingAgentHelloReply,
   ACTIVE_COUNTRY_CODE,
   ACTIVE_CURRENCY,
   addWhatsappCanonicalLocationFilter,

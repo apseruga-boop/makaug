@@ -178,7 +178,9 @@ async function sendPhoneOtp({ to, message, email, otp, expiresMinutes } = {}) {
   return {
     ok: false,
     channel: 'phone',
-    failureReason: 'phone_otp_delivery_failed',
+    // Somebody who has never written to the number is told so, and how to fix
+    // it: say hi first (18 Nov 2026).
+    failureReason: mayNotWriteToThem ? 'they_have_not_written_to_the_number' : 'phone_otp_delivery_failed',
     attempts
   };
 }
