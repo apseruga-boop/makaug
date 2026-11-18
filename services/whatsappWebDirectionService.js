@@ -33,7 +33,7 @@ function isLikelyMakaugOutboundPreview(value = '') {
     || /^Caption saved(?: for .*)?\. Now send (?:the )?first property media\b/i.test(text)
     || /^⚠️\s*Not saved yet:/i.test(text)
     || /^📋\s*\*?(?:Saved \d+ of \d+|All \d+ saved)/i.test(text)
-    || /^✅\s*(?:Batch checked|\*?\d+ properties sent for staff review)/i.test(text);
+    || /^✅\s*(?:Batch checked|\*?\d+ propert(?:y|ies) sent for staff review)/i.test(text);
 }
 
 module.exports = {

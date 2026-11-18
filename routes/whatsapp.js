@@ -975,7 +975,9 @@ function cleanDisplayName(value) {
     .trim();
   const digits = withoutBusinessSuffix.replace(/\D/g, '');
   if (digits.length >= 7) return '';
-  if (/^(makaug|makaug\.com|whatsapp|you|unknown|codex)$/i.test(withoutBusinessSuffix)) return '';
+  // "None", "null", "undefined": what a phone or the bridge puts where there is
+  // no name. 18 Nov 2026: somebody who said "Hello" was greeted "Good morning, None".
+  if (/^(makaug|makaug\.com|whatsapp|you|unknown|codex|none|null|undefined|nil|n\/a|anonymous|no\s*name)$/i.test(withoutBusinessSuffix)) return '';
   if (/\bcodex\b/i.test(withoutBusinessSuffix)) return '';
   if (/^https?:\/\//i.test(withoutBusinessSuffix)) return '';
   return withoutBusinessSuffix.replace(/[^\p{L}\p{N}\s'.-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 40);
@@ -5123,7 +5125,7 @@ async function findEmployeeApprovedAgents(query = '') {
   // Every word of the name, in any order: "gaita benard" is Benard Gaita.
   const words = clean.toLowerCase().split(' ').filter((word) => word.length >= 2 && !/^\d+$/.test(word)).map((word) => `%${word}%`);
   const result = await db.query(
-    `SELECT id, full_name, company_name, phone, whatsapp, email, fee_exempt, paid_until, pay_link_sent_at
+    `SELECT id, full_name, company_name, phone, whatsapp, email, status, fee_exempt, paid_until, pay_link_sent_at
        FROM agents
       WHERE status = 'approved'
         AND (
@@ -5147,6 +5149,23 @@ async function findEmployeeApprovedAgents(query = '') {
     [clean, `%${clean}%`, phoneKey, words]
   );
   return result.rows;
+}
+
+/**
+ * The end of a batch for an agent who is already approved: their properties
+ * wait for a moderator, not their profile, and they are told as each one goes
+ * live. On 18 Nov 2026 a batch for an agent approved the day before ended "has
+ * not been notified yet. The agent profile card is waiting for founder
+ * approval." When they have never written to the makaug number, that message
+ * waits for them to, so the employee is given the link to send them.
+ */
+async function approvedAgentBatchLine(name = '', agentPhone = '') {
+  const who = normalizeInput(name) || 'The agent';
+  const told = `${who} is already an approved agent. Each property goes live when a moderator approves it, and ${who} gets a WhatsApp message for each one then.`;
+  const waits = whatsappWebBridgeService.onlyToPeopleWhoWrote()
+    && !(await whatsappWebBridgeService.hasWrittenToUs(agentPhone));
+  if (!waits) return told;
+  return `${told}\n\n${who} has never written to the makaug WhatsApp number, which only writes to people who have written to it first, so those messages will wait until they do. Send them this to tap and send:\n${filmLinks.helloLink()}`;
 }
 
 async function ensurePendingEmployeeAgent(details = {}, identityDocument = {}, options = {}) {
@@ -5686,6 +5705,14 @@ function offPlanProjectNameFromCaption(caption = '', sessionData = {}) {
 // Words a caption uses around a place that are never the place itself.
 const CAPTION_PLACE_FILLER_WORDS = /^(?:town|city|village|villages|district|division|parish|ward|estate|estates|central|north|south|east|west|uganda|trading|centre|center|land|plot|plots|acre|acres|title|ready|private|mailo|freehold|leasehold|commercial|residential|contact|sale|rent|house|houses|home|homes)$/i;
 
+// A title and the name after it ("Pastor Kato", "Hajji Musa") is a person.
+const CAPTION_PERSON_TITLE_NAME = /\b(?:pastor|rev(?:erend)?|bishop|sheikh|imam|apostle|prophet|hon(?:ourable)?|mzee|hajj?i|prof(?:essor)?)\.?\s+[A-Za-z][A-Za-z'’-]*/gi;
+// What comes after these words is a landmark, not where the property is.
+const CAPTION_LANDMARK_WORD = /\b(?:near|opposite|next\s+to|behind|close\s+to|adjacent\s+to)\b/i;
+// What a plot is "suitable for", "ideal for" or "can be used for", to the end
+// of the sentence: "suitable for many projects, factory, school, hotel".
+const CAPTION_USE_LIST = /\b(?:(?:suitable|ideal|best|good|perfect|fit|great)\s+(?:use\s+)?(?:for|to\s+build)|(?:can\s+be\s+)?used\s+for)\b[^.;!?\n]*/gi;
+
 function employeePropertyFacts(caption = '', sessionData = {}) {
   // Luganda/Swahili captions are read through their English equivalents.
   const offPlan = employeeCaptionLooksOffPlan(caption, sessionData);
@@ -5793,6 +5820,19 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   ) {
     listingType = 'land';
   }
+  // "Acres for sale in Gayaza town ... 4 acres, on main road, suitable for many
+  // projects, factory, school, hotel, apartments, hospital" (18 Nov 2026) went
+  // up as a commercial property: "factory" was one of the things the land could
+  // be used for. Land whose only commercial word is in what it is suitable for
+  // is land. "A commercial plot" still says what it is.
+  if (
+    listingType === 'commercial'
+    && /\b(?:land|plots?|acres?|decimals?|hectares?|kibanja|bibanja)\b/i.test(cleanCaption)
+    && !/\b(?:commercial|offices?|shops?|retail|warehouses?|industrial|showroom|factory|factories|godown|arcade|buildings?|storey|storied|units?|rooms?|rentals?|houses?|apartments?|hotel|hostel|lodge)\b/i
+      .test(cleanCaption.replace(CAPTION_USE_LIST, ' '))
+  ) {
+    listingType = 'land';
+  }
   // "NALYA 4 RENTAL UNITS APARTMENT BLOCK OF 3 BEDROOMS EACH MAKING 10MILLION
   // MONTHLY SELLING UGX 1.1BILLION" — 4 Oct 2026. The words "rental" and
   // "monthly" describe what the block earns; "SELLING" describes what is on
@@ -5835,7 +5875,11 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   )
     // "2.5Km From Namuseera Town And Approximately 14Km (8.5 Miles) From Kampala
     // CBD" says where the property is NOT. It resolved to an area called "From".
-    .replace(/\b\d+(?:[.,]\d+)?\s*(?:km|kms|kilomet(?:er|re)s?|miles?|mi|minutes?|mins?|hrs?|hours?)\b(?:\s*\([^)]*\))?\s*(?:away\s+)?(?:drive\s+)?from\s+(?:the\s+)?[A-Za-z][A-Za-z'-]*(?:\s+(?:town|cbd|city|centre|center|road|rd))?/gi, ' ');
+    .replace(/\b\d+(?:[.,]\d+)?\s*(?:km|kms|kilomet(?:er|re)s?|miles?|mi|minutes?|mins?|hrs?|hours?)\b(?:\s*\([^)]*\))?\s*(?:away\s+)?(?:drive\s+)?from\s+(?:the\s+)?[A-Za-z][A-Za-z'-]*(?:\s+(?:town|cbd|city|centre|center|road|rd))?/gi, ' ')
+    // "near Pastor <name> home" (17 Nov 2026) is a person's home, not the town
+    // in another district that shares the pastor's name. A name after a title
+    // is a person.
+    .replace(CAPTION_PERSON_TITLE_NAME, ' ');
   let locationResolution = resolveWhatsappLocation(locationCaption, { allowText: true });
   // "#Mukono_Kisowera kayunga rd" (26 Oct 2026) resolved to Kayunga district:
   // the road's name outranked the district written in front of it. When a
@@ -5845,6 +5889,24 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   if (roadStripped !== locationCaption) {
     const withoutRoads = resolveWhatsappLocation(roadStripped, { allowText: true });
     if (withoutRoads?.status === 'matched') locationResolution = withoutRoads;
+  }
+  // "A brand new house for sale in Nansana Kabulengwa ( near Pastor <name>
+  // home)" went in under a town in Jinja: a landmark outranked the place the
+  // advert is in. When the place the caption resolved to is named only after near /
+  // opposite / next to, and the words before that name a place below district
+  // level, that place is where it is.
+  const landmarkAt = locationCaption.search(CAPTION_LANDMARK_WORD);
+  if (locationResolution?.status === 'matched' && landmarkAt > 0) {
+    const beforeLandmarkWords = locationCaption.slice(0, landmarkAt);
+    const resolvedName = normalizeInput(locationResolution.match?.area || locationResolution.match?.name || '');
+    const namedBefore = resolvedName
+      && new RegExp(`\\b${resolvedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(beforeLandmarkWords);
+    if (resolvedName && !namedBefore) {
+      const placeBefore = resolveWhatsappLocation(beforeLandmarkWords, { allowText: true });
+      if (placeBefore?.status === 'matched' && !['district', 'region'].includes(normalizeInput(placeBefore.match?.level || ''))) {
+        locationResolution = placeBefore;
+      }
+    }
   }
   if (!locationResolution || locationResolution.status !== 'matched') {
     const beforeLandmark = locationCaption.split(/\b(?:opposite|near)\b/i)[0].trim();
@@ -7790,7 +7852,9 @@ async function createEmployeeReviewProperty({
         customer ? sessionData.identity_document_url || null : null,
         JSON.stringify(extraFields),
         // Buyers filter by type; a WhatsApp listing with none never showed under "house".
-        parsePropertyType(withEnglishPropertyTerms(caption)) || null,
+        // Land is not a house because the advert says it is "good for a country
+        // home" (17 Nov 2026): a land listing carries no house type.
+        facts.listingType === 'land' ? null : (parsePropertyType(withEnglishPropertyTerms(caption)) || null),
         intakeLatitude,
         intakeLongitude,
         // Every listing gets an MK reference when it is created. 424 Agent 007
@@ -9064,7 +9128,8 @@ function agentPropertyDetailLines(facts = {}, caption = '') {
     return lines;
   }
   const bedrooms = facts.listingType === 'land' ? 0 : (Number(facts.bedroomDraft?.bedrooms) || 0);
-  const kind = parsePropertyType(english) || (facts.listingType === 'land' ? 'land' : (facts.listingType === 'commercial' ? 'commercial property' : 'property'));
+  // Land is land, whatever it is "good for" (a country home, say).
+  const kind = facts.listingType === 'land' ? 'land' : (parsePropertyType(english) || (facts.listingType === 'commercial' ? 'commercial property' : 'property'));
   const deal = facts.listingType === 'rent' || facts.listingType === 'student'
     ? 'for rent'
     : (facts.listingType === 'commercial'
@@ -12116,13 +12181,17 @@ async function handleEmployeeWhatsappIntake({
       };
     }
     delete data.agent_lookup_failed;
+    // Only approved agents are found, and the card says so: on 18 Nov 2026 an
+    // agent approved the day before was shown as "created and waiting for staff
+    // approval", because the status was left behind here.
     data.agent_candidates = matches.map((agent) => ({
       id: agent.id,
       full_name: agent.full_name,
       company_name: agent.company_name,
       phone: agent.phone,
       whatsapp: agent.whatsapp,
-      email: agent.email
+      email: agent.email,
+      status: normalizeInput(agent.status) || 'approved'
     }));
     await replaceEmployeeSession(phone, 'employee_agent_confirm', data);
     const options = data.agent_candidates.map((agent, index) => `${index + 1} — ${agent.full_name}${agent.company_name ? ` (${agent.company_name})` : ''}`).join('\n');
@@ -12823,7 +12892,9 @@ async function handleEmployeeWhatsappIntake({
         ...(pendingAgentNotification ? { employee_intake_pending_agent_notification: pendingAgentNotification } : {})
       });
       const notificationLine = pendingAgentNotification
-        ? `\n\n${subjectName} has not been notified yet. The agent profile card is waiting for founder approval.`
+        ? `\n\n${String(data.agent?.status || '').toLowerCase() === 'approved'
+          ? await approvedAgentBatchLine(subjectName, agentPhone)
+          : `${subjectName} has not been notified yet. The agent profile card is waiting for founder approval.`}`
         : '';
       // The ID was promised, not sent. Say so at the end of the batch too, so it
       // is not forgotten between the promise and the moderator's review.
@@ -12832,7 +12903,7 @@ async function handleEmployeeWhatsappIntake({
         : `\n\n🪪 *ID still outstanding for ${subjectName}.* Staff can review these properties, but the ID must be received and verified before approval. Send the ID photo here whenever you have it.`;
       const completionHeadline = batchCounts.propertiesSetUp === 0 && batchCounts.duplicatesSkipped > 0
         ? `✅ *Batch checked — ${batchCounts.duplicatesSkipped} ${batchCounts.duplicatesSkipped === 1 ? 'property is' : 'properties are'} already in staff review*`
-        : `✅ *${batchCounts.propertiesSetUp} properties sent for staff review*`;
+        : `✅ *${batchCounts.propertiesSetUp} ${batchCounts.propertiesSetUp === 1 ? 'property' : 'properties'} sent for staff review*`;
       return {
         handled: true,
         nextStep: 'main_menu',
@@ -16623,6 +16694,7 @@ async function sweepEmployeeBatchSummaries() {
  */
 const EMPLOYEE_MEDIA_FAILURE_RE = /could not store (?:that|the) (?:media|picture)|No usable media bytes|no usable image bytes/i;
 const EMPLOYEE_MEDIA_RETRY_ACK = 'Got your media — it did not load on the first try, so I am retrying it myself. You do not need to send it again; I will confirm here once it is added.';
+const EMPLOYEE_VOICE_NOTE_REPLY = '🎙️ Got your voice note. A voice note cannot go on a listing, so nothing was added from it. If it has details I should add (the size, the price, the exact place), please type them here.';
 const EMPLOYEE_MEDIA_RETRY_DELAYS_MS = [60_000, 3 * 60_000, 10 * 60_000, 30 * 60_000, 90 * 60_000];
 let employeeMediaRetryTimer = null;
 let employeeMediaRetryRunning = false;
@@ -16675,7 +16747,7 @@ async function parkEmployeeMediaForRetry({ phone, body = '', mediaUrl = '', runt
   return true;
 }
 
-async function sweepEmployeeMediaRetries() {
+async function sweepEmployeeMediaRetries({ now = new Date() } = {}) {
   if (employeeMediaRetryRunning) return 0;
   employeeMediaRetryRunning = true;
   let handled = 0;
@@ -16692,6 +16764,21 @@ async function sweepEmployeeMediaRetries() {
       const queue = Array.isArray(row.queue) ? row.queue : [];
       const due = queue.find((item) => item?.nextAt && new Date(item.nextAt).getTime() <= Date.now());
       if (!due) continue;
+      // Whatever the retry comes to, it ends in a message to them: at night it
+      // waits for the morning (17 Nov 2026: "please send that photo or video
+      // once more" reached an agent at 01:27 in Kampala).
+      const morning = whatsappWebBridgeService.isOutboxQuietHours(now)
+        ? require('../services/agentWelcomeService').kampalaNightEnds(now)
+        : null;
+      if (morning) {
+        await db.query(
+          `UPDATE whatsapp_sessions
+              SET session_data = jsonb_set(COALESCE(session_data, '{}'::jsonb), '{media_retry_queue}', $2::jsonb, true)
+            WHERE phone = $1`,
+          [phone, JSON.stringify(queue.map((item) => (item === due ? { ...item, nextAt: morning.toISOString() } : item)))]
+        );
+        continue;
+      }
       const rest = queue.filter((item) => item !== due && item?.inboundMessageId !== due.inboundMessageId);
       await db.query(
         `UPDATE whatsapp_sessions
@@ -24348,6 +24435,12 @@ async function processInboundRuntimeUnlocked({
       message: 'Employee intake hit a temporary error. Nothing was published. Please wait before resending.'
     };
   });
+  // A voice note is not a photo or video that failed to load. Retried as one,
+  // it ended at 01:27 in Kampala with "please send that photo or video once
+  // more" to an agent whose photos were all on his listing (17 Nov 2026).
+  if (isAudioNote && employeeIntake.handled && EMPLOYEE_MEDIA_FAILURE_RE.test(String(employeeIntake.message || ''))) {
+    employeeIntake.message = EMPLOYEE_VOICE_NOTE_REPLY;
+  }
   if (employeeIntake.handled && EMPLOYEE_MEDIA_FAILURE_RE.test(String(employeeIntake.message || ''))) {
     const parked = await parkEmployeeMediaForRetry({
       phone,
@@ -26371,6 +26464,8 @@ module.exports.__test = {
   sweepEmployeeMediaRetries,
   parkEmployeeMediaForRetry,
   EMPLOYEE_MEDIA_FAILURE_RE,
+  EMPLOYEE_VOICE_NOTE_REPLY,
+  cleanDisplayName,
   ACTIVE_COUNTRY_CODE,
   ACTIVE_CURRENCY,
   addWhatsappCanonicalLocationFilter,
