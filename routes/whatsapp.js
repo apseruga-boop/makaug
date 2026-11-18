@@ -9786,16 +9786,25 @@ function agentHelpReply(agent = {}) {
   ].join('\n');
 }
 
+/** The answer to an agent's question that a person has to answer. */
+function agentQuestionReply(agent = {}) {
+  const first = agentGreetingName(agent, '');
+  const contact = agentHelpContact();
+  return `👍 Thanks${first ? ` ${first}` : ''}, I have passed your question to *${contact.name}* from our team, who will answer you here.`;
+}
+
 /** Tell Ronald (and the team alert list) that an agent asked for a person. */
-function alertTeamAgentNeedsHelp({ agent = {}, phone = '', said = '' } = {}) {
+function alertTeamAgentNeedsHelp({ agent = {}, phone = '', said = '', title = 'Agent asked for help on WhatsApp', withLastLead = false } = {}) {
   deferWhatsappWork('agent help alert', async () => {
     const number = String(agent.whatsapp || agent.phone || phone || '').replace(/\D+/g, '');
+    const lastLead = withLastLead ? await lastLeadSentToAgent(agent).catch(() => '') : '';
     const body = [
-      `🙋 *Agent asked for help on WhatsApp*`,
+      `🙋 *${title}*`,
       `${agent.full_name || 'An agent'}${agent.company_name ? ` (${agent.company_name})` : ''}`,
       number ? `Their number: +${number}` : '',
       number ? `Reply to them: https://wa.me/${number}` : '',
       said ? `They said: "${String(said).slice(0, 160)}"` : '',
+      lastLead,
       '',
       'Please call or WhatsApp them back as soon as you can.'
     ].filter((line, i, all) => line || (i > 0 && all[i - 1])).join('\n');
@@ -9814,6 +9823,31 @@ function alertTeamAgentNeedsHelp({ agent = {}, phone = '', said = '' } = {}) {
       await handoff.deliverWhatsapp({ to, body, kind: 'agent_help_request', leadId: null, nonce });
     }
   });
+}
+
+/**
+ * The lead the lead desk last sent this agent, in the last three days, as one
+ * line for the team: an agent's question is usually about it.
+ */
+async function lastLeadSentToAgent(agent = {}) {
+  if (!agent.id) return '';
+  const row = (await db.query(
+    `SELECT r.sent_at, d.want, d.area, d.budget
+       FROM demand_lead_referrals r
+       JOIN demand_leads d ON d.id = r.demand_lead_id
+      WHERE r.agent_id = $1
+        AND r.sent_at > NOW() - INTERVAL '3 days'
+      ORDER BY r.sent_at DESC
+      LIMIT 1`,
+    [agent.id]
+  ).catch(() => ({ rows: [] }))).rows[0];
+  if (!row) return '';
+  const referral = require('../services/leadReferralService');
+  const hours = Math.max(0, Math.round((Date.now() - new Date(row.sent_at).getTime()) / 3600000));
+  const when = hours < 1 ? 'within the hour' : (hours < 48 ? `${hours} hour${hours === 1 ? '' : 's'} ago` : `${Math.round(hours / 24)} days ago`);
+  const budget = typeof referral.budgetWords === 'function' ? referral.budgetWords(row.want, row.budget) : '';
+  const area = normalizeInput(row.area) && !/^anywhere$/i.test(row.area) ? ` in ${normalizeInput(row.area)}` : '';
+  return `The last lead we sent them (${when}): ${referral.wantPhrase(row.want)}${area}${budget ? `, up to ${budget}` : ''}.`;
 }
 
 /** Tell the team a new agent property is waiting, so review happens the same day. */
@@ -10353,10 +10387,24 @@ function looksLikeAdvertText(text = '') {
   return ADVERT_WORDS.test(raw);
 }
 
+// A question with no property in it: "Is it a mistake or they really want
+// something of 150k" (18 Nov 2026), an agent asking about a lead we had sent
+// him, was taken for a property because it named a price, and he was asked
+// for its photos.
+const QUESTION_OPENING = /^\s*(?:is|are|was|were|do|does|did|can|could|will|would|should|shall|may|what|how|why|when|where|who|which|whose|has|have|pliz|plz|please)\b/i;
+const PROPERTY_THING = /\b(?:house|houses|home|homes|land|plots?|acres?|decimals?|rooms?|apartments?|flats?|rentals?|shops?|offices?|buildings?|bungalows?|villas?|mansions?|duplex|condos?|hostels?|warehouses?|bedrooms?|beds?|kibanja|bibanja|muzigo|mizigo|ennyumba|ettaka|nyumba|ardhi|estate)\b/i;
+
+function isQuestionNotProperty(text = '') {
+  const clean = normalizeInput(text);
+  if (!clean) return false;
+  return (/\?\s*$/.test(clean) || QUESTION_OPENING.test(clean)) && !PROPERTY_THING.test(clean);
+}
+
 function looksLikeForwardedProperty({ cleanBody = '', mediaUrl = '', runtime = {} } = {}) {
   if (mediaUrl || Number(runtime.mediaCount || 0) > 0) return true;
   if (normalizeInput(cleanBody).length < 25) return false;
   if (looksLikeSearchBrief(cleanBody)) return false;
+  if (isQuestionNotProperty(cleanBody)) return false;
   const facts = employeePropertyFacts(cleanBody, {});
   return Boolean(facts.listingType && Number(facts.price) > 0);
 }
@@ -11643,7 +11691,7 @@ async function handleEmployeeWhatsappIntake({
       const payAnswer = payingAgent ? await agentPayLinkAside({ agent: payingAgent, cleanBody: askedText }) : null;
       if (payAnswer) return { handled: true, nextStep: currentStep, message: payAnswer };
     }
-    if (!active && (agentVoiceOnly || AGENT_HELP.test(askedText) || AGENT_IS_IT_DONE.test(askedText) || AGENT_HOW_TO_POST.test(askedText) || WANTS_TO_POST.test(askedText) || AGENT_GREETING.test(askedText) || isAgentProfilePhotoRequest(askedText) || AGENT_SHARE_REQUEST.test(askedText) || AGENT_TERMS_AGREE.isAgreeReply(askedText))) {
+    if (!active && (agentVoiceOnly || AGENT_HELP.test(askedText) || AGENT_IS_IT_DONE.test(askedText) || AGENT_HOW_TO_POST.test(askedText) || WANTS_TO_POST.test(askedText) || AGENT_GREETING.test(askedText) || isAgentProfilePhotoRequest(askedText) || AGENT_SHARE_REQUEST.test(askedText) || AGENT_TERMS_AGREE.isAgreeReply(askedText) || isQuestionNotProperty(askedText))) {
       const askingAgent = await findApprovedAgentByPhone(phone);
       if (askingAgent) {
         if (AGENT_TERMS_AGREE.isAgreeReply(askedText)) {
@@ -11692,6 +11740,14 @@ async function handleEmployeeWhatsappIntake({
         // on top of it (17 Nov 2026).
         if (AGENT_GREETING.test(askedText) && await agentWelcomeIsWaiting(phone)) {
           return { handled: true, nextStep: currentStep, message: agentWelcomeArrivingReply(askingAgent) };
+        }
+        // An agent's question that is not a property goes to a person, with
+        // the lead we last sent them beside it (18 Nov 2026: "Is it a mistake
+        // or they really want something of 150k" was answered "now send the
+        // photos").
+        if (isQuestionNotProperty(askedText)) {
+          alertTeamAgentNeedsHelp({ agent: askingAgent, phone, said: askedText, title: 'Agent question on WhatsApp', withLastLead: true });
+          return { handled: true, nextStep: currentStep, message: agentQuestionReply(askingAgent) };
         }
         return {
           handled: true,
@@ -14514,15 +14570,20 @@ function isUgNlisLandVerificationIntent(text = '') {
 // was answered with 600k, 1M and 1.2M homes because the range parsed as
 // nothing at all.)
 function parseBudgetRange(lower = '') {
-  const m = /(?:between\s+)?(?:(usd|\$|ugx|ush|shs?)\s*)?(\d[\d,]*(?:\.\d+)?)\s*(k|m|thousand|million)?\s*(?:-|–|—|to|and|up to)\s*(?:(usd|\$|ugx|ush|shs?)\s*)?(\d[\d,]*(?:\.\d+)?)\s*(k|m|thousand|million)\b/i.exec(lower);
+  const m = /(?:between\s+)?(?:(usd|\$|ugx|ush|shs?)\s*)?(\d[\d,]*(?:\.\d+)?)\s*(k|m|thousand|million)?\s*(?:-|–|—|to|and|up to)\s*(?:(usd|\$|ugx|ush|shs?)\s*)?(\d[\d,]*(?:\.\d+)?)(?:\s*(k|m|thousand|million))?\b/i.exec(lower);
   if (!m) return null;
+  const lowSuffix = (m[3] || '').toLowerCase();
   const highSuffix = (m[6] || '').toLowerCase();
-  const low = parseNumberToken(m[2], (m[3] || highSuffix).toLowerCase());
+  const low = parseNumberToken(m[2], (lowSuffix || highSuffix).toLowerCase());
   const high = parseNumberToken(m[5], highSuffix);
   if (!low || !high || high < low || low < 1_000) return null;
+  // "150000-250000" (16 Nov 2026) is a range too, read until now as a budget of
+  // 150,000. Figures with no k or m are money only when both are money-sized:
+  // "2-3 bedroom", "50-100 ft" and "2025-2026" are not.
+  if (!lowSuffix && !highSuffix && (low < 10_000 || high < 10_000)) return null;
   // "1-3km", "50x100", "3-4 bedroom": distances and counts never carry k/m.
   const after = lower.slice((m.index || 0) + m[0].length, (m.index || 0) + m[0].length + 12);
-  if (/^\s*(?:km|kilomet|miles?|bed|bedroom|acre|decimal|sq)/i.test(after)) return null;
+  if (/^\s*(?:km|kilomet|miles?|bed|bedroom|acre|decimal|sq|ft\b|feet|metres?|meters?)/i.test(after)) return null;
   const currency = (m[1] || m[4] || '').toLowerCase();
   return { low, high, currency: currency === '$' ? 'usd' : (currency || ''), raw: m[0] };
 }
@@ -15104,6 +15165,16 @@ function whatsappSearchLocationBlockReply(filters = {}, originalText = '') {
  * with a district, and was shown three properties for sale in it, one of
  * them land at USh 500M. The kind of search had been dropped with the place.
  */
+/**
+ * What somebody has said for one search so far, oldest first: the request,
+ * then whatever they added while the bot waited for the place. Kept for the
+ * team, and for the agent the request may be passed to.
+ */
+function searchSaidSoFar(before = '', now = '') {
+  const parts = [normalizeInput(before), normalizeInput(now)].filter(Boolean);
+  return parts.filter((part, index) => parts.indexOf(part) === index).join(' · ').slice(0, 600);
+}
+
 async function holdSearchForArea(phone, filters = {}, queryText = '') {
   await patchSessionData(phone, {
     search_type: normalizeListingType(filters?.searchType || 'any'),
@@ -23401,6 +23472,13 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     let naturalFilters = null;
     if (pendingFilters) {
       naturalFilters = { ...pendingFilters };
+      // "150000-250000 should be near <the office>" (16 Nov 2026), sent while
+      // the bot waited for where the office is: the budget in it was dropped,
+      // and the request an agent was sent two days later had none.
+      const told = extractNaturalSearchFilters(cleanBody, {}, naturalFilters.searchType || searchType || 'any', {}) || {};
+      for (const key of ['maxBudgetUgx', 'minBudgetUgx', 'budgetPeriod', 'pricePeriod', 'bedsMin', 'propertyType']) {
+        if (told[key] && !naturalFilters[key]) naturalFilters[key] = told[key];
+      }
       if ((!naturalFilters.area || naturalFilters.location_blocked) && cleanBody.length >= 2) {
         // The answer may be a sentence ("it is in Kampala, on Jinja Road"): the
         // place in it is the area. And the landmark nobody could place is let
@@ -23430,7 +23508,10 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       naturalFilters = resolveWhatsappSearchLocation(naturalFilters, cleanBody);
       const locationBlockReply = whatsappSearchLocationBlockReply(naturalFilters, cleanBody);
       if (locationBlockReply) {
-        await patchSessionData(phone, { pending_search_filters: naturalFilters });
+        await patchSessionData(phone, {
+          pending_search_filters: naturalFilters,
+          natural_query_text: searchSaidSoFar(pendingFilters ? sessionData.natural_query_text : '', cleanBody)
+        });
         return respond(locationBlockReply, 'search_area');
       }
       const rows = await findPropertiesByNaturalFilters(naturalFilters);
@@ -23452,7 +23533,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           area: naturalFilters.area,
           queryText: cleanBody,
           filters: naturalFilters,
-          notes: `No approved listings found for natural query in search_area: ${cleanBody}`
+          // Everything they said for this search, not only the last word of it
+          // ("Nakawa"), so the agent it is passed to knows what they want.
+          notes: `No approved listings found for natural query in search_area: ${searchSaidSoFar(pendingFilters ? sessionData.natural_query_text : '', cleanBody)}`
         });
         return respond(reply, 'main_menu');
       }
@@ -26645,6 +26728,10 @@ module.exports.__test = {
   pendingAgentHelloReply,
   isStrayKeys,
   talkingWithThemJustNow,
+  isQuestionNotProperty,
+  agentQuestionReply,
+  lastLeadSentToAgent,
+  searchSaidSoFar,
   findPropertiesNearLandmark,
   findStudentRowsForUniversity,
   ACTIVE_COUNTRY_CODE,
