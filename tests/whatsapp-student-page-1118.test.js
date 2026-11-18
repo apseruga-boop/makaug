@@ -116,6 +116,7 @@ test('stray keys in the middle of a conversation get no menu', async () => {
   const guard = source.indexOf("if (isStrayKeys(cleanBody) && await talkingWithThemJustNow(phone, { waMessageId: runtime.waMessageId })) {");
   const fallback = source.indexOf('await conversationalAssistantFallback({', guard);
   const routed = source.lastIndexOf('const next = await routeReply(lang, inferredRoute, { phone, text: cleanBody });', guard);
-  assert.ok(routed > 0 && guard > routed && fallback > guard && fallback - guard < 400);
-  assert.match(source.slice(guard, fallback), /return respond\('', 'main_menu'\);/);
+  // Between them since 18 Nov: the answers for somebody who has asked to join.
+  assert.ok(routed > 0 && guard > routed && fallback > guard && fallback - guard < 1500);
+  assert.match(source.slice(guard, guard + 200), /return respond\('', 'main_menu'\);/);
 });
