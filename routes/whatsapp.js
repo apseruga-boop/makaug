@@ -978,6 +978,9 @@ function cleanDisplayName(value) {
   // "None", "null", "undefined": what a phone or the bridge puts where there is
   // no name. 18 Nov 2026: somebody who said "Hello" was greeted "Good morning, None".
   if (/^(makaug|makaug\.com|whatsapp|you|unknown|codex|none|null|undefined|nil|n\/a|anonymous|no\s*name)$/i.test(withoutBusinessSuffix)) return '';
+  // A user name, not a name: letters run into digits, as "<name>189" (18 Nov
+  // 2026: "Good afternoon, <name>189").
+  if (/^\p{L}+\d+$/u.test(withoutBusinessSuffix)) return '';
   if (/\bcodex\b/i.test(withoutBusinessSuffix)) return '';
   if (/^https?:\/\//i.test(withoutBusinessSuffix)) return '';
   return withoutBusinessSuffix.replace(/[^\p{L}\p{N}\s'.-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 40);
@@ -21892,6 +21895,82 @@ async function talkToPersonReply({ phone, lang = 'en', contactName = '', text = 
   return talkToPersonMessage(lang);
 }
 
+// After "Join makaug as an agent": what do you need, how do I start.
+const JOIN_FOLLOW_UP_QUESTION = /\b(?:what (?:do|does|did) (?:you|u) (?:need|want|require)|what (?:is|are) (?:needed|required|the requirements?)|requirements?|how (?:do|can|will) i (?:join|start|register|sign ?up|begin|be (?:an )?agent)|what next|next steps?|what should i (?:do|send|bring)|which documents?|what documents?)\b/i;
+// "I want to be sending my properties to you such that I get customs".
+const WANTS_TO_SEND_PROPERTIES = /\b(?:send(?:ing)?|post(?:ing)?|list(?:ing)?|upload(?:ing)?|advertis(?:e|ing)|bring(?:ing)?|put(?:ting)?)\b.{0,30}\b(?:my|our)\s+(?:properties|listings|houses|plots|rentals)\b|\b(?:get|find|reach)\s+(?:more\s+)?(?:customers?|customs|clients?|buyers?|tenants?)\b/i;
+
+/** Whether this number asked to join as an agent in the last two days. */
+async function askedToJoinRecently(phone = '') {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 9) return false;
+  const row = (await db.query(
+    `SELECT 1 FROM audit_logs
+      WHERE action = 'agent_join_requested'
+        AND details->>'phone' = $1
+        AND created_at > NOW() - INTERVAL '2 days'
+      LIMIT 1`,
+    [digits]
+  ).catch(() => ({ rows: [] }))).rows[0];
+  return Boolean(row);
+}
+
+/**
+ * What joining takes, for somebody who asked to join and asks what is needed;
+ * or, to "I want to send my properties to get customers", that this is how it
+ * works, and what it takes.
+ */
+function agentJoinNeedsReply({ sendingProperties = false } = {}) {
+  const contact = agentHelpContact();
+  if (sendingProperties) {
+    return [
+      '✅ Yes, that is exactly how makaug works: once you are approved as an agent, you send your properties here, they go live on makaug.com under your name, and buyers and tenants call you directly.',
+      '',
+      `To approve you we need your full name and the area you work in, a photo of your ID, and a profile photo or logo. It is ${agentMonthlyFeeLabel()} a month, no commission.`,
+      '',
+      `Sign up yourself here: ${HOME_URL}/broker-signup`,
+      `or wait for *${contact.name}*'s call: he will set you up.`
+    ].join('\n');
+  }
+  return [
+    '🧑‍💼 *To join makaug as an agent, we need:*',
+    '1. Your full name, and the area and district you work in',
+    '2. A clear photo of your ID (kept private, only to check it is you)',
+    '3. A profile photo or your company logo',
+    '',
+    `It is ${agentMonthlyFeeLabel()} a month, short stays included, and no commission.`,
+    '',
+    `Sign up yourself here: ${HOME_URL}/broker-signup`,
+    `or wait for *${contact.name}*'s call: he will set you up.`,
+    '',
+    'Once you are approved, send each property here: its photos, with one message saying what it is, rent or sale, the area and the price. Buyers and tenants then call you directly.'
+  ].join('\n');
+}
+
+/** Not understood twice in a row: a person takes it, and they are told so. */
+async function notUnderstoodTwiceReply({ phone, lang = 'en', contactName = '', text = '' } = {}) {
+  const said = normalizeInput(text).slice(0, 400);
+  await safeConversationControl(phone, {
+    status: 'needs_human',
+    priority: 'high',
+    category: 'support',
+    last_summary: said,
+    metadata: {
+      needs_person_reason: 'not_understood_twice',
+      needs_person_at: new Date().toISOString(),
+      needs_person_source: 'text'
+    }
+  }, 'whatsapp_not_understood_twice');
+  deferWhatsappWork('not-understood-twice alert', () => require('../services/leadDeskService').alertTeamConversationNeedsPerson(db, {
+    phone,
+    contactName,
+    summary: said,
+    reason: 'The assistant did not understand them twice in a row',
+    language: languageDisplayName(lang)
+  }));
+  return `Sorry, I did not understand that.\n\n${talkToPersonMessage(lang)}`;
+}
+
 // What it costs to list, asked in words.
 const LISTING_COST_QUESTION = /\b(?:how much|cost|costs|charge|charges|fee|fees|pay|price)\b.{0,40}\b(?:to|for) (?:list|listing|post|posting|advertise|advertising|upload|put up|join|become|register|subscribe)\b|\bis (?:it |listing |posting |advertising )?free (?:to |for )?(?:list|post|advertis|join)|\bdo you charge\b|\b(?:listing|posting|advertising|agent|subscription) (?:fee|fees|cost|costs|charge|charges|price)\b/i;
 const COST_ANSWER_STEPS = new Set(['', 'main_menu', 'greeting', 'listing_type', 'ownership', 'search_type', 'submitted']);
@@ -23096,17 +23175,35 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       return respond('', 'main_menu');
     }
 
-    return respond(
-      await conversationalAssistantFallback({
-        phone,
-        body: cleanBody,
-        lang,
-        step,
-        intentResult,
-        sessionData
-      }),
-      'main_menu'
-    );
+    // 18 Nov 2026: somebody who had just picked "Join makaug as an agent" asked
+    // "What do you need", then wrote "I want to be sending my properties to you
+    // such that I get customers". Both got the menu, the second time opened
+    // with "Here it is again". Within two days of asking to join, a question
+    // about joining, or about sending their properties, is answered with what
+    // joining takes.
+    if ((JOIN_FOLLOW_UP_QUESTION.test(cleanBody) || WANTS_TO_SEND_PROPERTIES.test(cleanBody)) && await askedToJoinRecently(phone)) {
+      return respond(agentJoinNeedsReply({ sendingProperties: WANTS_TO_SEND_PROPERTIES.test(cleanBody) }), 'main_menu');
+    }
+
+    const fallback = await conversationalAssistantFallback({
+      phone,
+      body: cleanBody,
+      lang,
+      step,
+      intentResult,
+      sessionData
+    });
+    // The menu, a second time, to somebody it did not help the first time, is
+    // a loop: a person takes it instead (18 Nov 2026).
+    if (fallback === friendlyUnknownReply(lang)) {
+      const before = Date.parse(sessionData.last_unknown_fallback_at || '');
+      if (Number.isFinite(before) && Date.now() - before < 30 * 60 * 1000) {
+        await patchSessionData(phone, { last_unknown_fallback_at: null });
+        return respond(await notUnderstoodTwiceReply({ phone, lang, contactName: runtime.contactName || sessionData.contact_name || '', text: cleanBody }), 'main_menu');
+      }
+      await patchSessionData(phone, { last_unknown_fallback_at: new Date().toISOString() });
+    }
+    return respond(fallback, 'main_menu');
   }
 
   // SEARCH TYPE
@@ -26723,6 +26820,12 @@ module.exports.__test = {
   EMPLOYEE_MEDIA_FAILURE_RE,
   EMPLOYEE_VOICE_NOTE_REPLY,
   cleanDisplayName,
+  JOIN_FOLLOW_UP_QUESTION,
+  WANTS_TO_SEND_PROPERTIES,
+  askedToJoinRecently,
+  agentJoinNeedsReply,
+  notUnderstoodTwiceReply,
+  friendlyUnknownReply,
   pendingAgentBatchLine,
   findPendingAgentByPhone,
   pendingAgentHelloReply,
