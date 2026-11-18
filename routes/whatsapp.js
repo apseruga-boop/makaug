@@ -1708,6 +1708,29 @@ function photoStepReminderMessage(lang, step) {
   return messages[code] || messages.en;
 }
 
+// A slip of the thumb, not a request: letters run into a digit ("Hl9", "k9"),
+// or two consonants ("Hl", "hm").
+const STRAY_KEYS_RE = /^(?:\p{L}{1,4}\p{N}{1,3}|[bcdfghjklmnpqrstvwxz]{2})$/iu;
+
+function isStrayKeys(text = '') {
+  return STRAY_KEYS_RE.test(normalizeInput(text).replace(/\s+/g, ''));
+}
+
+/** Whether a message went either way with this number in the last two minutes, besides this one. */
+async function talkingWithThemJustNow(phone, { waMessageId = '', seconds = 120 } = {}) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 9) return false;
+  const row = (await db.query(
+    `SELECT 1 FROM whatsapp_messages
+      WHERE user_phone = ANY($1::text[])
+        AND created_at > NOW() - ($2 || ' seconds')::interval
+        AND COALESCE(wa_message_id, '') <> $3
+      LIMIT 1`,
+    [[String(phone), digits, `+${digits}`], String(seconds), String(waMessageId || '')]
+  ).catch(() => ({ rows: [] }))).rows[0];
+  return Boolean(row);
+}
+
 function friendlyUnknownReply(lang) {
   const code = resolveLangCode(lang);
   const messages = {
@@ -1871,6 +1894,10 @@ function whatsappSearchResultsUrl(searchType = 'any', area = '') {
   const params = new URLSearchParams();
   const type = normalizeListingType(searchType || 'any');
   const cleanArea = normalizeInput(area);
+  // Student rooms near a university: that university's page on the website.
+  if (type === 'student' && cleanArea && normalizeUniversityName(cleanArea).toLowerCase() === cleanArea.toLowerCase()) {
+    return `${HOME_URL}/student-accommodation/university/${require('../utils/publicSeoFacets').universitySlug(normalizeUniversityName(cleanArea))}`;
+  }
   if (type && type !== 'any') params.set('listing_type', type);
   if (cleanArea && cleanArea.toLowerCase() !== 'any area') params.set('area', cleanArea);
   const query = params.toString();
@@ -2324,8 +2351,12 @@ const WEBSITE_PREFILL_RULES = [
 ];
 const WEBSITE_PREFILL_NON_AREA_SEGMENTS = new Set([
   'land', 'sale', 'rent', 'students', 'student', 'commercial', 'for-sale', 'to-rent', 'houses', 'homes',
-  'properties', 'property', 'brokers', 'agents', 'search', 'plots', 'rentals'
+  'properties', 'property', 'brokers', 'agents', 'search', 'plots', 'rentals',
+  'university', 'universities', 'hostels', 'student-accommodation', 'campus'
 ]);
+// The website's pages for one university: /student-accommodation/university/<slug>
+// (and the older /hostels/<slug>). The page names the university, not a place.
+const WEBSITE_PREFILL_UNIVERSITY_PAGE = /^\/(?:student-accommodation\/university|hostels)\/([a-z0-9-]+)/i;
 const WEBSITE_PREFILL_PAGE = /\bPage:\s*(?:https?:\/\/)?(?:www\.)?makaug\.com(\/[^\s?#]*)?\S*/i;
 
 /** What the visitor typed themselves, in or around the message the website wrote for them. */
@@ -2350,10 +2381,16 @@ function websitePrefillSearchText(input = '') {
   const rule = WEBSITE_PREFILL_RULES.find((entry) => entry.re.test(text));
   if (!rule) return '';
   let area = '';
+  let university = null;
   const page = text.match(WEBSITE_PREFILL_PAGE);
   if (page && page[1]) {
+    // 18 Nov 2026: from makaug.com/student-accommodation/university/kyambogo the
+    // place was taken to be "University", and a student was told there was no
+    // student listing "in University". The page names the university.
+    const universityPage = page[1].match(WEBSITE_PREFILL_UNIVERSITY_PAGE);
+    if (universityPage) university = require('../utils/publicSeoFacets').universityForSlug(universityPage[1].toLowerCase());
     const segments = page[1].split('/').map((part) => part.trim().toLowerCase()).filter(Boolean);
-    const slug = segments.slice(1).find((part) => !WEBSITE_PREFILL_NON_AREA_SEGMENTS.has(part) && /^[a-z][a-z-]*[a-z]$/.test(part));
+    const slug = university ? '' : segments.slice(1).find((part) => !WEBSITE_PREFILL_NON_AREA_SEGMENTS.has(part) && /^[a-z][a-z-]*[a-z]$/.test(part));
     if (slug && !/^(?:[0-9a-f]{8}-|page-)/.test(slug)) {
       area = slug.split('-').filter(Boolean).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     }
@@ -2361,7 +2398,8 @@ function websitePrefillSearchText(input = '') {
   const own = websitePrefillOwnWords(text, rule);
   // A place the visitor names themselves comes before the one in the page address.
   const ownNamesPlace = /\b(?:in|at|near|nearby|around|within|from|close to|next to|opposite|behind)\s+[a-z]/i.test(own);
-  const search = area && !ownNamesPlace ? `${rule.query} in ${area}` : rule.query;
+  const where = university ? `near ${university.name}` : (area ? `in ${area}` : '');
+  const search = where && !ownNamesPlace ? `${rule.query} ${where}` : rule.query;
   return own ? `${search}. ${own}` : search;
 }
 
@@ -15596,11 +15634,22 @@ async function findPropertiesNearLandmark(filters = {}) {
     { ...filters, area: null, district: null },
     radiusMiles
   );
-  if (near.usedNearestFallback) return [];
-  const header = proximity.generic && proximity.kind
-    ? `around ${proximity.label} (nearest ${proximity.kind} shown for each)`
-    : `within ${radiusMiles % 1 ? radiusMiles.toFixed(1) : radiusMiles} mile${radiusMiles === 1 ? '' : 's'} of ${proximity.label}`;
-  return near.rows.map((row) => {
+  // Student rooms near a university are also the ones that name it, as its
+  // page on the website lists them, map pin or not (18 Nov 2026: a student
+  // from the Kyambogo University page was offered nothing near it, while the
+  // page listed thirteen).
+  const university = proximity.kind === 'university' && normalizeListingType(filters.searchType || 'any') === 'student'
+    ? normalizeUniversityName(proximity.target || proximity.label)
+    : '';
+  const named = university ? await findStudentRowsForUniversity(university, filters).catch(() => []) : [];
+  if (near.usedNearestFallback && !named.length) return [];
+  const nearRows = near.usedNearestFallback ? [] : near.rows;
+  const header = named.length
+    ? `near ${university}`
+    : (proximity.generic && proximity.kind
+      ? `around ${proximity.label} (nearest ${proximity.kind} shown for each)`
+      : `within ${radiusMiles % 1 ? radiusMiles.toFixed(1) : radiusMiles} mile${radiusMiles === 1 ? '' : 's'} of ${proximity.label}`);
+  const rows = nearRows.map((row) => {
     const out = {
       ...row,
       distance_label: `${landmarks.formatDistance(row.distance_km)} from ${proximity.label}`,
@@ -15612,6 +15661,66 @@ async function findPropertiesNearLandmark(filters = {}) {
     }
     return out;
   });
+  if (!named.length) return rows;
+  const shown = new Set(rows.map((row) => String(row.id)));
+  const more = named.filter((row) => !shown.has(String(row.id)));
+  const total = Math.max(rows.length, ...rows.map((row) => Number(row.total_count) || 0)) + more.length;
+  return [
+    ...rows,
+    ...more.map((row) => ({
+      ...row,
+      distance_label: Number(row.distance_to_uni_km) > 0 ? `${landmarks.formatDistance(Number(row.distance_to_uni_km))} from ${university}` : '',
+      proximity_header: header
+    }))
+  ].slice(0, WHATSAPP_PROPERTY_RESULT_LIMIT).map((row) => ({ ...row, total_count: total }));
+}
+
+/**
+ * Approved student rooms, and rooms to rent, that name this university as the
+ * one they are near: what its page on the website lists. Nearest first, where
+ * the listing says how near.
+ */
+async function findStudentRowsForUniversity(university = '', filters = {}) {
+  const name = normalizeUniversityName(university);
+  if (!name) return [];
+  const values = ['approved'];
+  let where = 'WHERE p.status = $1';
+  where += addWhatsappPublicListingFilter(values, 'p');
+  where += ` AND LOWER(COALESCE(p.listing_type, '')) IN ('student', 'students', 'rent', 'rental', 'to_rent')
+    AND COALESCE(NULLIF(p.nearest_university, ''), p.extra_fields->>'nearest_university', p.extra_fields->>'student_university', p.extra_fields->>'student_campus', '') <> ''`;
+  if (Number(filters.maxBudgetUgx) > 0) {
+    values.push(Number(filters.maxBudgetUgx));
+    where += ` AND p.price IS NOT NULL AND p.price <= $${values.length}`;
+  }
+  const result = await db.query(
+    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type,
+            p.nearest_university, p.distance_to_uni_km, p.room_type, p.room_arrangement, p.students_welcome, p.extra_fields,
+            p.latitude, p.longitude, img.url AS primary_image_url
+     FROM properties p
+     LEFT JOIN LATERAL (
+       SELECT CASE WHEN url ~* '^https?://' AND length(url) < 500 THEN url ELSE NULL END AS url
+       FROM property_images
+       WHERE property_id = p.id
+       ORDER BY is_primary DESC, sort_order ASC, created_at ASC
+       LIMIT 1
+     ) img ON TRUE
+     ${where}
+     ORDER BY ${searchOrderBySql('p')}
+     LIMIT 500`,
+    values
+  );
+  // The university each listing names, read the way the website reads it.
+  const named = result.rows.filter((row) => normalizeUniversityName(
+    row.nearest_university
+    || row.extra_fields?.nearest_university
+    || row.extra_fields?.student_university
+    || row.extra_fields?.student_campus
+  ) === name);
+  const km = (row) => (Number(row.distance_to_uni_km) > 0 ? Number(row.distance_to_uni_km) : Infinity);
+  return named
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => (km(a.row) - km(b.row)) || (a.index - b.index))
+    .map(({ row }) => ({ ...row, total_count: named.length }));
 }
 
 async function findPropertiesByNaturalFilters(filters = {}) {
@@ -22909,6 +23018,13 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       return respond(next.message, next.nextStep);
     }
 
+    // "Hl9" (18 Nov 2026): a few stray keys, seven seconds after a student's
+    // request and before its answer had arrived. Answered with the menu, they
+    // buried the answer under it. In the middle of a conversation they are let be.
+    if (isStrayKeys(cleanBody) && await talkingWithThemJustNow(phone, { waMessageId: runtime.waMessageId })) {
+      return respond('', 'main_menu');
+    }
+
     return respond(
       await conversationalAssistantFallback({
         phone,
@@ -26527,6 +26643,10 @@ module.exports.__test = {
   pendingAgentBatchLine,
   findPendingAgentByPhone,
   pendingAgentHelloReply,
+  isStrayKeys,
+  talkingWithThemJustNow,
+  findPropertiesNearLandmark,
+  findStudentRowsForUniversity,
   ACTIVE_COUNTRY_CODE,
   ACTIVE_CURRENCY,
   addWhatsappCanonicalLocationFilter,
