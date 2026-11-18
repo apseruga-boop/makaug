@@ -1120,7 +1120,7 @@ const originalGetClient = db.getClient;
     propertiesFailed: 1
   });
   assert.equal(completed.pendingAgentNotification.status, 'awaiting_founder_approval');
-  assert.match(completed.message, /1 properties sent for staff review/);
+  assert.match(completed.message, /1 property sent for staff review/);
   assert.match(completed.message, /Batch complete for Francis Isabirye/);
   assert.match(completed.message, /Properties received: 3/);
   assert.match(completed.message, /Newly sent to staff review: 1/);
