@@ -37,6 +37,17 @@ const WANT_PHRASES = Object.freeze({
   any: 'a property'
 });
 
+// A budget for these is a month's rent (18 Nov 2026: a student's room at
+// 150,000-250,000 a month reached an agent as "Budget: up to UGX 150,000",
+// and he asked whether it was a mistake).
+const MONTHLY_WANTS = new Set(['rent', 'student', 'students']);
+
+function budgetWords(type = '', budget = 0) {
+  const amount = money(budget);
+  if (!amount) return '';
+  return `${amount}${MONTHLY_WANTS.has(text(type, 'any').toLowerCase()) ? ' a month' : ''}`;
+}
+
 function wantPhrase(type = '') {
   const key = text(type, 'any').toLowerCase().replace(/\s+/g, '_');
   return WANT_PHRASES[key] || `a ${key.replace(/_/g, ' ')} property`;
@@ -91,14 +102,14 @@ function buildAgentReferralMessage({ agent = {}, need = {} } = {}) {
     lines.push('');
     if (p.name) lines.push(`Name: ${p.name}`);
     if (p.phone) lines.push(`WhatsApp: ${displayPhone(p.phone)}`);
-    if (money(p.budget)) lines.push(`Budget: up to ${money(p.budget)}`);
+    if (budgetWords(need.type, p.budget)) lines.push(`Budget: up to ${budgetWords(need.type, p.budget)}`);
     if (cleanSaid(p.said)) lines.push(`What they said: "${cleanSaid(p.said).slice(0, 220)}"`);
     if (p.askedAt) lines.push(`Asked: ${ago(p.askedAt)}`);
   } else {
     lines.push(`We have ${people.length} leads for you: people looking for ${what}${where}.`);
     lines.push('');
     people.forEach((p, index) => {
-      const bits = [p.name, displayPhone(p.phone), money(p.budget) ? `budget up to ${money(p.budget)}` : '', p.askedAt ? `asked ${ago(p.askedAt)}` : '']
+      const bits = [p.name, displayPhone(p.phone), budgetWords(need.type, p.budget) ? `budget up to ${budgetWords(need.type, p.budget)}` : '', p.askedAt ? `asked ${ago(p.askedAt)}` : '']
         .filter(Boolean);
       lines.push(`${index + 1}. ${bits.join(' · ')}`);
       const said = cleanSaid(p.said);
@@ -431,5 +442,6 @@ module.exports = {
   markLeadReferred,
   sendReferral,
   wantPhrase,
+  budgetWords,
   _recordLeadHandoff: recordLeadHandoff
 };
