@@ -6606,20 +6606,50 @@ function employeeWaitingCaptionCount(data = {}) {
   return pendingWaiting + employeePendingSubmissionQueue(data).filter((entry) => entry.caption && !entry.media.length).length;
 }
 
-function employeeShouldHoldUnassignedMedia({ data = {}, ownCaption = false, senderMs = 0, burstSize = 0 } = {}) {
-  if (ownCaption) return false;
-  if (data.whatsapp_agent_self_intake === true) return false;
+/**
+ * 19 Nov 2026, Ronald for a new agent: "…akright City … 6 bedroom", a photo,
+ * "25decimals … bwebajja -dundu …", a video, a survey map, all inside four
+ * seconds. The video was a tour of the Akright house; it went up on the
+ * Bwebajja plot because it came after that description. Messages forwarded
+ * together reach us a second or less apart, in the order of the chat they came
+ * from, and that order does not say which photo is whose. A photo arriving
+ * that close behind a description is held for a moment instead of being given
+ * to it; when the burst is over it goes to that description if the run held no
+ * other (settleHeldMediaBySenderTime), and otherwise it is asked about.
+ */
+const EMPLOYEE_FORWARD_RUN_GAP_MS = 3000;
+
+function employeePreviousSenderMs(data = {}, senderMs = 0) {
+  const earlier = (Array.isArray(data.recent_sender_ms) ? data.recent_sender_ms : [])
+    .map(Number)
+    .filter((t) => Number.isFinite(t) && t > 0 && t < Number(senderMs));
+  return earlier.length ? Math.max(...earlier) : 0;
+}
+
+/** Why a photo with no caption is held: '' to place it now, otherwise the reason. */
+function employeeHoldReason({ data = {}, ownCaption = false, senderMs = 0, burstSize = 0, senderTimeKnown = false } = {}) {
+  if (ownCaption) return '';
+  if (data.whatsapp_agent_self_intake === true) return '';
   // 5 Nov 2026: three descriptions in two seconds, then the photos. The first
   // six photos slipped in before the burst was big enough to notice, and each
   // waiting description was handed one — the Sseguku house went up on the
   // Mutundwe listing. With more than one description waiting, a photo with no
   // caption of its own is a guess whatever the pace, and is held.
-  if (employeeWaitingCaptionCount(data) > 1) return true;
-  if (Number(burstSize) < EMPLOYEE_SENDER_BURST_MIN) return false;
+  const waiting = employeeWaitingCaptionCount(data);
+  if (waiting > 1) return 'several_waiting';
+  if (senderTimeKnown && waiting === 1 && (data.property_batch_mode || 'multiple') === 'multiple') {
+    const previous = employeePreviousSenderMs(data, senderMs);
+    if (previous && Number(senderMs) - previous <= EMPLOYEE_FORWARD_RUN_GAP_MS) return 'forward_run';
+  }
+  if (Number(burstSize) < EMPLOYEE_SENDER_BURST_MIN) return '';
   const lastAlbum = Number(data.last_album_sender_ms || 0);
   const lastText = Number(data.last_text_caption_sender_ms || 0);
   const inAlbum = lastAlbum > 0 && lastAlbum >= lastText && senderMs - lastAlbum <= EMPLOYEE_ALBUM_GAP_MS;
-  return !inAlbum;
+  return inAlbum ? '' : 'burst';
+}
+
+function employeeShouldHoldUnassignedMedia(options = {}) {
+  return Boolean(employeeHoldReason(options));
 }
 
 function employeeUnassignedMedia(data = {}) {
@@ -8827,7 +8857,10 @@ function agentConversationalAside({ data = {}, cleanBody = '' } = {}) {
 }
 
 // "Hi makaug" too: it is what the link staff send a new agent types for them (17 Nov 2026).
-const AGENT_GREETING = /^\s*(hi|hii+|hey|hello+|helo|yo|hallo|good\s*(morning|afternoon|evening|day)|morning|afternoon|evening|greetings|start|menu|hi there|gyebale ?ko|oli otya)(?:\s+makaug(?:\.com)?)?\b[\s.!,👋😊🙏]*$/i;
+// "Hlo" (19 Nov 2026): a new agent's first word to us, his welcome waiting
+// for it, was not read as hello, and he was sent the customer menu and the
+// language list on top of his welcome. The ways people here write hello.
+const AGENT_GREETING = /^\s*(hi|hii+|hie|hy|hey|hello+|hellow|helo|hlo+|hlw|hallo|halo|yo|good\s*(morning|afternoon|evening|day)|gu?d\s*(morning|afternoon|evening|day)|morning|afternoon|evening|greetings|start|menu|hi there|gyebale ?ko|oli otya)(?:\s+(?:makaug(?:\.com)?|team|sir|boss))?\b[\s.!,👋😊🙏]*$/i;
 const AGENT_TERMS_AGREE = require('../services/agentTermsService');
 const AGENT_SHARE_REQUEST = /\b(share|my (link|card|profile|page|listings?|properties)|send me (my|the) (link|card|profile)|how do i share|agent card)\b/i;
 
@@ -13463,7 +13496,14 @@ async function handleEmployeeWhatsappIntake({
     });
     const ownMediaCaption = !placeholderBody && Boolean(normalizeInput(cleanBody));
     const mediaSenderMs = Number(data.current_sender_ms || 0) || Date.now();
-    if (employeeShouldHoldUnassignedMedia({ data, ownCaption: ownMediaCaption, senderMs: mediaSenderMs, burstSize: employeeBurstSize })) {
+    const holdReason = employeeHoldReason({
+      data,
+      ownCaption: ownMediaCaption,
+      senderMs: mediaSenderMs,
+      burstSize: employeeBurstSize,
+      senderTimeKnown: Number(runtime.senderMs || 0) > 0
+    });
+    if (holdReason) {
       let held = [];
       try {
         held = await storeEmployeeMedia(candidates, { privateMedia: false, phone, inboundMessageId, provider: runtime.provider });
@@ -13474,8 +13514,10 @@ async function handleEmployeeWhatsappIntake({
       const pool = employeeUnassignedMedia(data);
       held.forEach((item) => pool.push({ ...item, sender_ms: mediaSenderMs, inbound_message_id: normalizeInput(inboundMessageId) }));
       data.employee_unassigned_media = pool.slice(-120);
-      const firstNotice = data.employee_unassigned_notice_sent !== true;
-      data.employee_unassigned_notice_sent = true;
+      // Held for a moment after its one description is how a forwarded
+      // property arrives: it is placed when the burst is over, with nothing to say.
+      const firstNotice = holdReason !== 'forward_run' && data.employee_unassigned_notice_sent !== true;
+      if (firstNotice) data.employee_unassigned_notice_sent = true;
       await replaceEmployeeSession(phone, currentStep, data);
       return {
         handled: true,
@@ -16607,6 +16649,22 @@ async function settleHeldMediaBySenderTime({ phone, data = {}, currentStep = 'em
   });
   if (!captions.length || captions.some((entry) => !(entry.ms > 0))) return [];
   const media = held.map((item) => ({ ...item, ms: Number(item.sender_ms), caption: '' }));
+  // Inside one run of messages forwarded together, the order says nothing about
+  // which photo is whose (19 Nov 2026: a house tour forwarded after the next
+  // property's description). A run with two descriptions in it is asked about.
+  const timeline = [
+    ...captions.map((entry) => ({ ms: entry.ms, description: true })),
+    ...media.map((item) => ({ ms: item.ms, description: false }))
+  ].sort((a, b) => a.ms - b.ms);
+  let run = 0;
+  let previousMs = -Infinity;
+  const descriptionsPerRun = new Map();
+  for (const event of timeline) {
+    if (event.ms - previousMs > EMPLOYEE_FORWARD_RUN_GAP_MS) run += 1;
+    previousMs = event.ms;
+    if (event.description) descriptionsPerRun.set(run, (descriptionsPerRun.get(run) || 0) + 1);
+  }
+  if ([...descriptionsPerRun.values()].some((count) => count > 1)) return [];
   const orphans = pairForwardedAlbums(captions, media);
   if (orphans.length || captions.some((entry) => !entry.media.length)) return [];
 
@@ -16741,6 +16799,11 @@ async function buildEmployeeBatchSummary(phone, since) {
       // has become complete (16 Nov 2026).
       keptSaved = (await settleAgentWaitingAdverts({ phone, data })).saved;
     } else {
+      // Photos held a moment behind their one description (a property
+      // forwarded as its words and then its photos) go to it now that the
+      // burst is over; a run with more than one description stays held.
+      const pairedHeld = await settleHeldMediaBySenderTime({ phone, data });
+      if (pairedHeld.length) await flushReadyEmployeeSubmissions({ phone, currentStep: 'employee_property_media', data, inboundMessageId: '' });
       keptSaved = await saveReadyKeptSubmissions({ phone, data });
     }
   } catch (error) {
@@ -16805,7 +16868,7 @@ async function buildEmployeeBatchSummary(phone, since) {
   if (heldMedia.length) {
     notSaved.push({
       label: `${heldCount} photo${heldCount === 1 ? '' : 's'}/video${heldCount === 1 ? '' : 's'} sent without a description (held, not guessed)`,
-      needs: 'each property sent as its photos with the description as the caption'
+      needs: 'each property sent again on its own: its description, then its photos'
     });
   }
   const duplicateLines = employeeBatchDuplicateLines(data);
@@ -16816,9 +16879,12 @@ async function buildEmployeeBatchSummary(phone, since) {
   const lines = [];
   const everythingReady = notSaved.length > 0
     && notSaved.every((item) => /^nothing more\b/i.test(item.needs));
+  // The held photos are not a property of their own: "all 10 properties below"
+  // over nine descriptions and a line of photos miscounted the batch.
+  const propertiesNotSaved = notSaved.length - (heldMedia.length ? 1 : 0);
   lines.push(!saved.length && !notSaved.length
     ? '📋 *Nothing new in this batch* — every property sent is already on makaug.'
-    : employeeBatchSummaryHeadline(saved.length, notSaved.length, everythingReady));
+    : employeeBatchSummaryHeadline(saved.length, Math.max(propertiesNotSaved, saved.length ? 0 : 1), everythingReady));
   if (duplicateLines.length) {
     lines.push('', '↩️ *Already on makaug, not added again:*', ...duplicateLines);
   }
@@ -16841,7 +16907,9 @@ async function buildEmployeeBatchSummary(phone, since) {
       : allNeedMedia
         ? (notSaved.length === 1
           ? 'Send its photos or video and I will save it.'
-          : 'Send the photos or video for each one, newest caption first, and I will save them.')
+          // 19 Nov 2026: "newest caption first" sent Ronald back to the same
+          // mix-up. One property at a time is the layout that cannot be misread.
+          : 'Send them one property at a time: the description, then that property\'s photos straight after it, and leave a few seconds before the next property. I will save each one as it comes.')
         : (notSaved.length === 1
           ? 'Reply with just the missing detail (for example "Kira, Wakiso") and I will add it. You do not need to resend the media.'
           : 'Reply with the missing detail for the first one listed and I will add it, then the next. You do not need to resend the media.'));
@@ -26993,6 +27061,8 @@ module.exports.__test = {
   noteEmployeeBatchDuplicate,
   employeeSenderMs,
   employeeShouldHoldUnassignedMedia,
+  employeeHoldReason,
+  EMPLOYEE_FORWARD_RUN_GAP_MS,
   employeeCaptionLooksOffPlan,
   offPlanProjectNameFromCaption,
   createOffPlanDraftFromIntake,
