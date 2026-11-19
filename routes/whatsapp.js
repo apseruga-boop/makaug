@@ -2570,17 +2570,17 @@ function parseListingPriceDraft(input = '') {
     const metadata = propertyPriceMetadata(sourceFragment);
     if (metadata.supported && Number(metadata.price) >= 10000) return Number(metadata.price);
   }
-  const millionMatch = clean.match(/\b(\d+(?:\.\d+)?)\s*(m|mn|mil|million)\b/i);
+  const millionMatch = clean.match(/\b(\d+(?:\.\d+)?)\s*(m|mn|mil|millions?)\b/i);
   if (millionMatch) {
     const value = Math.round(Number(millionMatch[1]) * 1000000);
     if (value >= 10000) return value;
   }
-  const thousandMatch = clean.match(/\b(\d+(?:\.\d+)?)\s*(k|thousand)\b/i);
+  const thousandMatch = clean.match(/\b(\d+(?:\.\d+)?)\s*(k|thousands?)\b/i);
   if (thousandMatch) {
     const value = Math.round(Number(thousandMatch[1]) * 1000);
     if (value >= 10000) return value;
   }
-  const billionMatch = clean.match(/\b(\d+(?:\.\d+)?)\s*(b|bn|bil|billion)\b/i);
+  const billionMatch = clean.match(/\b(\d+(?:\.\d+)?)\s*(b|bn|bil|billions?)\b/i);
   if (billionMatch) {
     const value = Math.round(Number(billionMatch[1]) * 1000000000);
     if (value >= 10000) return value;
@@ -5566,6 +5566,9 @@ const EMPLOYEE_INTAKE_MIN_PRICE = 10000;
  */
 function normalizeCaptionPriceNotation(caption = '') {
   return String(caption || '')
+    // "1.5 billions negotiable" (a new agent's Akright house, 19 Nov 2026) was read as
+    // no price at all, and the house was given the next advert's 220m.
+    .replace(/(\d\s*)(billion|million|thousand)s\b/gi, '$1$2')
     // "Price 25.m per acre": a full stop typed between the figure and its m.
     // Read as no price at all, so a three-acre plot was held back for a price
     // its caption gave, and the batch it was in was never closed (14 Nov 2026).
@@ -5819,12 +5822,18 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     listingType = 'rent';
   }
   const bedroomDraft = parseEmployeeBedroomDraft(cleanCaption);
+  // "…akright City estates entebbe road sectors,6 bedroom, land size 25
+  // decimals title on table" (19 Nov 2026) went up as land: a plot has no
+  // bedrooms, so a count of them is the house on it.
+  const countsItsOwnBedrooms = /\b\d{1,2}\s*-?\s*(?:bed(?:room)?s?|br)\b/i.test(cleanCaption)
+    && !/\b(?:near|next to|opposite|behind|beside|neighbou?ring)\b[^.,\n]{0,30}\b\d{1,2}\s*-?\s*bed/i.test(cleanCaption);
   if (
     listingType === 'land'
     && Number(bedroomDraft.bedrooms) >= 1
     && (
       /\b(?:house|home|villa|bungalow|mansion|apartment|flat|townhouse)\b/i.test(cleanCaption)
       || /\b(?:boys?|staff)\s+quarters?\b/i.test(cleanCaption)
+      || countsItsOwnBedrooms
     )
     && (Number(price) >= 50000000 || /\b(?:sale|selling|buy|purchase)\b/i.test(cleanCaption))
   ) {
@@ -6414,7 +6423,11 @@ const AREA_CANDIDATE_STOPWORDS = new Set([
   'fully', 'occupied', 'vacant', 'brand', 'clean', 'modern', 'spacious', 'secure', 'gated',
   // A region or the country is not an area either: the same caption then went
   // live as *Land for sale in Northern*.
-  'northern', 'southern', 'eastern', 'western', 'central', 'uganda', 'ug', 'kampala'
+  'northern', 'southern', 'eastern', 'western', 'central', 'uganda', 'ug', 'kampala',
+  // The colours of plots on a site plan (19 Nov 2026): "Blue available on main
+  // road at 290m" and "Green taken, blue is 140m" were filed under places
+  // called Blue and Green, and Ronald was asked which district Green is in.
+  'blue', 'green', 'red', 'pink', 'yellow', 'orange', 'purple', 'black', 'white', 'brown', 'grey', 'gray', 'taken', 'remaining'
 ]);
 
 /**
@@ -6711,6 +6724,45 @@ function employeeCaptionLikelySameProperty(previousCaption = '', nextCaption = '
   const nextTokens = tokens(next);
   const overlap = [...previousTokens].filter((token) => nextTokens.has(token)).length;
   return overlap >= 2 && overlap / Math.max(1, Math.min(previousTokens.size, nextTokens.size)) >= 0.25;
+}
+
+/**
+ * Whether a message sent while a property waits for a detail is a property of
+ * its own rather than the detail.
+ *
+ * 19 Nov 2026, Ronald for a new agent: eight properties forwarded as plain
+ * texts, the photos after them. "1.5 billions negotiable … akright City …"
+ * waited for a price it had given. "Plots for sale located at lutembe … all
+ * plots are 23decimals at 220m" came next, short of its district only, and was
+ * taken as the answer: the Akright house went live at the Lutembe plots' 220m.
+ * Then "Commercial plots located at nican resort … bunamwaya-kitebi" was added
+ * to the Bwebajja plot, which was not waiting for anything.
+ *
+ * A reply gives what the waiting property is missing. It does not bring a
+ * place, a type or a price of its own that differs from the waiting one's, and
+ * a property that is missing nothing has nothing to be answered.
+ */
+function employeeTextDescribesAnotherProperty(pendingCaption = '', textFacts = {}, sessionData = {}) {
+  const waiting = employeePropertyFacts(pendingCaption, sessionData);
+  if (!employeePropertyMissing(waiting).length) return true;
+  const differ = (a, b) => Boolean(a) && Boolean(b) && a !== b;
+  if (differ(waiting.listingType, textFacts.listingType)) return true;
+  if (differ(Number(waiting.price) || 0, Number(textFacts.price) || 0)) return true;
+  const place = (facts) => normalizeInput(facts?.locationPatch?.area || '').toLowerCase().replace(/[^a-z]/g, '');
+  const waitingPlace = place(waiting);
+  const textPlace = place(textFacts);
+  // "Kayunga town, Kayunga" names a place and nothing else: that is an answer.
+  const describesItself = Boolean(textFacts.listingType) || Number(textFacts.price) > 0;
+  return describesItself && Boolean(waitingPlace) && Boolean(textPlace)
+    && !waitingPlace.includes(textPlace) && !textPlace.includes(waitingPlace);
+}
+
+/** What to type for each missing detail: a price is not answered with a place. */
+function employeeMissingExample(missing = []) {
+  const wanted = (Array.isArray(missing) ? missing : []).join(' ');
+  if (/\bprice\b/i.test(wanted) && !/district|area|location/i.test(wanted)) return '"UGX 250m" or "1.5bn"';
+  if (/\btype\b/i.test(wanted) && !/district|area|location|price/i.test(wanted)) return '"for sale" or "for rent"';
+  return '"Kayunga town, Kayunga" or the district name alone';
 }
 
 function employeePendingSubmissionQueue(data = {}) {
@@ -13106,10 +13158,22 @@ async function handleEmployeeWhatsappIntake({
       let textOnlyFacts = employeePropertyFacts(cleanBody, data);
       let textOnlyMissing = employeePropertyMissing(textOnlyFacts);
       let mergedWithPendingCaption = false;
+      // The same description again is a copy, not a second property: on 19 Nov
+      // 2026 "Green taken, blue is 140m…" and the Kitende estate were each kept
+      // twice and listed twice in Ronald's summary.
+      const sameWords = (value = '') => normalizeInput(stripForwardMarkers(value)).replace(/\s+/g, ' ').toLowerCase();
+      const theseWords = sameWords(cleanBody);
+      if (theseWords.length >= 24
+        && data.whatsapp_agent_self_intake !== true
+        && [pendingCaption, ...employeePendingSubmissionQueue(data).map((entry) => entry.caption)].some((kept) => sameWords(kept) === theseWords)) {
+        return { handled: true, nextStep: currentStep, message: '' };
+      }
       // A short reply such as "Kira, Wakiso" or "UGX 300m" is a correction to the
       // property that is waiting, not a caption of its own. Judging it alone threw
       // away everything the original caption already said and asked for it again.
-      if (pendingStoredMedia.length && pendingCaption && textOnlyMissing.length) {
+      // A description with a place, type or price of its own is not a reply.
+      if (pendingStoredMedia.length && pendingCaption && textOnlyMissing.length
+        && !employeeTextDescribesAnotherProperty(pendingCaption, textOnlyFacts, data)) {
         const mergedCaption = `${pendingCaption}\n${cleanBody}`;
         const mergedFacts = employeePropertyFacts(mergedCaption, data);
         const mergedMissing = employeePropertyMissing(mergedFacts);
@@ -13167,7 +13231,7 @@ async function handleEmployeeWhatsappIntake({
           return {
             handled: true,
             nextStep: currentStep,
-            message: `Noted — I kept this new caption safe. Your earlier property ${employeeCaptionLabel(pendingCaption)} still needs: ${pendingMissing.join(', ') || 'a corrected caption'}. Reply with just that, for example "Kayunga town, Kayunga" or the district name alone, and I will move on to this one. Nothing is live yet.`
+            message: `Noted — I kept this new caption safe. Your earlier property ${employeeCaptionLabel(pendingCaption)} still needs: ${pendingMissing.join(', ') || 'a corrected caption'}. Reply with just that, for example ${employeeMissingExample(pendingMissing)}, and I will move on to this one. Nothing is live yet.`
           };
         }
         const propertyInboundMessageId = normalizeInput(data.pending_property_media_message_id) || inboundMessageId;
@@ -16714,7 +16778,13 @@ async function buildEmployeeBatchSummary(phone, since) {
           : (missing.length ? missing.join(', ') : 'nothing more — reply *COMPLETE* and I will save it')
     });
   }
+  // A description kept twice is still one property (19 Nov 2026: "Green
+  // taken, blue is 140m…" was listed twice).
+  const listedWords = new Set(pendingCaption ? [normalizeInput(stripForwardMarkers(pendingCaption)).replace(/\s+/g, ' ').toLowerCase()] : []);
   for (const entry of employeePendingSubmissionQueue(data)) {
+    const words = entry.caption ? normalizeInput(stripForwardMarkers(entry.caption)).replace(/\s+/g, ' ').toLowerCase() : '';
+    if (words && !entry.media.length && listedWords.has(words)) continue;
+    if (words) listedWords.add(words);
     const missing = entry.caption ? employeePropertyMissing(employeePropertyFacts(entry.caption, data)) : [];
     notSaved.push({
       label: entry.caption ? shortEmployeeLabel(entry.caption) : 'Media sent without a caption',
@@ -16727,9 +16797,14 @@ async function buildEmployeeBatchSummary(phone, since) {
   }
 
   const heldMedia = employeeUnassignedMedia(data);
+  // One for each photo or video sent. A photo can be kept more than once (its
+  // previews and the file itself): Ronald's 39 photos were counted as 116.
+  const heldCount = new Set(heldMedia.map((item, index) => normalizeEmployeeSourceMessageId(item?.inbound_message_id || '')
+    || normalizeInput(item?.sha256 || '')
+    || `held-${index}`)).size;
   if (heldMedia.length) {
     notSaved.push({
-      label: `${heldMedia.length} photo${heldMedia.length === 1 ? '' : 's'}/video${heldMedia.length === 1 ? '' : 's'} sent without a description (held, not guessed)`,
+      label: `${heldCount} photo${heldCount === 1 ? '' : 's'}/video${heldCount === 1 ? '' : 's'} sent without a description (held, not guessed)`,
       needs: 'each property sent as its photos with the description as the caption'
     });
   }
@@ -20708,10 +20783,18 @@ async function markAgentProspectReply(phone, status, reply = '') {
  * menu, or null to carry on as usual.
  */
 async function handleAgentFilmReply({ phone, body = '', step = '', lang = 'en', conversationControl = null, contactName = '', hasMedia = false, lastMessageAt = null } = {}) {
-  if (hasMedia) return null;
   const control = conversationControl || {};
   if (['off', 'copilot'].includes(String(control.ai_mode || '').toLowerCase())
     || ['needs_human', 'escalated'].includes(String(control.status || '').toLowerCase())) return null;
+  if (hasMedia) {
+    // The photos or video of the advert they sent a moment ago go with it: the
+    // video after the Maganjo house (18 Nov 2026) was answered with the menu.
+    const advert = await db.query(
+      `SELECT 1 FROM audit_logs WHERE action = 'agent_prospect_advert' AND details->>'phone' = $1 AND created_at > NOW() - INTERVAL '15 minutes' LIMIT 1`,
+      [String(phone || '').replace(/\D/g, '')]
+    ).catch(() => ({ rows: [] }));
+    return advert.rows.length ? { message: '', nextStep: 'main_menu', silent: true } : null;
+  }
   const currentStep = String(step || '');
 
   if (currentStep === AGENT_JOIN_OR_FIND_STEP) {
@@ -20781,6 +20864,9 @@ async function handleAgentFilmReply({ phone, body = '', step = '', lang = 'en', 
   const helpName = agentHelpContact().name;
   const fee = await agentMonthlyFeeUgx();
   const kind = agentFilm.prospectFollowUpKind(body);
+  if (kind === 'advert') {
+    await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('whatsapp', 'agent_prospect_advert', $1::jsonb)`, [JSON.stringify({ phone: digits })]).catch(() => {});
+  }
   let alerted = false;
   // Arthur and Ronald have what they said: now, or the same words within 12 hours.
   let noted = false;
@@ -25929,11 +26015,18 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   const releaseClaimUnlessHandled = () => {
     releaseInboundMessageClaim(runtimeInboundMessageId).catch(() => {});
   };
+  // Once the turn is with the runtime it will run, and its answer goes out
+  // through the outbox whether or not the bridge is still listening. 19 Nov
+  // 2026: four of Ronald's descriptions waited behind his photos longer than
+  // the bridge would wait. It hung up, the claim was given back, the bridge
+  // sent them again, and each one was answered and kept twice. From here only
+  // a turn that fails gives the id back.
+  let turnHandedToRuntime = false;
   res.on('finish', () => {
     if (res.statusCode >= 400) releaseClaimUnlessHandled();
     else confirmInboundMessageClaim(runtimeInboundMessageId).catch(() => {});
   });
-  res.on('close', () => { if (!res.writableFinished) releaseClaimUnlessHandled(); });
+  res.on('close', () => { if (!res.writableFinished && !turnHandedToRuntime) releaseClaimUnlessHandled(); });
 
   if (
     shouldUseBridgeInboundFingerprintDedupe({ providerMessageId })
@@ -26180,16 +26273,26 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     logger.warn('Agent booking reply check failed', { message: error.message || String(error) });
   }
 
-  const { message, nextStep, ownerForward = null, employeeIntake = null, sensitive = false } = await processInboundRuntime({
-    phone: runtimePhone,
-    inboundMessageId: runtimeInboundMessageId,
-    body,
-    mediaUrl: mediaUrl || null,
-    mediaType,
-    sharedLocation,
-    provider: 'web_bridge',
-    metadata: runtimeMetadata
-  });
+  turnHandedToRuntime = true;
+  let turn;
+  try {
+    turn = await processInboundRuntime({
+      phone: runtimePhone,
+      inboundMessageId: runtimeInboundMessageId,
+      body,
+      mediaUrl: mediaUrl || null,
+      mediaType,
+      sharedLocation,
+      provider: 'web_bridge',
+      metadata: runtimeMetadata
+    });
+  } catch (error) {
+    // The bridge may have hung up already, so 'finish' never comes: give the id
+    // back here, so its retry is answered.
+    releaseClaimUnlessHandled();
+    throw error;
+  }
+  const { message, nextStep, ownerForward = null, employeeIntake = null, sensitive = false } = turn;
 
   let queuedReply = null;
   const suppressEmployeeBatchReplayReply = suppressEmployeeBatchReplayNonCompletionReply
@@ -26766,6 +26869,8 @@ module.exports.__test = {
   handleControlRoomStep,
   handleOwnerFilmReply,
   handleAgentFilmReply,
+  employeeTextDescribesAnotherProperty,
+  employeeMissingExample,
   wentQuietBeforeFilm,
   handleOwnerListingCommand,
   ownerFilmSentTo,
