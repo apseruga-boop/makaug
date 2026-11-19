@@ -210,6 +210,21 @@ function accentless(text = '') {
   return normalise(String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, ''));
 }
 
+// 18 Nov 2026: a prospect sent "House for sale Location📍 Maganjo … 2 bedrooms
+// … Price 160m" and was told what joining costs, because the advert says
+// "Price". An advert names the property, says it is for sale or rent, and
+// gives a figure in millions or billions; a question about money does not.
+const ADVERT_DEAL = /\b(?:FOR SALE|ON SALE|FOR RENT|TO LET|TO RENT|SELLING|SALE|RENTALS?)\b/;
+const ADVERT_FIGURE = /\b\d+(?: \d+)?\s*(?:M|MN|MIL|MILLIONS?|B|BN|BILLIONS?)\b|\b\d{6,}\b/;
+const QUESTION_OPENING = /^(?:HOW|WHAT|WHATS|IS|ARE|DO|DOES|CAN|COULD|WILL|SHOULD|WHY|WHEN|WHERE|WHO)\b/;
+
+function looksLikeAdvert(t = '', raw = '') {
+  if (!PROPERTY_WORDS.test(t) || !ADVERT_DEAL.test(t) || !ADVERT_FIGURE.test(t)) return false;
+  // "How much to list a house for sale at 150m?" is still a question.
+  if (QUESTION_OPENING.test(t) || /\?\s*$/.test(String(raw || '').trim())) return t.length > 160;
+  return true;
+}
+
 /**
  * What a prospect's later message is: 'greeting', 'thanks', 'who', 'money',
  * 'menu' (a menu number or "list a property"), 'smalltalk' (a greeting with a
@@ -220,6 +235,7 @@ function prospectFollowUpKind(text = '') {
   if (!t) return '';
   if (t.length <= 60 && PROSPECT_GREETING.test(t)) return 'greeting';
   if (t.length <= 80 && PROSPECT_THANKS.test(t)) return 'thanks';
+  if (looksLikeAdvert(t, text)) return 'advert';
   if (PROSPECT_WHO.test(t)) return 'who';
   if (PROSPECT_MONEY.test(t)) return 'money';
   if (t.length <= 60 && PROSPECT_MENU_PICK.test(t)) return 'menu';
@@ -290,6 +306,13 @@ function prospectFollowUpReply({ kind = '', interested = false, first = '', help
     case 'money':
       return `Fair question${hi(first)}. Joining makaug as an agent is *${feeText}*. That covers all your listings, short stays included, and makaug takes no commission on your deals.\n\n`
         + (interested ? `${helpName} will call you to talk it through.` : `Reply *AGENT* and ${helpName} will call you to talk it through.`);
+    case 'advert': {
+      const passed = passedOn ? ` I've passed this one to ${sender}.` : '';
+      if (interested) return `Thank you${hi(first)}! 🏠${passed || ` ${helpName} will have it for your call.`} Once your agent page is set up, it goes up on makaug.com under your name.`;
+      return `Thank you${hi(first)}! 🏠 A property like this is exactly what makaug is for.${passed}\n\n`
+        + `To put it on makaug.com under your name, join as an agent: *${feeText}* covers all your listings, and makaug takes no commission. `
+        + `Reply *AGENT* and ${helpName} will call you to set you up.`;
+    }
     case 'menu':
       if (!interested) return '';
       return `You're in the right place${hi(first)}. ${helpName} will call you to set up your agent page first. After that you post every property here — the photos, the area and the price — all on the one monthly plan.`;
@@ -323,7 +346,7 @@ function prospectFollowUpReply({ kind = '', interested = false, first = '', help
 
 /** Whether Arthur and Ronald should see this message: what they said changes the call. */
 function prospectNoteWorthy(kind = '') {
-  return kind === 'money' || kind === 'note';
+  return kind === 'money' || kind === 'note' || kind === 'advert';
 }
 
 /** The note to Arthur and Ronald when a prospect tells us more after the first alert. */
@@ -331,7 +354,7 @@ function prospectNote({ digits = '', name = '', said = '', kind = '', interested
   const number = digitsOf(digits);
   const feeText = `UGX ${Number(fee || 50000).toLocaleString('en-US')} a month`;
   return [
-    kind === 'money' ? '💬 *Agent prospect asked about money*' : '💬 *More from an agent prospect*',
+    kind === 'money' ? '💬 *Agent prospect asked about money*' : (kind === 'advert' ? '🏠 *An agent prospect sent a property*' : '💬 *More from an agent prospect*'),
     `${clean(name, 80) ? `${clean(name, 80)} · ` : ''}+${number}`,
     `WhatsApp: https://wa.me/${number}`,
     `They said: "${clean(said, 300)}"`,
