@@ -23,6 +23,20 @@ The first release prepares a render brief from an authorised floor plan and reco
 
 The implementation review identified `FloorplanToBlender3d` as a possible image-to-Blender prototype and Blender's supported headless animation renderer as a possible worker foundation. Neither is bundled into the website: the former is GPL-licensed and version-sensitive, while both still require a separately operated render worker and human visual review. This keeps the website fast and avoids presenting an experimental render as a faithful representation of the completed property.
 
+## 3D tour (Vanta House, 20 November 2026)
+
+A project can have a 3D tour: one HTML page kept beside its other assets at `assets/off-plan/<slug>/tour.html` and served at `/off-plan/<slug>/tour` (a project without that file has no such page). Vanta House is the first. The page draws the home with three.js (makaug's own copy, `assets/vendor/three.min.js`) and loads nothing from any other site.
+
+What the page does: a welcome screen with the project name, address and price; a guided tour that walks from the front door through every room, pausing with the room's name, its size in square feet and square metres, and one fact about it; walking around freely (keys and mouse, or touch with a walking pad); a dollhouse view with the roof off; three interior styles; a time-of-day slider that moves the sun and turns the lamps on; music made in the page with a mute button; a home switch (1, 2 and 3 bedroom); and a contact sheet that sends an ordinary off-plan enquiry (`metadata.from = "3d_tour"`).
+
+The homes are data at the top of the page: every room, door and window is a position on the developer's typical floor plan (24 drawing pixels to the metre). Walls are whatever lies between rooms. To change a room, a door or a piece of furniture, edit that data; `tests/off-plan-vanta-tour.test.js` then checks that the plan still closes, that each home is within 3% of the developer's stated size, that furniture stands inside rooms, and that the guided tour still reaches every room without touching a wall.
+
+Read from the drawing, not stated on it: the ceiling height (2.85 m assumed), window widths and sill heights, and which way the plan faces (its top is taken as north). The page says on its welcome screen that it is a concept model and that finishes, furniture and exact dimensions follow the signed agreement.
+
+The project page links to the tour when a walkthrough entry in `extra_fields.walkthroughs` carries `tour_url` (only an address of the form `/off-plan/<slug>/tour` is accepted). The link passes the chosen home and the site language, and the tour's close button returns to the listing. Useful addresses: `?home=2bhk`, `?style=scandi`, `?time=0.8` (0 is early morning, 1 is night), `?mode=walk` or `?mode=doll` to skip the welcome screen, `?lang=sw`. English is complete; Swahili covers the buttons and hints; room names and tour sentences are English only.
+
+The walkthrough films on the project page are the same guided tour, filmed from the page: `node scripts/off-plan-tour-film.js vanta-house 2bhk scandi 8.6` writes `tour-2bhk.mp4` and its poster beside the page. It needs Google Chrome and a real graphics card. Film again whenever the plan data, furniture or tour route changes, so the films and the page stay the same home.
+
 ## Configuration
 
 The feature uses the existing database, authentication, email-provider and cloud-media configuration. `OFF_PLAN_NOTIFICATION_EMAILS` optionally overrides the default operations recipients. `PUBLIC_BASE_URL` controls brochure and AI links, while `SUPPORT_PHONE` controls the WhatsApp handoff.
