@@ -510,6 +510,49 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     name: 'Wattuba', district: 'Mityana', town: 'Kikandwa', level: 'parish',
     aliases: ['Wattuba', 'Watuba', 'Watuuba', 'WATTUBA'],
     source: 'makaug_verified_location_override'
+  },
+
+  // 20 Nov 2026: a pending land listing at "Kamuvobe, Mityana, Central" could
+  // not be approved. Find set a pin, but the review desk said the location was
+  // not recognised and blocked approval ("Canonical location confirmation is
+  // required"). The UBOS parish/subcounty gazetteer never carried this village.
+  // Coordinates are the GeoNames populated-place record 11551822
+  // (0.42815, 32.11308), in Mityana District, Central Region. Agents also
+  // write Kamuvoobe (the spelling on a nearby school address). The town is
+  // Busimbi, the municipal division east of Mityana town, which this point sits
+  // in / beside.
+  {
+    name: 'Kamuvobe', district: 'Mityana', town: 'Busimbi', level: 'neighborhood',
+    aliases: ['Kamuvobe', 'Kamuvoobe', 'Kamuvobe Mityana', 'Kamuvoobe Mityana'],
+    lat: 0.42815, lng: 32.11308,
+    source: 'geonames_11551822'
+  },
+
+  // Same day: common Mityana spellings that the census writes with a doubled
+  // letter, so a caption or a typed Find of the everyday form fell through to
+  // the district and could not be auto-filled.
+  {
+    name: 'Kalangaalo', district: 'Mityana', town: 'Kalangaalo', level: 'parish',
+    aliases: ['Kalangaalo', 'KALANGAALO', 'Kalangalo', 'Kalangalo Subcounty', 'Kalangalo Sub County'],
+    source: 'makaug_verified_spelling_alias'
+  },
+  {
+    // Keep the existing area pin from the detailed list (0.43, 32.09).
+    name: 'Ttamu', district: 'Mityana', town: 'Mityana Town', level: 'area',
+    aliases: ['Ttamu', 'Tamu', 'Tamu Division', 'Ttamu Division'],
+    lat: 0.43, lng: 32.09,
+    source: 'makaug_verified_spelling_alias'
+  },
+  {
+    name: 'Ssekanyonyi', district: 'Mityana', town: 'Ssekanyonyi', level: 'neighborhood',
+    aliases: ['Ssekanyonyi', 'SSEKANYONYI WARD', 'Sekanyonyi', 'Sekanyonyi Town'],
+    source: 'makaug_verified_spelling_alias'
+  },
+  {
+    // "Banda, Mityana" is Bbanda in Mityana, not Banda in Kampala.
+    name: 'Bbanda', district: 'Mityana', town: 'Bbanda', level: 'neighborhood',
+    aliases: ['Bbanda', 'BBANDA WARD', 'Banda', 'Banda Mityana'],
+    source: 'makaug_verified_spelling_alias'
   }
 ];
 
