@@ -137,6 +137,8 @@ async function createSplitListing(client, source, child, sourceRef) {
     extra.photos_need_staff_check = true;
   }
 
+  // price is bigint; price_original is numeric. Reusing one parameter for
+  // both (as $7) makes Postgres raise 42P08 and roll the whole pass back.
   const inserted = (await client.query(
     `INSERT INTO properties (
         listing_type, title, description, district, area, address,
@@ -153,14 +155,14 @@ async function createSplitListing(client, source, child, sourceRef) {
       )
       VALUES (
         $1, $2, $3, $4, $5, $6,
-        $7, $8, $9, $10,
+        $7::bigint, $8, $9, $10,
         $11, $12, $13::jsonb, $14::jsonb,
         $15, $16, $17, $18, $19,
         'pending', $20, $21, $22, $23,
         $24, $25, $26,
         $27, $28, $29,
         'submitted', $30,
-        'UGX', $7, 'UGX',
+        'UGX', $31::numeric, 'UGX',
         NULL, NULL, false,
         'available'
       )
@@ -195,7 +197,8 @@ async function createSplitListing(client, source, child, sourceRef) {
       source.id_number,
       source.id_document_name,
       source.id_document_url,
-      child.note
+      child.note,
+      child.price
     ]
   )).rows[0];
 
@@ -260,9 +263,9 @@ async function updateSourceAfterSplit(client, source, spec, childRefs, extraPatc
   ];
   if (spec.sourcePrice != null) {
     values.push(spec.sourcePrice, spec.sourcePricePeriod || 'once', spec.sourcePrice, 'UGX');
-    sets.push(`price = $${values.length - 3}`);
+    sets.push(`price = $${values.length - 3}::bigint`);
     sets.push(`price_period = $${values.length - 2}`);
-    sets.push(`price_original = $${values.length - 1}`);
+    sets.push(`price_original = $${values.length - 1}::numeric`);
     sets.push(`price_original_currency = $${values.length}`);
     sets.push('price_fx_rate_ugx = NULL');
     sets.push('price_fx_as_of = NULL');
@@ -336,9 +339,9 @@ async function applyY2URD(client) {
     `UPDATE properties
         SET title = $2,
             description = $3,
-            price = $4,
+            price = $4::bigint,
             price_currency = 'UGX',
-            price_original = $5,
+            price_original = $5::numeric,
             price_original_currency = 'USD',
             price_fx_rate_ugx = $6,
             price_fx_as_of = $7::timestamptz,
