@@ -35694,7 +35694,7 @@ function adminReviewListingEditPanel(review = {}) {
           <input id="admin-review-amenities-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(amenities)}" placeholder="Tight security, modern kitchen, jacuzzi">
         </label>
         <label class="block text-xs font-bold text-gray-700 md:col-span-2">Short public description
-          <textarea id="admin-review-description-edit" class="mt-1 min-h-[120px] w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" placeholder="Keep this short. Put extra details in amenities/source facts.">${adminEscape(review.description || "")}</textarea>
+          <textarea id="admin-review-description-edit" class="mt-1 min-h-[120px] w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" placeholder="Keep this short. Put extra details in amenities/source facts.">${adminEscape(review.editor_description || review.description || "")}</textarea>
         </label>
       </div>
     </div>`;

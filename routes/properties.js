@@ -5614,6 +5614,19 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
       false
     );
     if (nextStatus === 'approved') {
+      const { placeholderTitleApprovalBlock } = require('../services/publicListingCopy');
+      const titleBlock = placeholderTitleApprovalBlock(current);
+      if (titleBlock) {
+        return res.status(422).json({
+          ok: false,
+          error: titleBlock.error,
+          code: 'placeholder_or_generic_title',
+          details: [
+            'Use a title built from the type, bedrooms, area, and sale or rent. Placeholder titles such as "Found-online TikTok property post 55" cannot be approved or published.'
+          ],
+          override_available: false
+        });
+      }
       // Impossible prices (over UGX 1 trillion, or a "USD" original that is
       // really a shilling figure) block approval for everyone: no override,
       // no sourced-listing exemption. The price has to be corrected.

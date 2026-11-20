@@ -38,6 +38,7 @@ const {
 const { insertFoundOnlineShortStayListing } = require('./foundOnlineShortStayIntake');
 const { plotSaleBeatsStudentWords } = require('../utils/listingCategorySignals');
 const { detectPropertyTypeEvidence } = require('../utils/propertyTypeVocabulary');
+const { factualListingTitle, isPlaceholderOrGenericTitle } = require('./publicListingCopy');
 const { isApartmentBlockText, modestPriceDrop, videoIdFromText } = require('../utils/listingIntakeQuality');
 const { correctedPinForNewListing } = require('./listingCoordinateRepairService');
 const { blockedSocialSourceMatch } = require('./socialSourceBlocklistService');
@@ -1727,7 +1728,17 @@ function publicDescriptionFor(item = {}) {
     .replace(/\s*Confirm[^.?!]*(?:before\s+(?:public\s+)?approval|before approval)\.?/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
-  const intro = `${item.title} is a ${listingType} around ${area}.`;
+  const introTitle = isPlaceholderOrGenericTitle(item.title)
+    ? factualListingTitle({
+      listing_type: item.listingType || item.listing_type,
+      property_type: item.property_type || item.subtype,
+      bedrooms: item.beds || item.bedrooms,
+      area: item.area,
+      district: item.district,
+      price_period: item.price_period || item.pricePeriod
+    })
+    : item.title;
+  const intro = `${introTitle} is a ${listingType} around ${area}.`;
   const agentLine = agent.name ? ` It is connected to ${agent.name}'s public property source, with the available contact route shown on the listing for direct enquiry.` : '';
   const guidance = ' Viewers should use the gallery, source evidence, map area and contact route to confirm availability and arrange a viewing.';
   return [intro, roomText, priceText, raw && raw !== intro ? ` ${raw}` : '', sourceTitle, ` ${firstPosted.replace(/\.*$/, '')}.`, agentLine, guidance]
@@ -2922,9 +2933,17 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   let listingType = canonicalStudentListingType((sourceHasExplicitTransaction || sourceHasPropertyCategorySignal)
     ? (evidenceClassification.listing_type || normalizeFoundOnlineListingType(sourceText, { price: unsafeSourcePrice }))
     : rawListingType);
+  const rawTitle = raw.title || raw.source_title || raw.caption;
+  const harvestFacts = {
+    listing_type: listingType,
+    property_type: inferSourcePropertyType({ ...raw, source_text: sourceText })?.label || raw.property_type || raw.subtype,
+    bedrooms: raw.bedrooms ?? raw.beds,
+    area,
+    district
+  };
   const title = cleanSourceListingTitle(
-    raw.title || raw.source_title || raw.caption,
-    `${listingType === 'land' ? 'Land' : (inferSourcePropertyType({ ...raw, source_text: sourceText })?.label || 'Property')}${area ? ` in ${area}` : ''}`
+    isPlaceholderOrGenericTitle(rawTitle) ? '' : rawTitle,
+    factualListingTitle(harvestFacts)
   );
   const baseDescription = compactText(raw.description || raw.caption || raw.summary || title);
   const description = compactText([

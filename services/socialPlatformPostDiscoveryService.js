@@ -27,6 +27,7 @@ const {
 const { resolveSourceShortUrl } = require('../utils/sourceUrlNormalization');
 const { plotSaleBeatsStudentWords } = require('../utils/listingCategorySignals');
 const { truncateUnicode } = require('../utils/postgresJson');
+const { factualListingTitle, isPlaceholderOrGenericTitle } = require('./publicListingCopy');
 const {
   buildHarvestFingerprints,
   primaryImagePerceptualHashes,
@@ -197,6 +198,13 @@ function sourceListingTitleFromText(value = '') {
     if (match) return cleanText(match[0]);
   }
   return '';
+}
+
+
+function titleFromHarvestFacts(candidateTitle, facts = {}) {
+  const candidate = cleanText(candidateTitle);
+  if (!candidate || isPlaceholderOrGenericTitle(candidate)) return factualListingTitle(facts);
+  return candidate;
 }
 
 function normalizePlatform(value = '') {
@@ -1184,8 +1192,8 @@ function buildTikTokExactPostImportRows({
       const visualText = sourceVisualTextFromObject(seed);
       const caption = cleanText(seed.caption || seed.description || oembed.title || seed.title || '');
       const sourceDerivedTitle = sourceListingTitleFromText(`${visualText} ${caption} ${commentEvidence}`);
-      const title = cleanText(seed.title || sourceDerivedTitle || oembed.title || caption || `TikTok property post ${index + 1}`);
-      const combinedText = cleanText(`${sourceDerivedTitle} ${title} ${caption} ${visualText} ${commentEvidence}`);
+      const candidateTitle = cleanText(seed.title || sourceDerivedTitle || oembed.title || caption);
+      const combinedText = cleanText(`${sourceDerivedTitle} ${candidateTitle} ${caption} ${visualText} ${commentEvidence}`);
       const rawArea = cleanText(seed.area || seed.location || '');
       const locationResolution = canonicalSocialLocation(rawArea, seed.district, combinedText);
       const canonicalLocation = locationResolution.status === 'matched' ? locationResolution.match : null;
@@ -1194,6 +1202,15 @@ function buildTikTokExactPostImportRows({
         : '';
       const district = canonicalLocation?.district || '';
       const locationEvidenceConfirmed = Boolean(canonicalLocation);
+      const listingType = seed.listing_type || listingTypeFromText(`${combinedText} ${rawArea}`);
+      const bedrooms = seed.bedrooms || bedroomsFromText(combinedText);
+      const title = titleFromHarvestFacts(candidateTitle, {
+        listing_type: listingType,
+        property_type: seed.property_type || seed.subtype,
+        bedrooms,
+        area,
+        district
+      });
       const priceText = cleanText(seed.price_text || priceTextFromText(combinedText) || seed.price);
       const contactPhone = cleanText(normalizeUgandanPhone(seed.contact_phone || seed.phone || seed.whatsapp || '') || phoneFromText(combinedText));
       const contactEmail = cleanText(seed.contact_email || seed.email || emailFromText(combinedText));
@@ -1806,8 +1823,8 @@ function buildExactSocialPostImportRows({
       const visualText = sourceVisualTextFromObject(seed);
       const caption = cleanText(seed.caption || seed.description || page.description || oembed.title || page.title || '');
       const sourceDerivedTitle = sourceListingTitleFromText(`${visualText} ${caption} ${commentEvidence}`);
-      const title = cleanText(seed.title || sourceDerivedTitle || page.title || oembed.title || `Found-online ${platform} property post ${index + 1}`);
-      const combinedText = cleanText(`${sourceDerivedTitle} ${title} ${caption} ${visualText} ${commentEvidence}`);
+      const candidateTitle = cleanText(seed.title || sourceDerivedTitle || page.title || oembed.title);
+      const combinedText = cleanText(`${sourceDerivedTitle} ${candidateTitle} ${caption} ${visualText} ${commentEvidence}`);
       const rawArea = cleanText(seed.area || seed.location || '');
       const locationResolution = canonicalSocialLocation(rawArea, seed.district, combinedText);
       const canonicalLocation = locationResolution.status === 'matched' ? locationResolution.match : null;
@@ -1816,6 +1833,15 @@ function buildExactSocialPostImportRows({
         : '';
       const district = canonicalLocation?.district || '';
       const locationEvidenceConfirmed = Boolean(canonicalLocation);
+      const listingType = seed.listing_type || listingTypeFromText(`${combinedText} ${rawArea}`);
+      const bedrooms = seed.bedrooms || bedroomsFromText(combinedText);
+      const title = titleFromHarvestFacts(candidateTitle, {
+        listing_type: listingType,
+        property_type: seed.property_type || seed.subtype,
+        bedrooms,
+        area,
+        district
+      });
       const priceText = cleanText(seed.price_text || priceTextFromText(combinedText) || seed.price);
       const contactPhone = cleanText(normalizeUgandanPhone(seed.contact_phone || seed.phone || seed.whatsapp || '') || phoneFromText(combinedText));
       const contactEmail = cleanText(seed.contact_email || seed.email || emailFromText(combinedText));
@@ -3963,7 +3989,12 @@ function normalizeXApiPost(tweet = {}, includes = {}, job = {}) {
     source_page_url: username ? `https://x.com/${username}` : job.source_url,
     source_contact_url: username ? `https://x.com/${username}` : job.source_url,
     x_url: source_url,
-    title: truncateUnicode(text, 90) || `X property post ${tweet.id}`,
+    title: titleFromHarvestFacts(truncateUnicode(text, 90), {
+      listing_type: listingTypeFromText(text),
+      bedrooms: bedroomsFromText(text),
+      area,
+      district
+    }),
     caption: text,
     description: text,
     first_posted_at: tweet.created_at || null,

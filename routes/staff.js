@@ -3026,6 +3026,7 @@ const STAFF_SAFE_PRICE_FIELDS = [
 // write title, description and price from the same request. The rejected
 // area must not discard those fields (A30066, 12 Nov 2026).
 async function persistStaffReviewSafeFields(req, propertyId, existing, patch = {}, priceChoiceMode = 'unchanged', errors = []) {
+  applyStaffCopyCleanupToPatch(existing, patch);
   const canSavePrice = !errors.some(isPriceValidationError);
   const setParts = [];
   const values = [propertyId];
@@ -3107,6 +3108,7 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   }
   const existing = existingResult.rows[0];
   const { patch, hierarchy, errors } = normalizeStaffListingPatch(existing, listingPatch);
+  applyStaffCopyCleanupToPatch(existing, patch);
   const priceChoiceMode = patch.__priceChoice || 'unchanged';
   delete patch.__priceChoice;
   if (!Object.prototype.hasOwnProperty.call(patch, 'transaction_type')) {
@@ -3694,22 +3696,71 @@ async function loadStaffPropertyPreview(propertyId) {
     },
     approved_by_name: await staffApprovedByName(property.approved_by),
     editor_title: staffEditorTitle(property, extra),
+    editor_description: staffEditorDescription(property, extra),
     video_caption_ocr: await staffPreviewOcr(property),
     events
   };
 }
 
-function staffEditorTitle(property = {}, extra = {}) {
-  const stored = cleanText(property.title);
-  if (!rowIsFoundOnlineReview(property)) return stored;
-  try {
-    const { tidyCreatorListingTitle, copyReviewState } = require('../services/publicListingCopy');
-    const review = copyReviewState(property, extra);
-    if (review.staffTitle || review.kingTitle) return stored;
-    return cleanText(tidyCreatorListingTitle(property, extra)) || stored;
-  } catch (_) {
-    return stored;
+function staffEditorCopy(property = {}, extra = {}) {
+  const {
+    tidyCreatorListingTitle,
+    copyReviewState,
+    isPlaceholderOrGenericTitle,
+    factualListingTitle,
+    rewritePlaceholderDescription
+  } = require('../services/publicListingCopy');
+  const { looksLikePastedWhatsAppCopy, cleanPastedListingCopy } = require('../utils/pastedListingCopy');
+  const storedTitle = cleanText(property.title);
+  const storedDescription = String(property.description || '');
+  let title = storedTitle;
+  let description = storedDescription;
+  if (isPlaceholderOrGenericTitle(title)) {
+    title = factualListingTitle(property);
+    description = rewritePlaceholderDescription(storedTitle, title, storedDescription) || description;
+  } else if (looksLikePastedWhatsAppCopy(title) || looksLikePastedWhatsAppCopy(description)) {
+    const cleaned = cleanPastedListingCopy(property);
+    if (looksLikePastedWhatsAppCopy(title) || isPlaceholderOrGenericTitle(title)) title = cleaned.title;
+    if (looksLikePastedWhatsAppCopy(description)) description = cleaned.description;
+  } else if (rowIsFoundOnlineReview(property)) {
+    try {
+      const review = copyReviewState(property, extra);
+      if (!(review.staffTitle || review.kingTitle)) {
+        title = cleanText(tidyCreatorListingTitle(property, extra)) || title;
+      }
+    } catch (_) { /* keep stored */ }
   }
+  return {
+    title,
+    description,
+    changed: title !== storedTitle || description !== storedDescription
+  };
+}
+
+function staffEditorTitle(property = {}, extra = {}) {
+  return staffEditorCopy(property, extra).title;
+}
+
+function staffEditorDescription(property = {}, extra = {}) {
+  return staffEditorCopy(property, extra).description;
+}
+
+function applyStaffCopyCleanupToPatch(existing = {}, patch = {}) {
+  const { isPlaceholderOrGenericTitle } = require('../services/publicListingCopy');
+  const { looksLikePastedWhatsAppCopy } = require('../utils/pastedListingCopy');
+  const merged = { ...existing, ...patch };
+  if (Object.prototype.hasOwnProperty.call(patch, 'title')) merged.title = patch.title;
+  if (Object.prototype.hasOwnProperty.call(patch, 'description')) merged.description = patch.description;
+  const incomingTitle = Object.prototype.hasOwnProperty.call(patch, 'title') ? patch.title : existing.title;
+  const incomingDesc = Object.prototype.hasOwnProperty.call(patch, 'description') ? patch.description : existing.description;
+  const titleNeedsClean = isPlaceholderOrGenericTitle(incomingTitle) || looksLikePastedWhatsAppCopy(incomingTitle);
+  const descNeedsClean = looksLikePastedWhatsAppCopy(incomingDesc)
+    || (isPlaceholderOrGenericTitle(incomingTitle) && String(incomingDesc || '').includes(String(incomingTitle || '')));
+  if (!titleNeedsClean && !descNeedsClean) return patch;
+  const cleaned = staffEditorCopy(merged, existing.extra_fields || {});
+  if (titleNeedsClean && cleaned.title) patch.title = cleaned.title;
+  if (descNeedsClean && cleaned.description) patch.description = cleaned.description;
+  return patch;
 }
 
 async function staffPreviewOcr(property = {}) {
@@ -4059,9 +4110,24 @@ async function approveStaffBulkFoundOnlineListing(client, req, row = {}) {
       no_owner_whatsapp_auto_sent: true
     }
   };
+  const {
+    isPlaceholderOrGenericTitle,
+    factualListingTitle,
+    rewritePlaceholderDescription
+  } = require('../services/publicListingCopy');
+  let nextTitle = row.title;
+  let nextDescription = row.description;
+  if (isPlaceholderOrGenericTitle(nextTitle)) {
+    const factual = factualListingTitle(row);
+    if (isPlaceholderOrGenericTitle(factual)) return null;
+    nextDescription = rewritePlaceholderDescription(nextTitle, factual, nextDescription);
+    nextTitle = factual;
+  }
   const result = await client.query(
     `UPDATE properties
      SET status = 'approved',
+         title = $8,
+         description = COALESCE($9, description),
          reviewed_at = NOW(),
          reviewed_by = COALESCE($2::uuid, reviewed_by),
          moderation_stage = 'approved',
@@ -4083,7 +4149,9 @@ async function approveStaffBulkFoundOnlineListing(client, req, row = {}) {
       'Bulk staff review approved found-online source; owner notification left manual.',
       reason,
       JSON.stringify(warningOverrides),
-      JSON.stringify(extraPatch)
+      JSON.stringify(extraPatch),
+      nextTitle,
+      nextDescription || null
     ]
   );
   await client.query(
@@ -6408,4 +6476,4 @@ router.get('/video-caption-conflicts', async (req, res, next) => {
 module.exports = router;
 // King → Agents → Manage → Edit reuses the staff live-edit save (routes/adminAgentManager.js).
 module.exports.updateStaffEditableListing = updateStaffEditableListing;
-module.exports._test = { staffBulkDuplicateMatch, buildApprovedDuplicateIndex, staffPossibleDuplicateOf, normalizeStaffListingPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin, updateStaffEditableListing, persistStaffReviewSafeFields, loadStaffPropertyPreview, liveEditSnapshot, staffLocationWarnings, staffLocationSoftWarnings, staffWeakEvidenceDistricts, staffFastSourceSummary, stripRoadNamePhrases };
+module.exports._test = { staffBulkDuplicateMatch, buildApprovedDuplicateIndex, staffPossibleDuplicateOf, normalizeStaffListingPatch, staffEditorCopy, applyStaffCopyCleanupToPatch, applyStaffBulkRealPhotoGate, toIsoTimestampOrNull, isMissingPin, updateStaffEditableListing, persistStaffReviewSafeFields, loadStaffPropertyPreview, liveEditSnapshot, staffLocationWarnings, staffLocationSoftWarnings, staffWeakEvidenceDistricts, staffFastSourceSummary, stripRoadNamePhrases };
