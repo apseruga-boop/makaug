@@ -2545,6 +2545,20 @@ function renderOffPlanProjectPage(req, res, next, countryCode = 'UG') {
   });
 }
 
+// The 3D tour of an off-plan project is a page of its own: one HTML file kept
+// beside that project's other assets. Only a project that has the file gets
+// the page; anything else carries on to the routes below.
+app.get('/off-plan/:slug/tour', (req, res, next) => {
+  const slug = String(req.params.slug || '').toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{0,80}$/.test(slug)) return next();
+  const file = path.join(staticRoot, 'assets', 'off-plan', slug, 'tour.html');
+  return fs.access(file, fs.constants.R_OK, (error) => {
+    if (error) return next();
+    res.set('Cache-Control', 'no-cache');
+    return res.sendFile(file);
+  });
+});
+
 app.get('/off-plan/overseas/kenya/:slug', (req, res, next) => renderOffPlanProjectPage(req, res, next, 'KE'));
 
 app.get('/off-plan/overseas/:countrySlug/:slug', async (req, res, next) => {

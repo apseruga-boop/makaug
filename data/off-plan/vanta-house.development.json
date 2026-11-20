@@ -775,29 +775,32 @@
    {
     "unit_key": "1bhk",
     "label": "1 Bedroom · 52 m²",
-    "video_url": "/assets/off-plan/vanta-house/walkthrough-1bhk.mp4",
-    "poster_url": "/assets/off-plan/vanta-house/walkthrough-1bhk-poster.jpg",
+    "video_url": "/assets/off-plan/vanta-house/tour-1bhk.mp4",
+    "poster_url": "/assets/off-plan/vanta-house/tour-1bhk-poster.jpg",
+    "tour_url": "/off-plan/vanta-house/tour",
     "layout_url": "/assets/off-plan/vanta-house/walkthrough-layouts.json",
     "layout_key": "1bhk",
-    "duration_seconds": 58
+    "duration_seconds": 57
    },
    {
     "unit_key": "2bhk",
     "label": "2 Bedroom · 92 m²",
-    "video_url": "/assets/off-plan/vanta-house/walkthrough-2bhk.mp4",
-    "poster_url": "/assets/off-plan/vanta-house/walkthrough-2bhk-poster.jpg",
+    "video_url": "/assets/off-plan/vanta-house/tour-2bhk.mp4",
+    "poster_url": "/assets/off-plan/vanta-house/tour-2bhk-poster.jpg",
+    "tour_url": "/off-plan/vanta-house/tour",
     "layout_url": "/assets/off-plan/vanta-house/walkthrough-layouts.json",
     "layout_key": "2bhk",
-    "duration_seconds": 79
+    "duration_seconds": 71
    },
    {
     "unit_key": "3bhk",
     "label": "3 Bedroom · 160 m²",
-    "video_url": "/assets/off-plan/vanta-house/walkthrough-3bhk.mp4",
-    "poster_url": "/assets/off-plan/vanta-house/walkthrough-3bhk-poster.jpg",
+    "video_url": "/assets/off-plan/vanta-house/tour-3bhk.mp4",
+    "poster_url": "/assets/off-plan/vanta-house/tour-3bhk-poster.jpg",
+    "tour_url": "/off-plan/vanta-house/tour",
     "layout_url": "/assets/off-plan/vanta-house/walkthrough-layouts.json",
     "layout_key": "3bhk",
-    "duration_seconds": 95
+    "duration_seconds": 97
    }
   ],
   "construction_updates": [

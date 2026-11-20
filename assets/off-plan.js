@@ -1001,8 +1001,15 @@
       const video = clean(item.video_url)
         ? `<div class="off-plan-walk-video"><video controls preload="metadata" playsinline ${clean(item.poster_url) ? `poster="${escapeHtml(item.poster_url)}"` : ''} src="${escapeHtml(item.video_url)}"></video></div>`
         : (clean(item.poster_url) ? `<div class="off-plan-walk-video"><img src="${escapeHtml(item.poster_url)}" alt="${escapeHtml(label)}" loading="lazy"></div>` : '');
+      // A project with a full 3D tour (its own page) opens that; otherwise the
+      // simple walk-around viewer on this page. The tour is a page the server
+      // sends, not part of this app, so the link is left to the browser.
+      const tourPath = /^\/off-plan\/[a-z0-9-]+\/tour$/.test(clean(item.tour_url)) ? clean(item.tour_url) : '';
+      const tourHref = tourPath ? `${tourPath}?home=${encodeURIComponent(clean(item.unit_key))}&lang=${encodeURIComponent(offPlanLanguage())}&back=1` : '';
       const buttons = [
-        clean(item.layout_url) ? `<button type="button" class="off-plan-walk-button is-primary" onclick="openOffPlanWalkaround('${escapeHtml(item.unit_key)}')"><i class="fas fa-person-walking"></i>${escapeHtml(homesText('walkAround'))}</button>` : '',
+        tourHref
+          ? `<a class="off-plan-walk-button is-primary" href="${escapeHtml(tourHref)}" data-no-spa="true" data-off-plan-tour="${escapeHtml(item.unit_key)}" onclick="noteOffPlanTourVisit('${escapeHtml(project.slug)}')"><i class="fas fa-person-walking"></i>${escapeHtml(homesText('walkAround'))}</a>`
+          : (clean(item.layout_url) ? `<button type="button" class="off-plan-walk-button is-primary" onclick="openOffPlanWalkaround('${escapeHtml(item.unit_key)}')"><i class="fas fa-person-walking"></i>${escapeHtml(homesText('walkAround'))}</button>` : ''),
         tour ? `<a class="off-plan-walk-button" href="${escapeHtml(tour.url)}" target="_blank" rel="noopener noreferrer"><i class="fas fa-vr-cardboard"></i>${escapeHtml(homesText('tour360'))}</a>` : '',
         plan ? `<a class="off-plan-walk-button" href="${escapeHtml(plan.url)}" target="_blank" rel="noopener noreferrer"><i class="fas fa-ruler-combined"></i>${escapeHtml(homesText('floorPlan'))}</a>` : ''
       ].filter(Boolean).join('');
@@ -1381,9 +1388,33 @@
     });
   }
 
+  // Back from the 3D tour, the visitor returns to the homes section they left
+  // from. The tour link leaves a note for this tab; it is used once, for the
+  // same project, within half an hour. A page the browser kept whole (restored
+  // exactly as it was) has no use for the note, so it is dropped.
+  const TOUR_RETURN_KEY = 'makaugOffPlanTourReturn';
+  function noteOffPlanTourVisit(slug) {
+    try { window.sessionStorage.setItem(TOUR_RETURN_KEY, JSON.stringify({ slug: clean(slug), at: Date.now() })); } catch (error) { /* no session storage: the page simply opens at the top */ }
+  }
+  function returnFromOffPlanTour(project) {
+    let note = null;
+    try { note = JSON.parse(window.sessionStorage.getItem(TOUR_RETURN_KEY) || 'null'); window.sessionStorage.removeItem(TOUR_RETURN_KEY); } catch (error) { note = null; }
+    if (!note || note.slug !== clean(project?.slug) || !(Date.now() - Number(note.at) < 30 * 60 * 1000)) return;
+    const toHomes = () => {
+      const section = document.getElementById('off-plan-walk-section');
+      if (section) window.scrollTo({ top: Math.max(0, section.getBoundingClientRect().top + window.scrollY - 88) });
+    };
+    window.requestAnimationFrame(toHomes);
+    window.setTimeout(toHomes, 700); // once more, after the pictures above have taken their place
+  }
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('pageshow', (event) => { if (event.persisted) { try { window.sessionStorage.removeItem(TOUR_RETURN_KEY); } catch (error) { /* nothing to drop */ } } });
+  }
+
   function hydrateOffPlanDetail(project) {
     renderOffPlanDetailMap(project);
     hydrateOffPlanExperience(project);
+    returnFromOffPlanTour(project);
   }
 
   async function openOffPlanDetail(slug, options = {}) {
@@ -1904,7 +1935,7 @@
     else returnToOffPlanList({ history: false });
   }
 
-  Object.assign(window, { applyOffPlanLanguageUI, closeOffPlanWalkaround, offPlanWalkaroundReset, offPlanWalkaroundTour, openOffPlanWalkaround, renderOffPlanFloorPrices, markOffPlanProjectUpdate, calculateOffPlanPayments, changeOffPlanCalculatorCurrency, clearOffPlanFilters, closeOffPlanContactModal, closeOffPlanCreateModal, closeOffPlanGallery, createOffPlanWalkthroughBrief, deleteOffPlanProject, downloadOffPlanBrochure, handleOffPlanListingAiPrompt, initializeOffPlanPage, loadOffPlanManagement, manageOffPlanWalkthrough, openOffPlanContactModal, openOffPlanCreateModal, openOffPlanCustomPaymentBuilder, openOffPlanDetail, openOffPlanFromHero, openOffPlanGallery, recalculateOffPlanMortgages, returnToOffPlanList, saveOffPlanProgress, searchOffPlan, selectOffPlanContactChannel, selectOffPlanUnit, setOffPlanProjectStatus, shareOffPlan, submitOffPlanContact, submitOffPlanProject, toggleOffPlanAi, toggleOffPlanFilters, toggleOffPlanMap, toggleOffPlanMortgage, uploadOffPlanMedia });
+  Object.assign(window, { applyOffPlanLanguageUI, closeOffPlanWalkaround, offPlanWalkaroundReset, offPlanWalkaroundTour, openOffPlanWalkaround, renderOffPlanFloorPrices, markOffPlanProjectUpdate, noteOffPlanTourVisit, calculateOffPlanPayments, changeOffPlanCalculatorCurrency, clearOffPlanFilters, closeOffPlanContactModal, closeOffPlanCreateModal, closeOffPlanGallery, createOffPlanWalkthroughBrief, deleteOffPlanProject, downloadOffPlanBrochure, handleOffPlanListingAiPrompt, initializeOffPlanPage, loadOffPlanManagement, manageOffPlanWalkthrough, openOffPlanContactModal, openOffPlanCreateModal, openOffPlanCustomPaymentBuilder, openOffPlanDetail, openOffPlanFromHero, openOffPlanGallery, recalculateOffPlanMortgages, returnToOffPlanList, saveOffPlanProgress, searchOffPlan, selectOffPlanContactChannel, selectOffPlanUnit, setOffPlanProjectStatus, shareOffPlan, submitOffPlanContact, submitOffPlanProject, toggleOffPlanAi, toggleOffPlanFilters, toggleOffPlanMap, toggleOffPlanMortgage, uploadOffPlanMedia });
   if (/^\/off-plan(?:\/|$)/i.test(location.pathname)) initializeOffPlanPage();
   if (document.getElementById('page-staff-dashboard')?.classList.contains('active')) loadOffPlanManagement('staff');
   if (document.getElementById('page-admin-dashboard')?.classList.contains('active')) loadOffPlanManagement('admin');
