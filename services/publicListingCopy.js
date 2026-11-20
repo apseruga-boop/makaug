@@ -503,6 +503,41 @@ function looksLikeMakaugTemplateTitle(value = '') {
   return /^(?:student accommodation(?:\s+in|\s+-)|land(?:\s+for\s+(?:sale|rent))?\s+in|plots?\s+for\s+(?:sale|rent)\s+in|property\s+for\s+(?:sale|rent)\s+in|commercial\s+property(?:\s+for\s+(?:sale|rent))?\s+in|\d+-bed\b)/i.test(text);
 }
 
+// Import fallbacks such as "Found-online TikTok property post 55" or
+// "TikTok property post 12". These are not a creator title and must never
+// be approved, published, or used as the start of a public description.
+const PLACEHOLDER_TITLE_RE = /^(?:found[\s-]?online\s+)?(?:tiktok|facebook|instagram|youtube|x|twitter|linkedin)?\s*(?:property\s+)?(?:post|source)(?:\s+\d+)?\b/i;
+
+function isPlaceholderOrGenericTitle(value = '') {
+  const text = cleanText(value);
+  if (!text) return true;
+  if (/^found[\s-]?online property source$/i.test(text)) return true;
+  if (/^property listing$/i.test(text)) return true;
+  return PLACEHOLDER_TITLE_RE.test(text);
+}
+
+function rewritePlaceholderDescription(oldTitle, newTitle, description = '') {
+  const desc = String(description || '');
+  const nextTitle = cleanText(newTitle);
+  const prevTitle = cleanText(oldTitle);
+  if (!desc || !nextTitle) return desc;
+  if (prevTitle && desc.startsWith(prevTitle)) return `${nextTitle}${desc.slice(prevTitle.length)}`;
+  if (PLACEHOLDER_TITLE_RE.test(desc)) return desc.replace(PLACEHOLDER_TITLE_RE, nextTitle);
+  return desc;
+}
+
+const PLACEHOLDER_TITLE_APPROVAL_ERROR = 'This listing still has a placeholder or generic title. Write a real title from the type, bedrooms, area, and sale or rent before approval.';
+
+function placeholderTitleApprovalBlock(row = {}) {
+  const title = cleanText(row.title);
+  if (!isPlaceholderOrGenericTitle(title)) return null;
+  return {
+    code: 'placeholder_or_generic_title',
+    error: PLACEHOLDER_TITLE_APPROVAL_ERROR,
+    override_available: false
+  };
+}
+
 // What a line of a caption has to carry to stand as a title: something a
 // property is, or its size.
 const TITLE_PROPERTY_SIGNAL = /\b(?:\d+(?:\.\d+)?\s*(?:acres?|decimals?|bed(?:room)?s?|rooms?|units?|plots?|sq\s*m|sqm|stor(?:e)?ys?)|lands?|plots?|acres?|decimals?|houses?|homes?|bungalows?|apartments?|flats?|rentals?|rooms?|shops?|offices?|warehouses?|hostels?|hotels?|lodges?|mansions?|villas?|buildings?|estates?|farms?|condos?|condominiums?|maisonettes?|duplex(?:es)?|commercial|residential|kibanja|bibanja|muzigo|mizigo|doubles|singles|studios?|arcades?|factory|factories|schools?)\b/i;
@@ -557,14 +592,14 @@ function creatorListingWording(property = {}, extra = {}) {
     nested.source_title,
     property.source_title,
   ].map(cleanText).filter(Boolean);
-  const source = sources.find((value) => !looksLikeMakaugTemplateTitle(value));
-  if (looksLikeMakaugTemplateTitle(stored) && source && source.toLowerCase() !== stored.toLowerCase()) return source;
-  if (stored && !looksLikeMakaugTemplateTitle(stored)) return stored;
+  const source = sources.find((value) => !looksLikeMakaugTemplateTitle(value) && !isPlaceholderOrGenericTitle(value));
+  if ((looksLikeMakaugTemplateTitle(stored) || isPlaceholderOrGenericTitle(stored)) && source && source.toLowerCase() !== stored.toLowerCase()) return source;
+  if (stored && !looksLikeMakaugTemplateTitle(stored) && !isPlaceholderOrGenericTitle(stored)) return stored;
   if (source) return source;
   const caption = String(bag.source_caption || nested.source_caption || property.source_caption || '');
   const clause = describingCaptionClause(caption, property);
-  if (clause.length >= 8 && !looksLikeMakaugTemplateTitle(clause)) return clause;
-  return stored;
+  if (clause.length >= 8 && !looksLikeMakaugTemplateTitle(clause) && !isPlaceholderOrGenericTitle(clause)) return clause;
+  return isPlaceholderOrGenericTitle(stored) ? '' : stored;
 }
 
 function tidyCreatorListingTitle(property = {}, extra = {}) {
@@ -581,9 +616,9 @@ function cleanListingTitle(row = {}, options = {}) {
   // public title, unless it contradicts the listing's facts.
   if (allowTemplate && copyReviewState(row, row.extra_fields).staffTitle) {
     const typed = collapseDuplicatePublicTransaction(sanitizeStaffCopy(original));
-    if (typed && !publicListingTitleContradictsFacts(row, typed)) return typed;
+    if (typed && !isPlaceholderOrGenericTitle(typed) && !publicListingTitleContradictsFacts(row, typed)) return typed;
   }
-  if (publicListingTitleContradictsFacts(row, original)) return fallback();
+  if (isPlaceholderOrGenericTitle(original) || publicListingTitleContradictsFacts(row, original)) return fallback();
   // Stored enums in titles ("shop_retail in Kampala") read as labels.
   const humanised = original.replace(/\b[a-z]+(?:_[a-z]+)+\b/gi, (word) => humanPropertyTypeLabel(word.toLowerCase()));
   const stripped = stripTitleNoise(cleanPublicListingCopy(humanised))
@@ -784,6 +819,10 @@ module.exports = {
   STAFF_INSTRUCTION_PATTERNS,
   stripStaffInstructions,
   looksLikeMakaugTemplateTitle,
+  isPlaceholderOrGenericTitle,
+  rewritePlaceholderDescription,
+  PLACEHOLDER_TITLE_APPROVAL_ERROR,
+  placeholderTitleApprovalBlock,
   creatorListingWording,
   tidyCreatorListingTitle,
   buildThirdPartyPublicTitle,

@@ -3124,6 +3124,17 @@ function scheduleStartupDataRepairs() {
     } catch (error) {
       logger.warn('Moderation reversal 225 skipped:', error.message || String(error));
     }
+    // Placeholder found-online titles and pasted WhatsApp copy (Arthur,
+    // 20 Nov 2026). Migration 241 only creates the backup table.
+    try {
+      const { runPlaceholderTitlesAndPastedCopy241 } = require('./scripts/run-placeholder-titles-and-pasted-copy-241');
+      const titleFix = await runPlaceholderTitlesAndPastedCopy241(db, { logger });
+      if (titleFix && !titleFix.skipped && (titleFix.updated || titleFix.stopped_early)) {
+        logger.info('Placeholder titles and pasted copy fix 241 finished a pass', titleFix);
+      }
+    } catch (error) {
+      logger.warn('Placeholder titles and pasted copy fix 241 skipped:', error.message || String(error));
+    }
   }, staggeredBootDelay('startup_data_repairs'));
   timer.unref?.();
 }

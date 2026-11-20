@@ -217,7 +217,7 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
   ...rows([
     'Ssabagabo', 'Maganjo', 'Kawanda', 'Namulonge', 'Bunamwaya', 'Kiwenda',
     'Ssisa', 'Sentema', 'Kirinya', 'Katalemwa',
-    'Kabojja', 'Kawuku', 'Nkumba', 'Nyanama', 'Wampewo', 'Kitala', 'Bulenga',
+    'Kabojja', 'Nkumba', 'Nyanama', 'Wampewo', 'Kitala', 'Bulenga',
     'Buwambo', 'Kabubbu', 'Busabala', 'Namulanda', 'Busukuma', 'Masajja',
     'Kigungu', 'Nakawuka', 'Bwerenga', 'Nsamizi'
   ], 'Wakiso', 'Wakiso'),
@@ -552,6 +552,25 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     // "Banda, Mityana" is Bbanda in Mityana, not Banda in Kampala.
     name: 'Bbanda', district: 'Mityana', town: 'Bbanda', level: 'neighborhood',
     aliases: ['Bbanda', 'BBANDA WARD', 'Banda', 'Banda Mityana'],
+    source: 'makaug_verified_spelling_alias'
+  },
+
+  // 20 Nov 2026: a pasted Entebbe-road land advert said "Entebbe Kawuku"
+  // and "Kawuku Entebbe" without a comma. Kawuku is already in the
+  // catalogue (Wakiso, on the Entebbe Road corridor near Kisubi and
+  // Nkumba). These aliases let the unpunctuated forms resolve. Town stays
+  // Wakiso so existing rows are not re-parented; Entebbe is the nearby
+  // municipality on the same road.
+  {
+    name: 'Kawuku', district: 'Wakiso', town: 'Wakiso', level: 'area',
+    aliases: ['Kawuku', 'Kawuku Entebbe', 'Entebbe Kawuku'],
+    source: 'makaug_verified_spelling_alias'
+  },
+  {
+    // The gazetteer already has Bussi (a Wakiso subcounty). Agents write
+    // "Bussi Island".
+    name: 'Bussi', district: 'Wakiso', town: 'Bussi', level: 'subcounty',
+    aliases: ['Bussi', 'BUSSI', 'Bussi Island'],
     source: 'makaug_verified_spelling_alias'
   }
 ];
