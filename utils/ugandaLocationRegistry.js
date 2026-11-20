@@ -5,6 +5,7 @@ const { kampalaTownFor } = require('./kampalaDivisions');
 const { UGANDA_AREA_CENTROIDS } = require('./ugandaAreaCentroids');
 const {
   freeTextLocationQueryAttempts: sharedFreeTextLocationQueryAttempts,
+  isRoadOrPremiseNoisePart,
   locationQueryAttempts: sharedLocationQueryAttempts,
   normalizeLocationQueryCandidates: sharedNormalizeLocationQueryCandidates
 } = require('./locationQueryNormalization');
@@ -507,6 +508,33 @@ const KNOWN_MAJOR_LOCALITY_BY_ALIAS = new Map(Object.entries({
   njeru: 'buikwe:njeru'
 }));
 
+
+function queryIsCoarseAdminUnit(value = '') {
+  const key = normalizeLocationKey(value)
+    .replace(/\s+(?:district|city|municipality)$/, '')
+    .trim();
+  if (!key) return false;
+  if (key === 'uganda') return true;
+  if (/^(?:central|eastern|northern|western)(?:\s+region)?$/.test(key)) return true;
+  const district = normalizeDistrict(value);
+  return Boolean(district && normalizeLocationKey(district) === key);
+}
+
+function firstCommaSegmentIsKnownPlace(value = '', suppliedDistrict = '') {
+  const raw = String(value || '').trim();
+  if (!raw.includes(',')) return true;
+  const firstSegment = raw.split(',')[0].trim();
+  if (!firstSegment) return true;
+  if (queryIsCoarseAdminUnit(firstSegment)) return true;
+  // "Plot 12, Mityana, Central" has no village in the first part — the
+  // district that follows is the real place, so keep allowing it.
+  if (isRoadOrPremiseNoisePart(firstSegment)) return true;
+  const variants = [firstSegment];
+  const withoutRoad = firstSegment.replace(/\s+(?:road|rd|street|st|avenue|ave|highway|bypass|expressway|drive|dr|lane|ln|boulevard|blvd)\.?$/i, '').trim();
+  if (withoutRoad && withoutRoad !== firstSegment) variants.push(withoutRoad);
+  return variants.some((candidate) => exactAliasCandidates(candidate, suppliedDistrict).length > 0);
+}
+
 function districtHintFromQuery(value = '', suppliedDistrict = '') {
   const supplied = normalizeDistrict(suppliedDistrict);
   if (supplied) return supplied;
@@ -612,9 +640,15 @@ function resolveCanonicalUgandaLocation(value = '', suppliedDistrict = '', optio
       });
     }
   }
+  // "Kamuvobe, Mityana, Central" must resolve the village, not the district
+  // that follows. If the first comma part is a real place we do not know,
+  // skip later district/region/country attempts so staff are not shown a
+  // district match that the review desk then refuses to auto-fill.
+  const firstPlaceKnown = firstCommaSegmentIsKnownPlace(value, districtHint);
   let candidates = [];
   let matchedAttempt = null;
   for (const attempt of attempts) {
+    if (!firstPlaceKnown && queryIsCoarseAdminUnit(attempt.value)) continue;
     candidates = exactAliasCandidates(attempt.value, districtHint, { noiseStripped: attempt.noise_stripped });
     if (candidates.length) {
       matchedAttempt = attempt;
