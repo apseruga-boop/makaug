@@ -1,0 +1,51 @@
+{
+  "date": "2026-11-21",
+  "short": "Sat 21 Nov 2026",
+  "long": "Saturday 21 November 2026",
+  "label": "MORNING BRIEF",
+  "emoji": "☀️",
+  "slot": "morning",
+  "stories": [
+    {
+      "chip": "SHOP TENANTS",
+      "emoji": "🔑",
+      "title": "Kampala traders end their strike",
+      "story": "Traders ended their <b>three-day</b> shutdown after government promised to review taxes on imported clothes. Cabinet gives its answer on <b>24 Nov</b>.",
+      "you": "Shops are reopening. <span class=\"hl\">Restart shop viewings</span> — and watch Cabinet’s reply.",
+      "source": "Source: Daily Express · 20 Nov 2026"
+    },
+    {
+      "chip": "SHILLING",
+      "emoji": "💵",
+      "title": "Dollar climbs to Shs4,225",
+      "story": "The shilling weakened on <b>18 Nov</b>, closing at <b>4,225</b> a dollar after opening at <b>4,180</b>. Traders blame strong demand for dollars.",
+      "you": "Dollar earners get more shillings. <span class=\"hl\">Show diaspora buyers the dollar price</span> too.",
+      "source": "Source: New Vision · 18 Nov 2026"
+    },
+    {
+      "chip": "LANDSLIDES",
+      "emoji": "🌧️",
+      "title": "Bududa: move out by December",
+      "story": "Families in Bududa’s high-risk areas have <b>two months</b> to leave. Government offers <b>Shs18m</b>: two acres worth <b>Shs8m</b> and <b>Shs10m</b> to build a house.",
+      "you": "Families will be buying land. <span class=\"hl\">Offer safe, titled plots</span> in the east.",
+      "source": "Source: Nile Post · 19 Nov 2026"
+    },
+    {
+      "chip": "MINING LAND",
+      "emoji": "⛏️",
+      "title": "Minerals under land belong to the State",
+      "story": "Minister <b>Phiona Nyamutoro</b> warned Kigezi landowners not to block mining. If talks fail, the law allows <b>compulsory acquisition</b>, valued by the Chief Government Valuer.",
+      "you": "Selling land in a mineral area? <span class=\"hl\">Check for mining licences</span> before your client pays.",
+      "source": "Source: Nile Post · 18 Nov 2026"
+    },
+    {
+      "chip": "BIG PROJECT",
+      "emoji": "🏭",
+      "title": "Masaka industrial park is back on",
+      "story": "Government has revived the park at <b>Mazigo, Bukakata</b>, <b>11 years</b> after its 2015 launch. Chinese investors have visited the site, which is meant for coffee processing.",
+      "you": "Buyers may ask. <span class=\"hl\">Sell the land, not the promise</span> — this park stalled for years.",
+      "source": "Source: Nile Post · 18 Nov 2026"
+    }
+  ],
+  "caption": "☀️ *makaug Morning Brief* · Sat 21 Nov\n5 property stories that affect your business, in 30 seconds 👆\n\n1️⃣ *Kampala traders end their strike* → restart shop viewings\nhttps://dailyexpress.co.ug/2026/11/20/kampala-traders-end-strike-government-tax-review-ura/\n\n2️⃣ *Dollar climbs to Shs4,225* → show diaspora buyers dollar prices\nhttps://www.newvision.co.ug/category/business/shilling-weakens-as-dollar-demand-outpaces-in-NV_244413_112026\n\n3️⃣ *Bududa families told to move* → offer safe, titled plots\nhttps://nilepost.co.ug/news/388897/bududa-landslide-survivors-seek-justice-at-the-un\n\n4️⃣ *Minerals belong to the State* → check for mining licences\nhttps://nilepost.co.ug/news/388643/nyamutoro-warns-landowners-against-blocking-mining-investments\n\n5️⃣ *Masaka industrial park back on* → sell the land, not the promise\nhttps://nilepost.co.ug/news/388595/government-revives-masaka-industrial-park-plan-after-11-year-delay\n\nReply STOP if you don't want the brief.\nPhillip, makaug.com"
+}
