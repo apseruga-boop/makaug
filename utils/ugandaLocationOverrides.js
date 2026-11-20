@@ -568,10 +568,12 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
   },
   {
     // The gazetteer already has Bussi (a Wakiso subcounty). Agents write
-    // "Bussi Island".
+    // "Bussi Island". Coordinates are the GeoNames island record 234034
+    // (0.04917, 32.32667), the same point Mapcarta and mindat use.
     name: 'Bussi', district: 'Wakiso', town: 'Bussi', level: 'subcounty',
     aliases: ['Bussi', 'BUSSI', 'Bussi Island'],
-    source: 'makaug_verified_spelling_alias'
+    lat: 0.04917, lng: 32.32667,
+    source: 'geonames_234034'
   }
 ];
 
