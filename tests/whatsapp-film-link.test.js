@@ -130,7 +130,7 @@ test('Agent 007 shows the link first, and every way a film goes out asks whether
   assert.strictEqual(links.firstContactNote({ on: false, limits }), '');
   assert.strictEqual(
     links.firstContactNote({ on: true, limits, now: new Date('2026-11-16T06:00:00Z') }),
-    '_Until Wednesday 18 Nov the number itself writes first to nobody. A name and number sent here gets the film only if they have written to this number before. For everybody else, your link._'
+    '_Until Wednesday 18 Nov the number itself writes first to nobody. A name and number sent here gets the film only if they have written to this number in the last 7 days. For everybody else, your link._'
   );
   assert.strictEqual(
     links.firstContactNote({ on: true, limits, now: new Date('2026-11-18T06:00:00Z') }),

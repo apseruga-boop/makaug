@@ -5204,7 +5204,7 @@ async function approvedAgentBatchLine(name = '', agentPhone = '') {
   const who = normalizeInput(name) || 'The agent';
   const told = `${who} is already an approved agent. Each property goes live when a moderator approves it, and ${who} gets a WhatsApp message for each one then.`;
   if (!(await neverWroteToUs(agentPhone))) return told;
-  return `${told}\n\n${who} has never written to the makaug WhatsApp number, which only writes to people who have written to it first, so those messages will wait until they do. Send them this to tap and send:\n${filmLinks.helloLink()}`;
+  return `${told}\n\n${who} hasn't written to the makaug WhatsApp number in the last ${whatsappWebBridgeService.wroteWithinDays()} days, and it only writes to people who have, so those messages will wait until they do. Send them this to tap and send:\n${filmLinks.helloLink()}`;
 }
 
 /**
@@ -5218,10 +5218,10 @@ async function pendingAgentBatchLine(name = '', agentPhone = '') {
   const who = normalizeInput(name) || 'The agent';
   const waiting = `${who} has not been notified yet. The agent profile card is waiting for founder approval.`;
   if (!(await neverWroteToUs(agentPhone))) return waiting;
-  return `${waiting}\n\n👋 ${who} has never written to the makaug WhatsApp number, which only writes to people who have written to it first. Send them this to tap and send now, and their welcome goes the moment they are approved:\n${filmLinks.helloLink()}`;
+  return `${waiting}\n\n👋 ${who} hasn't written to the makaug WhatsApp number in the last ${whatsappWebBridgeService.wroteWithinDays()} days, and it only writes to people who have. Send them this to tap and send now, and their welcome goes the moment they are approved:\n${filmLinks.helloLink()}`;
 }
 
-/** Whether the makaug number may not write to this phone yet: the rule is on and they never have. */
+/** Whether the makaug number may not write to this phone yet: the rule is on and they have not written lately. */
 async function neverWroteToUs(phone = '') {
   return whatsappWebBridgeService.onlyToPeopleWhoWrote()
     && !(await whatsappWebBridgeService.hasWrittenToUs(phone));
@@ -11311,6 +11311,19 @@ async function sendOwnerListingPayLink({ listing = {}, requestedBy = '' } = {}) 
     throw error;
   }
   const created = await payLinks.createPayLink(db, { purpose: 'listing_fee', property_id: listing.id }, actor);
+  // Somebody who has not written lately is sent nothing (20 Nov 2026). The
+  // link is made, so staff can send it again the moment they have written.
+  if (await whatsappWebBridgeService.waitsForThem(to)) {
+    return {
+      code: created.link.code,
+      url: created.url,
+      amount_ugx: Number(created.link.amount_ugx || 0),
+      status: 'not_written_lately',
+      reason: 'they_have_not_written_lately',
+      recipient: to,
+      held_message: whatsappWebBridgeService.notSentUntilTheyWrite({ name: listing.lister_name || listing.owner_name || '', what: 'payment link', waiting: false })
+    };
+  }
   const sent = await payLinks.sendPayLink(db, { code: created.link.code, to, actor })
     .catch((error) => ({ status: 'failed', reason: error.message }));
   return {
@@ -11514,13 +11527,16 @@ async function handleControlRoomStep({ phone, currentStep, cleanBody, data = {} 
       if (action.key === 'pay_link') {
         if (row.kind === 'agent') {
           const sent = await sendStaffPayLink({ name: row.name, phone: row.phone, agentId: row.id, requestedBy: phone });
-          done = `✅ *Payment link sent to ${row.name}* — ${sent.fee_label} a month\n${sent.url}`;
+          done = sent.held_message || `✅ *Payment link sent to ${row.name}* — ${sent.fee_label} a month\n${sent.url}`;
         } else {
-          const sent = await sendOwnerListingPayLink({ listing: { id: row.id, lister_phone: row.phone }, requestedBy: phone });
-          done = ['sent', 'queued', 'simulated'].includes(sent.status)
+          const sent = await sendOwnerListingPayLink({ listing: { id: row.id, lister_phone: row.phone, lister_name: row.name }, requestedBy: phone });
+          done = sent.held_message || (['sent', 'queued', 'simulated'].includes(sent.status)
             ? `✅ *Payment link sent to ${row.name}* — UGX ${Number(sent.amount_ugx || 0).toLocaleString('en-US')} a month\n${sent.url}`
-            : `⚠️ The link was made but not sent (${sent.status}). Forward it yourself:\n${sent.url}`;
+            : `⚠️ The link was made but not sent (${sent.status}). Forward it yourself:\n${sent.url}`);
         }
+      } else if (await whatsappWebBridgeService.waitsForThem(row.phone)) {
+        const label = action.key === 'final_reminder' ? 'final reminder' : 'reminder';
+        return stay(`${whatsappWebBridgeService.notSentUntilTheyWrite({ name: row.name, what: label, waiting: false })}\n\nReply *0* for the list, or *CANCEL* to close.`, 'employee_owes_person', { owesHeld: action.key });
       } else {
         const result = row.kind === 'agent'
           ? await billingOps.sendAgentBillingMessage(db, { agentId: row.id, kind: action.key, actor, force: action.key === 'reminder' })
@@ -11570,11 +11586,13 @@ async function handleControlRoomStep({ phone, currentStep, cleanBody, data = {} 
       try {
         if (action.key === 'agent_pay_link') {
           const sent = await sendStaffPayLink({ name: dossier.agent.full_name, phone: dossier.phone, agentId: dossier.agent.id, requestedBy: phone });
+          if (sent.held_message) return stay(`${sent.held_message}\n\nSend another name or number, or *CANCEL*.`, 'employee_lookup_action', { payLinkHeld: sent.code });
           return stay(`✅ *Payment link sent to ${who}* — ${sent.fee_label} a month\n${sent.url}\n\nI will tell you the moment it is paid.\n\nSend another name or number, or *CANCEL*.`, 'employee_lookup_action', { payLinkSent: sent.code });
         }
         if (action.key === 'owner_pay_link') {
           const listing = dossier.own_listings.find((item) => item.id === action.listing_id) || dossier.own_listings[0];
           const sent = await sendOwnerListingPayLink({ listing, requestedBy: phone });
+          if (sent.held_message) return stay(`${sent.held_message}\n\nSend another name or number, or *CANCEL*.`, 'employee_lookup_action', { payLinkHeld: sent.code });
           return stay(`${controlRoom.payLinkOwnerSentMessage({ listing, url: sent.url, code: sent.code, amountLabel: `UGX ${Number(sent.amount_ugx || 0).toLocaleString('en-US')}`, sentStatus: sent.status })}\n\nSend another name or number, or *CANCEL*.`, 'employee_lookup_action', { payLinkSent: sent.code });
         }
         const kind = action.key === 'owner_howto' ? 'owner' : 'agent';
@@ -11638,6 +11656,9 @@ async function sendHowToFromStaff({ kind = 'agent', phone = '', name = '', sentB
     return { ok: false, message: `I did not send it: ${name || dialable} was sent this video in the last 24 hours. If they cannot find it, ask them to scroll up in the makaug chat.` };
   }
   const displayName = agent ? agentGreetingName(agent, '') || name : name;
+  if (await whatsappWebBridgeService.waitsForThem(dialable)) {
+    return { ok: false, held: true, message: whatsappWebBridgeService.notSentUntilTheyWrite({ name: agent?.full_name || name, what: 'how-to video', waiting: false }) };
+  }
   try {
     await sendHowToVideo({ kind, phone: dialable, name: displayName, sentBy, lang });
   } catch (error) {
@@ -12235,6 +12256,9 @@ async function handleEmployeeWhatsappIntake({
       employee_intake_last_pay_link_code: sent.code,
       employee_intake_last_pay_link_at: new Date().toISOString()
     });
+    if (sent.held_message) {
+      return { handled: true, nextStep: 'main_menu', payLinkHeld: sent.code, message: sent.held_message };
+    }
     return {
       handled: true,
       nextStep: 'main_menu',
@@ -12350,6 +12374,9 @@ async function handleEmployeeWhatsappIntake({
       employee_intake_last_pay_link_code: sent.code,
       employee_intake_last_pay_link_at: new Date().toISOString()
     });
+    if (sent.held_message) {
+      return { handled: true, nextStep: 'main_menu', payLinkHeld: sent.code, message: sent.held_message };
+    }
     return {
       handled: true,
       nextStep: 'main_menu',
@@ -20661,7 +20688,10 @@ function filmLinkPeople() {
   return people;
 }
 
-/** Whether this number has ever written to us. Somebody who has is answered, not approached. */
+/**
+ * Whether this number has written to us lately (the last seven days, as the
+ * queue counts it). Somebody who has is answered, not approached.
+ */
 async function hasWrittenToUs(phone) {
   const tail = String(phone || '').replace(/\D/g, '').slice(-9);
   if (tail.length !== 9) return false;
@@ -20670,8 +20700,9 @@ async function hasWrittenToUs(phone) {
       WHERE direction = 'inbound'
         AND message_type <> 'call'
         AND RIGHT(regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g'), 9) = $1
+        AND created_at >= NOW() - make_interval(days => $2)
       LIMIT 1`,
-    [tail]
+    [tail, whatsappWebBridgeService.wroteWithinDays()]
   );
   return result.rows.length > 0;
 }
@@ -21782,6 +21813,24 @@ async function sendStaffPayLink({
   const methodLine = await payLinkMethodLine(created.link.code);
   const firstName = normalizeInput(name).split(/\s+/)[0] || 'there';
 
+  // Everyone who will be asked about this money later. The requester is first
+  // because they are standing in front of the person who has to pay.
+  const requester = String(requestedBy || '').replace(/\D/g, '');
+  const recipients = new Set();
+  if (requester.length >= 9) recipients.add(requester);
+  for (const owner of getConfiguredOwnerPhones()) {
+    const digits = String(owner || '').replace(/\D/g, '');
+    if (digits.length >= 9) recipients.add(digits);
+  }
+
+  // 20 Nov 2026, 07:18: Ronald sent an agent his payment link from Agent 007.
+  // The agent had last written on 26 Oct, and WhatsApp restricted the number
+  // straight after. Somebody who has not written lately is sent nothing now:
+  // the link waits for them and goes the moment they write, and whoever asked
+  // is told that, with a link to send them, instead of "sent".
+  const waits = !firstContact && await whatsappWebBridgeService.waitsForThem(recipient);
+  const team = [...recipients].filter((digits) => digits.slice(-9) !== recipient.slice(-9));
+
   // A prospect gets the film first, so the link lands on a conversation that
   // already knows who we are. It is queued before the link and the bridge
   // sends in order.
@@ -21806,6 +21855,8 @@ async function sendStaffPayLink({
       // The number writing first to somebody: this message is the one counted
       // for it, with or without the film before it.
       ...(firstContact ? { first_contact: true } : {}),
+      // Waiting for them to write: when it goes, these people hear that it has.
+      ...(waits ? { held_for_first_message: true, agent_name: normalizeInput(name), tell_when_sent: team } : {}),
       // Unique per send: a staff member sending it again has decided to.
       reply_dedupe_key: `pay_link:${created.link.code}:${Date.now()}`
     }
@@ -21817,15 +21868,36 @@ async function sendStaffPayLink({
     await db.query('UPDATE agents SET pay_link_sent_at = NOW() WHERE id = $1', [agentId]).catch(() => null);
   }
 
-  // Everyone who will be asked about this money later. The requester is first
-  // because they are standing in front of the person who has to pay.
-  const requester = String(requestedBy || '').replace(/\D/g, '');
   const told = [];
-  const recipients = new Set();
-  if (requester.length >= 9) recipients.add(requester);
-  for (const owner of getConfiguredOwnerPhones()) {
-    const digits = String(owner || '').replace(/\D/g, '');
-    if (digits.length >= 9) recipients.add(digits);
+  const heldMessage = waits
+    ? whatsappWebBridgeService.notSentUntilTheyWrite({ name: normalizeInput(name), what: 'payment link', waiting: true })
+    : '';
+  if (waits) {
+    // The requester is answered with it in their own chat; the others hear it too.
+    for (const target of team.filter((digits) => digits !== requester)) {
+      await queueWhatsappWebBridgeMessage({
+        recipient: target,
+        text: `${heldMessage}\n\nLink: *${created.link.code}* · ${feeLabel} a month`,
+        source: 'whatsapp_runtime',
+        actorId: actor,
+        metadata: {
+          message_kind: 'agent_pay_link_staff_notice',
+          pay_link_code: created.link.code,
+          reply_dedupe_key: `pay_link_notice:${created.link.code}:${target}`
+        }
+      }).catch(() => null);
+      told.push(target);
+    }
+    return {
+      code: created.link.code,
+      url,
+      reused: created.reused === true,
+      fee_label: feeLabel,
+      recipient,
+      notified: told,
+      waiting_for_first_message: true,
+      held_message: heldMessage
+    };
   }
   const note = `💳 *Payment link sent* — ${normalizeInput(name) || recipient}\n\n`
     + `Link: *${created.link.code}*\n`

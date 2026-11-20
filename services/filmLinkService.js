@@ -213,14 +213,14 @@ function firstContactDecision({ sentToday = 0, lastAt = null, now = new Date(), 
 }
 
 // What a member of staff is told while the number writes to nobody first.
-const ONLY_WROTE_WHY = 'The makaug number now only writes to people who have written to it first. WhatsApp removed its link on 15 Nov and again on 16 Nov, each time two seconds after it wrote to somebody who had not.';
+const ONLY_WROTE_WHY = 'The makaug number only writes to people who have written to it in the last 7 days. WhatsApp restricted it on 15, 16, 17 and 20 Nov, each time just after it wrote to somebody who had not written to it lately.';
 
 /**
  * The line under the name-and-number way in Agent 007: how far the number
  * itself will write first, today. Nothing when the limits are off.
  */
 function firstContactNote({ now = new Date(), limits = outreachLimits(), on = limitsOn(), onlyWrote = false } = {}) {
-  const onlyIfTheyWrote = 'A name and number sent here gets the film only if they have written to this number before. For everybody else, your link.';
+  const onlyIfTheyWrote = 'A name and number sent here gets the film only if they have written to this number in the last 7 days. For everybody else, your link.';
   if (onlyWrote) return `_The number itself writes first to nobody. ${onlyIfTheyWrote}_`;
   if (!on) return '';
   if (limits.notBefore && now.getTime() < limits.notBefore.getTime()) {

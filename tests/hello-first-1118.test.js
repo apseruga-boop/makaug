@@ -86,13 +86,13 @@ test('Agent 007: a new agent who has never written is to be sent the link now, s
     const done = await at(STAFF, 'employee_property_media', 'COMPLETE', batchFor(NEW_AGENT));
     assert.strictEqual(done.batchComplete, true, done.message);
     assert.match(done.message, /Replay Newcomer has not been notified yet\. The agent profile card is waiting for founder approval\./);
-    assert.match(done.message, /Replay Newcomer has never written to the makaug WhatsApp number/);
+    assert.match(done.message, /Replay Newcomer hasn't written to the makaug WhatsApp number in the last 7 days/);
     assert.match(done.message, /Send them this to tap and send now, and their welcome goes the moment they are approved:\nhttps:\/\/wa\.me\/\d+\?text=Hi%20makaug/);
   });
   await withWorld(async ({ at }) => {
     const done = await at(STAFF, 'employee_property_media', 'COMPLETE', batchFor(NEW_AGENT));
     assert.match(done.message, /waiting for founder approval\./);
-    assert.doesNotMatch(done.message, /never written|wa\.me/, 'somebody who has written needs no link');
+    assert.doesNotMatch(done.message, /hasn't written|wa\.me/, 'somebody who has written needs no link');
   }, { wrote: true });
   // With the rule off nothing is asked and nothing changes.
   const off = process.env.WHATSAPP_ONLY_TO_PEOPLE_WHO_WROTE;

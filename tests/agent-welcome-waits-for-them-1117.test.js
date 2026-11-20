@@ -103,7 +103,7 @@ test('an agent who has never written: staff are told it waits, given the link, a
     assert.strictEqual(notes.length, 2, 'the employee who signed them up, and the owner');
     for (const note of notes) {
       assert.match(note.text, /^💳 \*Test Agent is approved\*, but nothing has reached them yet\./);
-      assert.match(note.text, /They have never written to the makaug WhatsApp number, and it only writes to people who have written to it first\./);
+      assert.match(note.text, /They haven't written to the makaug WhatsApp number in the last 7 days, and it only writes to people who have\./);
       assert.match(note.text, /Their welcome, the payment link and any "your property is live" messages are waiting, and go the moment they send it a message\./);
       assert.ok(note.text.includes(`Send them this to tap and send:\n${HELLO}`));
       assert.match(note.text, /Amount: UGX 50,000 a month\nNumber: 256701000137\nPaid: not yet/);
@@ -116,7 +116,7 @@ test('an agent who has never written: staff are told it waits, given the link, a
     assert.strictEqual(result.fee_link.waiting_for_first_message, true);
     // And what the employee who approved them on WhatsApp reads.
     const line = welcome.welcomeSentLine(result);
-    assert.match(line, /^Nothing has reached them yet: they have never written to the makaug WhatsApp number/);
+    assert.match(line, /^Nothing has reached them yet: they haven't written to the makaug WhatsApp number in the last 7 days/);
     assert.ok(line.endsWith(HELLO));
     assert.doesNotMatch(line, /have gone to them/);
   });

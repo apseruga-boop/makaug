@@ -33035,7 +33035,9 @@ async function adminSendWhatsappReply(source = "human") {
     });
 
     const manualUrl = response?.data?.manual_url || "";
-    if (response?.data?.queued_for_bridge) {
+    if (response?.data?.queued_for_bridge && response?.data?.waiting_for_first_message) {
+      toast(adminReplyWaitsNote(response.data));
+    } else if (response?.data?.queued_for_bridge) {
       toast("Reply queued for the WhatsApp Web copilot. It will send from the open browser session.");
     } else if (response?.data?.manual_required && manualUrl) {
       window.open(manualUrl, "_blank", "noopener,noreferrer");
@@ -38614,7 +38616,16 @@ function adminKampalaClock(value) {
 // with the link that lets them write first (17 Nov 2026).
 function adminWelcomeWaitsNote(w = {}) {
   const link = w?.hello_link || "https://wa.me/256780863394?text=Hi%20makaug";
-  return ` Nothing has reached them yet: they have never written to the makaug WhatsApp number. Their welcome and payment link go the moment they do. Send them ${link} to tap and send.`;
+  return ` Nothing has reached them yet: they haven't written to the makaug WhatsApp number in the last 7 days. Their welcome and payment link go the moment they do. Send them ${link} to tap and send.`;
+}
+
+// A reply typed in the inbox to somebody who has not written lately: it waits
+// for them, because WhatsApp blocks the number for writing to people who have
+// not written to it (20 Nov 2026).
+function adminReplyWaitsNote(d = {}) {
+  const link = d?.hello_link || "https://wa.me/256780863394?text=Hi%20makaug";
+  const days = Number(d?.wrote_within_days) || 7;
+  return `Not sent — they haven't written to makaug in the last ${days} days. WhatsApp blocks our number when we message people who haven't written to us. Ask them to message us first: send them ${link} to tap and press send. Your reply goes the moment they write.`;
 }
 
 // What the agent was sent when they were approved, in one line for the toast.

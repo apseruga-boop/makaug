@@ -12191,6 +12191,11 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
       }
     }
 
+    // 20 Nov 2026: a reply to somebody who has not written lately waits in the
+    // queue until they do, and whoever typed it is told so, not that it went.
+    const bridgeRules = require('../services/whatsappWebBridgeService');
+    const waitingForThem = queuedForBridge ? await bridgeRules.waitsForThem(phone).catch(() => false) : false;
+
     if (delivery.sent) {
       await db.query(
         `INSERT INTO whatsapp_messages (user_phone, wa_message_id, direction, message_type, payload)
@@ -12242,6 +12247,7 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
       delivery_mode: effectiveDeliveryMode,
       queued_for_bridge: queuedForBridge,
       bridge_queue_id: bridgeQueueId,
+      waiting_for_first_message: waitingForThem,
       manual_required: delivery.sent !== true,
       manual_url: manualUrl || null
     }, actor);
@@ -12253,6 +12259,8 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
         delivery,
         queued_for_bridge: queuedForBridge,
         bridge_queue_id: bridgeQueueId,
+        waiting_for_first_message: waitingForThem,
+        ...(waitingForThem ? { wrote_within_days: bridgeRules.wroteWithinDays(), hello_link: require('../services/filmLinkService').helloLink() } : {}),
         manual_required: delivery.sent !== true,
         manual_url: manualUrl || null
       }
@@ -15945,8 +15953,9 @@ async function prepareAgentFeeLink({ agent = {}, actor = 'admin', force = false 
 
 /**
  * Whether what we send this agent waits for them to write first: the makaug
- * number writes to nobody who has never written to it (16 Nov 2026). Asked only
- * while that rule is on. When it cannot be told, they have not written.
+ * number writes to nobody who has not written to it lately (16 Nov 2026; the
+ * last seven days since 20 Nov). Asked only while that rule is on. When it
+ * cannot be told, they have not written.
  */
 async function agentWaitsForFirstMessage(phone = '') {
   const bridge = require('../services/whatsappWebBridgeService');
@@ -16001,7 +16010,7 @@ async function queueAgentFeeLink(prepared = {}, { agent = {}, actor = 'admin', s
     : 'Their payment link is waiting, and goes';
   const opening = waits
     ? `💳 *${agent.full_name} is approved*, but nothing has reached them yet.\n\n`
-      + 'They have never written to the makaug WhatsApp number, and it only writes to people who have written to it first. '
+      + `They haven't written to the makaug WhatsApp number in the last ${require('../services/whatsappWebBridgeService').wroteWithinDays()} days, and it only writes to people who have. `
       + `${waiting} the moment they send it a message.\n\n`
       + `Send them this to tap and send:\n${require('../services/filmLinkService').helloLink()}\n\n`
     : (heldUntil
