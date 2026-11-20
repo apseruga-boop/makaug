@@ -4367,6 +4367,66 @@ function employeeMediaFailureMessage(error = null) {
   return 'I could not store that media permanently, so it was not added to review. Please wait before resending; nothing went live.';
 }
 
+/** { limitMb, isVideo } when storing failed because the media was over the size limit, else null. */
+function employeeMediaTooLarge(error = null) {
+  const text = [error?.message, error?.cause?.message].filter(Boolean).join(' ');
+  const match = /exceeds the (\d+)MB intake limit/i.exec(text);
+  return match ? { limitMb: Number(match[1]) || 25, isVideo: /\bvideo\b/i.test(text) } : null;
+}
+
+/**
+ * Keep a description whose photos or video could not be taken, so what the
+ * agent sends next completes it. A description already waiting for photos is
+ * not displaced: this one waits behind it.
+ */
+function keepEmployeeCaptionForMedia(data = {}, { caption = '', inboundMessageId = '', senderMs = 0 } = {}) {
+  const kept = normalizeInput(caption);
+  const waiting = normalizeInput(data.pending_property_caption || '');
+  if (!waiting || waiting === kept) {
+    data.pending_property_caption = kept;
+    data.pending_caption_sender_ms = Number(senderMs || 0) || Date.now();
+    data.pending_caption_media_too_large = true;
+  } else {
+    rememberEmployeeQueuedSubmission(data, { caption: kept, storedMedia: [], inboundMessageId, senderMs });
+  }
+  return data;
+}
+
+/**
+ * A property was saved or matched, so the description that was waiting is
+ * done with. One that was waiting only because its video was too big, and is
+ * not the one just saved, goes back in line for its photos instead of being
+ * dropped by the next property the agent sends.
+ */
+function releaseEmployeePendingCaption(data = {}, { before = '', caption = '' } = {}) {
+  const keptForMedia = data.pending_caption_media_too_large === true
+    && normalizeInput(before)
+    && normalizeInput(before) !== normalizeInput(caption)
+    ? normalizeInput(before)
+    : '';
+  if (keptForMedia) {
+    rememberEmployeeQueuedSubmission(data, { caption: keptForMedia, storedMedia: [], senderMs: data.pending_caption_sender_ms });
+  }
+  delete data.pending_property_caption;
+  delete data.pending_caption_media_too_large;
+  clearEmployeePendingMedia(data);
+  const promoted = promoteEmployeeQueuedSubmission(data);
+  if (keptForMedia && promoted && normalizeInput(promoted.caption) === keptForMedia) data.pending_caption_media_too_large = true;
+  return promoted;
+}
+
+/** What the agent hears when the only media of a property was too big. */
+function employeeMediaTooLargeKeptMessage(caption = '', tooLarge = {}) {
+  const what = tooLarge.isVideo === false ? 'file' : 'video';
+  return [
+    `⚠️ *Not saved yet — ${employeeCaptionLabel(caption)}*`,
+    '',
+    `That ${what} is over ${Number(tooLarge.limitMb) || 25} MB, so I couldn't take it, and a property needs at least one photo or video.`,
+    '',
+    'I have kept your description. Send a few photos, or a video under 2 minutes, and I will add them to it.'
+  ].join('\n');
+}
+
 function employeeMediaCandidates(runtime = {}, mediaUrl = '') {
   const collected = [];
   const append = (candidate = {}, fallbackMime = '') => {
@@ -9320,8 +9380,12 @@ function agentPropertyDetailLines(facts = {}, caption = '') {
   const meta = facts.priceMetadata || {};
   const shown = agentMoney(meta.price_original || facts.price, meta.price_original_currency || meta.price_currency || 'UGX');
   if (shown) {
+    // "22M each" for 2 acres is 22M an acre, and is kept as that; the message
+    // said only "UGX 22,000,000" (20 Nov 2026).
+    const unit = String(facts.pricePeriod || '').toLowerCase();
     const period = ownerForwardPricePeriod(facts.listingType, english);
-    lines.push(`💰 ${shown}${period === 'month' ? ' a month' : (period === 'semester' ? ' a semester' : '')}`);
+    const per = unit === 'acre' ? ' an acre' : (unit === 'plot' ? ' a plot' : (period === 'month' ? ' a month' : (period === 'semester' ? ' a semester' : '')));
+    lines.push(`💰 ${shown}${per}`);
   }
   return lines;
 }
@@ -13740,18 +13804,14 @@ async function handleEmployeeWhatsappIntake({
           const toppedUp = await agentTopUpExistingProperty({ data, existingProperty, storedMedia: fresh, phone, inboundMessageId });
           if (toppedUp) {
             if (!pendingStoredMediaBeforeMessage.length || continuesPendingProperty) {
-              delete data.pending_property_caption;
-              clearEmployeePendingMedia(data);
-              promoteEmployeeQueuedSubmission(data);
+              releaseEmployeePendingCaption(data, { before: pendingCaptionBeforeMessage, caption });
             }
             await replaceEmployeeSession(phone, currentStep, data);
             return { handled: true, nextStep: currentStep, propertyId: existingProperty.id, duplicate: true, message: toppedUp };
           }
         }
         if (!pendingStoredMediaBeforeMessage.length || continuesPendingProperty) {
-          delete data.pending_property_caption;
-          clearEmployeePendingMedia(data);
-          promoteEmployeeQueuedSubmission(data);
+          releaseEmployeePendingCaption(data, { before: pendingCaptionBeforeMessage, caption });
         }
         await replaceEmployeeSession(phone, currentStep, data);
         return {
@@ -13807,8 +13867,18 @@ async function handleEmployeeWhatsappIntake({
       logger.error('WhatsApp employee property-media storage failed:', error);
       if (propertyAttemptRecorded) {
         data.properties_failed_count = Number(data.properties_failed_count || 0) + 1;
-        await replaceEmployeeSession(phone, currentStep, data);
       }
+      // 20 Nov 2026: 64 acres described in full, with one video over 25 MB.
+      // Nothing was saved, and the agent was told "Everything else you sent is
+      // kept". The description is kept now, waiting for photos the way a
+      // description sent before its photos waits, and he is told it is not saved.
+      const tooLarge = employeeMediaTooLarge(error);
+      if (tooLarge && shouldStartProperty && caption) {
+        keepEmployeeCaptionForMedia(data, { caption, inboundMessageId, senderMs: mediaSenderMs });
+        await replaceEmployeeSession(phone, currentStep, data);
+        return { handled: true, nextStep: currentStep, message: employeeMediaTooLargeKeptMessage(caption, tooLarge) };
+      }
+      if (propertyAttemptRecorded) await replaceEmployeeSession(phone, currentStep, data);
       return { handled: true, nextStep: currentStep, message: employeeMediaFailureMessage(error) };
     }
 
@@ -13822,9 +13892,7 @@ async function handleEmployeeWhatsappIntake({
           data.total_media_count = Number(data.total_media_count || 0) + storedMedia.length;
         }
         if (!pendingStoredMediaBeforeMessage.length || continuesPendingProperty) {
-          delete data.pending_property_caption;
-          clearEmployeePendingMedia(data);
-          promoteEmployeeQueuedSubmission(data);
+          releaseEmployeePendingCaption(data, { before: pendingCaptionBeforeMessage, caption });
         } else {
           // Photos parked before this caption arrived: give them to the property
           // from this burst they belong with, rather than leaving them stranded.
@@ -15376,6 +15444,44 @@ function isAffordabilityAdviceQuestion(value) {
     const escaped = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return new RegExp(`(^|[^a-z0-9])${escaped}($|[^a-z0-9])`, 'i').test(clean);
   });
+}
+
+/**
+ * "What is needed to get a house" (20 Nov 2026, 2:25am): somebody just shown
+ * single rooms at 150K asked how renting works. It was taken as a search for
+ * "house", and he was shown houses at 850K to 2M. A question about how to get
+ * a place is answered with how to get a place. A figure, an area or a word
+ * about buying makes it something else, and it is left to the search.
+ */
+function isRentingProcessQuestion(value) {
+  const clean = normalizeInput(value).toLowerCase().replace(/[\u2018\u2019]/g, "'");
+  if (!clean || clean.length < 8 || clean.length > 160) return false;
+  if (/\d/.test(clean)) return false;
+  if (/\b(?:buy|buying|purchase|own|mortgage|loan|sell|selling|list|listing|post|agent|broker)\b/.test(clean)) return false;
+  if (!/\b(?:house|houses|home|room|rooms|rental|apartment|flat|place|hostel|rent|renting|tenant)\b/.test(clean)) return false;
+  return /\bwhat(?:'s| is| are)?\s+(?:needed|required|the requirements?|the process|the procedure)\b/.test(clean)
+    || /\bwhat\s+(?:do|should|must)\s+i\s+(?:need|have|bring|do)\b/.test(clean)
+    || /\bhow\s+(?:do|can|will|should)\s+i\s+(?:get|rent|hire|secure|take)\b/.test(clean)
+    || /\b(?:requirements?|process|procedure|steps)\s+(?:for|to|of)\b/.test(clean);
+}
+
+/** How getting a place works, then the search they were on, if there was one. */
+function rentingProcessReply(lang = 'en', sessionData = {}) {
+  void lang;
+  const brief = recentSearchBrief(sessionData);
+  const looking = brief ? describeSearchBrief({ ...brief, area: null, query: null }) : '';
+  return [
+    whatsappBrandHeader('Getting a place'),
+    'Here is how it works:',
+    '1️⃣ Pick a place on makaug, then call or WhatsApp the owner or agent from the listing. makaug charges you nothing.',
+    '2️⃣ See the room or house before you pay anything.',
+    '3️⃣ Ask how many months they want upfront (often 1 to 3) and what is included, like water and yaka.',
+    '4️⃣ Take your National ID, and get a written agreement and a receipt for what you pay.',
+    '',
+    looking
+      ? `Want me to keep looking (${looking})? Send the area.`
+      : 'Tell me the area and your budget and I will find options, for example: *single room in Kireka under 150k*.'
+  ].join('\n');
 }
 
 function parseBudgetFromQuestion(text) {
@@ -19549,6 +19655,72 @@ function searchBriefFromFilters(filters = {}, queryText = '') {
   };
 }
 
+// A search goes on from the one before it for two hours (20 Nov 2026): a
+// renter who had asked for a single room at 150K named Kiwatule and was shown
+// houses at 850K to 2M, then said "for 150k" and was asked for the area he had
+// just named. What they said stays until they say otherwise.
+const LAST_SEARCH_CARRIES_MS = 2 * 60 * 60 * 1000;
+
+/** The last search's brief while it still counts, or null. */
+function recentSearchBrief(sessionData = {}, now = Date.now()) {
+  const brief = sessionData && typeof sessionData === 'object' ? sessionData.last_search_brief : null;
+  if (!brief || typeof brief !== 'object') return null;
+  const at = Date.parse(brief.at || '');
+  if (!Number.isFinite(at) || now - at > LAST_SEARCH_CARRIES_MS || at - now > 60000) return null;
+  return brief;
+}
+
+/**
+ * This search with the gaps filled from the last one: a new area keeps the
+ * budget and the kind of home, a new budget keeps the area. Renting after
+ * renting goes on; land after a room is a new search and is left alone, and a
+ * different home (a 2 bedroom after a single room) does not take the old
+ * budget. `keepArea` false when the area is what is being asked for now.
+ */
+function continueFromLastSearch(filters = {}, sessionData = {}, { keepArea = true, now = Date.now() } = {}) {
+  const brief = recentSearchBrief(sessionData, now);
+  if (!brief || !filters || typeof filters !== 'object') return filters;
+  const lastType = normalizeListingType(brief.search_type || 'any');
+  const newType = normalizeListingType(filters.searchType || 'any');
+  if (newType !== 'any' && lastType !== 'any' && newType !== lastType) return filters;
+  const out = { ...filters };
+  const carried = [];
+  if (newType === 'any' && lastType !== 'any') {
+    out.searchType = lastType;
+    carried.push('type');
+  }
+  const newHome = normalizeInput(filters.propertyType || '').toLowerCase();
+  const newBeds = Number(filters.bedsMin) > 0 ? Number(filters.bedsMin) : 0;
+  const namesHome = Boolean(newHome) || newBeds > 0;
+  const sameHome = !namesHome
+    || (newHome === normalizeInput(brief.property_type || '').toLowerCase() && newBeds === (Number(brief.beds_min) || 0));
+  if (!namesHome) {
+    if (brief.property_type) {
+      out.propertyType = brief.property_type;
+      carried.push('home');
+    }
+    if (Number(brief.beds_min) > 0) {
+      out.bedsMin = Number(brief.beds_min);
+      carried.push('beds');
+    }
+  }
+  if (sameHome && !(Number(out.maxBudgetUgx) > 0) && Number(brief.max_budget_ugx) > 0) {
+    out.maxBudgetUgx = Number(brief.max_budget_ugx);
+    if (!(Number(out.minBudgetUgx) > 0) && Number(brief.min_budget_ugx) > 0) out.minBudgetUgx = Number(brief.min_budget_ugx);
+    if (!out.budgetPeriod && brief.budget_period) out.budgetPeriod = brief.budget_period;
+    carried.push('budget');
+  }
+  if (keepArea && !normalizeInput(out.area || '') && !normalizeInput(out.district || '') && !out.useSharedLocation && normalizeInput(brief.area || '')) {
+    out.area = normalizeInput(brief.area);
+    out.carriedArea = true;
+    carried.push('area');
+  }
+  if (!carried.length) return filters;
+  out.continuedFromLastSearch = carried;
+  out.hasSignal = true;
+  return out;
+}
+
 function describeSearchBrief(brief = {}) {
   if (!brief || typeof brief !== 'object') return '';
   const type = { rent: 'to rent', sale: 'to buy', land: 'land', student: 'student housing', commercial: 'commercial' }[brief.search_type] || '';
@@ -20211,6 +20383,20 @@ async function formatNoMatchOrFallbackReply({
   ].join('\n');
 }
 
+/**
+ * The kind of page "See all" opens. A search with no kind ("house in
+ * Kiwatule") whose results are all rentals opens the to-rent page: on 20 Nov
+ * 2026 three rentals were followed by "See all 23: makaug.com/for-sale?…".
+ */
+function searchResultsLinkType(searchType = 'any', rows = []) {
+  const asked = normalizeListingType(searchType || 'any');
+  if (asked !== 'any') return asked;
+  const kinds = [...new Set((Array.isArray(rows) ? rows : [])
+    .map((row) => normalizeListingType(row?.listing_type || 'any'))
+    .filter((kind) => kind && kind !== 'any'))];
+  return kinds.length === 1 ? kinds[0] : 'any';
+}
+
 function formatPropertySearchMessage(lang, rows, location, searchType) {
   void lang;
   recordResultList(rows);
@@ -20218,7 +20404,7 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
     homeUrl: HOME_URL,
     location,
     searchType,
-    searchResultsUrl: whatsappSearchResultsUrl(searchType, location)
+    searchResultsUrl: whatsappSearchResultsUrl(searchResultsLinkType(searchType, rows), location)
   });
 }
 
@@ -20365,7 +20551,7 @@ function formatPropertySearchMessageLegacy(lang, rows, location, searchType) {
     lines.push('━━━━━━━━━━━━━━━━');
   });
   if (totalMatches > visibleRows.length) {
-    const url = whatsappSearchResultsUrl(searchType, location);
+    const url = whatsappSearchResultsUrl(searchResultsLinkType(searchType, visibleRows), location);
     const moreLine = (copy.moreResults || cardCopy.en.moreResults)
       .replace('{total}', String(totalMatches))
       .replace('{shown}', String(visibleRows.length))
@@ -23004,6 +23190,15 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     return respond(t(lang, 'askAgentArea'), 'agent_area');
   }
 
+  // "What is needed to get a house?" is a question about renting, not a search for "house".
+  if (
+    ['greeting', 'main_menu', 'search_type', 'search_area'].includes(step)
+    && isRentingProcessQuestion(cleanBody)
+    && !parseAreaFromText(cleanBody, sessionData)
+  ) {
+    return respond(rentingProcessReply(lang, sessionData), step === 'search_area' ? 'search_area' : 'main_menu');
+  }
+
   if (
     ['greeting', 'main_menu', 'search_type', 'search_area'].includes(step)
     && cleanBody.length > 3
@@ -23056,6 +23251,13 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       }
     }
     naturalFilters = resolveWhatsappSearchLocation(naturalFilters, cleanBody);
+    // What they asked for a moment ago still stands: a new area keeps the budget, a new budget keeps the area.
+    if (naturalFilters.hasSignal) {
+      const continued = continueFromLastSearch(naturalFilters, sessionData);
+      if (continued !== naturalFilters) {
+        naturalFilters = continued.carriedArea ? resolveWhatsappSearchLocation(continued, continued.area) : continued;
+      }
+    }
     const locationBlockReply = whatsappSearchLocationBlockReply(naturalFilters, cleanBody);
     if (locationBlockReply) {
       await holdSearchForArea(phone, naturalFilters, cleanBody);
@@ -23826,6 +24028,8 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       if (parsed.hasSignal) naturalFilters = parsed;
     }
     if (naturalFilters) naturalFilters = preserveExplicitSearchType(naturalFilters, searchType);
+    // The budget or kind of home they gave just before this search still stands.
+    if (naturalFilters) naturalFilters = continueFromLastSearch(naturalFilters, sessionData, { keepArea: false });
 
     if (naturalFilters && naturalFilters.area) {
       naturalFilters = resolveWhatsappSearchLocation(naturalFilters, cleanBody);
@@ -26901,6 +27105,15 @@ module.exports.forwardedAdvertMimeType = forwardedAdvertMimeType;
 module.exports.importForwardedAdvert = importForwardedAdvert;
 
 module.exports.__test = {
+  isRentingProcessQuestion,
+  rentingProcessReply,
+  recentSearchBrief,
+  continueFromLastSearch,
+  searchResultsLinkType,
+  employeeMediaTooLarge,
+  keepEmployeeCaptionForMedia,
+  releaseEmployeePendingCaption,
+  employeeMediaTooLargeKeptMessage,
   pickShownListing,
   listingCodesInText,
   pickPriceFigures,

@@ -14,7 +14,7 @@ assert(whatsappRouteSource.includes('LIMIT $'), 'WhatsApp property searches shou
 assert(whatsappRouteSource.includes('አዲሶቹን {shown} አሳይቻለሁ'), 'Amharic WhatsApp result cards should include translated more-results copy');
 assert(whatsappRouteSource.includes('const visibleRows = Array.isArray(rows) ? rows.slice(0, WHATSAPP_PROPERTY_RESULT_LIMIT) : []'), 'Formatter should slice visible WhatsApp search rows to the shared cap');
 assert(whatsappRouteSource.includes('totalMatches > visibleRows.length'), 'Formatter should show a website link when more matches exist');
-assert(whatsappRouteSource.includes('whatsappSearchResultsUrl(searchType, location)'), 'More-results message should link to filtered website results');
+assert(whatsappRouteSource.includes('whatsappSearchResultsUrl(searchResultsLinkType(searchType, visibleRows), location)'), 'More-results message should link to filtered website results, for the kind of listing shown');
 assert(whatsappRouteSource.includes('function whatsappSearchResultsPath'), 'More-results URLs should choose a real public category route');
 assert(whatsappRouteSource.includes("student: '/student-accommodation'"), 'Student more-results URLs should open the student accommodation page');
 assert(whatsappRouteSource.includes("rent: '/to-rent'"), 'Rent more-results URLs should open the rent page');
