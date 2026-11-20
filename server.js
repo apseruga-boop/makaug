@@ -3135,6 +3135,17 @@ function scheduleStartupDataRepairs() {
     } catch (error) {
       logger.warn('Placeholder titles and pasted copy fix 241 skipped:', error.message || String(error));
     }
+    // Split combined adverts and set the Namanve USD price (Arthur,
+    // 20 Nov 2026). Migration 242 only creates the backup table.
+    try {
+      const { runSplitMultiPlotListings242 } = require('./scripts/run-split-multi-plot-listings-242');
+      const splitFix = await runSplitMultiPlotListings242(db, { logger });
+      if (splitFix && !splitFix.skipped && (splitFix.updated || splitFix.stopped_early)) {
+        logger.info('Split multi-plot listings fix 242 finished a pass', splitFix);
+      }
+    } catch (error) {
+      logger.warn('Split multi-plot listings fix 242 skipped:', error.message || String(error));
+    }
   }, staggeredBootDelay('startup_data_repairs'));
   timer.unref?.();
 }
