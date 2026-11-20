@@ -87,3 +87,15 @@ test('migration 242, rollback, and the startup hook are in place', () => {
   assert.ok(server.indexOf('runSplitMultiPlotListings242') > server.indexOf('runPlaceholderTitlesAndPastedCopy241'));
   assert.equal(MARKER, 'split_listings_242');
 });
+
+test('the split insert uses separate typed parameters for price and price_original', () => {
+  const runner = fs.readFileSync(path.join(__dirname, '../scripts/run-split-multi-plot-listings-242.js'), 'utf8');
+  // price is bigint, price_original is numeric. Reusing $7 for both raises 42P08.
+  assert.match(runner, /\$7::bigint/);
+  assert.match(runner, /\$31::numeric/);
+  assert.doesNotMatch(runner, /'UGX', \$7,/);
+  assert.match(runner, /price = \$\$\{values\.length - 3\}::bigint/);
+  assert.match(runner, /price_original = \$\$\{values\.length - 1\}::numeric/);
+  assert.match(runner, /price = \$4::bigint/);
+  assert.match(runner, /price_original = \$5::numeric/);
+});
