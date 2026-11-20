@@ -188,7 +188,7 @@ test('the end of a batch for an approved agent says what happens next, and how t
     assert.strictEqual(done.batchComplete, true, done.message);
     assert.match(done.message, /✅ \*2 properties sent for staff review\*/);
     assert.match(done.message, /Replay Tester is already an approved agent\. Each property goes live when a moderator approves it/);
-    assert.match(done.message, /Replay Tester has never written to the makaug WhatsApp number/);
+    assert.match(done.message, /Replay Tester hasn't written to the makaug WhatsApp number in the last 7 days/);
     assert.match(done.message, /https:\/\/wa\.me\/\d+\?text=Hi%20makaug/);
     assert.doesNotMatch(done.message, /waiting for founder approval|has not been notified yet/);
   });
@@ -196,7 +196,7 @@ test('the end of a batch for an approved agent says what happens next, and how t
     const done = await at(STAFF, 'employee_property_media', 'COMPLETE', batchFor(AGENT, 1));
     assert.match(done.message, /✅ \*1 property sent for staff review\*/, 'one property, not "1 properties"');
     assert.match(done.message, /Replay Tester is already an approved agent/);
-    assert.doesNotMatch(done.message, /never written|wa\.me/, 'an agent who has written needs no link');
+    assert.doesNotMatch(done.message, /hasn't written|wa\.me/, 'an agent who has written needs no link');
   }, { wrote: true });
   await withWorld(async ({ at }) => {
     const { status, ...pending } = AGENT;

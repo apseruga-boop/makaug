@@ -652,12 +652,18 @@ async function letGoOfExpiredCodes({ force = false } = {}) {
  * automatic messages in a month and had never once answered.
  *
  * So a message is handed to the bridge only when the person it is for has
- * written to the number at some time, or when it answers a message of theirs.
+ * written to the number lately, or when it answers a message of theirs.
  * Anything else waits in the queue. The moment they write, even "Hi", what is
  * waiting for them goes. It is the rule for every kind of message, the
  * welcome to a new agent and a notice to staff included, because WhatsApp
  * makes no exception for them. WHATSAPP_ONLY_TO_PEOPLE_WHO_WROTE=off removes
  * it; under test it is off unless a test turns it on.
+ *
+ * "Lately" is the last seven days (20 Nov 2026). Having written once was not
+ * enough: an agent who last wrote on 26 Oct and had answered none of the 28
+ * messages sent since was the last person written to before the number was
+ * restricted on 17 Nov (the Morning Brief) and again on 20 Nov (a payment
+ * link a member of staff sent him).
  */
 function onlyToPeopleWhoWrote(env = process.env) {
   const flag = String(env.WHATSAPP_ONLY_TO_PEOPLE_WHO_WROTE || '').trim().toLowerCase();
@@ -668,12 +674,23 @@ function onlyToPeopleWhoWrote(env = process.env) {
 }
 
 /**
- * SQL, true when the person a queued row is for has written to us, or the row
- * answers a message of theirs. `q` is the row's alias. The first test uses the
- * index on (user_phone, created_at); the second is for a reply whose number is
- * stored in another form than the message it answers.
+ * How many days back a message of theirs counts as "lately": seven, or
+ * WHATSAPP_WROTE_WITHIN_DAYS (1 to 90). It is the same window the agents'
+ * Morning Brief has used for its audience since 17 Nov 2026.
  */
-function hasWrittenSql(q = 'q') {
+function wroteWithinDays(env = process.env) {
+  const days = Number.parseInt(String(env.WHATSAPP_WROTE_WITHIN_DAYS || '').trim(), 10);
+  return Number.isInteger(days) && days >= 1 && days <= 90 ? days : 7;
+}
+
+/**
+ * SQL, true when the person a queued row is for has written to us lately, or
+ * the row answers a message of theirs. `q` is the row's alias. The first test
+ * uses the index on (user_phone, created_at); the second is for a reply whose
+ * number is stored in another form than the message it answers.
+ */
+function hasWrittenSql(q = 'q', { days = wroteWithinDays() } = {}) {
+  const within = Number.isInteger(days) && days >= 1 && days <= 90 ? days : 7;
   return `(
           EXISTS (
             SELECT 1 FROM whatsapp_messages m
@@ -685,6 +702,8 @@ function hasWrittenSql(q = 'q') {
                  regexp_replace(COALESCE(${q}.user_phone, ''), '\\D', '', 'g'),
                  '+' || regexp_replace(COALESCE(${q}.user_phone, ''), '\\D', '', 'g')
                )
+               -- Lately: somebody who last wrote a month ago has not asked for this.
+               AND m.created_at >= NOW() - INTERVAL '${within} days'
           )
           OR EXISTS (
             SELECT 1 FROM whatsapp_messages m
@@ -697,7 +716,7 @@ function hasWrittenSql(q = 'q') {
         )`;
 }
 
-/** Whether this number has ever written to us. When it cannot be told, no. */
+/** Whether this number has written to us lately (wroteWithinDays). When it cannot be told, no. */
 async function hasWrittenToUs(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
   if (digits.length < 9) return false;
@@ -706,13 +725,50 @@ async function hasWrittenToUs(phone) {
     const result = await db.query(
       `SELECT 1 FROM whatsapp_messages
         WHERE direction = 'inbound' AND message_type <> 'call' AND user_phone = ANY($1::text[])
+          AND created_at >= NOW() - make_interval(days => $2)
         LIMIT 1`,
-      [[...new Set([normalized, digits, `+${digits}`, String(normalized).replace(/\D/g, ''), `+${String(normalized).replace(/\D/g, '')}`])]]
+      [[...new Set([normalized, digits, `+${digits}`, String(normalized).replace(/\D/g, ''), `+${String(normalized).replace(/\D/g, '')}`])], wroteWithinDays()]
     );
     return result.rows.length > 0;
   } catch (_error) {
     return false;
   }
+}
+
+/**
+ * Whether what the number sends this person now would only wait in the queue:
+ * the rule is on and they have not written lately. When it cannot be told, it
+ * would wait.
+ */
+async function waitsForThem(phone) {
+  if (!onlyToPeopleWhoWrote()) return false;
+  return !(await hasWrittenToUs(phone).catch(() => false));
+}
+
+/**
+ * What a member of staff is told instead of "sent" when the person has not
+ * written lately (20 Nov 2026, in Arthur's words: tell them this person has yet
+ * to message, so we cannot, or we will be blocked). `waiting` true: what they
+ * asked for is in the queue and goes the moment the person writes, and staff
+ * are told when it has. False: nothing was queued, and they send it again once
+ * the person has written.
+ */
+function notSentUntilTheyWrite({ name = '', what = 'message', waiting = true, days = wroteWithinDays(), helloLink = '' } = {}) {
+  const who = String(name || '').trim().split(/\s+/)[0] || '';
+  const subject = who || 'This person';
+  const link = helloLink || require('./filmLinkService').helloLink();
+  return [
+    `⏸️ *Not sent — ${subject} hasn't written to makaug in the last ${days} days.*`,
+    '',
+    'WhatsApp blocks our number when we message people who haven\'t written to us.',
+    '',
+    `Ask ${who || 'them'} to message us first. Send them this link to tap and press send:`,
+    link,
+    '',
+    waiting
+      ? `The ${what} is waiting and goes to them the moment they write. I'll tell you when it has gone.`
+      : `Once they have written, send the ${what} again from here and it goes straight away.`
+  ].join('\n');
 }
 
 // Numbers that are sent nothing unasked for the time being, on staff's say
@@ -815,11 +871,12 @@ async function setNumberPaused(phone, paused, { by = '', note = '' } = {}) {
 let lastWaitingSweepAt = 0;
 
 /**
- * What is waiting for somebody who has never written does not wait for ever.
- * A notice to staff, a Morning Brief or "sorry we missed your call" is no use
- * the next day and is let go after twelve hours; everything else (a welcome,
- * "your property is live") after seven days. Looked at once a minute at most, and only while the rule
- * is on.
+ * What is waiting for somebody who has not written lately does not wait for
+ * ever. A notice to staff, a Morning Brief or "sorry we missed your call" is
+ * no use the next day and is let go after twelve hours, so a member of staff
+ * who writes after a quiet week is not sent a pile of old notices at once;
+ * everything else (a welcome, "your property is live") after seven days.
+ * Looked at once a minute at most, and only while the rule is on.
  */
 async function letGoOfWhatNobodyCameFor({ force = false } = {}) {
   if (!onlyToPeopleWhoWrote()) return 0;
@@ -829,14 +886,14 @@ async function letGoOfWhatNobodyCameFor({ force = false } = {}) {
     const result = await db.query(
       `UPDATE outbound_message_queue q
           SET status = 'failed',
-              last_error = 'Not sent: they have never written to the makaug number.',
+              last_error = 'Not sent: they had not written to the makaug number lately.',
               metadata = COALESCE(q.metadata, '{}'::jsonb) || '{"failure_class":"never_wrote","retry_suppressed":true}'::jsonb,
               updated_at = NOW()
         WHERE q.channel = 'whatsapp'
           AND q.status IN ('pending', 'retry')
           AND COALESCE(q.metadata->>'delivery_mode', '') = 'web_bridge'
           AND q.next_attempt_at < NOW() - (
-            CASE WHEN COALESCE(q.metadata->>'message_kind', '') ~ '^(agent_brief|lead_handoff_)'
+            CASE WHEN COALESCE(q.metadata->>'message_kind', '') ~ '^(agent_brief|lead_handoff_)|_notice$'
                    OR LOWER(COALESCE(q.metadata->>'source', '')) = 'whatsapp_missed_call'
               THEN INTERVAL '12 hours' ELSE INTERVAL '7 days' END
           )
@@ -1039,6 +1096,9 @@ async function getWhatsappWebBridgeStatus() {
 }
 
 module.exports = {
+  wroteWithinDays,
+  waitsForThem,
+  notSentUntilTheyWrite,
   classifyBridgeSendError,
   bridgeSessionCannotSend,
   bridgeCarriedSource,

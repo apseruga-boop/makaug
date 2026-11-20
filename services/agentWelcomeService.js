@@ -445,24 +445,36 @@ function kampalaClock(value) {
  */
 function welcomeWaitsLine({ link = '' } = {}) {
   const hello = link || require('./filmLinkService').helloLink();
+  const days = require('./whatsappWebBridgeService').wroteWithinDays();
   return [
-    'Nothing has reached them yet: they have never written to the makaug WhatsApp number, and it only writes to people who have written to it first.',
+    `Nothing has reached them yet: they haven't written to the makaug WhatsApp number in the last ${days} days, and it only writes to people who have.`,
     'Their welcome, how-to video and payment link go the moment they send it a message. Send them this to tap and send:',
     hello
   ].join('\n');
 }
 
+// What the staff who were told something was waiting hear when it goes. The
+// payment link a member of staff sent somebody who had not written lately was
+// added on 20 Nov 2026.
+const HELD_WENT_LINES = {
+  agent_fee_link_on_approval: (name) => `✅ *${name} has their welcome and payment link now.* They wrote to the makaug number, so what was waiting for them is going out.`,
+  agent_pay_link_staff_sent: (name) => `✅ *${name} has the payment link now.* They wrote to the makaug number, so it went out.`
+};
+
 /**
- * The welcome waited for the agent to write; they have, and its last message,
- * the payment link, has just gone. The staff who were told it was waiting hear
- * that it went. `row` is the queue row just marked sent; `queue` stands in for
- * the bridge's queue under test. Returns how many were told.
+ * What waited for somebody to write has gone: the welcome's last message (the
+ * payment link), or a payment link a member of staff sent. The staff who were
+ * told it was waiting hear that it went. `row` is the queue row just marked
+ * sent; `queue` stands in for the bridge's queue under test. Returns how many
+ * were told.
  */
 async function tellTeamHeldWelcomeWent(row = {}, { queue = null } = {}) {
   const meta = (row && row.metadata) || {};
-  if (meta.message_kind !== 'agent_fee_link_on_approval' || meta.held_for_first_message !== true) return 0;
+  const line = HELD_WENT_LINES[meta.message_kind];
+  if (!line || meta.held_for_first_message !== true) return 0;
   const send = queue || require('./whatsappWebBridgeService').queueWhatsappWebBridgeMessage;
-  const name = String(meta.agent_name || '').trim() || 'The new agent';
+  const welcome = meta.message_kind === 'agent_fee_link_on_approval';
+  const name = String(meta.agent_name || '').trim() || (welcome ? 'The new agent' : 'They');
   const agentTail = String(row.user_phone || '').replace(/\D/g, '').slice(-9);
   const team = [...new Set((Array.isArray(meta.tell_when_sent) ? meta.tell_when_sent : [])
     .map((phone) => String(phone || '').replace(/\D/g, ''))
@@ -471,9 +483,15 @@ async function tellTeamHeldWelcomeWent(row = {}, { queue = null } = {}) {
   for (const recipient of team) {
     await send({
       recipient,
-      text: `✅ *${name} has their welcome and payment link now.* They wrote to the makaug number, so what was waiting for them is going out.`,
+      text: line(name),
       source: String(process.env.AGENT_REPORT_WHATSAPP_SOURCE || 'whatsapp_runtime').trim().toLowerCase() || 'whatsapp_runtime',
-      metadata: { message_kind: 'agent_welcome_went_notice', agent_id: meta.agent_id || null, reply_dedupe_key: `agent_welcome_went:${meta.agent_id || row.id}:${recipient}` }
+      metadata: {
+        message_kind: 'agent_welcome_went_notice',
+        agent_id: meta.agent_id || null,
+        reply_dedupe_key: welcome
+          ? `agent_welcome_went:${meta.agent_id || row.id}:${recipient}`
+          : `held_went:${meta.pay_link_code || row.id}:${recipient}`
+      }
     });
     told += 1;
   }

@@ -90,14 +90,14 @@ test('nothing is handed to the bridge for somebody who has never written', async
 });
 
 test('what is waiting is not failed: it stays in the queue, and what nobody comes for is let go later', async () => {
-  await withRule('on', () => withFakeDb((sql) => (/never written to the makaug number/.test(sql) ? { rows: [], rowCount: 3 } : null), async (calls) => {
+  await withRule('on', () => withFakeDb((sql) => (/had not written to the makaug number lately/.test(sql) ? { rows: [], rowCount: 3 } : null), async (calls) => {
     assert.strictEqual(await bridge.letGoOfWhatNobodyCameFor({ force: true }), 3);
     const sweep = calls[0].sql;
-    assert.match(sweep, /SET status = 'failed',\s+last_error = 'Not sent: they have never written to the makaug number\.'/);
+    assert.match(sweep, /SET status = 'failed',\s+last_error = 'Not sent: they had not written to the makaug number lately\.'/);
     assert.match(sweep, /"failure_class":"never_wrote"/);
     assert.match(sweep, /q\.status IN \('pending', 'retry'\)/);
     // A notice to staff, a Morning Brief, "sorry we missed your call": twelve hours. A welcome: seven days.
-    assert.match(sweep, /'\^\(agent_brief\|lead_handoff_\)'\s+OR LOWER\(COALESCE\(q\.metadata->>'source', ''\)\) = 'whatsapp_missed_call'\s+THEN INTERVAL '12 hours' ELSE INTERVAL '7 days' END/);
+    assert.match(sweep, /'\^\(agent_brief\|lead_handoff_\)\|_notice\$'\s+OR LOWER\(COALESCE\(q\.metadata->>'source', ''\)\) = 'whatsapp_missed_call'\s+THEN INTERVAL '12 hours' ELSE INTERVAL '7 days' END/);
     assert.match(sweep, /AND NOT \(\s+EXISTS \(\s+SELECT 1 FROM whatsapp_messages m/, 'never anything for somebody who has written');
     // Once a minute at most: it runs beside every hand-over.
     assert.strictEqual(await bridge.letGoOfWhatNobodyCameFor(), 0);
@@ -135,8 +135,8 @@ test('a member of staff is not told a film was sent when it would only wait', as
     assert.strictEqual(refused.ok, false);
     assert.strictEqual(refused.code, 'only_to_people_who_wrote');
     assert.strictEqual(refused.why, links.ONLY_WROTE_WHY);
-    assert.match(refused.why, /only writes to people who have written to it first/);
-    assert.match(refused.why, /15 Nov and again on 16 Nov, each time two seconds after it wrote to somebody who had not/);
+    assert.match(refused.why, /only writes to people who have written to it in the last 7 days/);
+    assert.match(refused.why, /restricted it on 15, 16, 17 and 20 Nov, each time just after it wrote to somebody who had not written to it lately/);
   }));
   // Somebody who has: as before.
   await withRule('on', () => withFakeDb((sql) => (/FROM whatsapp_messages/.test(sql) ? { rows: [{ ok: 1 }] } : null), async () => {
@@ -145,7 +145,7 @@ test('a member of staff is not told a film was sent when it would only wait', as
   // And Agent 007 says so before she types a name.
   assert.strictEqual(
     links.firstContactNote({ onlyWrote: true }),
-    '_The number itself writes first to nobody. A name and number sent here gets the film only if they have written to this number before. For everybody else, your link._'
+    '_The number itself writes first to nobody. A name and number sent here gets the film only if they have written to this number in the last 7 days. For everybody else, your link._'
   );
   assert.match(read('routes/whatsapp.js'), /firstContactNote\(\{ now, onlyWrote: whatsappWebBridgeService\.onlyToPeopleWhoWrote\(\) \}\)/);
 });
