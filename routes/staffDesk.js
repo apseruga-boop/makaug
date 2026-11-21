@@ -2,6 +2,7 @@
 
 const desk = require('../services/staffDesk');
 const pipe = require('../services/staffPipeline');
+const leadsDesk = require('../services/staffLeads');
 
 /**
  * Staff desk pages (Arthur, 21 Nov 2026). Shared with staff logins through
@@ -45,6 +46,15 @@ function registerStaffDeskRoutes(router) {
   router.get('/desk/missed', wrap(async (req, res) => res.json({ ok: true, data: await pipe.missed(personFor(req)) })));
   router.post('/desk/missed', wrap(async (req, res) => res.status(201).json({ ok: true, data: await pipe.logMissed(needMe(req), req.body || {}) })));
   router.post('/desk/missed/:id/dismiss', wrap(async (req, res) => res.json({ ok: true, data: await pipe.dismissMissed(needMe(req), req.params.id) })));
+  // Staff Leads & WhatsApp (read only). Callers do not get this page.
+  const leadUser = (req) => {
+    if (!isKing(req) && scopeOf(req) === 'caller') { const e = new Error('Your login is for the calling screen only.'); e.status = 403; throw e; }
+    const u = req.userAuth || {};
+    return { userId: String(u.id || req.adminAuth?.userId || req.staffAuth?.userId || '') || null, name: me(req).name, king: isKing(req) };
+  };
+  router.get('/desk/leads', wrap(async (req, res) => res.json({ ok: true, data: await leadsDesk.desk(leadUser(req), { filter: String(req.query?.filter || 'action') }) })));
+  router.post('/desk/leads/from-chat', wrap(async (req, res) => res.status(201).json({ ok: true, data: await leadsDesk.addFromChat(leadUser(req), req.body?.message_id) })));
+  router.post('/desk/leads/:key/outcome', wrap(async (req, res) => res.json({ ok: true, data: await leadsDesk.outcome(leadUser(req), req.params.key, req.body || {}) })));
   // King only: one staff member's full profile, ID number included.
   router.get('/king/staff/:id/profile', wrap(async (req, res) => {
     if (!isKing(req)) return res.status(403).json({ ok: false, error: 'King only.' });

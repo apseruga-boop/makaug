@@ -37,11 +37,11 @@
     ['Today', [['home', '🏠', 'Dashboard'], ['calls', '📞', 'Calls', ['staff-calling-card']], ['perf', '📈', 'My performance']]],
     ['Pipeline', [['pipeline', '🧭', 'My pipeline'], ['approve', '✅', 'Agents to approve'], ['owes', '💸', 'Owes us money'], ['missed', '📵', 'Missed calls']]],
     ['Work', [['review', '🏡', 'Properties to review', ['staff-booking-escalations', 'staff-review-grid'], 1], ['stays', '🛏️', 'Short stays', ['staff-short-term-control', 'staff-video-caption-conflicts'], 1],
-      ['leads', '💬', 'Leads & WhatsApp', ['staff-home-seekers', 'staff-leads-grid'], 1], ['harvest', '🔎', 'Harvest', ['staff-source-panel'], 1], ['tools', '🧰', 'Desk tools', ['staff-king-tools'], 1], ['howto', '🎓', 'How to', ['staff-training-panel'], 1]]],
+      ['leads', '💬', 'Leads & WhatsApp', [], 1], ['harvest', '🔎', 'Harvest', ['staff-source-panel'], 1], ['tools', '🧰', 'Desk tools', ['staff-king-tools'], 1], ['howto', '🎓', 'How to', ['staff-training-panel'], 1]]],
     ['Me', [['pay', '💰', 'My pay'], ['connect', '📱', 'Connect your phone'], ['profile', '🪪', 'Profile'], ['settings', '⚙️', 'Settings', ['staff-settings-panel']]]]
   ];
   var KNOWN = ['staff-calling-card', 'staff-booking-escalations', 'staff-header-card', 'staff-short-term-control', 'staff-video-caption-conflicts', 'staff-settings-panel', 'staff-kpi-grid', 'staff-review-grid', 'staff-source-panel', 'staff-leads-grid', 'staff-home-seekers', 'staff-king-tools', 'staff-training-panel'];
-  var NEW_PAGES = ['home', 'perf', 'pay', 'profile', 'settings', 'pipeline', 'approve', 'owes', 'missed'];
+  var NEW_PAGES = ['home', 'perf', 'pay', 'profile', 'settings', 'pipeline', 'approve', 'owes', 'missed', 'leads'];
   function items() { var out = []; NAV.forEach(function (g) { g[1].forEach(function (i) { out.push(i); }); }); return out; }
   function item(id) { return items().filter(function (i) { return i[0] === id; })[0]; }
   function allowed(i) { return !(i[4] && S.scope === 'caller'); }
@@ -82,6 +82,19 @@
       '.sd-grid2{display:grid;grid-template-columns:1.3fr 1fr;gap:12px;margin-bottom:12px}@media(max-width:900px){.sd-grid2{grid-template-columns:1fr}}',
       '.sd-banner{border-radius:14px;padding:12px 14px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:12px;font-weight:700;font-size:14px}',
       '.sd-banner.behind{background:#fff7ed;border:1px solid #fdba74;color:#9a3412}.sd-banner.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}.sd-banner.info{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a}',
+      '#sd-side .sd-b.red{background:#dc2626;color:#fff}.sl-red{display:inline-block;background:#dc2626;color:#fff;border-radius:999px;font-size:12px;font-weight:900;padding:1px 8px;vertical-align:middle;margin-left:6px}',
+      '.sl-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}@media(max-width:900px){.sl-kpis{grid-template-columns:repeat(2,1fr)}}.sl-kpi .v{font-size:24px;font-weight:900}.sl-kpi .v.red{color:#dc2626}.sl-kpi .l{font-size:12px;color:#64748b;font-weight:700}',
+      '.sl-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.sl-chip{border:1px solid #cbd5e1;background:#fff;border-radius:999px;padding:6px 12px;font-weight:800;font-size:13px;cursor:pointer;color:#0f172a}.sl-chip.on{background:#14532d;border-color:#14532d;color:#fff}',
+      '.sl-cols{display:grid;grid-template-columns:1.35fr 1fr;gap:12px;align-items:start}@media(max-width:1023px){.sl-cols{grid-template-columns:1fr}}',
+      '.sl-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}.sl-head h3{margin:0}.sl-head span{font-size:12px;color:#64748b}',
+      '.sl-lead{display:grid;grid-template-columns:40px 1fr 150px;gap:10px;padding:12px 0;border-top:1px solid #eef2f7}@media(max-width:640px){.sl-lead{grid-template-columns:36px 1fr}.sl-lead .sl-act{grid-column:1/-1}}',
+      '.sl-av{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:900;font-size:14px;background:#0ea5e9}',
+      '.sl-who{font-weight:900}.sl-ph{color:#64748b;font-weight:700}.sl-st{display:inline-block;font-size:11px;font-weight:800;background:#e2e8f0;border-radius:6px;padding:1px 6px;margin-left:4px}.sl-want{margin-top:2px}.sl-src{font-size:12px;color:#64748b}',
+      '.sl-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:6px 0 4px}.sl-bar i{height:4px;border-radius:4px;background:#e2e8f0}.sl-bar i.on{background:#16a34a}.sl-next{font-size:13px}',
+      '.sl-act{display:flex;flex-direction:column;gap:6px}.sl-act .sd-btn,.sl-act select{width:100%;text-align:center;text-decoration:none;box-sizing:border-box}.sl-act select{border:1px solid #cbd5e1;border-radius:10px;padding:8px;font-weight:800;background:#fff}',
+      '.sl-when{display:flex;gap:6px;flex-wrap:wrap}.sl-when input{border:1px solid #cbd5e1;border-radius:8px;padding:6px;flex:1}',
+      '.sl-chat{padding:10px 0;border-top:1px solid #eef2f7}.sl-msg{background:#ecfdf5;border:1px solid #bbf7d0;border-radius:10px;padding:8px 10px;margin:6px 0;white-space:pre-wrap;word-break:break-word}.sl-sug{font-size:13px}.sl-sug b{color:#15803d}',
+      '.sl-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.sl-btns .sd-btn{text-decoration:none}.sl-note{font-size:12px;color:#64748b;border:1px dashed #cbd5e1;border-radius:10px;padding:8px 10px;margin-top:10px}.sl-ok{color:#15803d;font-weight:800;font-size:13px}',
       '.sd-btn{border:0;border-radius:10px;padding:9px 14px;font-weight:800;font-size:13px;cursor:pointer;background:#15603f;color:#fff}.sd-btn.ghost{background:#f1f5f9;color:#0f172a}.sd-btn:disabled{opacity:.6;cursor:wait}',
       '.sd-check{list-style:none;margin:0;padding:0}.sd-check li{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px}.sd-check li:last-child{border:0}',
       '.sd-dot{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:900;flex:0 0 auto}.sd-dot.done{background:#dcfce7;color:#166534}.sd-dot.now{background:#dbeafe;color:#1d4ed8}.sd-dot.missed{background:#ffe4e6;color:#be123c}.sd-dot.todo{background:#f1f5f9;color:#64748b}',
@@ -133,7 +146,7 @@
         var list = g[1].filter(allowed);
         if (!list.length) return '';
         return '<div class="sd-g">' + esc(g[0]) + '</div>' + list.map(function (i) {
-          var badge = i[0] === 'home' && behind ? '<span class="sd-b" data-sd-badge="behind">behind</span>' : (i[0] === 'profile' && S.home && (S.home.profile_missing || []).length ? '<span class="sd-b" data-sd-badge="profile">' + S.home.profile_missing.length + '</span>' : '');
+          var badge = i[0] === 'home' && behind ? '<span class="sd-b" data-sd-badge="behind">behind</span>' : (i[0] === 'profile' && S.home && (S.home.profile_missing || []).length ? '<span class="sd-b" data-sd-badge="profile">' + S.home.profile_missing.length + '</span>' : (i[0] === 'leads' && S.leadsAction ? '<span class="sd-b red" data-sd-badge="leads">' + S.leadsAction + '</span>' : ''));
           return '<button type="button" class="sd-i' + (i[0] === S.page ? ' on' : '') + '" data-sd-go="' + i[0] + '"><span>' + i[1] + '</span><span>' + esc(i[2]) + '</span>' + badge + '</button>';
         }).join('');
       }).join('')
@@ -166,6 +179,7 @@
     else if (page === 'approve') loadApprove(host);
     else if (page === 'owes') loadOwes(host);
     else if (page === 'missed') loadMissed(host);
+    else if (page === 'leads') loadLeads(host);
     else if (page === 'calls' && window.makaugCalling && typeof window.makaugCalling.rescan === 'function') { try { window.makaugCalling.rescan(); } catch (x) { /* calling screen redraws itself */ } }
   }
   function openConnect() {
@@ -184,7 +198,7 @@
   }
   function loadHome() {
     loadOwed();
-    return api('/desk/home').then(function (h) { S.home = h; S.homeErr = ''; S.scope = (h.me && h.me.scope) || S.scope; document.body.classList.toggle('sd-caller', S.scope === 'caller'); drawSide(); if (S.page === 'home') drawHome(); return h; },
+    return api('/desk/home').then(function (h) { S.home = h; S.homeErr = ''; S.scope = (h.me && h.me.scope) || S.scope; document.body.classList.toggle('sd-caller', S.scope === 'caller'); drawSide(); if (S.scope !== 'caller' && (!S.leadsBadgeAt || Date.now() - S.leadsBadgeAt > 60000)) { S.leadsBadgeAt = Date.now(); leadsBadge(); } if (S.page === 'home') drawHome(); return h; },
       function (e) { S.homeErr = e.message; if (S.page === 'home') drawHome(); throw e; });
   }
   function greeting(min) { return min < 12 * 60 ? 'Good morning' : (min < 17 * 60 ? 'Good afternoon' : 'Good evening'); }
@@ -330,6 +344,95 @@
       qa('[data-sd-dismiss]', host).forEach(function (b) { b.onclick = function () { api('/desk/missed/' + b.getAttribute('data-sd-dismiss') + '/dismiss', { method: 'POST', body: {} }).then(function () { loadMissed(host); }, function (e) { window.alert(e.message); }); }; });
     }, function (e) { failed(host, 'Missed calls', e); });
   }
+
+  // ------------------------------------------- leads & WhatsApp (ops 3) ----
+  // One lead queue worked from the top, and WhatsApp read only. Staff never
+  // send WhatsApp: the buttons open a text (sms:) or a call (tel:) on the
+  // company phone. Phones show as •••last 3. Consent is King-only.
+  var SL_FILTERS = [['action', 'Needs action'], ['list', 'Want to list'], ['looking', 'Looking'], ['asked', 'Asked about a listing'], ['mine', 'Mine'], ['done', 'Done']];
+  var SL_STAGES = ['new', 'contacted', 'matched', 'viewing'];
+  var SL_COLORS = ['#0ea5e9', '#f97316', '#8b5cf6', '#16a34a', '#64748b', '#db2777'];
+  function ago(at) {
+    var ms = Date.now() - new Date(at).getTime(); if (!(ms >= 0)) return '';
+    var h = Math.floor(ms / 3600000); if (h < 1) return Math.max(1, Math.floor(ms / 60000)) + ' min ago';
+    if (h < 24) return h + ' h ago'; var d = Math.floor(h / 24); return d === 1 ? 'yesterday' : d + ' days ago';
+  }
+  function hhmm(at) { try { return new Date(at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kampala' }); } catch (x) { return ''; } }
+  function smsHref(dial, body) { return 'sms:' + dial + (body ? '?body=' + encodeURIComponent(body) : ''); }
+  function slLink(dial, label, body, cls) {
+    if (!dial) return '<button type="button" class="sd-btn ' + (cls || '') + '" disabled title="No phone number">' + esc(label) + '</button>';
+    return '<a class="sd-btn ' + (cls || '') + '" data-sl-link href="' + esc(body === null ? 'tel:' + dial : smsHref(dial, body)) + '">' + esc(label) + '</a>';
+  }
+  function slLead(it, outcomes) {
+    var nx = it.next || {};
+    var stageIdx = SL_STAGES.indexOf(it.stage);
+    var bar = SL_STAGES.map(function (st, i) { return '<i class="' + (it.stage === 'done' || i <= stageIdx ? 'on' : '') + '"></i>'; }).join('');
+    var color = SL_COLORS[(it.who || '?').charCodeAt(0) % SL_COLORS.length];
+    var main = it.taken ? '<div class="sd-muted" style="font-size:12px">' + esc(it.taken_by || 'Someone else') + ' is on this one</div>'
+      : (nx.action === 'text' ? slLink(nx.dial, nx.button, nx.sms || '') : slLink(nx.dial, nx.button, null));
+    var opts = '<option value="">Outcome…</option>' + Object.keys(outcomes || {}).map(function (k) { return '<option value="' + esc(k) + '">' + esc(outcomes[k]) + '</option>'; }).join('');
+    return '<div class="sl-lead" data-sl-lead="' + esc(it.key) + '" data-sl-type="' + esc(it.type) + '">'
+      + '<div class="sl-av" style="background:' + color + '">' + esc(it.initials || '?') + '</div>'
+      + '<div><div><span class="sl-who">' + esc(it.who) + '</span> <span class="sl-ph" data-sl-phone>' + esc(it.phone) + '</span><span class="sl-st">' + esc(it.stage === 'done' ? 'Done' : it.stage.charAt(0).toUpperCase() + it.stage.slice(1)) + '</span></div>'
+      + '<div class="sl-want">' + esc(it.want) + '</div><div class="sl-src">' + esc(it.source) + ' · ' + esc(ago(it.at)) + '</div>'
+      + '<div class="sl-bar">' + bar + '</div><div class="sl-next"><b>Next:</b> ' + esc(nx.label || '') + '</div></div>'
+      + '<div class="sl-act">' + main + (it.stage === 'done' || it.taken ? '' : '<select data-sl-outcome="' + esc(it.key) + '" aria-label="Outcome">' + opts + '</select><div data-sl-when></div>') + '</div></div>';
+  }
+  function slChat(c) {
+    var sug = c.suggest || {};
+    return '<div class="sl-chat" data-sl-chat="' + esc(c.id) + '"><div class="sl-head"><span class="sl-who" style="font-size:15px;color:#0f172a">' + esc(c.who) + ' <span class="sl-ph" data-sl-phone>' + esc(c.phone) + '</span></span><span>' + esc(hhmm(c.at)) + (c.needs_reply ? ' · <b style="color:#dc2626">needs a reply</b>' : '') + '</span></div>'
+      + '<div class="sl-msg">' + esc(c.text) + '</div><div class="sl-sug"><b>Suggested:</b> ' + esc(sug.tip || '') + '</div>'
+      + '<div class="sl-btns">' + slLink(c.dial, '✉️ Text them', sug.sms || '', 'ghost sm') + slLink(c.dial, '📞 Call', null, 'ghost sm')
+      + (c.lead_id ? '<span class="sl-ok" data-sl-is-lead>Lead ✓</span>' : '<button type="button" class="sd-btn ghost sm" data-sl-add="' + esc(c.id) + '">Add as lead</button>') + '</div></div>';
+  }
+  function loadLeads(host, filter) {
+    S.leadsFilter = filter || S.leadsFilter || 'action';
+    if (!q('[data-sl-root]', host)) host.innerHTML = pageWrap('Leads & WhatsApp', '', '<div class="sd-card">Loading…</div>');
+    return api('/desk/leads?filter=' + encodeURIComponent(S.leadsFilter)).then(function (d) {
+      if (S.page !== 'leads') return;
+      var c = d.counts || {}; var by = c.by_filter || {};
+      S.leadsAction = n(c.need_action); drawSide();
+      var chips = SL_FILTERS.map(function (f) {
+        var cnt = n(by[f[0]]);
+        return '<button type="button" class="sl-chip' + (f[0] === d.filter ? ' on' : '') + '" data-sl-filter="' + f[0] + '">' + esc(f[1]) + (f[0] === 'action' && cnt ? '<span class="sl-red">' + cnt + '</span>' : (cnt && f[0] !== 'mine' && f[0] !== 'done' ? ' ' + cnt : '')) + '</button>';
+      }).join('');
+      var kp = function (v, l, red, key) { return '<div class="sd-card sl-kpi" data-sl-kpi="' + key + '"><div class="v' + (red && v ? ' red' : '') + '">' + fmt(v) + '</div><div class="l">' + esc(l) + '</div></div>'; };
+      var items = d.items || []; var chats = d.chats || [];
+      var empty = { action: 'Nothing needs action right now. 🎉', list: 'Nobody new wants to list.', looking: 'Nobody is looking right now.', asked: 'No listing questions waiting.', mine: 'You have not worked a lead yet. Pick one from Needs action.', done: 'Nothing done in the last 30 days.' }[d.filter];
+      host.innerHTML = '<div class="sd-page" data-sl-root><h1 class="sd-h1">Leads & WhatsApp' + (S.leadsAction ? '<span class="sl-red" data-sl-badge>' + S.leadsAction + '</span>' : '') + '</h1>'
+        + '<p class="sd-muted" style="margin:4px 0 0">People who want to list, rent or buy. Work the top one first. We read WhatsApp here but never send on it: call or text.</p>'
+        + '<div class="sl-kpis">' + kp(c.need_action, 'need action today', 1, 'action') + kp(c.want_to_list_30d, 'want to list (30 days)', 0, 'list') + kp(c.looking, 'looking for a place', 0, 'looking') + kp(c.chats_week, 'WhatsApp chats this week', 0, 'chats') + '</div>'
+        + '<div class="sl-chips">' + chips + '</div><div data-sl-flash></div>'
+        + '<div class="sl-cols"><div class="sd-card" data-sl-queue><div class="sl-head"><h3>Lead queue</h3><span>New → Contacted → Matched → Viewing</span></div>'
+        + (items.length ? items.map(function (it) { return slLead(it, d.outcomes); }).join('') : '<p class="sd-muted" data-sl-empty>' + esc(empty) + '</p>') + '</div>'
+        + '<div class="sd-card" data-sl-feed><div class="sl-head"><h3>WhatsApp (read only)</h3><span>last 24 h · ' + n(c.chats_need_reply) + ' need a reply</span></div>'
+        + (chats.length ? chats.map(slChat).join('') : '<p class="sd-muted">No WhatsApp messages in the last 24 hours.</p>')
+        + '<div class="sl-note">Staff never send WhatsApp messages. Use ✉️ Text (SMS from the company phone) or 📞 Call. Consent and marketing settings are King-only.</div></div></div></div>';
+      if (S.leadsFlash) { q('[data-sl-flash]', host).innerHTML = '<div class="sd-banner info" style="margin-bottom:10px">' + esc(S.leadsFlash) + '</div>'; S.leadsFlash = ''; }
+      qa('[data-sl-filter]', host).forEach(function (b) { b.onclick = function () { loadLeads(host, b.getAttribute('data-sl-filter')); }; });
+      qa('[data-sl-add]', host).forEach(function (b) { b.onclick = function () {
+        b.disabled = true; b.textContent = 'Adding…';
+        api('/desk/leads/from-chat', { method: 'POST', body: { message_id: b.getAttribute('data-sl-add') } }).then(function (r) {
+          S.leadsFlash = r.existing ? 'They are already a lead. It is in Mine or Needs action.' : 'Added as a lead and given to you. Call or text them next.';
+          loadLeads(host);
+        }, function (e) { b.disabled = false; b.textContent = 'Add as lead'; window.alert(e.message); });
+      }; });
+      qa('[data-sl-outcome]', host).forEach(function (sel) { sel.onchange = function () {
+        var key = sel.getAttribute('data-sl-outcome'); var v = sel.value; if (!v) return;
+        var save = function (at) {
+          sel.disabled = true;
+          api('/desk/leads/' + encodeURIComponent(key).replace('%3A', ':') + '/outcome', { method: 'POST', body: { outcome: v, at: at || null } }).then(function () {
+            S.leadsFlash = 'Saved: ' + (d.outcomes[v] || v) + '.'; loadLeads(host);
+          }, function (e) { sel.disabled = false; sel.value = ''; window.alert(e.message); });
+        };
+        if (v !== 'viewing' && v !== 'call_back') { save(); return; }
+        var box = sel.parentNode.querySelector('[data-sl-when]');
+        box.innerHTML = '<div class="sl-when"><input type="datetime-local" data-sl-at aria-label="When"><button type="button" class="sd-btn sm" data-sl-save>Save</button></div>';
+        q('[data-sl-save]', box).onclick = function () { var val = q('[data-sl-at]', box).value; if (!val) { window.alert('Pick the day and time.'); return; } save(new Date(val).toISOString()); };
+      }; });
+    }, function (e) { failed(host, 'Leads & WhatsApp', e); });
+  }
+  function leadsBadge() { if (S.scope === 'caller') return; api('/desk/leads?filter=action').then(function (d) { S.leadsAction = n(d.counts && d.counts.need_action); drawSide(); }, function () { /* badge only */ }); }
 
   // ------------------------------------------------------ performance ----
   var OUTCOME = { no_answer: 'No answer', replied: 'Replied / chatting', interested: 'Interested', signed_up: 'Signed up', paid: 'Paid', renewed: 'Renewed', not_interested: 'Not interested', wrong_number: 'Wrong number', call_back: 'Call back', none: 'Needs an outcome' };

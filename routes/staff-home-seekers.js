@@ -21,6 +21,27 @@ const { getPendingAlertSummary, runWhatsappAlertDigest } = require('../services/
 const router = express.Router();
 router.use(requireStaffAccess);
 
+// Consent and the alert digest are King-only (Arthur, 21 Nov 2026). Staff
+// read the list with phones masked and no emails.
+function isKingLogin(req) {
+  return ['admin', 'super_admin'].includes(String(req.staffAuth?.role || req.userAuth?.role || '').toLowerCase());
+}
+function requireKing(req, res, next) {
+  if (isKingLogin(req)) return next();
+  return res.status(403).json({ ok: false, error: 'King only. Ask King to record consent.' });
+}
+function maskPhone(value) {
+  const d = String(value || '').replace(/\D/g, '');
+  return d.length >= 7 ? `•••${d.slice(-3)}` : '';
+}
+function maskOverviewForStaff(overview) {
+  return {
+    ...overview,
+    signups: (overview.signups || []).map((u) => ({ ...u, phone: maskPhone(u.phone), email: '' })),
+    alerts: (overview.alerts || []).map((a) => ({ ...a, phone: maskPhone(a.phone) }))
+  };
+}
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SEEKER_ROLES = ['buyer_renter', 'student'];
 
@@ -142,13 +163,16 @@ async function loadHomeSeekerOverview(runner = db, { days = 14 } = {}) {
 
 router.get('/', async (req, res, next) => {
   try {
-    const overview = await loadHomeSeekerOverview(db, { days: req.query.days });
+    const king = isKingLogin(req);
+    const loaded = await loadHomeSeekerOverview(db, { days: req.query.days });
+    const overview = king ? loaded : maskOverviewForStaff(loaded);
     let whatsappAlerts = null;
     try {
       whatsappAlerts = await getPendingAlertSummary(db);
     } catch (error) {
       if (!['42P01', '42703'].includes(error.code)) throw error;
     }
+    if (whatsappAlerts && !king) whatsappAlerts = { ...whatsappAlerts, recent: [] };
     return res.json({ ok: true, data: { ...overview, whatsapp_alerts: whatsappAlerts } });
   } catch (error) {
     return next(error);
@@ -157,7 +181,7 @@ router.get('/', async (req, res, next) => {
 
 // "Agreed in person" tick. Records consent the person gave face to face, on
 // the date staff enter (today when left empty). Unticking records a "no".
-router.post('/users/:id/marketing-consent-in-person', async (req, res, next) => {
+router.post('/users/:id/marketing-consent-in-person', requireKing, async (req, res, next) => {
   const userId = String(req.params.id || '');
   if (!UUID_PATTERN.test(userId)) return res.status(400).json({ ok: false, error: 'Invalid user id' });
   const agreed = req.body?.agreed !== false && req.body?.agreed !== 'false';
@@ -204,7 +228,7 @@ router.post('/users/:id/marketing-consent-in-person', async (req, res, next) => 
 
 // Writes today's WhatsApp alert digest rows now (previews while
 // WHATSAPP_ALERTS_ENABLED is off). Never sends anything.
-router.post('/whatsapp-alerts/run', async (_req, res, next) => {
+router.post('/whatsapp-alerts/run', requireKing, async (_req, res, next) => {
   try {
     const summary = await runWhatsappAlertDigest(db);
     return res.json({ ok: true, data: summary });
@@ -216,4 +240,4 @@ router.post('/whatsapp-alerts/run', async (_req, res, next) => {
 router._test = { inPersonConsentDate, loadHomeSeekerOverview };
 
 module.exports = router;
-module.exports._test = { inPersonConsentDate };
+module.exports._test = { inPersonConsentDate, isKingLogin, maskOverviewForStaff, maskPhone };

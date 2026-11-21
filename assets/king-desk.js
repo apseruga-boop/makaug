@@ -38,7 +38,7 @@
     'v:staff': [['Staff & pay', 'k-staff', null], ['Commission, targets & logins', 'performance', 'staff'], ['Staff logins (advanced)', 'staff', null]],
     'v:money': [['Payments & MoMo', 'k-payments', null], ['Cash check & payment SMS proofs', 'performance', 'money'], ['Sales', 'revenue', null], ['Ad slots', 'revenue', 'ads']],
     'v:agents': [['Agents', 'agents', null], ['Owners', 'public', null], ['Find a person', 'accounts', null]],
-    'v:leads': [['WhatsApp inbox', 'whatsapp', null], ['Lead desk & CRM', 'notifications', 'leads'], ['Find a person', 'accounts', null]],
+    'v:leads': [['WhatsApp inbox', 'whatsapp', null], ['Lead desk & CRM', 'notifications', 'leads'], ['Find a person', 'accounts', null], ['Home seekers & consent', 'whatsapp', 'seekers']],
     'v:lists': [['Numbers & call-backs', 'performance', 'lists'], ['Outreach', 'outreach', null], ['Full calling desk', 'performance', null]],
     'v:harvest': [['YouTube & sources', 'youtube-sweep', null], ['Harvest tools & old review queue', 'review', 'legacy']],
     'v:settings': [['Logs & mortgage rates', 'notifications', 'logs'], ['Field agents (not in use)', 'field-agents', null]]
@@ -85,6 +85,8 @@
     'body.kd-on[data-kd-part="lists"] [data-kpart]:not([data-kpart~="lists"]){display:none!important}',
     'body.kd-on[data-kd-part="leads"] [data-kpart]:not([data-kpart~="leads"]){display:none!important}',
     'body.kd-on[data-kd-part="logs"] [data-kpart]:not([data-kpart~="logs"]){display:none!important}',
+    // Home seekers & consent (King only): its own card on the WhatsApp tab.
+    'body.kd-on[data-kd-part="seekers"] [data-admin-tab-panel="whatsapp"]:not(#king-home-seekers){display:none!important}body:not([data-kd-part="seekers"]) #king-home-seekers{display:none!important}',
     'body.kd-on[data-kd-view="v:money"]:not([data-kd-part="ads"]) #admin-advertising-control{display:none!important}body.kd-on[data-kd-part="ads"] #admin-revenue-control{display:none!important}',
     'body.kd-on[data-kd-view="v:harvest"] #kr-root{display:none!important}',
     '#kd-viewbar{display:none}body.kd-on #kd-viewbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}',
@@ -211,6 +213,7 @@
     if (tab === 'k-overview') { if (S.overview && !force) drawOverview(S.overview); refreshCounts(); S.timer = setInterval(function () { if (!document.hidden) refreshCounts(); }, 60000); }
     if (tab === 'k-payments') { loadPayments(); S.timer = setInterval(function () { if (!document.hidden) loadPayments(true); }, 30000); }
     if (tab === 'k-removals') loadRemovals();
+    if (tab === 'whatsapp' && document.body.getAttribute('data-kd-part') === 'seekers' && typeof window.loadKingHomeSeekers === 'function') window.loadKingHomeSeekers();
     if (tab === 'review') { setReviewKind(S.reviewKind || 'found'); if (window.kingReview) window.kingReview.show(S.reviewKind); }
     else document.body.removeAttribute('data-kd-review');
   }
