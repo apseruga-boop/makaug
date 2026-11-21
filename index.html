@@ -8938,6 +8938,12 @@
           </div>
         </div>
 
+        <!-- King desk pages (assets/king-desk.js). -->
+        <div id="king-overview" data-admin-tab-panel="k-overview" data-king-page="k-overview" class="admin-tab-panel hidden"></div>
+        <div id="king-payments" data-admin-tab-panel="k-payments" data-king-page="k-payments" class="admin-tab-panel hidden"></div>
+        <div id="king-removals" data-admin-tab-panel="k-removals" data-king-page="k-removals" class="admin-tab-panel hidden"></div>
+        <div id="king-staff" data-admin-tab-panel="k-staff" data-king-page="k-staff" class="admin-tab-panel hidden"></div>
+
         <div id="admin-short-term-king-control" data-admin-tab-panel="review" class="st-scope admin-tab-panel bg-white border border-amber-200 rounded-2xl p-5">
           <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
             <div>
@@ -11196,6 +11202,12 @@
             var callingScript = document.createElement("script");
             callingScript.src = "/assets/calling-screen.js?v=20261121-connect2";
             document.body.appendChild(callingScript);
+          }
+          // King's sidebar desk (Overview, Payments & MoMo, Removal requests, Staff).
+          if (document.getElementById("king-overview")) {
+            var kingDeskScript = document.createElement("script");
+            kingDeskScript.src = "/assets/king-desk.js?v=20261121-kd1";
+            document.body.appendChild(kingDeskScript);
           }
         };
         document.body.appendChild(script);
