@@ -25,7 +25,7 @@
   // made of parts of the existing tabs; the chips at the top switch between the parts. Nothing is deleted:
   // every old tab is still reachable from a chip, and "Full calling desk" shows the old page whole.
   var NAV = [
-    ['King', [['k-overview', '👑', 'Overview'], ['v:team', '👥', 'Team & calls'], ['v:staff', '🧾', 'Staff, pay & targets'], ['v:money', '💳', 'Money in', 'momo_unmatched']]],
+    ['King', [['k-overview', '👑', 'Overview'], ['v:team', '👥', 'Team & calls'], ['v:staff', '🧾', 'Staff, pay & targets'], ['k-hub', '📣', 'Team hub'], ['v:money', '💳', 'Money in', 'momo_unmatched']]],
     ['To review', [['review:found', '🌐', 'Found online to review', 'found_online'], ['review:agent', '🏠', 'Agent properties to review', 'agent_props'], ['review:stays', '🛏️', 'Short stays', 'short_stays'], ['k-removals', '🗑️', 'Removal requests', 'removal_requests'], ['agent-reports', '🚩', 'Agent reports']]],
     ['Agents & listings', [['v:agents', '👩‍💼', 'Agents & owners'], ['listings', '📋', 'All listings'], ['live', '⭐', 'Live & featured']]],
     ['Leads & calls', [['v:leads', '💬', 'Leads & WhatsApp'], ['v:lists', '📞', 'Calling lists']]],

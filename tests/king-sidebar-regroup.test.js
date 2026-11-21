@@ -11,9 +11,9 @@ const viewSrc = desk.slice(desk.indexOf('  var VIEWS = {'), desk.indexOf('  var 
 const items = [...navSrc.matchAll(/\['([a-z:\-]+)', '[^']+', '([^']+)'/g)].map((m) => ({ id: m[1], label: m[2] }));
 const groups = [...navSrc.matchAll(/^\s+\['([A-Za-z &]+)', \[/gm)].map((m) => m[1]);
 
-test('16 sidebar items in the approved groups and order', () => {
+test('17 sidebar items in the approved groups and order (16 + Team hub, ops 3c)', () => {
   assert.deepEqual(groups, ['King', 'To review', 'Agents & listings', 'Leads & calls', 'Harvest', 'System']);
-  assert.deepEqual(items.map((i) => i.label), ['Overview', 'Team & calls', 'Staff, pay & targets', 'Money in',
+  assert.deepEqual(items.map((i) => i.label), ['Overview', 'Team & calls', 'Staff, pay & targets', 'Team hub', 'Money in',
     'Found online to review', 'Agent properties to review', 'Short stays', 'Removal requests', 'Agent reports',
     'Agents & owners', 'All listings', 'Live & featured', 'Leads & WhatsApp', 'Calling lists', 'Harvest', 'Settings & logs']);
   assert.ok(!items.some((i) => i.id === 'field-agents'), 'Field agents is off the sidebar');

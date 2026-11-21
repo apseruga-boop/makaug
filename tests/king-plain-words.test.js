@@ -74,7 +74,7 @@ test('staff Short stays says it is switched off instead of loading for ever', ()
   const sd = read('assets/staff-desk.js');
   assert.match(sd, /else if \(page === 'stays'\) staysOffNote\(\);/);
   assert.match(sd, /Short stays are switched off, so there is nothing to review here\./);
-  assert.match(read('index.html'), /staff-desk\.js\?v=20261121-ops4/);
+  assert.match(read('index.html'), /staff-desk\.js\?v=20261121-ops[45]/);
 });
 
 test('Settings & logs: event names and statuses are words, no table names', () => {

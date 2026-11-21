@@ -4,6 +4,7 @@ const king = require('../services/kingDesk');
 const kingCalls = require('../services/kingCalls');
 const kingStaff = require('../services/kingStaff');
 const kingReview = require('../services/kingReview');
+const teamHub = require('../services/teamHub');
 
 /**
  * King desk pages (King only). These paths are not in
@@ -32,6 +33,21 @@ function registerKingDeskRoutes(router, { writeAudit } = {}) {
   const actorOf = (req) => { const u = req.userAuth || {}; return [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email || 'King'; };
   const originOf = (req) => { const host = req.get('host') || 'makaug.com'; return `${/^(localhost|127\.0\.0\.1)(:|$)/.test(host) ? 'http' : 'https'}://${host}`; };
   const audit = async (req, action, details) => { if (typeof writeAudit === 'function') await writeAudit(action, { ...details, by: actorOf(req) }, req.adminAuth?.userId || actorOf(req)); };
+  // Team hub (ops 3c): messages to the team or one person, Rules, T&Cs, Working hours, how-to video slots.
+  router.get('/king/hub', wrap(async (req, res) => res.json({ ok: true, data: await teamHub.kingHub() })));
+  router.post('/king/hub/messages', wrap(async (req, res) => {
+    const out = await teamHub.send(req.body || {}, { actor: actorOf(req) });
+    await audit(req, 'king_team_message_sent', { id: out.id, audience: out.audience, kind: out.kind });
+    return res.status(201).json({ ok: true, data: out });
+  }));
+  router.post('/king/hub/messages/:id/withdraw', wrap(async (req, res) => res.json({ ok: true, data: await teamHub.withdraw(req.params.id, { actor: actorOf(req) }) })));
+  router.put('/king/hub/pages/:key', wrap(async (req, res) => {
+    const out = await teamHub.savePage(String(req.params.key), req.body?.body, { actor: actorOf(req) });
+    await audit(req, 'king_team_page_saved', { key: out.key });
+    return res.json({ ok: true, data: out });
+  }));
+  router.put('/king/hub/videos/:id', wrap(async (req, res) => res.json({ ok: true, data: await teamHub.saveVideo(String(req.params.id) === 'new' ? 'new' : req.params.id, req.body || {}, { actor: actorOf(req) }) })));
+  router.post('/king/hub/videos/:id/remove', wrap(async (req, res) => res.json({ ok: true, data: await teamHub.removeVideo(req.params.id, { actor: actorOf(req) }) })));
   router.get('/king/staff', wrap(async (req, res) => res.json({ ok: true, data: await kingStaff.list() })));
   router.post('/king/staff', wrap(async (req, res) => {
     const out = await kingStaff.addStaff(req.body || {}, { actor: actorOf(req), origin: originOf(req) });
