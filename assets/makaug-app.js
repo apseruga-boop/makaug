@@ -19818,7 +19818,8 @@ async function resolveAgentBookingFlag(id) {
 function staffLoginIsCallerOnly(error) {
   const profile = authState?.user?.profile_data && typeof authState.user.profile_data === "object" ? authState.user.profile_data : {};
   if (profile.staff_scope === "caller") return true;
-  if (document.getElementById("staff-body")?.classList.contains("mkc-caller-only")) return true;
+  // Not the page's "mkc-caller-only" class: it can outlive a caller who signed out
+  // and would then hide a moderator's dashboard on the same tab.
   return Boolean(error && /calling screen only/i.test(String(error.message || "")));
 }
 

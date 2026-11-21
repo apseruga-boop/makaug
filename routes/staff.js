@@ -224,7 +224,7 @@ const STAFF_SOURCE_MONITOR_GUIDE = {
   deep_channel_cadence: 'Every 1-2 hours: deeper known-channel upload scans for agency sources that post heavily.',
   broad_search_cadence: 'Every 2-4 hours: broader hashtag/search discovery in small batches so YouTube Search quota is protected.',
   daily_registry_cadence: 'Once daily: refresh the source registry and review baseline.',
-  render_trigger_path: 'The website runs it at 05:30 London every day. The King can switch it off.',
+  render_trigger_path: 'The website runs it at 05:30 London every day.',
   lookback_days: 30,
   source_registry_batch_id: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
   source_registry_target_count: PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
