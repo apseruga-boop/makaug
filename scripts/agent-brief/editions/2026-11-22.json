@@ -1,0 +1,51 @@
+{
+  "date": "2026-11-22",
+  "short": "Sun 22 Nov 2026",
+  "long": "Sunday 22 November 2026",
+  "label": "MORNING BRIEF",
+  "emoji": "☀️",
+  "slot": "morning",
+  "stories": [
+    {
+      "chip": "LAND LAW",
+      "emoji": "📜",
+      "title": "MPs float State ownership of all land",
+      "story": "Some MPs want the <b>Constitution amended</b> so government can take back land. They say the State spends too much <b>compensating owners</b> before roads are built.",
+      "you": "It is only an idea for now. <span class=\"hl\">Calm worried buyers</span>: titles still stand.",
+      "source": "Source: NTV Uganda · 20 Nov 2026"
+    },
+    {
+      "chip": "LOANS",
+      "emoji": "🏦",
+      "title": "Minister: cut 18% loan rates",
+      "story": "Finance Minister <b>Henry Musasizi</b> said lending rates hover around <b>18%</b> and told banks to cut them. Bank profits reached <b>Shs2.17 trillion</b>.",
+      "you": "Rates have not fallen yet. <span class=\"hl\">Help buyers compare banks</span> before they borrow.",
+      "source": "Source: Nile Post · 21 Nov 2026"
+    },
+    {
+      "chip": "SGR",
+      "emoji": "🚆",
+      "title": "SGR building has not started",
+      "story": "Works Minister <b>Fred Byamukama</b> told Parliament work on the <b>Shs12.31 trillion</b> railway has not begun. Government aims to have all the money by <b>January 2027</b>.",
+      "you": "Selling near the line? <span class=\"hl\">Price on today’s value</span>, not on a train date.",
+      "source": "Source: The Independent · 20 Nov 2026"
+    },
+    {
+      "chip": "ROADS",
+      "emoji": "🛣️",
+      "title": "Shs530bn loan for Kanungu roads",
+      "story": "Government wants to borrow <b>Shs530bn</b> to tarmac <b>78.4km</b> of roads in Kanungu and Rubanda. Compensation rose from <b>Shs35bn</b> to <b>Shs70bn</b>.",
+      "you": "Roadside plots there may rise. <span class=\"hl\">Check the road reserve</span> before you sell.",
+      "source": "Source: Nile Post · 20 Nov 2026"
+    },
+    {
+      "chip": "TOURISM LAND",
+      "emoji": "🚧",
+      "title": "Bunyonyi road: contractor to go",
+      "story": "Government is moving to drop <b>Samcrete</b>, which failed to start the <b>15.8km</b> Kabale–Lake Bunyonyi road. It is part of a <b>Shs112bn</b> roads project.",
+      "you": "Selling lakeside land? <span class=\"hl\">Don’t sell the new road</span> — work has not started.",
+      "source": "Source: New Vision · 20 Nov 2026"
+    }
+  ],
+  "caption": "☀️ *makaug Morning Brief* · Sun 22 Nov\n5 property stories that affect your business, in 30 seconds 👆\n\n1️⃣ *MPs float State ownership of land* → calm buyers: titles stand\nhttps://ntv.co.ug/news/national-news/some-mps-support-government-ownership-of-all-land-in-uganda\n\n2️⃣ *Minister: cut 18% loan rates* → help buyers compare banks\nhttps://nilepost.co.ug/businesses/389381/musasizi-presses-banks-to-expand-lending-as-profits-hit-shs2-trillion\n\n3️⃣ *SGR work not started* → price on today's value\nhttps://www.independent.co.ug/uganda-targets-january-2027-financial-closure-for-shs12-trillion-sgr-project/\n\n4️⃣ *Shs530bn for Kanungu roads* → check the road reserve\nhttps://nilepost.co.ug/news/389232/government-seeks-shs530bn-citi-bank-loan-to-tarmac-78-4km-of-roads-in-kanungu-rubanda\n\n5️⃣ *Bunyonyi road contractor to go* → don't sell the new road\nhttps://www.newvision.co.ug/category/news/uganda-seeks-new-contractor-for-sh112b-kabale-NV_244485_112026\n\nReply STOP if you don't want the brief.\nPhillip, makaug.com"
+}
