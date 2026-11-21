@@ -50,6 +50,15 @@ function weekSeries(list = [], from) {
   return out;
 }
 
+/** Active staff logins with no targets set for today yet (King sets them each morning). */
+async function targetsUnset(day) {
+  const r = await db.query(`SELECT COUNT(*)::int AS n FROM users u
+      WHERE u.role = 'moderator' AND u.status = 'active' AND u.profile_data ? 'person_key' AND u.profile_data ? 'staff_scope'
+        AND COALESCE(u.profile_data->>'sandbox', 'false') <> 'true'
+        AND NOT EXISTS (SELECT 1 FROM call_targets t WHERE t.person_key = u.profile_data->>'person_key' AND t.effective_from = $1::date)`, [day]).catch(() => ({ rows: [{ n: 0 }] }));
+  return Number((r.rows[0] || {}).n || 0);
+}
+
 async function overview({ now = new Date() } = {}) {
   const r = ranges(now);
   const [moneyNow, moneyPrev, paidNow, paidPrev, callRows, notesRow, pipe, unmatched, noTx, perf, openReq, reqCount] = await Promise.all([
@@ -95,7 +104,7 @@ async function overview({ now = new Date() } = {}) {
     live_notes: { spoke: num(n.spoke), with_notes: num(n.with_notes), pct: n.spoke ? Math.round((100 * num(n.with_notes)) / num(n.spoke)) : null, flagged: num(n.flagged) },
     pipeline: { contacted: num(p.contacted), interested: num(p.interested), said_hi: num(p.said_hi), submitted: num(p.submitted), approved: num(p.approved), paid: num(paidNow[0]?.v) },
     needs_you: needs,
-    counts: { removal_requests: num(reqCount), momo_unmatched: unmatched.length, behind: behind.length },
+    counts: { removal_requests: num(reqCount), momo_unmatched: unmatched.length, behind: behind.length, targets_unset: await targetsUnset(r.today) },
     staff_today: (perf.people || []).map((x) => {
       const spoke = num(x.connected); const noTxP = num((x.flags || {}).no_transcript);
       return { person_key: x.person_key, name: x.name, calls: num(x.calls), target_calls: num(x.targets?.calls_per_day), paid: num(x.closes), target_paid: num(x.targets?.closes_per_day), notes_pct: spoke ? Math.round((100 * (spoke - noTxP)) / spoke) : null, live: x.live || null };

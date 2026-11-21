@@ -366,6 +366,8 @@ async function loadCallers() {
   }
   for (const r of await safeRows('SELECT DISTINCT person_key FROM call_targets')) add(r.person_key, null);
   for (const r of await safeRows("SELECT DISTINCT person_key FROM call_sessions WHERE started_at > NOW() - INTERVAL '60 days'")) add(r.person_key, null);
+  // Removed by King on the Staff page: off the desk and the reports' people list (their history stays).
+  for (const r of await safeRows("SELECT profile_data->>'person_key' AS person_key FROM users WHERE role = 'moderator' AND status <> 'active' AND profile_data ? 'removed_at'")) people.delete(cleanKey(r.person_key));
   return [...people.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 

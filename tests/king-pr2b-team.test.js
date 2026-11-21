@@ -40,7 +40,7 @@ test('call window: an unfinished call looks 15 minutes past the tap', () => {
 });
 
 function routes() {
-  const h = {}; const router = { get: (p, f) => { h[`GET ${p}`] = f; }, put: (p, f) => { h[`PUT ${p}`] = f; } };
+  const h = {}; const router = { get: (p, f) => { h[`GET ${p}`] = f; }, put: (p, f) => { h[`PUT ${p}`] = f; }, post: (p, f) => { h[`POST ${p}`] = f; } };
   registerKingDeskRoutes(router); return h;
 }
 function call(fn, req) {
