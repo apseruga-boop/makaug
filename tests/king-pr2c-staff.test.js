@@ -90,8 +90,9 @@ test('remove keeps history: login off (suspended), reason kept, nothing deleted;
 
 test('sidebar: Staff, pay & targets is the new page; the old staff tab stays reachable', () => {
   const desk = read('assets/king-desk.js');
-  assert.match(desk, /\['k-staff', '🧾', 'Staff, pay & targets'\]/);
-  assert.match(desk, /\['staff', '🗂️', 'Staff accounts \(advanced\)'\]/);
+  // Regrouped 21 Nov: one "Staff, pay & targets" item; the old staff-logins tab is its "advanced" chip.
+  assert.match(desk, /\['v:staff', '🧾', 'Staff, pay & targets'\]/);
+  assert.match(desk, /'v:staff': \[\['Staff & pay', 'k-staff', null\],.*\['Staff logins \(advanced\)', 'staff', null\]\]/);
   assert.match(desk, /data-kd-open="k-staff" data-kd-chip="targets"/);
   assert.match(read('index.html'), /\/assets\/king-staff\.js\?v=/);
 });

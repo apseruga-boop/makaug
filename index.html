@@ -9098,7 +9098,7 @@
         </div>
 
         <div id="admin-staff-performance-control" data-admin-tab-panel="performance" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-4 md:p-5">
-          <div data-perf-root="admin">
+          <div data-perf-root="admin" data-kpart="staff">
             <h3 class="text-xl font-bold text-gray-800">Staff Performance</h3>
             <p class="text-xs text-gray-500 mt-1">Loading Staff Performance…</p>
           </div>
@@ -9671,8 +9671,8 @@
             </div>
             <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Logs</button>
           </div>
-          <div id="admin-crm-overview" class="grid sm:grid-cols-2 xl:grid-cols-6 gap-3 mb-5"></div>
-          <div class="border border-amber-200 rounded-2xl p-4 bg-amber-50 mb-5">
+          <div data-kpart="leads" id="admin-crm-overview" class="grid sm:grid-cols-2 xl:grid-cols-6 gap-3 mb-5"></div>
+          <div data-kpart="leads" class="border border-amber-200 rounded-2xl p-4 bg-amber-50 mb-5">
             <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
               <div>
                 <h4 class="text-lg font-bold text-gray-800">Lead desk &mdash; demand we could not fill</h4>
@@ -9681,7 +9681,7 @@
             </div>
             <div id="admin-demand-gaps"></div>
           </div>
-          <div class="border border-sky-200 rounded-2xl p-4 bg-sky-50 mb-5">
+          <div data-kpart="logs" class="border border-sky-200 rounded-2xl p-4 bg-sky-50 mb-5">
             <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
               <div>
                 <h4 class="text-lg font-bold text-gray-800">Mortgage rates &mdash; changes to approve</h4>
@@ -9691,7 +9691,7 @@
             </div>
             <div id="admin-mortgage-rate-proposals"></div>
           </div>
-          <div class="grid gap-5">
+          <div data-kpart="leads" class="grid gap-5">
             <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
               <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
                 <div>
@@ -9742,7 +9742,7 @@
               </div>
             </div>
           </div>
-          <div class="grid xl:grid-cols-3 gap-5 mt-5">
+          <div data-kpart="logs" class="grid xl:grid-cols-3 gap-5 mt-5">
             <div class="border border-gray-200 rounded-2xl p-4 bg-white">
               <h4 class="text-lg font-bold text-gray-800 mb-1">Notification Log</h4>
               <p class="text-xs text-gray-500 mb-3">Queued, sent, failed, and skipped follow-ups across channels.</p>
@@ -11202,7 +11202,7 @@
           // only inside the protected staff and King pages.
           if (document.getElementById("staff-calling-card") || document.getElementById("admin-calling-control")) {
             var callingScript = document.createElement("script");
-            callingScript.src = "/assets/calling-screen.js?v=20261121-pipe1";
+            callingScript.src = "/assets/calling-screen.js?v=20261121-ops2";
             document.body.appendChild(callingScript);
           }
           // Staff sidebar desk (Dashboard, My performance, My pay, Profile, Settings).
@@ -11220,7 +11220,7 @@
           // King's sidebar desk (Overview, Payments & MoMo, Removal requests, Staff).
           if (document.getElementById("king-overview")) {
             var kingDeskScript = document.createElement("script");
-            kingDeskScript.src = "/assets/king-desk.js?v=20261121-kd5";
+            kingDeskScript.src = "/assets/king-desk.js?v=20261121-kd6";
             document.body.appendChild(kingDeskScript);
             var kingReviewScript = document.createElement("script");
             kingReviewScript.src = "/assets/king-review.js?v=20261121-kr1";
