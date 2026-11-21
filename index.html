@@ -8285,7 +8285,7 @@
   </div>
 
   <div id="page-staff-dashboard" class="page">
-    <div class="bg-slate-900 py-8 text-white">
+    <div id="staff-hero" class="bg-slate-900 py-8 text-white">
       <div class="max-w-6xl mx-auto px-4">
         <p class="text-emerald-200 text-sm font-black uppercase tracking-wide">makaug.com operations</p>
         <h1 class="text-3xl font-black serif mt-1">Staff Operations Dashboard</h1>
@@ -8310,7 +8310,7 @@
           <h3 class="text-lg font-black text-gray-900">Booking escalations</h3>
           <div id="staff-booking-flags" class="mt-3 text-sm text-gray-600">No open booking escalations.</div>
         </section>
-        <div class="bg-white border border-gray-200 rounded-2xl p-6">
+        <div id="staff-header-card" class="bg-white border border-gray-200 rounded-2xl p-6">
           <div class="flex justify-between items-start gap-4 flex-wrap">
             <div>
               <h2 id="staff-dashboard-name" class="text-2xl font-black text-gray-900">Moderator Dashboard</h2>
@@ -8383,7 +8383,7 @@
           </form>
         </div>
 
-        <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div id="staff-kpi-grid" class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <button type="button" onclick="staffJumpToDesk('review')" class="text-left bg-white border border-gray-200 hover:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-200 rounded-2xl p-5 transition" title="Listings currently live on the public website.">
             <div class="text-sm text-gray-500">Live Properties</div>
             <div id="staff-stat-total" class="text-3xl font-black text-slate-900 mt-1">0</div>
@@ -8426,7 +8426,7 @@
           </button>
         </div>
 
-        <div class="grid lg:grid-cols-[1.15fr,0.85fr] gap-5">
+        <div id="staff-review-grid" class="grid lg:grid-cols-[1.15fr,0.85fr] gap-5">
           <div id="staff-review-panel" class="bg-white border border-gray-200 rounded-2xl p-5 scroll-mt-28">
             <div class="flex items-center justify-between gap-3 mb-4">
               <h3 class="text-xl font-black text-gray-900">Listing moderation queue</h3>
@@ -8505,7 +8505,7 @@
                   <button type="button" onclick="staffClaimTikTokCoverageBatch()" class="rounded-lg border border-pink-300 px-3 py-1.5 text-xs font-black text-pink-800 hover:bg-pink-50">Load next 10 TikTok sources</button>
                 </div>
               </div>
-              <div id="staff-source-coverage-status" class="mt-3 text-xs text-gray-600">Coverage manifest has not been loaded.</div>
+              <div id="staff-source-coverage-status" class="mt-3 text-xs text-gray-600">Press Refresh coverage to see progress.</div>
               <div id="staff-source-coverage-items" class="mt-3 grid md:grid-cols-2 gap-2"></div>
             </div>
             <div class="mt-3 rounded-xl border border-emerald-200 bg-white p-3" id="staff-uganda-rotation-panel">
@@ -8520,7 +8520,7 @@
                   <button type="button" onclick="staffToggleUgandaRotationTimer()" class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-black text-gray-700 hover:bg-gray-50" id="staff-uganda-rotation-timer">Daily timer: off</button>
                 </div>
               </div>
-              <div id="staff-uganda-rotation-status" class="mt-3 text-xs text-gray-600">Rotation has not been loaded.</div>
+              <div id="staff-uganda-rotation-status" class="mt-3 text-xs text-gray-600">Press Refresh rotation to see the latest run.</div>
             </div>
             <details class="mt-3 rounded-xl bg-white border border-sky-100 p-3">
               <summary class="cursor-pointer font-black text-gray-900 text-sm">Trigger commands</summary>
@@ -8598,7 +8598,7 @@
           </div>
         </div>
 
-        <div class="grid lg:grid-cols-[1.05fr,0.95fr] gap-5">
+        <div id="staff-leads-grid" class="grid lg:grid-cols-[1.05fr,0.95fr] gap-5">
           <div id="staff-leads-panel" class="bg-white border border-gray-200 rounded-2xl p-5 scroll-mt-28">
             <h3 class="text-lg font-black text-gray-900 mb-3">Lead generation</h3>
             <div id="staff-leads-list" class="space-y-3 text-sm"></div>
@@ -11202,8 +11202,14 @@
           // only inside the protected staff and King pages.
           if (document.getElementById("staff-calling-card") || document.getElementById("admin-calling-control")) {
             var callingScript = document.createElement("script");
-            callingScript.src = "/assets/calling-screen.js?v=20261121-fix1";
+            callingScript.src = "/assets/calling-screen.js?v=20261121-desk2";
             document.body.appendChild(callingScript);
+          }
+          // Staff sidebar desk (Dashboard, My performance, My pay, Profile, Settings).
+          if (document.getElementById("staff-calling-card")) {
+            var staffDeskScript = document.createElement("script");
+            staffDeskScript.src = "/assets/staff-desk.js?v=20261121-sd1";
+            document.body.appendChild(staffDeskScript);
           }
           // King's sidebar desk (Overview, Payments & MoMo, Removal requests, Staff).
           if (document.getElementById("king-overview")) {

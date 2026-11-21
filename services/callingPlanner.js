@@ -159,4 +159,21 @@ async function markHousekeeping(personKey, { key, note = '', status = 'done' } =
   return { id: r.id, at: r.created_at, key: k, status: st };
 }
 
-module.exports = { KINDS, DEFAULT_SPLIT, getSplit, saveSplit, cleanSplit, dayPlan, housekeeping, markHousekeeping, practiceItems, toMin, kampalaMinutes };
+/**
+ * Are they behind? Expected calls by now = every finished calling block's
+ * target plus the elapsed share of the current one (pure, tested).
+ */
+function pace(plan, nowMin) {
+  let expected = 0; let done = 0;
+  for (const b of (plan && plan.blocks) || []) {
+    if (!b.target || b.kind === 'housekeeping' || b.kind === 'lunch') continue;
+    const s = toMin(b.start); const e = toMin(b.end);
+    if (nowMin >= e) { expected += b.target; done += b.done; } else if (nowMin > s) { expected += b.target * (nowMin - s) / (e - s); done += b.done; }
+  }
+  expected = Math.round(expected);
+  const shortBy = Math.max(0, expected - done);
+  const behind = expected >= 5 && done < expected * 0.7;
+  return { expected, done, short_by: shortBy, behind, pct: expected ? Math.round((100 * done) / expected) : null };
+}
+
+module.exports = { pace, KINDS, DEFAULT_SPLIT, getSplit, saveSplit, cleanSplit, dayPlan, housekeeping, markHousekeeping, practiceItems, toMin, kampalaMinutes };

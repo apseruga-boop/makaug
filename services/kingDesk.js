@@ -10,6 +10,7 @@
 const db = require('../config/database');
 const calling = require('./callingScreen');
 const removals = require('./agentRemovalRequestService');
+const planner = require('./callingPlanner');
 
 const TZ_OFFSET_H = 3; // Kampala, no DST
 async function rows(sql, params = []) { try { return (await db.query(sql, params)).rows || []; } catch (_) { return []; } }
@@ -110,7 +111,16 @@ async function overview({ now = new Date() } = {}) {
   for (const s of unmatched) needs.push({ kind: 'momo', id: s.id, text: `UGX ${num(s.amount_ugx).toLocaleString('en-GB')} from “${maskText(s.counterparty) || 'unknown'}” · no matching payment`, at: s.received_at, open: 'k-payments' });
   const noTxN = num(noTx[0]?.v);
   if (noTxN) needs.push({ kind: 'flag', text: `${noTxN} call${noTxN === 1 ? '' : 's'} yesterday had no live-notes transcript`, open: 'performance' });
-  const behind = (perf.people || []).filter((x) => x.targets && x.calls < x.targets.calls_per_day && x.work && x.work.open_ms > 0);
+  // Behind (Arthur, 21 Nov 2026): anyone who worked today and is under 70% of the calls their day plan expects by now.
+  const nowMin = planner.kampalaMinutes(now);
+  const worked = (perf.people || []).filter((x) => x.work && x.work.open_ms > 0);
+  const behind = [];
+  for (const x of worked) {
+    const pl = await planner.dayPlan(x.person_key, { now }).catch(() => null);
+    const pc = pl ? planner.pace(pl, nowMin) : null;
+    if (pc && pc.behind) behind.push({ person_key: x.person_key, name: x.name, ...pc });
+  }
+  for (const b of behind) needs.push({ kind: 'behind', person_key: b.person_key, text: `${b.name} is behind: ${b.done} calls, ${b.expected} expected by now (${b.short_by} short)`, open: 'k-team' });
   const trackedFrom = await calling.trackingSince().catch(() => null);
   return {
     day: r.today,
