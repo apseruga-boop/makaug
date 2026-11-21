@@ -23,7 +23,7 @@
   }
   var NAV = [
     ['King', [['k-overview', '👑', 'Overview'], ['k-team', '👥', 'Team performance'], ['k-payments', '💳', 'Payments & MoMo', 'momo_unmatched'], ['k-removals', '🗑️', 'Removal requests', 'removal_requests'], ['k-staff', '🧾', 'Staff, pay & targets']]],
-    ['Pipeline', [['agents', '👩‍💼', 'Agents'], ['review', '🏡', 'Properties to review'], ['listings', '📋', 'All listings'], ['agent-reports', '🚩', 'Agent reports']]],
+    ['Pipeline', [['agents', '👩‍💼', 'Agents'], ['review:found', '🌐', 'Found online to review', 'found_online'], ['review:agent', '🏠', 'Agent properties to review', 'agent_props'], ['review:stays', '🛏️', 'Short stays', 'short_stays'], ['listings', '📋', 'All listings'], ['agent-reports', '🚩', 'Agent reports']]],
     ['Ops', [['performance', '📞', 'Calling desk & targets'], ['whatsapp', '💬', 'Leads & WhatsApp'], ['outreach', '📣', 'Outreach'], ['live', '⭐', 'Live & featured'], ['revenue', '💰', 'Sales & revenue'], ['accounts', '👤', 'Accounts'], ['public', '🌍', 'Public'], ['field-agents', '🧭', 'Field agents'], ['notifications', '🔔', 'Notifications'], ['youtube-sweep', '▶️', 'YouTube sweep'], ['staff', '🗂️', 'Staff accounts (advanced)']]]
   ];
   var LABEL = {}; NAV.forEach(function (g) { g[1].forEach(function (i) { LABEL[i[0]] = i[2]; }); });
@@ -62,7 +62,16 @@
   function injectCss() { if (q('#kd-css')) return; var st = document.createElement('style'); st.id = 'kd-css'; st.textContent = CSS; document.head.appendChild(st); }
   function adminVisible() { var b = q('#admin-body'); var pg = q('#page-admin-dashboard'); return !!(b && !b.classList.contains('hidden') && pg && pg.offsetParent !== null); }
   function currentTab() { try { return typeof activeAdminWorkflowTab !== 'undefined' ? activeAdminWorkflowTab : S.tab; } catch (x) { return S.tab; } }
-  function go(tab) { closeDrawer(); if (typeof window.setAdminWorkflowTab === 'function') window.setAdminWorkflowTab(tab); else { S.tab = tab; onTab(tab); } try { window.scrollTo({ top: 0 }); } catch (x) { window.scrollTo(0, 0); } }
+  // Review queues are views of the one "review" tab: review:found, review:agent, review:stays.
+  function setReviewKind(k) { S.reviewKind = k; document.body.setAttribute('data-kd-review', k); }
+  function go(tab) {
+    closeDrawer();
+    var m = /^review:(found|agent|stays)$/.exec(String(tab || ''));
+    if (m) { setReviewKind(m[1]); tab = 'review'; if (typeof window.closeAdminReviewPanel === 'function') window.closeAdminReviewPanel(); }
+    if (typeof window.setAdminWorkflowTab === 'function') { var was = currentTab(); window.setAdminWorkflowTab(tab); if (m && was === 'review') onTab('review'); } else { S.tab = tab; onTab(tab); }
+    try { window.scrollTo({ top: 0 }); } catch (x) { window.scrollTo(0, 0); }
+  }
+  function itemOn(id, tab) { if (/^review:/.test(id)) return tab === 'review' && id === 'review:' + (S.reviewKind || 'found'); return id === tab; }
   window.kingDeskGo = go;
   // The sidebar starts below whatever is pinned at the top (the site header), or below
   // the page's own top while the strips above it are still on screen.
@@ -88,7 +97,7 @@
       + NAV.map(function (g) {
         return '<div class="kd-g">' + esc(g[0]) + '</div>' + g[1].map(function (i) {
           var n = i[3] ? Number(S.counts[i[3]] || 0) : 0;
-          return '<button type="button" class="kd-i' + (i[0] === tab ? ' on' : '') + '" data-kd-go="' + i[0] + '"><span>' + i[1] + '</span><span>' + esc(i[2]) + '</span>' + (n ? '<span class="kd-b" data-kd-badge="' + i[3] + '">' + n + '</span>' : '') + '</button>';
+          return '<button type="button" class="kd-i' + (itemOn(i[0], tab) ? ' on' : '') + '" data-kd-go="' + i[0] + '"><span>' + i[1] + '</span><span>' + esc(i[2]) + '</span>' + (n ? '<span class="kd-b" data-kd-badge="' + i[3] + '">' + n + '</span>' : '') + '</button>';
         }).join('');
       }).join('')
       + '<div class="kd-foot"><button type="button" class="kd-i" data-kd-refresh><span>🔄</span><span>Refresh</span></button><button type="button" class="kd-i" data-kd-account><span>⚙️</span><span>Account settings</span></button></div>';
@@ -99,7 +108,7 @@
     qa('[data-kd-go]', side).forEach(function (b) { b.onclick = function () { go(b.getAttribute('data-kd-go')); }; });
     var rf = q('[data-kd-refresh]', side); if (rf) rf.onclick = function () { closeDrawer(); if (typeof window.renderAdminDashboard === 'function') window.renderAdminDashboard(); onTab(currentTab(), true); };
     var ac = q('[data-kd-account]', side); if (ac) ac.onclick = function () { closeDrawer(); if (typeof window.showPage === 'function') window.showPage('account'); };
-    var top = q('#kd-top-title'); if (top) top.textContent = LABEL[currentTab()] || 'King';
+    var top = q('#kd-top-title'); if (top) top.textContent = (currentTab() === 'review' ? LABEL['review:' + (S.reviewKind || 'found')] : LABEL[currentTab()]) || 'King';
   }
   function openDrawer() { document.body.classList.add('kd-drawer'); }
   function closeDrawer() { document.body.classList.remove('kd-drawer'); }
@@ -123,7 +132,7 @@
     if (!/[?&#](tab|section)=/.test(location.search + location.hash) && (t === 'review' || !t)) go('k-overview'); else onTab(t);
   }
   function refreshCounts() {
-    return api('/king/overview').then(function (o) { S.counts = o.counts || {}; S.overview = o; drawSide(); if (currentTab() === 'k-overview') drawOverview(o); }, function () { drawSide(); });
+    return api('/king/overview').then(function (o) { S.counts = o.counts || {}; if (window.kingReview) window.kingReview.counts(S.counts); S.overview = o; drawSide(); if (currentTab() === 'k-overview') drawOverview(o); }, function () { drawSide(); });
   }
   function onTab(tab, force) {
     drawSide();
@@ -131,6 +140,8 @@
     if (tab === 'k-overview') { if (S.overview && !force) drawOverview(S.overview); refreshCounts(); S.timer = setInterval(function () { if (!document.hidden) refreshCounts(); }, 60000); }
     if (tab === 'k-payments') { loadPayments(); S.timer = setInterval(function () { if (!document.hidden) loadPayments(true); }, 30000); }
     if (tab === 'k-removals') loadRemovals();
+    if (tab === 'review') { setReviewKind(S.reviewKind || 'found'); if (window.kingReview) window.kingReview.show(S.reviewKind); }
+    else document.body.removeAttribute('data-kd-review');
   }
   // ------------------------------------------------------------- overview --
   function trend(cur, prev, unit) {
@@ -251,5 +262,5 @@
   var pending = false;
   new MutationObserver(function () { if (pending) return; pending = true; setTimeout(function () { pending = false; scan(); }, 200); }).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
   scan();
-  window.kingDesk = { refresh: function () { onTab(currentTab(), true); }, go: go, util: { api: api, esc: esc, when: when, ago: ago, ugx: ugx, ugxFull: ugxFull, q: q, qa: qa, currentTab: currentTab } };
+  window.kingDesk = { refresh: function () { onTab(currentTab(), true); }, go: go, refreshCounts: refreshCounts, setBadges: function (c) { for (var k in c) S.counts[k] = c[k]; drawSide(); }, util: { api: api, esc: esc, when: when, ago: ago, ugx: ugx, ugxFull: ugxFull, q: q, qa: qa, currentTab: currentTab } };
 })();
