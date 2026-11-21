@@ -327,7 +327,7 @@
     '.mkc-step{border-left:4px solid #10b981;padding:6px 10px;margin:8px 0;background:#f8fafc;border-radius:0 10px 10px 0}',
     '.mkc-step b{display:block;font-size:11px;text-transform:uppercase;color:#047857;letter-spacing:.05em}.mkc-step p{margin:2px 0 0;font-size:15px;line-height:1.45}',
     '.mkc-check-lg{display:inline-block;background:#fde68a;color:#78350f;font-size:11px;font-weight:800;border-radius:6px;padding:2px 6px;margin-left:6px}',
-    '.mkc-obj{border:1px solid #e2e8f0;border-radius:10px;padding:8px 10px;margin:6px 0;font-size:13px}.mkc-obj b{display:block}',
+    '.mkc-obj{border:1px solid #e2e8f0;border-radius:10px;padding:8px 10px;margin:6px 0;font-size:13px}.mkc-obj b{display:block}.mkc-obj[data-mkc-teamtip]{border-color:#fde68a;background:#fffbeb}.mkc-teamtip{display:inline-block;font-size:11px;font-weight:900;color:#92400e;margin-bottom:2px}',
     '.mkc-feed div{font-size:13px;padding:6px 0;border-bottom:1px solid #f1f5f9}.mkc-feed .k{font-size:10px;font-weight:900;text-transform:uppercase;color:#64748b;margin-right:4px}',
     '.mkc-nudge{background:#ecfdf5;color:#065f46;border-radius:10px;padding:8px 10px;font-weight:800;font-size:13px;margin-bottom:8px}',
     '.mkc-lb div{display:flex;justify-content:space-between;font-size:13px;padding:4px 0}.mkc-lb .me{font-weight:900;color:#047857}',
@@ -1716,7 +1716,8 @@
       var STAGES = [['before', 'Before the call'], ['greeting', 'Greeting'], ['pitch', 'Pitch'], ['objections', 'Objections'], ['close', 'Close']];
       var stepHtml = function (st, i) { return '<div class="mkc-step' + (i === hiStep ? ' now' : '') + '"><b>' + (i + 1) + '. ' + esc(st[0]) + '</b><p>' + esc(stepText(st, i, ctx)) + '</p></div>'; };
       var objs = ((boot.scripts.objections || {})[task.key] || []);
-      var objHtml = function (list) { return list.map(function (o) { return '<div class="mkc-obj"><b>“' + esc(o[0]) + '”</b>' + esc(fillTemplate(o[1], ctx)) + '</div>'; }).join(''); };
+      // o[2] === 'team': a script line the team suggested and King approved (Rejections & lessons).
+      var objHtml = function (list) { return list.map(function (o) { return '<div class="mkc-obj"' + (o[2] === 'team' ? ' data-mkc-teamtip' : '') + '>' + (o[2] === 'team' ? '<span class="mkc-teamtip">💡 Team tip, approved by King</span>' : '') + '<b>“' + esc(o[0]) + '”</b>' + esc(fillTemplate(o[1], ctx)) + '</div>'; }).join(''); };
       var helloIdx = -1; steps.forEach(function (st, i) { if (st[2] === 'hello' || /hello/i.test(st[0])) helloIdx = i; });
       html += '<div class="mkc-stages">' + STAGES.map(function (x) { return '<button type="button" class="mkc-stage' + (x[0] === stage ? ' on' : '') + (x[0] === auto ? ' auto' : '') + '" data-mkc-stage="' + x[0] + '">' + esc(x[1]) + '</button>'; }).join('') + '</div>'
         + '<div class="mkc-tabs">' + vars.map(function (k2) { return '<button type="button" class="mkc-tab' + (k2 === v ? ' on' : '') + '" data-mkc-var="' + esc(k2) + '">' + esc((boot.scripts.variants[k2] || {}).label || k2) + '</button>'; }).join('')

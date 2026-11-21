@@ -126,15 +126,15 @@ test('migration 249: new tables only, a team target is impossible, rollback drop
 
 test('pages: staff Team menu for everyone (callers too), unread badge, King Team hub item; nothing sends', () => {
   const sd = read('assets/staff-desk.js');
-  assert.match(sd, /\['Team', \[\['msgs', '📣', 'Messages from King'\], \['rules', '📘', 'Rules, T&Cs & hours'\], \['videos', '🎬', 'How-to videos'\]\]\]/);
+  assert.match(sd, /\['Team', \[\['msgs', '📣', 'Messages from King'\], \['rules', '📘', 'Rules, T&Cs & hours'\], \['videos', '🎬', 'How-to videos'\]/);
   assert.match(sd, /data-sd-badge="msgs"/);
   assert.match(sd, /data-sd-hub-nudge/);
-  assert.match(read('assets/king-desk.js'), /\['k-hub', '📣', 'Team hub'\]/);
-  assert.match(read('assets/makaug-app.js'), /"k-team", "k-hub"\]/);
+  assert.match(read('assets/king-desk.js'), /\['v:hub', '📣', 'Team hub', 'lessons_waiting'\]/);
+  assert.match(read('assets/makaug-app.js'), /"k-team", "k-hub"/);
   const idx = read('index.html');
   assert.match(idx, /id="king-hub" data-admin-tab-panel="k-hub"/);
   assert.match(idx, /team-hub\.js\?v=20261121-th1/);
-  assert.match(idx, /king-desk\.js\?v=20261121-kd8/);
+  assert.match(idx, /king-desk\.js\?v=20261121-kd(8|9)/);
   const th = read('assets/team-hub.js');
   assert.doesNotMatch(th, /wa\.me|sms:|tel:|whatsapp\/send|\/send-sms/i);
   assert.match(th, /kind\.options\[1\]\.disabled = team/, 'Target is greyed out when Whole team is picked');

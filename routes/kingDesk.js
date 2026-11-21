@@ -5,6 +5,7 @@ const kingCalls = require('../services/kingCalls');
 const kingStaff = require('../services/kingStaff');
 const kingReview = require('../services/kingReview');
 const teamHub = require('../services/teamHub');
+const teamLearnings = require('../services/teamLearnings');
 
 /**
  * King desk pages (King only). These paths are not in
@@ -48,6 +49,14 @@ function registerKingDeskRoutes(router, { writeAudit } = {}) {
   }));
   router.put('/king/hub/videos/:id', wrap(async (req, res) => res.json({ ok: true, data: await teamHub.saveVideo(String(req.params.id) === 'new' ? 'new' : req.params.id, req.body || {}, { actor: actorOf(req) }) })));
   router.post('/king/hub/videos/:id/remove', wrap(async (req, res) => res.json({ ok: true, data: await teamHub.removeVideo(req.params.id, { actor: actorOf(req) }) })));
+  // Rejections & lessons (ops 3c part 2): King approves, edits or declines the team's script suggestions.
+  router.get('/king/lessons', wrap(async (req, res) => res.json({ ok: true, data: await teamLearnings.kingView() })));
+  router.post('/king/lessons', wrap(async (req, res) => res.status(201).json({ ok: true, data: await teamLearnings.suggest({ userId: req.adminAuth?.userId || req.userAuth?.id || 'king', name: actorOf(req), king: true }, req.body || {}) })));
+  router.post('/king/lessons/:id/decide', wrap(async (req, res) => {
+    const out = await teamLearnings.decide(req.params.id, req.body || {}, { actor: actorOf(req) });
+    await audit(req, 'king_lesson_' + out.status, { id: out.id });
+    return res.json({ ok: true, data: out });
+  }));
   router.get('/king/staff', wrap(async (req, res) => res.json({ ok: true, data: await kingStaff.list() })));
   router.post('/king/staff', wrap(async (req, res) => {
     const out = await kingStaff.addStaff(req.body || {}, { actor: actorOf(req), origin: originOf(req) });

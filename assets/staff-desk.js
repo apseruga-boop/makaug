@@ -38,11 +38,11 @@
     ['Pipeline', [['pipeline', '🧭', 'My pipeline'], ['approve', '✅', 'Agents to approve'], ['owes', '💸', 'Owes us money'], ['missed', '📵', 'Missed calls']]],
     ['Work', [['review', '🏡', 'Properties to review', ['staff-booking-escalations', 'staff-review-grid'], 1], ['stays', '🛏️', 'Short stays', ['staff-short-term-control', 'staff-video-caption-conflicts'], 1],
       ['leads', '💬', 'Leads & WhatsApp', [], 1], ['harvest', '🔎', 'Harvest', ['staff-source-panel'], 1], ['tools', '🧰', 'Desk tools', ['staff-king-tools'], 1], ['howto', '🎓', 'How to', ['staff-training-panel'], 1]]],
-    ['Team', [['msgs', '📣', 'Messages from King'], ['rules', '📘', 'Rules, T&Cs & hours'], ['videos', '🎬', 'How-to videos']]],
+    ['Team', [['msgs', '📣', 'Messages from King'], ['rules', '📘', 'Rules, T&Cs & hours'], ['videos', '🎬', 'How-to videos'], ['lessons', '💡', 'Rejections & lessons']]],
     ['Me', [['pay', '💰', 'My pay'], ['connect', '📱', 'Connect your phone'], ['profile', '🪪', 'Profile'], ['settings', '⚙️', 'Settings', ['staff-settings-panel']]]]
   ];
   var KNOWN = ['staff-calling-card', 'staff-booking-escalations', 'staff-header-card', 'staff-short-term-control', 'staff-video-caption-conflicts', 'staff-settings-panel', 'staff-kpi-grid', 'staff-review-grid', 'staff-source-panel', 'staff-leads-grid', 'staff-home-seekers', 'staff-king-tools', 'staff-training-panel'];
-  var NEW_PAGES = ['home', 'perf', 'pay', 'profile', 'settings', 'pipeline', 'approve', 'owes', 'missed', 'leads', 'msgs', 'rules', 'videos'];
+  var NEW_PAGES = ['home', 'perf', 'pay', 'profile', 'settings', 'pipeline', 'approve', 'owes', 'missed', 'leads', 'msgs', 'rules', 'videos', 'lessons'];
   function items() { var out = []; NAV.forEach(function (g) { g[1].forEach(function (i) { out.push(i); }); }); return out; }
   function item(id) { return items().filter(function (i) { return i[0] === id; })[0]; }
   function allowed(i) { return !(i[4] && S.scope === 'caller'); }
@@ -183,6 +183,7 @@
     else if (page === 'stays') staysOffNote();
     else if (page === 'leads') loadLeads(host);
     else if (page === 'msgs' || page === 'rules' || page === 'videos') loadHub(page, host);
+    else if (page === 'lessons') loadLessons(host);
     else if (page === 'calls' && window.makaugCalling && typeof window.makaugCalling.rescan === 'function') { try { window.makaugCalling.rescan(); } catch (x) { /* calling screen redraws itself */ } }
   }
   // Short stays switched off: the box used to say "Loading short stays…" for ever.
@@ -449,6 +450,10 @@
   function loadHub(page, host) {
     if (!window.teamHub) { host.innerHTML = '<div class="sd-page"><p class="sd-sub">Loading…</p></div>'; setTimeout(function () { if (S.page === page) loadHub(page, host); }, 400); return; }
     window.teamHub.staff(page, host, hubUnread);
+  }
+  function loadLessons(host) {
+    if (!window.teamLessons) { host.innerHTML = '<div class="sd-page"><p class="sd-sub">Loading…</p></div>'; setTimeout(function () { if (S.page === 'lessons') loadLessons(host); }, 400); return; }
+    window.teamLessons.staff(host);
   }
   function leadsBadge() { if (S.scope === 'caller') return; api('/desk/leads?filter=action').then(function (d) { S.leadsAction = n(d.counts && d.counts.need_action); drawSide(); }, function () { /* badge only */ }); }
 

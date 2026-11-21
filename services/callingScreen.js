@@ -1776,7 +1776,8 @@ async function evidenceTrends(personKey) {
 }
 
 async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
-  const [tasks, callers] = await Promise.all([loadTasks(), loadCallers()]);
+  // Approved team tips (King-approved script lines) join the written "If they say…" answers.
+  const [tasks, callers, tips] = await Promise.all([loadTasks(), loadCallers(), require('./teamLearnings').approvedTips().catch(() => ({}))]);
   const me = callers.find((p) => p.user_id && userId && String(p.user_id) === String(userId)) || null;
   return {
     tasks: tasks.map((t) => ({ key: t.key, name: t.name, description: t.description, queue_kind: t.queue_kind, checklist: t.checklist, outcomes: t.outcomes, script_variants: t.script_variants })),
@@ -1784,7 +1785,7 @@ async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
     callers: callers.filter((p) => !p.sandbox || isKing || (me && me.key === p.key)).map((p) => ({ key: p.key, name: p.name, sandbox: Boolean(p.sandbox) || undefined })),
     locked_person: me ? me.key : null,
     sandbox: Boolean(me && me.sandbox),
-    scripts: { variants: scripts.VARIANTS, objections: scripts.OBJECTIONS, greetings: scripts.GREETINGS, luganda_status: 'Ronald to check', routes: callRoutes.ROUTES, pickup: callRoutes.PICKUP },
+    scripts: { variants: scripts.VARIANTS, objections: require('./teamLearnings').withTips(scripts.OBJECTIONS, tips), greetings: scripts.GREETINGS, luganda_status: 'Ronald to check', routes: callRoutes.ROUTES, pickup: callRoutes.PICKUP },
     callback_min_hours: CALLBACK_MIN_HOURS,
     sms_texts: scripts.SMS_TEXTS,
     templates: scripts.TEMPLATES,
