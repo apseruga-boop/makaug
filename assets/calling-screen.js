@@ -882,18 +882,18 @@
       body = gateHtml();
     } else if (S.phase === 'shown') {
       body = '<a class="mkc-btn go mkc-call" href="' + esc(d.tel) + '" data-mkc-tap title="' + (isPhone() ? 'Opens the phone app' : 'Rings out from the company phone through Phone Link (Bluetooth)') + '"><i class="fas fa-phone"></i>&nbsp;' + (isPhone() ? esc(T('call_next')) : 'Call now') + '</a>'
-        + '<div class="mkc-row" style="margin-top:8px;justify-content:center"><button type="button" class="mkc-btn ghost sm" data-mkc-skip>' + esc(T('skip')) + '</button><button type="button" class="mkc-btn ghost sm" data-mkc-tree>History tree</button><button type="button" class="mkc-btn sm mkc-wabtn" data-mkc-washare>🟢 Share on WhatsApp</button></div>'
+        + '<div class="mkc-row" style="margin-top:8px;justify-content:center"><button type="button" class="mkc-btn ghost sm" data-mkc-skip>' + esc(T('skip')) + '</button><button type="button" class="mkc-btn ghost sm" data-mkc-tree>History tree</button></div>'
         + (boot.sandbox ? practiceCallHelp(a) : '');
     } else if (S.phase === 'calling') {
       body = '<div class="mkc-calling"><span class="dot"></span>' + (S.coach.answered ? 'On the call' : 'Ringing…') + ' <span data-mkc-calltimer>' + clock(Date.now() - (S.callStart || Date.now())) + '</span></div>'
         + '<button type="button" class="mkc-btn red mkc-call" style="margin-top:8px" data-mkc-end>' + esc(T('end')) + '</button>'
-        + '<div class="mkc-row" style="margin-top:6px;justify-content:center"><button type="button" class="mkc-btn sm mkc-wabtn" data-mkc-washare>🟢 Share on WhatsApp</button></div>' + txHtml();
+        + txHtml();
     } else if (S.phase === 'wrapup') {
       body = '<div class="mkc-calling" style="background:#f1f5f9;color:#334155"><span class="dot" style="background:#64748b;animation:none"></span>Call ended · ' + clock((S.callEnd || Date.now()) - (S.callStart || Date.now())) + '</div>';
     }
     var tools = payHtml(a) + contactHtml(a);
     var inCall = S.phase === 'calling' || S.phase === 'wrapup';
-    el.innerHTML = head + body + contextHtml(d, true) + (inCall ? (tools ? '<details class="mkc-extras"><summary>💰 Payment · texts · video</summary>' + tools + '</details>' : '') : tools);
+    el.innerHTML = head + body + contextHtml(d, true) + (inCall ? (tools ? '<details class="mkc-extras"><summary>💰 Payment · texts</summary>' + tools + '</details>' : '') : tools);
     bindPay(el, a); bindContact(el, a);
     bindTx(el); bindGate(el);
     bindLastDone(el);
@@ -907,7 +907,6 @@
       renderNum(); renderScript();
       op('/attempts/' + a.id + '/tap', { session_id: S.id, check: checkPayload() }).catch(function (e) { if (e.status === 428) { CHK.notes = 'none'; } toast(e.message, 'bad'); });
     };
-    qa('[data-mkc-washare]', el).forEach(function (b) { b.onclick = function () { openShare(a); }; });
     var endIt = endCallNow;
     var endEl = q('[data-mkc-end]', el); if (endEl) endEl.onclick = endIt;
     qa('[data-mkc-ans]', el).forEach(function (b2) {
@@ -1264,18 +1263,18 @@
     if (c.answered === false) return { outcome: 'no_answer', next: 'Try again next working day', summary: 'No answer.', auto: true };
     if (/how much|price|cost|expensive|50,?000/.test(t)) pts.push('asked about the price');
     if (/momo|merchant|pay|paid|money/.test(t)) pts.push('talked about payment');
-    if (/video|film|link/.test(t)) pts.push('wants the film / link');
+    if (/video|film|link/.test(t)) pts.push('wants the link');
     if (/hello|whatsapp/.test(t) || c.hi) pts.push('agreed to say Hello on WhatsApp');
     var m = t.match(/(\d+)\s+(houses|places|plots|rentals|listings|properties|apartments)/); if (m) pts.push('has ' + m[1] + ' ' + m[2]);
     if (/wrong number|don'?t know (you|makaug)|who is this/.test(t) && has('wrong_number')) out = 'wrong_number';
     else if (/stop calling|don'?t call|never call/.test(t) && has('do_not_contact')) out = 'do_not_contact';
     else if (/not interested|no thank|don'?t (want|need)/.test(t)) out = has('rejected') ? 'rejected' : (has('not_renewing') ? 'not_renewing' : '');
-    else if (task.key === 'payments' && /\bi('ve| have)? (already )?(paid|sent)\b/.test(t) && has('paid')) { out = 'paid'; next = 'Check MoMo for UGX 50,000 and confirm on WhatsApp'; }
+    else if (task.key === 'payments' && /\bi('ve| have)? (already )?(paid|sent)\b/.test(t) && has('paid')) { out = 'paid'; next = 'Check MoMo for UGX 50,000 and confirm'; }
     else if (task.key === 'retention' && /\b(renewed|i('ve| have) paid)\b/.test(t) && has('renewed')) { out = 'renewed'; next = 'Check MoMo and confirm the renewal'; }
     else if (/(will|i'?ll|going to|can) (pay|send the money|renew)|pay (today|tomorrow|tonight|on)/.test(t) && (has('promised') || has('call_back'))) { out = has('promised') ? 'promised' : 'call_back'; next = 'Chase payment: check MoMo for UGX 50,000'; when = when || { quick: '24h', at: quickDate('24h'), label: 'tomorrow, this time' }; }
     else if (/sign me up|register me|i will join|i'?ll join|let'?s do it|i('m| am) in\b/.test(t) && has('signed_up')) { out = 'signed_up'; next = 'Confirm their first payment by MoMo'; }
     else if (/call (me )?(back|later)|busy|driving|in a meeting|not a good time/.test(t) || (when && !out)) { out = 'call_back'; next = 'Call back'; when = when || { quick: '24h', at: quickDate('24h'), label: 'tomorrow, this time' }; }
-    else if (/send|whatsapp me|video|film|link/.test(t)) { out = has('interested') ? 'interested' : (has('will_list') ? 'will_list' : 'call_back'); next = 'Send the film and link on WhatsApp, then call back'; when = when || { quick: '24h', at: quickDate('24h'), label: 'tomorrow, this time' }; }
+    else if (/send|whatsapp me|video|film|link/.test(t)) { out = has('interested') ? 'interested' : (has('will_list') ? 'will_list' : 'call_back'); next = 'Text them the makaug.com link (Texts tab), then call back'; when = when || { quick: '24h', at: quickDate('24h'), label: 'tomorrow, this time' }; }
     if (out && !has(out)) out = '';
     if (when && new Date(when.at).getTime() < Date.now() + 24 * 3600000 - 5 * 60000) when = { quick: '24h', at: quickDate('24h'), label: 'tomorrow, this time' };
     var summary = (t ? 'Spoke ' + clock((S.callEnd - S.callStart) || 0) + '. ' : '') + (pts.length ? 'They ' + pts.join(', ') + '. ' : '') + (when ? 'Next contact ' + when.label + '.' : '');
@@ -1335,19 +1334,19 @@
     return (V[S.lang] || V.en || []).slice(1); // the greeting is said before "did they answer"
   }
   var NEXT_CHIPS = {
-    new_agents: ['Call back', 'Send the film and link on WhatsApp', 'Send the sign-up link', 'Wait for their Hello, then call', 'Confirm their first payment by MoMo', 'King to decide'],
-    payments: ['Chase payment: check MoMo for UGX 50,000', 'Call back', 'Send the MoMo code on WhatsApp', 'King to decide'],
+    new_agents: ['Call back', 'Text them the makaug.com link, then call back', 'Wait for their Hi on WhatsApp, then call', 'Confirm their first payment by MoMo', 'King to decide'],
+    payments: ['Chase payment: check MoMo for UGX 50,000', 'Call back', 'Text them the MoMo code', 'King to decide'],
     retention: ['Call back', 'Help them list new places', 'Chase the renewal payment', 'King to decide']
   };
   var NOTE_CHIPS = {
-    interested: ['Wants the film first', 'Will sign up this week', 'Sending places on WhatsApp', 'Asked about price'],
+    interested: ['Wants the link first', 'Will sign up this week', 'Will say Hi and send places on WhatsApp', 'Asked about price'],
     call_back: ['Busy, call later', 'Driving', 'Asked to call tomorrow', 'In a meeting'],
     rejected: ['Not interested', 'Price too high', 'Uses another site', 'Not an agent'],
     signed_up: ['Signed up, paying by MoMo today', 'Signed up, will pay tomorrow'],
     promised: ['Will pay today', 'Will pay tomorrow', 'Waiting for money'],
     paid: ['Paid, sending the MoMo ref on WhatsApp'],
     renewed: ['Renewed by MoMo'],
-    _: ['Spoke, will follow up', 'Asked for details on WhatsApp', 'Will send new places']
+    _: ['Spoke, will follow up', 'Will say Hi on WhatsApp for details', 'Will send new places']
   };
   var CB_CHIPS = [['24h', 'Tomorrow, this time'], ['2d', 'In 2 days'], ['3d', 'In 3 days'], ['mon', 'Next Monday 10:00']];
   function routePath() { return (S.route && S.route.path || []).map(function (x) { return x.label; }).join(' → '); }
@@ -1355,7 +1354,7 @@
     if (!o || o.close || o.terminal || o.key === 'no_answer') return '';
     if (o.key === 'promised') return 'Chase payment: check MoMo for UGX 50,000';
     if (o.key === 'will_list' || o.key === 'needs_help') return 'Help them list new places';
-    if (o.key === 'interested') return 'Send the film and link on WhatsApp, then call back';
+    if (o.key === 'interested') return 'Text them the makaug.com link (Texts tab), then call back';
     if (o.date) return 'Call back';
     return 'King to decide';
   }
@@ -1369,7 +1368,7 @@
       + (path ? '<div class="mkc-wrappath">🧭 ' + esc(path) + '</div>' : '')
       + (S.suggest && S.suggest.outcome && S.suggest.outcome === w.outcome ? '<div class="mkc-wrapsug">✨ Filled in from the call. Check it and save.</div>' : '')
       + '<div class="mkc-outs wrap">' + outs + '</div>';
-    if (!o) return html + '<div data-mkc-wraperr></div><div class="mkc-row" style="margin:6px 0 0;align-items:center;flex-wrap:nowrap;gap:8px"><p class="mkc-muted" style="margin:0;flex:1">Tap what happened. <b>No answer</b> saves straight away.</p><button type="button" class="mkc-btn sm mkc-wabtn" style="flex:0 0 auto" data-mkc-washare>🟢 Share on WhatsApp</button></div></div>';
+    if (!o) return html + '<div data-mkc-wraperr></div><div class="mkc-row" style="margin:6px 0 0;align-items:center;flex-wrap:nowrap;gap:8px"><p class="mkc-muted" style="margin:0;flex:1">Tap what happened. <b>No answer</b> saves straight away.</p></div></div>';
     if (o.close) {
       html += '<div class="mkc-wrapchecks"><b>' + esc(T('close_title')) + '</b>'
         + (boot.close_checks[task.key] || []).map(function (c, i) { var same = task.checklist.filter(function (x) { return x.required && sameText(x.label, c); })[0]; return '<label><input type="checkbox" data-mkc-chk="close_' + i + '"' + (same ? ' data-mkc-also="' + esc(same.key) + '"' : '') + (w.checklist['close_' + i] ? ' checked' : '') + '><span>' + esc(c) + '</span></label>'; }).join('')
@@ -1390,7 +1389,7 @@
     html += '<div class="mkc-wrapgrid">' + f + '</div>';
     if (o.spoke && !o.close) html += '<button type="button" class="mkc-hello sm' + (w.checklist.asked_hello ? ' on' : '') + '" data-mkc-hello>' + (w.checklist.asked_hello ? '✓' : '☐') + ' Asked them to say “Hello” on WhatsApp to ' + esc(boot.whatsapp_display) + '</button>';
     if (TX && TX.text) html += '<details class="mkc-muted" style="font-size:12px"><summary>Live notes (' + TX.text.split(/\s+/).length + ' words, no audio kept)</summary>' + esc(TX.text.slice(0, 1200)) + '</details>';
-    return html + '<div data-mkc-wraperr></div><div class="mkc-row" style="flex-wrap:nowrap;gap:6px"><button type="button" class="mkc-btn sm mkc-wabtn" style="flex:0 0 auto" data-mkc-washare>🟢 Share on WhatsApp</button><button type="button" class="mkc-btn go mkc-call mkc-save" style="flex:1" data-mkc-save>✓ Save &amp; call next ›</button></div></div>';
+    return html + '<div data-mkc-wraperr></div><div class="mkc-row" style="flex-wrap:nowrap;gap:6px"><button type="button" class="mkc-btn go mkc-call mkc-save" style="flex:1" data-mkc-save>✓ Save &amp; call next ›</button></div></div>';
   }
   function localInput(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
   function quickDate(k) {
@@ -1405,7 +1404,6 @@
   function bestChip() { var bt = S.cur && S.cur.context && S.cur.context.best_time; return bt && bt.hour != null ? [['best', pad(bt.hour) + ':00 (their best time)']] : []; }
   function bindWrap(el, task, a) {
     var w = S.wrap;
-    qa('[data-mkc-washare]', el).forEach(function (b) { b.onclick = function () { openShare(a); }; });
     qa('[data-mkc-out]', el).forEach(function (b) {
       b.onclick = function () {
         saveWrapInputs(el); w.outcome = b.getAttribute('data-mkc-out');
@@ -1493,8 +1491,8 @@
   function sendLinks(phone, text) {
     var digits = String(phone || '').replace(/\D/g, '');
     if (!digits) return '';
-    return '<a class="mkc-btn sm" href="sms:+' + esc(digits) + '?body=' + encodeURIComponent(text) + '">SMS</a>'
-      + '<a class="mkc-btn sm" target="_blank" rel="noopener" href="https://wa.me/' + esc(digits) + '?text=' + encodeURIComponent(text) + '">WhatsApp</a>';
+    // SMS only, from the company phone (Phone Link). We never send WhatsApp messages from calls.
+    return '<a class="mkc-btn sm" href="sms:+' + esc(digits) + '?body=' + encodeURIComponent(text) + '">SMS</a>';
   }
   function lastDoneHtml() {
     var L = S && S.lastDone; if (!L) return '';
@@ -1589,13 +1587,54 @@
         var x = R.nodes[r.node].replies[Number(b.getAttribute('data-mkc-reply'))];
         r.path.push({ from: r.node, label: x[0] }); r.node = x[1];
         var n = R.nodes[r.node]; r.end = n && n.end ? n.end : null;
-        if (/hello/i.test(x[0]) && /✓/.test(x[0])) { S.wrap.checklist.asked_hello = true; S.wrap.checklist.wa_hi = true; }
+        if (n && n.lang) S.lang = n.lang; // "Speak Luganda, please": the rest of the call in Luganda
+        if (/hello|\bhi\b/i.test(x[0]) && /✓/.test(x[0])) { S.wrap.checklist.asked_hello = true; S.wrap.checklist.wa_hi = true; }
         ev('route', r.node); renderScript();
       };
     });
     var bk = q('[data-mkc-rback]', el); if (bk) bk.onclick = function () { var last = r.path.pop(); if (last) { r.node = last.from; r.end = null; } renderScript(); };
     var er = q('[data-mkc-endroute]', el); if (er) er.onclick = function () { endCallNow(); };
     var fs = q('[data-mkc-fullscript]', el); if (fs) fs.onclick = function () { S.fullScript = !S.fullScript; renderScript(); };
+  }
+  // ---- Texts tab: ready SMS texts. The link opens the texting app (Phone Link on the laptop)
+  // with the number and the text filled in; each one is logged on the contact's timeline.
+  function smsDigits(phone) {
+    var d = String(phone || '').replace(/\D/g, '');
+    if (/^0\d{9}$/.test(d)) d = '256' + d.slice(1); else if (/^\d{9}$/.test(d)) d = '256' + d;
+    return d;
+  }
+  function smsHref(phone, text) { var d = smsDigits(phone); return d ? 'sms:+' + d + '?body=' + encodeURIComponent(text) : ''; }
+  function smsLabel(x) {
+    var t = (boot.sms_texts || []).filter(function (y) { return y.key === x.template; })[0];
+    return t ? t.label : 'our WhatsApp number, ' + (x.lang === 'lg' ? 'Luganda' : 'English');
+  }
+  function textsHtml(a, ctx) {
+    var list = boot.sms_texts || [];
+    var fill = function (t) { try { return fillTemplate(t, ctx); } catch (e) { return String(t || ''); } };
+    var card = function (key, label, text, logKey) {
+      var href = a ? smsHref(a.phone, text) : '';
+      return '<div class="mkc-tpl" data-mkc-text="' + esc(key) + '"><b>' + esc(label) + '</b><div style="margin:4px 0 6px">' + esc(text) + '</div><div class="mkc-row">'
+        + (href ? '<a class="mkc-btn sm go" style="text-decoration:none" href="' + esc(href) + '" data-mkc-sms="' + esc(logKey || '') + '">✉️ Open in Texts</a>' : '')
+        + '<button type="button" class="mkc-btn sm ghost" data-mkc-textcopy="' + esc(key) + '">Copy</button></div></div>';
+    };
+    var main = list.map(function (t) { return card(t.key, t.label, fill(t.text), t.key); }).join('');
+    var more = Object.keys(boot.templates || {}).map(function (k) { return card('o_' + k, 'After “' + k.replace(/_/g, ' ') + '”', fill(boot.templates[k]), ''); }).join('');
+    return '<p class="mkc-muted">Texts go by SMS from the company phone. <b>Open in Texts</b> opens your texting app (Phone Link) with the number and the text ready: check it and press Send there. We never send WhatsApp messages from calls.</p>'
+      + (a ? '' : '<p class="mkc-muted">Open a number to text it.</p>') + main
+      + (more ? '<details style="margin-top:8px"><summary class="mkc-muted" style="cursor:pointer">More texts (after an outcome)</summary>' + more + '</details>' : '');
+  }
+  function bindTexts(el, a, ctx) {
+    var textOf = function (key) {
+      var t = (boot.sms_texts || []).filter(function (x) { return x.key === key; })[0];
+      var raw = t ? t.text : (boot.templates || {})[key.replace(/^o_/, '')];
+      try { return fillTemplate(raw || '', ctx); } catch (e) { return String(raw || ''); }
+    };
+    qa('[data-mkc-textcopy]', el).forEach(function (b) { b.onclick = function () { copy(textOf(b.getAttribute('data-mkc-textcopy'))); }; });
+    qa('[data-mkc-sms]', el).forEach(function (b) { b.addEventListener('click', function () {
+      if (!a || boot.sandbox) return; // practice: nothing is sent or logged
+      op('/attempts/' + a.id + '/sms', { person_key: S.person, lang: S.lang === 'lg' ? 'lg' : 'en', template: b.getAttribute('data-mkc-sms') || '' })
+        .then(function () { ev('action', 'sms_sent'); toast('Text opened in your texting app and logged on their timeline. Press Send there.'); }, function (e) { toast(e.message || 'Could not log the text'); });
+    }); });
   }
   function renderScript() {
     var el = q('[data-mkc-script]'); if (!el || !S) return;
@@ -1649,15 +1688,12 @@
       }
       html += (task.key === 'payments' || task.key === 'retention' ? '<div class="mkc-nudge" style="margin-top:10px">MoMo merchant code: <span style="font-size:18px">' + esc(boot.momo_code) + '</span></div>' : '');
     } else if (S.tab === 'texts') {
-      html += '<p class="mkc-muted">' + esc(boot.template_rules) + '</p>' + Object.keys(boot.templates).map(function (k) {
-        var t = fillTemplate(boot.templates[k], ctx);
-        return '<div class="mkc-tpl"><b>' + esc(k.replace(/_/g, ' ')) + '</b><div style="margin:4px 0 6px">' + esc(t) + '</div><div class="mkc-row"><button type="button" class="mkc-btn sm" data-mkc-copy="' + esc(k) + '">Copy</button>' + (a ? sendLinks(a.phone, t) : '') + '</div></div>';
-      }).join('');
+      html += textsHtml(a, ctx);
     } else {
-      html += '<p class="mkc-muted">Send a film or link to yourself on WhatsApp, then forward it from the company phone.</p>' + boot.sales_kit.map(function (k) {
+      // For the caller to learn from. We never send films or WhatsApp messages from calls.
+      html += '<p class="mkc-muted">Films and cards to learn from. We never send WhatsApp messages or films from calls: ask them to say “Hi” on WhatsApp to ' + esc(boot.whatsapp_display) + ', and use <b>Texts</b> for an SMS.</p>' + boot.sales_kit.map(function (k) {
         return '<div class="mkc-kit"><div><b>' + esc(k.title) + '</b><div class="mkc-muted">' + esc(k.lang) + ' · ' + esc(k.kind) + '</div></div><div class="mkc-row" style="flex-wrap:nowrap">'
-          + '<a class="mkc-btn sm go" target="_blank" rel="noopener" data-mkc-kit="' + esc(k.key) + '" href="https://wa.me/?text=' + encodeURIComponent(k.title + ' – ' + k.url) + '">Send to me</a>'
-          + '<button type="button" class="mkc-btn sm" data-mkc-kitcopy="' + esc(k.key) + '">Copy link</button></div></div>';
+          + (k.url ? '<a class="mkc-btn sm" target="_blank" rel="noopener" data-mkc-kit="' + esc(k.key) + '" href="' + esc(k.url) + '">Watch</a>' : '') + '</div></div>';
       }).join('');
     }
     if (S.fullScript) html = '<button type="button" class="mkc-btn sm go" style="margin-bottom:8px" data-mkc-fullscript>🧭 Back to the routing script</button>' + html;
@@ -1668,7 +1704,8 @@
     qa('[data-mkc-stage]', el).forEach(function (b) { b.onclick = function () { S.stageManual = b.getAttribute('data-mkc-stage'); renderScript(); }; });
     qa('[data-mkc-lang]', el).forEach(function (b) { b.onclick = function () { S.lang = b.getAttribute('data-mkc-lang'); renderScript(); }; });
     qa('[data-mkc-copy]', el).forEach(function (b) { b.onclick = function () { copy(fillTemplate(boot.templates[b.getAttribute('data-mkc-copy')], ctx)); }; });
-    qa('[data-mkc-kit]', el).forEach(function (b) { b.addEventListener('click', function () { ev('kit_send', b.getAttribute('data-mkc-kit')); }); });
+    if (S.tab === 'texts') bindTexts(el, a, ctx);
+    qa('[data-mkc-kit]', el).forEach(function (b) { b.addEventListener('click', function () { ev('kit_send', b.getAttribute('data-mkc-kit') + ' (watched)'); }); });
     qa('[data-mkc-kitcopy]', el).forEach(function (b) {
       b.onclick = function () {
         var k = boot.sales_kit.filter(function (x) { return x.key === b.getAttribute('data-mkc-kitcopy'); })[0];
@@ -1820,7 +1857,7 @@
         + (t.said_hello ? '<div class="mkc-good" style="font-weight:900">Said Hello ✓ on WhatsApp ' + esc(kDayTime(t.said_hello.at)) + ' (registered as a client)</div>' : '<div class="mkc-muted">Has not said Hello on WhatsApp yet.</div>')
         + ((t.skips || []).length ? '<div class="mkc-muted">Skipped ' + t.skips.length + '×: ' + t.skips.map(function (k) { return esc(kDayTime(k.at)) + ' ' + esc(personName(k.by)) + ' – ' + esc(k.reason || ''); }).join(' · ') + '</div>' : '')
         + (wa ? '<div class="mkc-muted">' + esc(wa) + '</div>' : '') + outreach
-        + (t.sms || []).map(function (x) { return '<div class="mkc-muted">' + esc(kDayTime(x.at)) + ' · ✉️ SMS sent (our WhatsApp number, ' + (x.lang === 'lg' ? 'Luganda' : 'English') + ') by ' + esc(personName(x.by)) + '</div>'; }).join('')
+        + (t.sms || []).map(function (x) { return '<div class="mkc-muted">' + esc(kDayTime(x.at)) + ' · ✉️ SMS sent (' + esc(smsLabel(x)) + ') by ' + esc(personName(x.by)) + '</div>'; }).join('')
         + (t.videos || []).map(function (x) { return '<div class="mkc-muted">' + esc(kDayTime(x.at)) + ' · 🎬 Agent video ' + esc(x.status) + (x.sent_via ? ' (' + esc(x.sent_via.replace(/_/g, ' ')) + ')' : '') + ' · asked by ' + esc(personName(x.by)) + (x.decided_by ? ' · decided by ' + esc(x.decided_by) : '') + (x.opens ? ' · opened ' + x.opens + '×' : '') + '</div>'; }).join('')
         + '<div class="mkc-tree" style="margin-top:8px">' + (draw('root') || '<p class="mkc-muted">No calls yet.</p>') + '</div>', function (m, close) { q('[data-x]', m).onclick = close; });
     }, function (e) { toast(e.message, 'bad'); });
@@ -1963,42 +2000,7 @@
     m.addEventListener('click', function (e) { if (e.target === m) close(); });
     bind(m, close);
   }
-  // ---- Share on WhatsApp: the films and documents, sent from the caller's own WhatsApp (wa.me or
-  // WhatsApp Desktop). Inbound-first: WhatsApp only lets us message people who wrote to us, so it
-  // stays locked until they have said "Hi" to our number. Nothing is sent from the server here.
-  function openShare(a) {
-    if (!a) return;
-    // Only the number on screen for this call carries the full phone; a masked one cannot be shared.
-    var digits = /•/.test(String(a.phone || '')) ? '' : String(a.phone || '').replace(/\D/g, '');
-    if (!digits) { toast('Number not available to share.', 'bad'); return; }
-    var draw = function (m, c) {
-      var body;
-      if (!c) body = '<p class="mkc-muted">Checking if they have messaged our WhatsApp…</p>';
-      else if (c.locked) {
-        body = '<div class="mkc-tpl" style="background:#fef3c7;border-color:#fde68a" data-mkc-walocked><b>🔒 Locked until they say “Hi”</b><div style="margin-top:4px">WhatsApp only lets us message people who wrote to us first. Ask them to send <b>Hi</b> to <b>' + esc(boot.whatsapp_display) + '</b>, then tap “They said Hi”.</div></div>'
-          + '<div class="mkc-row" style="margin-top:8px"><a class="mkc-btn sm" href="sms:+' + esc(digits) + '?body=' + encodeURIComponent((c.sms_text && c.sms_text.en) || '') + '">✉️ Text them our WhatsApp number</a><button type="button" class="mkc-btn sm go" data-wa-recheck>🔄 They said Hi – check again</button></div>'
-          + '<p class="mkc-muted" style="font-size:12px;margin-top:8px">What you can send once they have said Hi:</p><ul style="margin:0 0 0 18px;font-size:13px">' + boot.sales_kit.map(function (k) { return '<li>' + esc(k.title) + ' <span class="mkc-muted">(' + esc(k.lang) + ')</span></li>'; }).join('') + '</ul>';
-      } else {
-        body = '<p class="mkc-good" style="font-weight:800;margin:0 0 6px">🔓 They messaged us' + (c.hello && c.hello.at ? ' ' + esc(kDayTime(c.hello.at)) : '') + '. Pick what to send:</p>'
-          + boot.sales_kit.map(function (k) {
-            var text = (k.text || (k.title + ' – ' + k.url));
-            return '<div class="mkc-kit" data-wa-item="' + esc(k.key) + '"><div><b>' + esc(k.title) + '</b><div class="mkc-muted">' + esc(k.lang) + ' · ' + esc(k.kind) + '</div></div><div class="mkc-row" style="flex-wrap:nowrap">'
-              + '<a class="mkc-btn sm go" target="_blank" rel="noopener" data-wa-send="' + esc(k.key) + '" href="https://wa.me/' + esc(digits) + '?text=' + encodeURIComponent(text) + '">WhatsApp</a>'
-              + '<a class="mkc-btn sm" data-wa-send="' + esc(k.key) + '" href="whatsapp://send?phone=' + esc(digits) + '&text=' + encodeURIComponent(text) + '" title="Opens the WhatsApp Desktop app">Desktop app</a></div></div>';
-          }).join('');
-      }
-      q('[data-wa-body]', m).innerHTML = body;
-      var rc = q('[data-wa-recheck]', m); if (rc) rc.onclick = function () { q('[data-wa-body]', m).innerHTML = '<p class="mkc-muted">Checking…</p>'; load(m); };
-      qa('[data-wa-send]', m).forEach(function (l) { l.addEventListener('click', function () { ev('wa_share', l.getAttribute('data-wa-send')); }); });
-    };
-    var load = function (m) { api('/attempts/' + a.id + '/contact').then(function (c) { if (S) { S.contact = S.contact || {}; S.contact[a.id] = c; } draw(m, c); }, function (e) { q('[data-wa-body]', m).innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; }); };
-    modal('<h3 style="margin:0 0 4px;font-weight:900">🟢 Share on WhatsApp</h3><p class="mkc-muted" style="margin:0 0 8px">To ' + esc(a.name || 'this number') + ' · ' + esc('•••' + digits.slice(-3)) + '. It opens your WhatsApp with the message ready: check it and press send.</p><div data-wa-body></div><div class="mkc-row" style="margin-top:10px;justify-content:flex-end"><button type="button" class="mkc-btn" data-x>Close</button></div>', function (m, close) {
-      q('[data-x]', m).onclick = close;
-      m.setAttribute('data-mkc-share', '');
-      var c0 = S && S.contact && S.contact[a.id];
-      draw(m, c0 || null); load(m);
-    });
-  }
+  // (No "Share on WhatsApp": we never send WhatsApp messages or films from calls. Arthur, 21 Nov 2026.)
   var HOW_KNOWN = ['Friend or referral', 'Saw their listing', 'Sign board', 'Social media', 'Met them', 'Other'];
   function openAddNumber() {
     var field = function (attr, ph, extra) { return '<input class="mkc-input" style="width:100%;box-sizing:border-box;margin:4px 0" ' + attr + ' placeholder="' + esc(ph) + '"' + (extra || '') + '>'; };
@@ -2201,13 +2203,9 @@
     var c = S.contact[a.id];
     if (c === undefined) { S.contact[a.id] = null; loadContact(a); }
     if (!c) return '<div class="mkc-pay" data-mkc-contact><span class="mkc-muted">✉️ …</span></div>';
-    var sms = function (lang, label) { return '<a class="mkc-btn sm" style="text-decoration:none" href="sms:' + esc(String(a.phone || '').replace(/\s+/g, '')) + '?body=' + encodeURIComponent(c.sms_text[lang]) + '" data-sms="' + lang + '">' + label + '</a>'; };
-    var v;
-    if (c.locked) v = '<div class="mkc-muted" style="margin-top:6px">🔒 <b>Send agent video</b> – locked until they message our WhatsApp. Text them the number above and ask them to send "Hi".</div>';
-    else if (c.open && c.open.status === 'requested') v = '<div style="margin-top:6px">⏳ <b>Video requested</b> – waiting for King to approve.</div>';
-    else if (c.open && c.open.status === 'approved') v = '<div style="margin-top:6px">✅ Approved – being sent from makaug\'s WhatsApp.</div>';
-    else v = '<div class="mkc-row" style="margin-top:6px"><span class="mkc-good" style="font-weight:800">🔓 They messaged us ' + esc(kDayTime(c.hello.at)) + '</span><select class="mkc-select" style="font-size:12px;padding:4px" data-vid>' + c.videos.map(function (x) { return '<option value="' + esc(x.key) + '">' + esc(x.title) + '</option>'; }).join('') + '</select><button type="button" class="mkc-btn sm dark" data-vreq>🎬 Request video send</button></div>'
-      + (c.sent ? '<div class="mkc-muted">Video sent before (' + c.sent + '×).</div>' : '');
+    var sms = function (lang, label) { return '<a class="mkc-btn sm" style="text-decoration:none" href="' + esc(smsHref(a.phone, c.sms_text[lang])) + '" data-sms="' + lang + '">' + label + '</a>'; };
+    // We never send WhatsApp messages or films from calls (Arthur, 21 Nov 2026): no video request here.
+    var v = c.hello && c.hello.at ? '<div class="mkc-good" style="margin-top:6px;font-weight:800">✅ They said Hi on WhatsApp ' + esc(kDayTime(c.hello.at)) + '</div>' : '<div class="mkc-muted" style="margin-top:6px">Ask them to say “Hi” on WhatsApp to ' + esc(boot.whatsapp_display) + '.</div>';
     return '<div class="mkc-pay" data-mkc-contact style="background:#f8fafc"><div class="mkc-row" style="justify-content:space-between"><b>✉️ Text them our WhatsApp number</b><span class="mkc-muted">' + (c.sms.length ? 'SMS sent ' + esc(kDayTime(c.sms[0].at)) : 'from the company SIM') + '</span></div>'
       + '<div class="mkc-row" style="margin-top:6px">' + sms('en', 'SMS in English') + sms('lg', 'SMS mu Luganda') + '<button type="button" class="mkc-btn sm ghost" data-smscopy>Copy text</button></div>' + v + '<div data-cerr></div></div>';
   }

@@ -17,6 +17,7 @@
 const crypto = require('crypto');
 const db = require('../config/database');
 const calling = require('./callingScreen');
+const scripts = require('./callingScripts');
 
 const { httpError, cleanKey } = calling;
 const rows = async (sql, params = []) => (await db.query(sql, params)).rows;
@@ -34,9 +35,9 @@ function smsText(lang = 'en', callerName = '') {
   const w = String(callerName || '').trim().split(/\s+/)[0];
   const who = w ? w.charAt(0).toUpperCase() + w.slice(1) : 'the makaug team';
   if (lang === 'lg') {
-    return `Gyebale ko! Nze ${who} okuva ku makaug.com, omukutu ogukuŋŋaanya amayumba, ettaka n'ebisulo byonna mu Uganda. WhatsApp yaffe: 0780 863 394. Tuwandiikire "Hi" ku WhatsApp ofune vidiyo n'ebisingawo.`;
+    return `Gyebale ko! Nze ${who} okuva ku makaug.com, omukutu ogukuŋŋaanya amayumba, ettaka n'ebisulo byonna mu Uganda. WhatsApp yaffe: 0780 863 394. Tuwandiikire "Hi" ku WhatsApp tukuddemu.`;
   }
-  return `Hello! This is ${who} from makaug.com, the site that brings every house, plot and rental in Uganda into one search. Our WhatsApp: 0780 863 394. WhatsApp us "Hi" to get the video and details.`;
+  return `Hello! This is ${who} from makaug.com, the site that brings every house, plot and rental in Uganda into one search. Our WhatsApp: 0780 863 394. Say "Hi" on WhatsApp and our team will answer you there.`;
 }
 
 async function attemptOf(attemptId) {
@@ -45,9 +46,11 @@ async function attemptOf(attemptId) {
   return a;
 }
 
-async function logSms(attemptId, { personKey = '', lang = 'en' } = {}) {
+/** Log a text the caller opened in the texting app (sms: link). `template` is one of the Texts tab keys. */
+async function logSms(attemptId, { personKey = '', lang = 'en', template = '' } = {}) {
   const a = await attemptOf(attemptId);
-  await db.query('INSERT INTO call_sms_log (phone_key, attempt_id, person_key, lang) VALUES ($1, $2, $3, $4)', [a.phone_key, a.id, cleanKey(personKey) || a.person_key, lang === 'lg' ? 'lg' : 'en']);
+  const tpl = scripts.SMS_TEXT_KEYS.has(String(template || '')) ? String(template) : null;
+  await db.query('INSERT INTO call_sms_log (phone_key, attempt_id, person_key, lang, template) VALUES ($1, $2, $3, $4, $5)', [a.phone_key, a.id, cleanKey(personKey) || a.person_key, lang === 'lg' ? 'lg' : 'en', tpl]);
   return { ok: true, sms_count: Number((await rows('SELECT COUNT(*)::int AS n FROM call_sms_log WHERE phone_key = $1', [a.phone_key]))[0].n) };
 }
 
@@ -64,7 +67,7 @@ async function videoState(attemptId) {
   const [hello, reqs, sms] = await Promise.all([
     helloOf(a.phone_key),
     rows('SELECT id, status, video_key, person_key, requested_at, decided_by, decided_at, sent_at, sent_via, send_reason, opens FROM call_video_requests WHERE phone_key = $1 ORDER BY requested_at DESC LIMIT 5', [a.phone_key]),
-    rows('SELECT at, person_key, lang FROM call_sms_log WHERE phone_key = $1 ORDER BY at DESC LIMIT 5', [a.phone_key])
+    rows('SELECT at, person_key, lang, template FROM call_sms_log WHERE phone_key = $1 ORDER BY at DESC LIMIT 5', [a.phone_key])
   ]);
   const open = reqs.find((r) => ['requested', 'approved'].includes(r.status)) || null;
   return {

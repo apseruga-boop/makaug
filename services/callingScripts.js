@@ -39,13 +39,13 @@ const VARIANTS = Object.freeze({
     en: [
       ['Greeting', '{greeting} {name}, my name is {caller} from makaug.com. You contacted us about a place. Is now a good time?'],
       ['Questions', 'What are you looking for? Which area, and what budget? When do you need it?'],
-      ['Help', 'I will send you places that match on WhatsApp. Please send "Hello" to 0780 863 394 so I can reach you there.'],
-      ['Close', 'Thank you. I will follow up on WhatsApp today.']
+      ['Help', 'Please say "Hi" on WhatsApp to 0780 863 394 and our team will answer you there with places that match. I can also text you a search link now.'],
+      ['Close', 'Thank you. Once you say Hi on WhatsApp, our team answers you there.']
     ],
     lg: [
       ['Okulamusa', '{greeting} {name}, nze {caller} okuva ku makaug.com. Watukubidde oba watuwandiikidde. Kati kiseera kirungi?'],
       ['Ebibuuzo', 'Onoonya ki? Kitundu ki, era ssente meka? Okyetaaga ddi?'],
-      ['Okuyamba', 'Nja kukuweereza ebifo ebituukana ku WhatsApp. Wandiika "Hello" ku 0780 863 394 nsobole okukutuukako eyo.'],
+      ['Okuyamba', 'Wandiika "Hi" ku WhatsApp ku 0780 863 394, ttiimu yaffe ejja kukuddamu eyo.'],
       ['Okumaliriza', 'Weebale. Nja kukukomawo.']
     ]
   },
@@ -56,14 +56,14 @@ const VARIANTS = Object.freeze({
       ['Why I am calling', 'makaug.com is where people in Uganda search for houses, land and rentals. We help agents get those enquiries straight to their phone.'],
       ['Questions', 'Are you an agent or do you own the places? Which areas do you cover? How many places do you have right now?'],
       ['Offer', PRICE_EN],
-      ['Close', 'Shall I sign you up now? I will send you the short film and the link on WhatsApp from this number.']
+      ['Close', 'Shall I sign you up now? Please say "Hi" on WhatsApp to 0780 863 394, and I can text you the link right now.']
     ],
     lg: [
       ['Okulamusa', '{greeting} {name}, nze {caller} okuva ku makaug.com. Olina eddakiika bbiri?'],
       ['Lwaki nkubira', 'makaug.com abantu mu Uganda we banoonyeza amayumba, ettaka n\'ebisulo. Tuyamba ba agenti okufuna abaagala okugula oba okupangisa.'],
       ['Ebibuuzo', 'Oli agenti oba ggwe nnannyini? Okola mu bitundu ki? Olina ebifo bimeka kaakano?'],
       ['Ekiweebwayo', PRICE_LG],
-      ['Okumaliriza', 'Nkuwandiise kaakano? Nja kukuweereza vidiyo n\'enkolagana ku WhatsApp.']
+      ['Okumaliriza', 'Nkuwandiise kaakano? Wandiika "Hi" ku WhatsApp ku 0780 863 394, era nsobola okukuweereza link mu SMS kaakano.']
     ]
   },
   found_online: {
@@ -73,14 +73,14 @@ const VARIANTS = Object.freeze({
       ['Why I am calling', 'I saw your place posted online. People searching makaug.com can already see it, and I want to make sure the enquiries come to you, not someone else.'],
       ['Questions', 'Is it still available? Are you the agent or the owner? Do you have more places we can put up for you?'],
       ['Offer', PRICE_EN + ' With an agent account your places carry your name and your number.'],
-      ['Close', 'Shall I set up your account now? I will WhatsApp you the link from this number.']
+      ['Close', 'Shall I set up your account now? I can text you the link right now, and please say "Hi" on WhatsApp to 0780 863 394.']
     ],
     lg: [
       ['Okulamusa', '{greeting} {name}, nze {caller} okuva ku makaug.com.'],
       ['Lwaki nkubira', 'Nalabye ekifo kyo ku mutimbagano. Abanoonya ku makaug.com bakiraba, era njagala abakyagala bakutuukeko ggwe.'],
       ['Ebibuuzo', 'Kikyaliwo? Oli agenti oba nnannyini? Olina ebifo ebirala bye tuyinza okuteekako?'],
       ['Ekiweebwayo', PRICE_LG],
-      ['Okumaliriza', 'Nkuggulire akawunti kaakano? Nja kukuweereza enkolagana ku WhatsApp.']
+      ['Okumaliriza', 'Nkuggulire akawunti kaakano? Nsobola okukuweereza link mu SMS, era wandiika "Hi" ku WhatsApp ku 0780 863 394.']
     ]
   },
   existing_contact: {
@@ -88,14 +88,14 @@ const VARIANTS = Object.freeze({
     en: [
       ['Greeting', '{greeting} {name}, it is {caller} from makaug.com again. We spoke before.'],
       ['Why I am calling', 'Last time: {history}. I wanted to follow up and see if you are ready to start.'],
-      ['Questions', 'Did you watch the film? Any questions about how it works or how clients reach you?'],
+      ['Questions', 'Did you have a look at makaug.com? Any questions about how it works or how clients reach you?'],
       ['Offer', PRICE_EN],
       ['Close', 'Shall we sign you up today? I can do it with you on this call.']
     ],
     lg: [
       ['Okulamusa', '{greeting} {name}, nze {caller} okuva ku makaug.com nate. Twayogerako.'],
       ['Lwaki nkubira', 'Omulundi oguwedde: {history}. Njagala okumanya oba weetegese okutandika.'],
-      ['Ebibuuzo', 'Walaba vidiyo? Olina ekibuuzo kyonna?'],
+      ['Ebibuuzo', 'Walabye ku makaug.com? Olina ekibuuzo kyonna?'],
       ['Ekiweebwayo', PRICE_LG],
       ['Okumaliriza', 'Tukuwandiise leero? Nsobola okukikola naawe ku ssimu eno.']
     ]
@@ -192,6 +192,16 @@ const SALES_KIT = Object.freeze([
 const WHATSAPP_NUMBER = '+256780863394';
 const WHATSAPP_DISPLAY = '0780 863 394';
 
+// Ready texts for the Texts tab. Sent by SMS from the company phone (an sms: link opens the
+// texting app through Phone Link with the number and text filled in). Inbound-first: we ask
+// them to say "Hi" on our WhatsApp; we never send WhatsApp messages or films from calls.
+const SMS_TEXTS = Object.freeze([
+  { key: 'say_hi', label: 'Say Hi on WhatsApp', text: 'Hi {name}, it is {caller} from makaug.com. Please say "Hi" on WhatsApp to ' + WHATSAPP_DISPLAY + ' and our team will answer you there.' },
+  { key: 'site_link', label: 'The makaug.com link', text: 'Hi {name}, it is {caller} from makaug.com, where buyers and renters all over Uganda find places. See it here: ' + SITE + ' . Agents UGX 50,000 a month, owners UGX 20,000, by MoMo merchant code ' + MOMO_CODE + '. Questions? Say "Hi" on WhatsApp to ' + WHATSAPP_DISPLAY + '.' },
+  { key: 'seeker_search', label: 'Seeker search link', text: 'Hi {name}, it is {caller} from makaug.com. Find places to rent here: ' + SITE + '/to-rent and to buy here: ' + SITE + '/for-sale . Say "Hi" on WhatsApp to ' + WHATSAPP_DISPLAY + ' and we will help you find one.' }
+]);
+const SMS_TEXT_KEYS = new Set(SMS_TEXTS.map((t) => t.key));
+
 // Before a caller can mark a close, every one of these must be ticked.
 // Mandatory in every mode: the caller asks them to WhatsApp "Hello" to makaug.
 // That registers them as a client and makes their number known (WhatsApp only
@@ -236,7 +246,7 @@ const COACH = Object.freeze({
   en: {
     next: 'Next call: {name}', dial: 'Dial the number', answered: 'Did they answer?', yes: 'Yes, they answered', no: 'No answer',
     script: 'Follow the script: step {n} of {total}', next_step: 'Next step', hi: 'Did you ask them to WhatsApp "Hello" to makaug on {wa}?',
-    hi_why: 'A must on every call: it registers them as a client and makes their number known, so we can send the film, link and payment details.', hi_done: 'Asked them to say Hello', hi_no: 'They refused',
+    hi_why: 'A must on every call: it registers them as a client and makes their number known, so our team can answer them on WhatsApp.', hi_done: 'Asked them to say Hello', hi_no: 'They refused',
     end: 'End call', confirm: 'Confirm what happened', save: 'Save and call next', must: 'You must finish this wrap-up before the next call.',
     close_title: 'Key things to remember to close', offline: 'Offline: saving locally', synced: 'Back online: saved', calls: 'Calls', closes: 'Paid', left: 'Left',
     brk: 'Break', exit: 'Exit', add: '+ Add number', report: 'My report', note: 'Note', what: 'What happened?', skip: 'Skip this number', call_next: 'Call next'
@@ -244,7 +254,7 @@ const COACH = Object.freeze({
   lg: {
     next: 'Essimu eddako: {name}', dial: 'Kuba ennamba', answered: 'Bakwatidde?', yes: 'Yee, bakwatidde', no: 'Tebakwatidde',
     script: 'Goberera ekiwandiiko: omutendera {n} ku {total}', next_step: 'Omutendera oguddako', hi: 'Obasabye okuwandiika "Hello" ku WhatsApp eri makaug ku {wa}?',
-    hi_why: 'WhatsApp tetukkiriza kusooka kubawandiikira. Bwe bagamba hi, tusobola okubaweereza film ne link.', hi_done: 'Mbasabye okugamba Hello', hi_no: 'Bagaanye',
+    hi_why: 'Bwe batuwandiikira "Hi" ku WhatsApp, ttiimu yaffe esobola okubaddamu.', hi_done: 'Mbasabye okugamba Hello', hi_no: 'Bagaanye',
     end: 'Malako essimu', confirm: 'Kakasa ekibaddewo', save: 'Tereka oyite essimu eddako', must: 'Olina okumaliriza kino nga tonnaba kukuba ssimu ndala.',
     close_title: 'By\'olina okujjukira okuggalawo', offline: 'Tewali yintaneeti: tuterekera wano', synced: 'Yintaneeti ezze: biterekeddwa', calls: 'Essimu', closes: 'Abakkirizza', left: 'Basigadde',
     brk: 'Wummula', exit: 'Fuluma', add: '+ Yongerako ennamba', report: 'Lipoota yange', note: 'Ebiwandiiko', what: 'Kiki ekibaddewo?', skip: 'Buuka ennamba eno', call_next: 'Kuba essimu eddako'
@@ -259,7 +269,7 @@ const REPLY_RULES = Object.freeze([
   { match: /\b(list|post|upload|photos?|house|land|rent|plot)\b/i, reply: 'Great, send me the photos, the price and the area of each place here and I will put them up for you. – {caller}, makaug.com ' + SITE },
   { match: /\b(agent|join|register|sign ?up|account)\b/i, reply: 'Welcome! To join makaug.com as an agent it is UGX 50,000 a month by MoMo merchant code 27248497. Send me your name and areas and I will set you up. – {caller}' },
   { match: /\b(call|phone|ring|kuba)\b/i, reply: 'Hi, it is {caller} from makaug.com. I will call you shortly from this number. What time suits you?' },
-  { match: /^\s*(hi|hello|hey|hallo|gyebale|oli otya|ki kati)\b/i, reply: 'Hi! Thank you for messaging makaug.com. It is {caller}. Here is our short film and link: ' + SITE + '/agents . Agents pay UGX 50,000 a month (MoMo merchant code 27248497).' }
+  { match: /^\s*(hi|hello|hey|hallo|gyebale|oli otya|ki kati)\b/i, reply: 'Hi! Thank you for messaging makaug.com. It is {caller}. Here is our link: ' + SITE + '/agents . Agents pay UGX 50,000 a month (MoMo merchant code 27248497).' }
 ]);
 const DEFAULT_REPLY = 'Hi, it is {caller} from makaug.com, thank you for your message. I will get back to you shortly. ' + SITE;
 
@@ -277,6 +287,8 @@ function fill(text = '', vars = {}) {
 }
 
 module.exports = {
+  SMS_TEXTS,
+  SMS_TEXT_KEYS,
   MOMO_CODE,
   WHATSAPP_NUMBER,
   WHATSAPP_DISPLAY,

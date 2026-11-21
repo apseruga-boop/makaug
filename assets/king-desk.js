@@ -32,7 +32,7 @@
     'body.kd-on #page-admin-dashboard > .bg-gray-900{display:none}',
     'body.kd-on #admin-body > .bg-white.border.border-gray-200.rounded-2xl.p-6:first-child,body.kd-on #admin-command-centre,body.kd-on #king-control-map,body.kd-on #admin-workflow-tabs{display:none!important}',
     'body.kd-on #page-admin-dashboard > .max-w-6xl{max-width:none;margin:0 0 0 256px;padding:20px 24px 40px}',
-    '#kd-side{position:fixed;left:0;top:var(--kd-top,64px);bottom:0;width:244px;background:#10291f;color:#e2f0e8;overflow:auto;z-index:40;padding:12px 10px 20px;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:none}',
+    '#kd-side{position:fixed;left:0;top:var(--kd-top,64px);bottom:var(--kd-bot,0px);width:244px;background:#10291f;color:#e2f0e8;overflow:auto;z-index:40;padding:12px 10px 20px;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:none}',
     'body.kd-on #kd-side{display:block}',
     '#kd-side .kd-me{display:flex;gap:10px;align-items:center;background:rgba(255,255,255,.07);border-radius:14px;padding:10px;margin-bottom:12px}#kd-side .kd-av{width:34px;height:34px;border-radius:50%;background:#15603f;display:grid;place-items:center;font-weight:900;color:#fff}',
     '#kd-side .kd-g{font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#86b39a;margin:14px 8px 6px}',
@@ -76,11 +76,15 @@
     var pg = q('#page-admin-dashboard'); var pt = pg ? pg.getBoundingClientRect().top : 0;
     return Math.round(Math.max(pinned, Math.min(pt, 260), 0)) || 64;
   }
-  function placeSide() { document.documentElement.style.setProperty('--kd-top', headerHeight() + 'px'); }
+  // ...and stops where the dashboard ends, so it never covers anything below it.
+  function bottomGap() { var pg = q('#page-admin-dashboard'); if (!pg) return 0; var r = pg.getBoundingClientRect(); if (!r.height) return 0; return Math.max(0, Math.round(window.innerHeight - r.bottom)); }
+  function placeSide() { var st = document.documentElement.style; st.setProperty('--kd-top', headerHeight() + 'px'); st.setProperty('--kd-bot', bottomGap() + 'px'); }
+  // King's first name: the shared account is "MakaUg Super Admin", which is Arthur. Never "MakaUg".
+  function kingName() { if (window.makaugDeskShell) return window.makaugDeskShell.kingName(); var t = ((q('#admin-dashboard-name') || {}).textContent || '').trim().split(' ')[0]; return t && !/^(makaug|admin|king)$/i.test(t) ? t : 'King'; }
   function sideHtml() {
     var tab = currentTab();
-    var who = (q('#admin-dashboard-name') || {}).textContent || 'King';
-    return '<div class="kd-me"><div class="kd-av">' + esc((who.trim()[0] || 'K').toUpperCase()) + '</div><div><b>' + esc(who.trim() || 'King') + '</b><div style="font-size:12px;color:#86b39a">King · manager</div></div></div>'
+    var who = kingName();
+    return '<div class="kd-me"><div class="kd-av">' + esc((who.trim()[0] || 'K').toUpperCase()) + '</div><div><b>' + esc(who) + '</b><div style="font-size:12px;color:#86b39a">King · manager</div></div></div>'
       + NAV.map(function (g) {
         return '<div class="kd-g">' + esc(g[0]) + '</div>' + g[1].map(function (i) {
           var n = i[3] ? Number(S.counts[i[3]] || 0) : 0;
@@ -113,6 +117,7 @@
     placeSide();
     refreshCounts();
     setInterval(function () { if (adminVisible() && !document.hidden) refreshCounts(); }, 60000);
+    setInterval(function () { if (document.body.classList.contains('kd-on')) placeSide(); }, 1500); // content height changes without a scroll
     var t = currentTab();
     // King lands on Overview, unless a link asked for a tab.
     if (!/[?&#](tab|section)=/.test(location.search + location.hash) && (t === 'review' || !t)) go('k-overview'); else onTab(t);
@@ -134,16 +139,25 @@
     if (!d) return '<span class="kd-flat">same as ' + unit + '</span>';
     return '<span class="' + (d > 0 ? 'kd-up' : 'kd-down') + '">' + (d > 0 ? '▲ ' : '▼ ') + Math.abs(d).toLocaleString('en-GB') + ' vs ' + unit + '</span>';
   }
-  function weekChart(a, b) {
-    var max = Math.max.apply(null, a.concat(b).concat([1])); var days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  // This week (green) next to last week (grey), with a legend. Before calls were tracked, last week
+  // has no data: the chart says "not tracked" instead of drawing empty bars that read as zero.
+  function weekChart(a, b, untracked) {
+    var max = Math.max.apply(null, a.concat(untracked ? [] : b).concat([1])); var days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     var W = 560, H = 170, base = 140, slot = W / 7;
     var bars = days.map(function (d, i) {
       var x = i * slot + slot / 2; var h1 = Math.round(110 * b[i] / max); var h2 = Math.round(110 * a[i] / max);
-      return '<rect x="' + (x - 20) + '" y="' + (base - h1) + '" width="17" height="' + h1 + '" rx="3" fill="#cbd5e1"><title>Last week ' + d + ': ' + b[i] + '</title></rect>'
-        + '<rect x="' + (x + 2) + '" y="' + (base - h2) + '" width="17" height="' + h2 + '" rx="3" fill="#15603f"><title>This week ' + d + ': ' + a[i] + '</title></rect>'
+      var last = untracked
+        ? '<rect x="' + (x - 20) + '" y="' + (base - 110) + '" width="17" height="110" rx="3" fill="url(#kd-hatch)" stroke="#cbd5e1" stroke-dasharray="3 3"><title>Last week ' + d + ': not tracked</title></rect>'
+        : '<rect x="' + (x - 20) + '" y="' + (base - h1) + '" width="17" height="' + h1 + '" rx="3" fill="#94a3b8"><title>Last week ' + d + ': ' + b[i] + '</title></rect>';
+      return last + '<rect x="' + (x + 2) + '" y="' + (base - h2) + '" width="17" height="' + h2 + '" rx="3" fill="#15603f"><title>This week ' + d + ': ' + a[i] + '</title></rect>'
+        + (a[i] ? '<text x="' + (x + 10) + '" y="' + (base - h2 - 4) + '" font-size="10" text-anchor="middle" fill="#0f172a" font-weight="700">' + a[i] + '</text>' : '')
         + '<text x="' + x + '" y="' + (base + 16) + '" font-size="11" text-anchor="middle" fill="#64748b">' + d + '</text>';
     }).join('');
-    return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Team calls this week vs last week" data-kd-weekchart>' + bars + '</svg><div class="kd-muted" style="font-size:12px"><span style="display:inline-block;width:10px;height:10px;background:#cbd5e1;border-radius:2px"></span> Last week &nbsp; <span style="display:inline-block;width:10px;height:10px;background:#15603f;border-radius:2px"></span> This week</div>';
+    var defs = '<defs><pattern id="kd-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#f8fafc"/><line x1="0" y1="0" x2="0" y2="6" stroke="#e2e8f0" stroke-width="3"/></pattern></defs>';
+    var stamp = untracked ? '<g data-kd-lw-untracked><rect x="' + (W / 2 - 150) + '" y="34" width="300" height="24" rx="12" fill="#fff" stroke="#cbd5e1"/><text x="' + (W / 2) + '" y="50" font-size="12" text-anchor="middle" fill="#475569" font-weight="700">Last week: not tracked (calling screen started later)</text></g>' : '';
+    var key = function (style, label) { return '<span style="display:inline-flex;align-items:center;gap:6px;margin-right:14px"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;' + style + '"></span>' + label + '</span>'; };
+    return '<div class="kd-muted" style="font-size:12px;font-weight:700;margin:-4px 0 6px" data-kd-legend>' + key('background:#15603f', 'This week') + key(untracked ? 'background:#f8fafc;border:1px dashed #94a3b8' : 'background:#94a3b8', 'Last week' + (untracked ? ' (not tracked)' : '')) + '</div>'
+      + '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Team calls this week vs last week" data-kd-weekchart>' + defs + bars + stamp + '</svg>';
   }
   function funnel(p) {
     var steps = [['Contacted', p.contacted, '#15603f'], ['Interested', p.interested, '#1f8a5c'], ['Said Hi on WhatsApp', p.said_hi, '#2f9e6b'], ['Agent submitted', p.submitted, '#d97706'], ['Approved', p.approved, '#c2410c'], ['Paid = Closed', p.paid, '#be123c']];
@@ -154,7 +168,7 @@
   function greet() { var h = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Africa/Kampala' }).format(new Date())); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
   function drawOverview(o) {
     var el = q('#king-overview'); if (!el) return;
-    var who = ((q('#admin-dashboard-name') || {}).textContent || 'King').trim().split(' ')[0];
+    var who = kingName();
     var c = o.counts || {};
     var cw = o.calls_week || {}; var ln = o.live_notes || {};
     var needs = (o.needs_you || []).map(function (n) {
@@ -173,7 +187,7 @@
       + '<div class="kd-card kd-kpi" data-kd-kpi="calls"><div class="l">Calls this week</div><div class="v">' + cw.n + '</div>' + (o.tracking_since && !o.last_week_tracked ? '<span class="kd-flat" data-kd-untracked>last week not tracked (calls tracked from ' + esc(dayShort(o.tracking_since)) + ')</span>' : cw.change_pct == null ? '<span class="kd-flat">no calls last week</span>' : '<span class="' + (cw.change_pct >= 0 ? 'kd-up' : 'kd-down') + '">' + (cw.change_pct >= 0 ? '▲ ' : '▼ ') + Math.abs(cw.change_pct) + '% vs last week</span>') + '</div>'
       + '<div class="kd-card kd-kpi" data-kd-kpi="notes"><div class="l">Calls with live notes</div><div class="v">' + (ln.pct == null ? '—' : ln.pct + '%') + '</div>' + (ln.flagged ? '<span class="kd-down">' + ln.flagged + ' call' + (ln.flagged === 1 ? '' : 's') + ' flagged ⚠</span>' : '<span class="kd-flat">this week</span>') + '</div>'
       + '</div>'
-      + '<div class="kd-grid2"><div class="kd-card"><h3>Team calls · this week vs last week</h3>' + weekChart(cw.this_week || [0, 0, 0, 0, 0, 0, 0], cw.last_week || [0, 0, 0, 0, 0, 0, 0]) + (o.tracking_since && !o.last_week_tracked ? '<p class="kd-muted" style="font-size:12px;margin:6px 0 0" data-kd-week-note>Last week has no grey bars because the calling screen only started recording calls on ' + esc(dayShort(o.tracking_since)) + '. They appear from next week.</p>' : '') + '</div><div class="kd-card"><h3>Pipeline this month</h3>' + funnel(o.pipeline || {}) + '</div></div>'
+      + '<div class="kd-grid2"><div class="kd-card"><h3>Team calls · this week vs last week</h3>' + weekChart(cw.this_week || [0, 0, 0, 0, 0, 0, 0], cw.last_week || [0, 0, 0, 0, 0, 0, 0], !!(o.tracking_since && !o.last_week_tracked)) + (o.tracking_since && !o.last_week_tracked ? '<p class="kd-muted" style="font-size:12px;margin:6px 0 0" data-kd-week-note>Last week shows “not tracked” because the calling screen only started recording calls on ' + esc(dayShort(o.tracking_since)) + '. They appear from next week.</p>' : '') + '</div><div class="kd-card"><h3>Pipeline this month</h3>' + funnel(o.pipeline || {}) + '</div></div>'
       + '<div class="kd-grid2b"><div class="kd-card" data-kd-needs><h3>Needs you</h3>' + needs + '</div>'
       + '<div class="kd-card"><h3>Staff today</h3><div class="kd-scroll"><table class="kd-table" data-kd-staff><tr><th>Who</th><th>Calls</th><th>Target</th><th>Paid</th><th>Notes on</th></tr>' + staff + '</table></div></div></div>'
       + '<p class="kd-muted" style="font-size:11px;margin-top:8px" data-kd-updated>Updated ' + esc(when(new Date())) + ' Kampala · refreshes every minute</p></div>';
