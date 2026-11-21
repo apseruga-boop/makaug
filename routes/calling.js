@@ -139,7 +139,7 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
   // SMS from the company SIM (sms: link) and the agent-video unlock.
   const contact = require('../services/callingContact');
   router.get('/calling/attempts/:id/contact', wrap(async (req, res) => res.json({ ok: true, data: await contact.videoState(req.params.id) })));
-  router.post('/calling/attempts/:id/sms', wrap(async (req, res) => res.json({ ok: true, data: await contact.logSms(req.params.id, { personKey: req.body?.person_key, lang: req.body?.lang }) })));
+  router.post('/calling/attempts/:id/sms', wrap(async (req, res) => res.json({ ok: true, data: await contact.logSms(req.params.id, { personKey: req.body?.person_key, lang: req.body?.lang, template: req.body?.template }) })));
   router.post('/calling/attempts/:id/video-request', wrap(async (req, res) => {
     const r = await contact.requestVideo(req.params.id, { personKey: req.body?.person_key, videoKey: req.body?.video_key });
     await audit(req, 'calling_video_requested', { attempt_id: req.params.id, request_id: r.id });

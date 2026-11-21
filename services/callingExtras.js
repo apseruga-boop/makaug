@@ -415,7 +415,7 @@ async function timeline({ attemptId = '', phoneKey = '' } = {}) {
   return {
     phone_key_masked: maskPhoneLast3(head.phone || key), name: head.full_name || '',
     nodes,
-    sms: (await safeRows('SELECT at, person_key AS by, lang FROM call_sms_log WHERE phone_key = $1 ORDER BY at', [key])),
+    sms: (await safeRows('SELECT at, person_key AS by, lang, template FROM call_sms_log WHERE phone_key = $1 ORDER BY at', [key])),
     videos: (await safeRows('SELECT requested_at AS at, person_key AS by, video_key, status, decided_by, sent_at, sent_via, opens FROM call_video_requests WHERE phone_key = $1 ORDER BY requested_at', [key])),
     blocked: (await safeRows('SELECT reason, blocked_by AS by, blocked_at AS at FROM call_blocks WHERE phone_key = $1 AND removed_at IS NULL', [key]))[0] || null,
     outreach: evs.map((e) => ({ at: e.created_at, kind: e.kind, outcome: e.outcome, note: e.note, by: e.person_key })),

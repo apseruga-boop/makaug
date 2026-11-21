@@ -11202,19 +11202,25 @@
           // only inside the protected staff and King pages.
           if (document.getElementById("staff-calling-card") || document.getElementById("admin-calling-control")) {
             var callingScript = document.createElement("script");
-            callingScript.src = "/assets/calling-screen.js?v=20261121-desk2";
+            callingScript.src = "/assets/calling-screen.js?v=20261121-hf1";
             document.body.appendChild(callingScript);
           }
           // Staff sidebar desk (Dashboard, My performance, My pay, Profile, Settings).
+          // Desk app shell: no public chrome on the King or staff desk, a slim app header instead.
+          if (document.getElementById("staff-calling-card") || document.getElementById("king-overview")) {
+            var deskShellScript = document.createElement("script");
+            deskShellScript.src = "/assets/desk-shell.js?v=20261121-sh1";
+            document.body.appendChild(deskShellScript);
+          }
           if (document.getElementById("staff-calling-card")) {
             var staffDeskScript = document.createElement("script");
-            staffDeskScript.src = "/assets/staff-desk.js?v=20261121-sd1";
+            staffDeskScript.src = "/assets/staff-desk.js?v=20261121-sd2";
             document.body.appendChild(staffDeskScript);
           }
           // King's sidebar desk (Overview, Payments & MoMo, Removal requests, Staff).
           if (document.getElementById("king-overview")) {
             var kingDeskScript = document.createElement("script");
-            kingDeskScript.src = "/assets/king-desk.js?v=20261121-kd3";
+            kingDeskScript.src = "/assets/king-desk.js?v=20261121-kd4";
             document.body.appendChild(kingDeskScript);
             var kingTeamScript = document.createElement("script");
             kingTeamScript.src = "/assets/king-team.js?v=20261121-kt2";

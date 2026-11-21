@@ -1775,6 +1775,7 @@ async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
     sandbox: Boolean(me && me.sandbox),
     scripts: { variants: scripts.VARIANTS, objections: scripts.OBJECTIONS, greetings: scripts.GREETINGS, luganda_status: 'Ronald to check', routes: callRoutes.ROUTES, pickup: callRoutes.PICKUP },
     callback_min_hours: CALLBACK_MIN_HOURS,
+    sms_texts: scripts.SMS_TEXTS,
     templates: scripts.TEMPLATES,
     template_rules: scripts.TEMPLATE_RULES,
     sales_kit: scripts.salesKit(),

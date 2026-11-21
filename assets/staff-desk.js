@@ -59,7 +59,7 @@
       'body.sd-on #staff-body > #staff-header-card{display:none!important}',
       'body.sd-on #staff-body{margin-top:0}',
       'body.sd-on:not([data-sd-page="' + NEW_PAGES.join('"]):not([data-sd-page="') + '"]) #sd-pages{display:none!important}',
-      '#sd-side{position:fixed;left:0;top:var(--sd-top,64px);bottom:0;width:244px;background:#10291f;color:#e2f0e8;overflow:auto;z-index:40;padding:12px 10px 20px;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:none}',
+      '#sd-side{position:fixed;left:0;top:var(--sd-top,64px);bottom:var(--sd-bot,0px);width:244px;background:#10291f;color:#e2f0e8;overflow:auto;z-index:40;padding:12px 10px 20px;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:none}',
       'body.sd-on #sd-side{display:block}',
       '#sd-side .sd-me{display:flex;gap:10px;align-items:center;background:rgba(255,255,255,.07);border-radius:14px;padding:10px;margin-bottom:8px;cursor:pointer}',
       '.sd-av{width:36px;height:36px;border-radius:50%;background:#15603f;display:grid;place-items:center;font-weight:900;color:#fff;overflow:hidden;flex:0 0 auto}.sd-av img{width:100%;height:100%;object-fit:cover}',
@@ -116,7 +116,9 @@
     // The public header is hidden on the desk, so normally nothing is pinned and the sidebar starts at the very top.
     return Math.round(Math.max(pinned, 0));
   }
-  function placeSide() { document.documentElement.style.setProperty('--sd-top', headerHeight() + 'px'); }
+  // The sidebar stops where the dashboard ends, so it never covers anything below it.
+  function bottomGap() { var pg = q('#page-staff-dashboard'); if (!pg) return 0; var r = pg.getBoundingClientRect(); if (!r.height) return 0; return Math.max(0, Math.round(window.innerHeight - r.bottom)); }
+  function placeSide() { var st = document.documentElement.style; st.setProperty('--sd-top', headerHeight() + 'px'); st.setProperty('--sd-bot', bottomGap() + 'px'); }
   function staffVisible() { var b = q('#staff-body'); var pg = q('#page-staff-dashboard'); return !!(b && !b.classList.contains('hidden') && pg && pg.offsetParent !== null); }
 
   function me() { return (S.home && S.home.me) || {}; }
@@ -377,7 +379,7 @@
     var vis = staffVisible();
     if (!vis) { S.blocked = false; if (document.body.classList.contains('sd-on')) { document.body.classList.remove('sd-on', 'sd-drawer'); clearInterval(S.timer); } return; }
     if (S.blocked) return;
-    if (S.mounted) { if (!document.body.classList.contains('sd-on')) { document.body.classList.add('sd-on'); placeSide(); go(S.page || 'home'); } return; }
+    if (S.mounted) { if (!document.body.classList.contains('sd-on')) { document.body.classList.add('sd-on'); go(S.page || 'home'); } placeSide(); return; }
     if (S.busy) return; S.busy = true;
     loadHome().then(function (h) { S.busy = false; mount((h.me && h.me.scope) || ''); }, function (e) {
       S.busy = false;
