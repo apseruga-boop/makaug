@@ -1,0 +1,134 @@
+'use strict';
+
+/**
+ * King desk (Arthur, 21 Nov 2026): the numbers behind King's sidebar pages.
+ * Overview: money and paid agents this month, team calls this week vs last
+ * week, live-notes coverage, the pipeline, what needs King, and staff today.
+ * Payments & MoMo: money in (recorded payments and forwarded MoMo SMS).
+ * Read-only. Phone numbers leave here masked to the last 3 digits.
+ */
+const db = require('../config/database');
+const calling = require('./callingScreen');
+const removals = require('./agentRemovalRequestService');
+
+const TZ_OFFSET_H = 3; // Kampala, no DST
+async function rows(sql, params = []) { try { return (await db.query(sql, params)).rows || []; } catch (_) { return []; } }
+const num = (v) => Number(v || 0);
+const mask = (v) => { const d = String(v || '').replace(/\D/g, ''); return d.length >= 3 ? `•••${d.slice(-3)}` : ''; };
+// Names from MoMo SMS can carry a number: keep the words, mask the digits.
+const maskText = (v) => String(v || '').replace(/\+?\d[\d\s-]{5,}\d/g, (m) => mask(m)).slice(0, 80);
+
+/** Kampala calendar helpers (pure, tested). */
+function kampalaParts(now = new Date()) {
+  const k = new Date(now.getTime() + TZ_OFFSET_H * 3600000);
+  return { y: k.getUTCFullYear(), m: k.getUTCMonth(), d: k.getUTCDate(), dow: k.getUTCDay() };
+}
+const isoDay = (y, m, d) => new Date(Date.UTC(y, m, d)).toISOString().slice(0, 10);
+/** Midnight Kampala of a YYYY-MM-DD, as an instant. */
+const startOf = (day) => new Date(`${day}T00:00:00+03:00`);
+function ranges(now = new Date()) {
+  const p = kampalaParts(now);
+  const today = isoDay(p.y, p.m, p.d);
+  const mondayOffset = (p.dow + 6) % 7;
+  const weekStart = isoDay(p.y, p.m, p.d - mondayOffset);
+  const lastWeekStart = isoDay(p.y, p.m, p.d - mondayOffset - 7);
+  const monthStart = isoDay(p.y, p.m, 1);
+  const lastMonthStart = isoDay(p.y, p.m - 1, 1);
+  const sameDayLastMonth = isoDay(p.y, p.m - 1, p.d + 1); // exclusive end: month-to-date vs the same days last month
+  return { today, weekStart, lastWeekStart, monthStart, lastMonthStart, sameDayLastMonth, tomorrow: isoDay(p.y, p.m, p.d + 1), yesterday: isoDay(p.y, p.m, p.d - 1), elapsedWeekDays: mondayOffset + 1 };
+}
+const pctChange = (cur, prev) => (prev > 0 ? Math.round(((cur - prev) / prev) * 100) : null);
+
+/** Calls per weekday (Mon..Sun) for a week starting at `from`. A call = tapped, saved, not "no answer". */
+function weekSeries(list = [], from) {
+  const out = [0, 0, 0, 0, 0, 0, 0];
+  const t0 = startOf(from).getTime();
+  for (const r of list) {
+    const i = Math.floor((new Date(r.at).getTime() - t0) / 86400000);
+    if (i >= 0 && i < 7) out[i] += 1;
+  }
+  return out;
+}
+
+async function overview({ now = new Date() } = {}) {
+  const r = ranges(now);
+  const [moneyNow, moneyPrev, paidNow, paidPrev, callRows, notesRow, pipe, unmatched, noTx, perf, openReq, reqCount] = await Promise.all([
+    rows(`SELECT COALESCE(SUM(amount_ugx),0)::bigint AS v FROM revenue_entries WHERE direction='in' AND voided_at IS NULL AND paid_at >= $1 AND paid_at < $2`, [startOf(r.monthStart), startOf(r.tomorrow)]),
+    rows(`SELECT COALESCE(SUM(amount_ugx),0)::bigint AS v FROM revenue_entries WHERE direction='in' AND voided_at IS NULL AND paid_at >= $1 AND paid_at < $2`, [startOf(r.lastMonthStart), startOf(r.sameDayLastMonth)]),
+    rows(`SELECT COUNT(DISTINCT COALESCE(agent_id::text, payer_phone, id::text))::int AS v FROM revenue_entries WHERE direction='in' AND kind='agent_subscription' AND voided_at IS NULL AND paid_at >= $1`, [startOf(r.monthStart)]),
+    rows(`SELECT COUNT(DISTINCT COALESCE(agent_id::text, payer_phone, id::text))::int AS v FROM revenue_entries WHERE direction='in' AND kind='agent_subscription' AND voided_at IS NULL AND paid_at >= $1 AND paid_at < $2`, [startOf(r.lastMonthStart), startOf(r.sameDayLastMonth)]),
+    rows(`SELECT tapped_at AS at FROM call_attempts WHERE tapped_at >= $1 AND tapped_at < $2 AND status='done' AND COALESCE(outcome,'') <> 'no_answer'`, [startOf(r.lastWeekStart), startOf(r.tomorrow)]),
+    rows(`SELECT COUNT(*) FILTER (WHERE spoke)::int AS spoke,
+                 COUNT(*) FILTER (WHERE spoke AND LENGTH(TRIM(COALESCE(transcript->>'text',''))) >= 3)::int AS with_notes,
+                 COUNT(*) FILTER (WHERE 'no_transcript' = ANY(flags))::int AS flagged
+            FROM call_attempts WHERE tapped_at >= $1 AND status='done'`, [startOf(r.weekStart)]),
+    rows(`SELECT
+            (SELECT COUNT(DISTINCT phone_key) FROM call_attempts WHERE tapped_at >= $1 AND status='done')::int AS contacted,
+            (SELECT COUNT(DISTINCT phone_key) FROM call_attempts WHERE wrapped_at >= $1 AND outcome IN ('interested','signed_up'))::int AS interested,
+            (SELECT COUNT(DISTINCT phone_key) FROM call_attempts WHERE wrapped_at >= $1 AND (checklist->>'asked_hello') IN ('true','auto','manual'))::int AS said_hi,
+            (SELECT COUNT(*) FROM agents WHERE created_at >= $1)::int AS submitted,
+            (SELECT COUNT(*) FROM agents WHERE approved_at >= $1)::int AS approved`, [startOf(r.monthStart)]),
+    rows(`SELECT id, received_at, amount_ugx, counterparty FROM money_sms_inbox WHERE direction='in' AND matched_entry_id IS NULL AND received_at > NOW() - INTERVAL '14 days' ORDER BY received_at DESC LIMIT 5`),
+    rows(`SELECT COUNT(*)::int AS v FROM call_attempts WHERE 'no_transcript' = ANY(flags) AND tapped_at >= $1 AND tapped_at < $2`, [startOf(r.yesterday), startOf(r.today)]),
+    calling.performance({ now }).catch(() => ({ people: [] })),
+    removals.listRequests({ status: 'open', limit: 5 }).catch(() => []),
+    removals.countOpen().catch(() => 0)
+  ]);
+  const thisWeek = weekSeries(callRows, r.weekStart);
+  const lastWeek = weekSeries(callRows, r.lastWeekStart);
+  const sumTo = (a, n) => a.slice(0, n).reduce((t, v) => t + v, 0);
+  const callsWeek = sumTo(thisWeek, 7);
+  const callsLastWeekSoFar = sumTo(lastWeek, r.elapsedWeekDays);
+  const n = notesRow[0] || {};
+  const p = pipe[0] || {};
+  const needs = [];
+  for (const q of openReq) needs.push({ kind: 'removal', id: q.id, text: `${q.agent_name || 'Agent'} · “${q.note}” · asked by ${q.requested_by_name || 'staff'}`, at: q.created_at, open: 'k-removals' });
+  for (const s of unmatched) needs.push({ kind: 'momo', id: s.id, text: `UGX ${num(s.amount_ugx).toLocaleString('en-GB')} from “${maskText(s.counterparty) || 'unknown'}” · no matching payment`, at: s.received_at, open: 'k-payments' });
+  const noTxN = num(noTx[0]?.v);
+  if (noTxN) needs.push({ kind: 'flag', text: `${noTxN} call${noTxN === 1 ? '' : 's'} yesterday had no live-notes transcript`, open: 'performance' });
+  const behind = (perf.people || []).filter((x) => x.targets && x.calls < x.targets.calls_per_day && x.work && x.work.open_ms > 0);
+  return {
+    day: r.today,
+    money_month: { ugx: num(moneyNow[0]?.v), prev_ugx: num(moneyPrev[0]?.v), change_ugx: num(moneyNow[0]?.v) - num(moneyPrev[0]?.v) },
+    paid_agents_month: { n: num(paidNow[0]?.v), prev: num(paidPrev[0]?.v) },
+    calls_week: { n: callsWeek, last_week_same_days: callsLastWeekSoFar, change_pct: pctChange(callsWeek, callsLastWeekSoFar), this_week: thisWeek, last_week: lastWeek },
+    live_notes: { spoke: num(n.spoke), with_notes: num(n.with_notes), pct: n.spoke ? Math.round((100 * num(n.with_notes)) / num(n.spoke)) : null, flagged: num(n.flagged) },
+    pipeline: { contacted: num(p.contacted), interested: num(p.interested), said_hi: num(p.said_hi), submitted: num(p.submitted), approved: num(p.approved), paid: num(paidNow[0]?.v) },
+    needs_you: needs,
+    counts: { removal_requests: num(reqCount), momo_unmatched: unmatched.length, behind: behind.length },
+    staff_today: (perf.people || []).map((x) => {
+      const spoke = num(x.connected); const noTxP = num((x.flags || {}).no_transcript);
+      return { person_key: x.person_key, name: x.name, calls: num(x.calls), target_calls: num(x.targets?.calls_per_day), paid: num(x.closes), target_paid: num(x.targets?.closes_per_day), notes_pct: spoke ? Math.round((100 * (spoke - noTxP)) / spoke) : null, live: x.live || null };
+    })
+  };
+}
+
+async function payments({ days = 30, now = new Date() } = {}) {
+  const r = ranges(now);
+  const d = Math.max(1, Math.min(120, Number(days) || 30));
+  const [entries, sms, totals, last] = await Promise.all([
+    rows(`SELECT e.id, e.paid_at, e.amount_ugx, e.kind, e.method, e.account_key, e.payer_name, e.payer_phone, e.verified_status, e.verification_source, e.sms_id, e.recorded_by, a.full_name AS agent_name
+            FROM revenue_entries e LEFT JOIN agents a ON a.id = e.agent_id
+           WHERE e.direction='in' AND e.voided_at IS NULL AND e.paid_at > NOW() - ($1 || ' days')::interval
+           ORDER BY e.paid_at DESC LIMIT 200`, [String(d)]),
+    rows(`SELECT id, received_at, amount_ugx, counterparty, account_key, matched_entry_id IS NOT NULL AS matched
+            FROM money_sms_inbox WHERE direction='in' AND received_at > NOW() - ($1 || ' days')::interval
+           ORDER BY received_at DESC LIMIT 200`, [String(d)]),
+    rows(`SELECT COALESCE(SUM(amount_ugx) FILTER (WHERE paid_at >= $1),0)::bigint AS today,
+                 COALESCE(SUM(amount_ugx) FILTER (WHERE paid_at >= $2),0)::bigint AS week,
+                 COALESCE(SUM(amount_ugx) FILTER (WHERE paid_at >= $3),0)::bigint AS month
+            FROM revenue_entries WHERE direction='in' AND voided_at IS NULL AND paid_at >= LEAST($1,$2,$3)`, [startOf(r.today), startOf(r.weekStart), startOf(r.monthStart)]),
+    rows(`SELECT MAX(received_at) AS at FROM money_sms_inbox WHERE direction='in'`)
+  ]);
+  const t = totals[0] || {};
+  return {
+    totals: { today: num(t.today), week: num(t.week), month: num(t.month) },
+    forwarder_last_seen: last[0]?.at || null,
+    token_configured: String(process.env.MONEY_SMS_WEBHOOK_TOKEN || '').trim().length >= 16,
+    entries: entries.map((e) => ({ id: e.id, at: e.paid_at, amount_ugx: num(e.amount_ugx), kind: e.kind, method: e.method, account: e.account_key, who: e.agent_name || maskText(e.payer_name) || '', phone: mask(e.payer_phone), verified: e.verified_status, from_sms: Boolean(e.sms_id) || e.verification_source === 'sms_match', by: e.recorded_by || '' })),
+    sms: sms.map((s) => ({ id: s.id, at: s.received_at, amount_ugx: num(s.amount_ugx), from: maskText(s.counterparty), account: s.account_key, matched: Boolean(s.matched) })),
+    unmatched: sms.filter((s) => !s.matched).length
+  };
+}
+
+module.exports = { overview, payments, ranges, weekSeries, pctChange, mask, maskText, kampalaParts };

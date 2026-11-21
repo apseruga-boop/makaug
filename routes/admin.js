@@ -10,6 +10,7 @@ const { isStaffSharedKingTool } = require('../utils/staffSharedKingTools');
 const { registerOutreachTrackerRoutes } = require('./outreachTracker');
 const { registerStaffPerformanceRoutes } = require('./staffPerformance');
 const { registerCallingRoutes } = require('./calling');
+const { registerKingDeskRoutes } = require('./kingDesk');
 const { grantVerifiedTickIfComplete } = require('../services/agentVerifiedTickService');
 const { registerAgentManagerRoutes, HAS_ID_DOCUMENT_SQL: AGENT_HAS_ID_DOCUMENT_SQL } = require('./adminAgentManager');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
@@ -9030,6 +9031,8 @@ registerCallingRoutes(router, {
   writeAudit,
   actorLabel: (user) => moderationActorLabel(user)
 });
+
+registerKingDeskRoutes(router, { writeAudit });
 
 router.post('/agents/invite', async (req, res, next) => {
   try {

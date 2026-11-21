@@ -24582,7 +24582,7 @@ async function staffPerfSaveSettings(event, scope) {
 
 
 function setAdminWorkflowTab(tab = "review") {
-  const allowed = ["review", "youtube-sweep", "revenue", "live", "accounts", "outreach", "performance", "agents", "public", "field-agents", "staff", "whatsapp", "agent-reports", "notifications", "listings"];
+  const allowed = ["review", "youtube-sweep", "revenue", "live", "accounts", "outreach", "performance", "agents", "public", "field-agents", "staff", "whatsapp", "agent-reports", "notifications", "listings", "k-overview", "k-payments", "k-removals", "k-staff"];
   const previousTab = activeAdminWorkflowTab;
   // Tabs removed in the Oct 2026 King slim-down open where their content now lives.
   const moved = { "student-sweep": "review", actioned: "listings", ads: "revenue" };
@@ -24607,6 +24607,8 @@ function setAdminWorkflowTab(tab = "review") {
   if (activeAdminWorkflowTab === "performance") staffPerfEnsureLoaded("admin");
   if (activeAdminWorkflowTab === "agents") adminAgentManagerEnsureLoaded();
   if (activeAdminWorkflowTab === "public") adminPublicManagerEnsureLoaded();
+  // King desk pages (assets/king-desk.js) load their own data when shown.
+  try { document.dispatchEvent(new CustomEvent("makaug:admin-tab", { detail: { tab: activeAdminWorkflowTab, previous: previousTab } })); } catch (_) { /* old browsers */ }
 }
 
 async function fetchAdminPaginatedRows(path, headers, options = {}) {
