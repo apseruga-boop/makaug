@@ -3,6 +3,7 @@
 const desk = require('../services/staffDesk');
 const pipe = require('../services/staffPipeline');
 const leadsDesk = require('../services/staffLeads');
+const teamHub = require('../services/teamHub');
 
 /**
  * Staff desk pages (Arthur, 21 Nov 2026). Shared with staff logins through
@@ -55,6 +56,9 @@ function registerStaffDeskRoutes(router) {
   router.get('/desk/leads', wrap(async (req, res) => res.json({ ok: true, data: await leadsDesk.desk(leadUser(req), { filter: String(req.query?.filter || 'action') }) })));
   router.post('/desk/leads/from-chat', wrap(async (req, res) => res.status(201).json({ ok: true, data: await leadsDesk.addFromChat(leadUser(req), req.body?.message_id) })));
   router.post('/desk/leads/:key/outcome', wrap(async (req, res) => res.json({ ok: true, data: await leadsDesk.outcome(leadUser(req), req.params.key, req.body || {}) })));
+  // Team hub (ops 3c): King's messages to the team or to me, Rules, T&Cs, Working hours, how-to videos. Read only, plus "Got it".
+  router.get('/desk/hub', wrap(async (req, res) => res.json({ ok: true, data: await teamHub.staffHub(me(req).userId) })));
+  router.post('/desk/hub/read', wrap(async (req, res) => res.json({ ok: true, data: await teamHub.markRead(me(req).userId, req.body?.ids) })));
   // King only: one staff member's full profile, ID number included.
   router.get('/king/staff/:id/profile', wrap(async (req, res) => {
     if (!isKing(req)) return res.status(403).json({ ok: false, error: 'King only.' });

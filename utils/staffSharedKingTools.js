@@ -38,6 +38,9 @@ function isStaffSharedKingTool(path, method = 'GET') {
   // Staff Leads & WhatsApp (ops 3): read the queue, add a chat as a lead, record an outcome. Never sends.
   if (p === '/desk/leads' && m === 'GET') return true;
   if (m === 'POST' && (p === '/desk/leads/from-chat' || /^\/desk\/leads\/(ss:)?[0-9a-f-]{36}\/outcome$/i.test(p))) return true;
+  // Team hub (ops 3c): read King's messages and the team pages, and say "Got it". King writes from /king/hub only.
+  if (p === '/desk/hub' && m === 'GET') return true;
+  if (p === '/desk/hub/read' && m === 'POST') return true;
   if (m === 'POST' && (/^\/desk\/owed\/[0-9a-f-]{36}$/i.test(p) || /^\/desk\/owes\/[0-9a-f-]{36}\/chase$/i.test(p) || p === '/desk/missed' || /^\/desk\/missed\/\d+\/dismiss$/.test(p))) return true;
   if (p === '/calling/bootstrap' && m === 'GET') return true;
   if (p === '/calling/sessions' && m === 'POST') return true;

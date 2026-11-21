@@ -38,10 +38,11 @@
     ['Pipeline', [['pipeline', '🧭', 'My pipeline'], ['approve', '✅', 'Agents to approve'], ['owes', '💸', 'Owes us money'], ['missed', '📵', 'Missed calls']]],
     ['Work', [['review', '🏡', 'Properties to review', ['staff-booking-escalations', 'staff-review-grid'], 1], ['stays', '🛏️', 'Short stays', ['staff-short-term-control', 'staff-video-caption-conflicts'], 1],
       ['leads', '💬', 'Leads & WhatsApp', [], 1], ['harvest', '🔎', 'Harvest', ['staff-source-panel'], 1], ['tools', '🧰', 'Desk tools', ['staff-king-tools'], 1], ['howto', '🎓', 'How to', ['staff-training-panel'], 1]]],
+    ['Team', [['msgs', '📣', 'Messages from King'], ['rules', '📘', 'Rules, T&Cs & hours'], ['videos', '🎬', 'How-to videos']]],
     ['Me', [['pay', '💰', 'My pay'], ['connect', '📱', 'Connect your phone'], ['profile', '🪪', 'Profile'], ['settings', '⚙️', 'Settings', ['staff-settings-panel']]]]
   ];
   var KNOWN = ['staff-calling-card', 'staff-booking-escalations', 'staff-header-card', 'staff-short-term-control', 'staff-video-caption-conflicts', 'staff-settings-panel', 'staff-kpi-grid', 'staff-review-grid', 'staff-source-panel', 'staff-leads-grid', 'staff-home-seekers', 'staff-king-tools', 'staff-training-panel'];
-  var NEW_PAGES = ['home', 'perf', 'pay', 'profile', 'settings', 'pipeline', 'approve', 'owes', 'missed', 'leads'];
+  var NEW_PAGES = ['home', 'perf', 'pay', 'profile', 'settings', 'pipeline', 'approve', 'owes', 'missed', 'leads', 'msgs', 'rules', 'videos'];
   function items() { var out = []; NAV.forEach(function (g) { g[1].forEach(function (i) { out.push(i); }); }); return out; }
   function item(id) { return items().filter(function (i) { return i[0] === id; })[0]; }
   function allowed(i) { return !(i[4] && S.scope === 'caller'); }
@@ -146,7 +147,7 @@
         var list = g[1].filter(allowed);
         if (!list.length) return '';
         return '<div class="sd-g">' + esc(g[0]) + '</div>' + list.map(function (i) {
-          var badge = i[0] === 'home' && behind ? '<span class="sd-b" data-sd-badge="behind">behind</span>' : (i[0] === 'profile' && S.home && (S.home.profile_missing || []).length ? '<span class="sd-b" data-sd-badge="profile">' + S.home.profile_missing.length + '</span>' : (i[0] === 'leads' && S.leadsAction ? '<span class="sd-b red" data-sd-badge="leads">' + S.leadsAction + '</span>' : ''));
+          var badge = i[0] === 'home' && behind ? '<span class="sd-b" data-sd-badge="behind">behind</span>' : (i[0] === 'profile' && S.home && (S.home.profile_missing || []).length ? '<span class="sd-b" data-sd-badge="profile">' + S.home.profile_missing.length + '</span>' : (i[0] === 'leads' && S.leadsAction ? '<span class="sd-b red" data-sd-badge="leads">' + S.leadsAction + '</span>' : (i[0] === 'msgs' && S.hubUnread ? '<span class="sd-b red" data-sd-badge="msgs">' + S.hubUnread + '</span>' : '')));
           return '<button type="button" class="sd-i' + (i[0] === S.page ? ' on' : '') + '" data-sd-go="' + i[0] + '"><span>' + i[1] + '</span><span>' + esc(i[2]) + '</span>' + badge + '</button>';
         }).join('');
       }).join('')
@@ -181,6 +182,7 @@
     else if (page === 'missed') loadMissed(host);
     else if (page === 'stays') staysOffNote();
     else if (page === 'leads') loadLeads(host);
+    else if (page === 'msgs' || page === 'rules' || page === 'videos') loadHub(page, host);
     else if (page === 'calls' && window.makaugCalling && typeof window.makaugCalling.rescan === 'function') { try { window.makaugCalling.rescan(); } catch (x) { /* calling screen redraws itself */ } }
   }
   // Short stays switched off: the box used to say "Loading short stays…" for ever.
@@ -205,7 +207,7 @@
   }
   function loadHome() {
     loadOwed();
-    return api('/desk/home').then(function (h) { S.home = h; S.homeErr = ''; S.scope = (h.me && h.me.scope) || S.scope; document.body.classList.toggle('sd-caller', S.scope === 'caller'); drawSide(); if (S.scope !== 'caller' && (!S.leadsBadgeAt || Date.now() - S.leadsBadgeAt > 60000)) { S.leadsBadgeAt = Date.now(); leadsBadge(); } if (S.page === 'home') drawHome(); return h; },
+    return api('/desk/home').then(function (h) { S.home = h; S.homeErr = ''; S.scope = (h.me && h.me.scope) || S.scope; document.body.classList.toggle('sd-caller', S.scope === 'caller'); drawSide(); if (S.scope !== 'caller' && (!S.leadsBadgeAt || Date.now() - S.leadsBadgeAt > 60000)) { S.leadsBadgeAt = Date.now(); leadsBadge(); } if (!S.hubBadgeAt || Date.now() - S.hubBadgeAt > 60000) { S.hubBadgeAt = Date.now(); hubBadge(); } if (S.page === 'home') drawHome(); return h; },
       function (e) { S.homeErr = e.message; if (S.page === 'home') drawHome(); throw e; });
   }
   function greeting(min) { return min < 12 * 60 ? 'Good morning' : (min < 17 * 60 ? 'Good afternoon' : 'Good evening'); }
@@ -258,6 +260,7 @@
     host.innerHTML = '<div class="sd-page" data-sd-home>'
       + '<div class="sd-row"><div style="display:flex;gap:12px;align-items:center"><div class="sd-av" style="width:52px;height:52px;font-size:20px">' + avatar(m.photo, m.first_name) + '</div><div><h1 class="sd-h1" data-sd-greeting>' + greeting(n(h.now_min)) + ', ' + esc(m.first_name || 'there') + '</h1><p class="sd-sub">' + esc(niceDay(h.day)) + ' · targets today: ' + n(t.calls) + ' calls, ' + n(t.interested) + ' interested, ' + n(t.paid) + ' paid</p></div></div><button type="button" class="sd-btn" data-sd-go-calls>📞 Start calling</button></div>'
       + banner + nudge
+      + (S.hubUnread ? '<div class="sd-banner info" data-sd-hub-nudge>📣 ' + (S.hubUnread === 1 ? 'One new message' : S.hubUnread + ' new messages') + ' from King. <button type="button" class="sd-btn" data-sd-go-msgs>Read</button></div>' : '')
       + (S.owed ? '<div class="sd-card sd-owed" data-sd-owed style="border-color:#fecaca;background:#fef2f2;margin-top:12px"><div class="sd-row"><b>📵 ' + (S.owed === 1 ? 'One call needs' : S.owed + ' calls need') + ' an outcome before you call again.</b><button type="button" class="sd-btn" data-sd-owed-go>Answer now</button></div></div>' : '')
       + '<div class="sd-kpis">' + kpi('Calls today', n(d.calls), n(t.calls), '#15603f') + kpi('Interested', n(d.interested), n(t.interested), '#2563eb') + kpi('Paid', n(d.paid), n(t.paid), '#d97706') + kpi('Talk time', dur(d.talk_s), 0, '', 'on calls today') + '</div>'
       + '<div class="sd-grid2"><div class="sd-card" data-sd-week><div class="sd-row"><h3>This week vs last week</h3><span>' + thisW + ' calls · ' + change(thisW, lastW, 'week') + '</span></div>' + weekChart(wk.this_week, wk.last_week, wk.elapsed_days) + '</div>'
@@ -266,6 +269,7 @@
       + money + '</div>';
     qa('[data-sd-go-calls]', host).forEach(function (b) { b.onclick = function () { go('calls'); }; });
     qa('[data-sd-go-profile]', host).forEach(function (b) { b.onclick = function () { go('profile'); }; });
+    qa('[data-sd-go-msgs]', host).forEach(function (b) { b.onclick = function () { go('msgs'); }; });
     qa('[data-sd-go-pay]', host).forEach(function (b) { b.onclick = function () { go('pay'); }; });
     var og = q('[data-sd-owed-go]', host); if (og) og.onclick = openOwed;
   }
@@ -438,6 +442,13 @@
         q('[data-sl-save]', box).onclick = function () { var val = q('[data-sl-at]', box).value; if (!val) { window.alert('Pick the day and time.'); return; } save(new Date(val).toISOString()); };
       }; });
     }, function (e) { failed(host, 'Leads & WhatsApp', e); });
+  }
+  // Team hub (ops 3c): assets/team-hub.js draws the pages; the desk keeps the unread badge and the home nudge.
+  function hubUnread(nu) { var was = S.hubUnread; S.hubUnread = n(nu); if (was !== S.hubUnread) { drawSide(); if (S.page === 'home') drawHome(); } }
+  function hubBadge() { if (!window.teamHub) return; window.teamHub.unread().then(hubUnread, function () { /* badge only */ }); }
+  function loadHub(page, host) {
+    if (!window.teamHub) { host.innerHTML = '<div class="sd-page"><p class="sd-sub">Loading…</p></div>'; setTimeout(function () { if (S.page === page) loadHub(page, host); }, 400); return; }
+    window.teamHub.staff(page, host, hubUnread);
   }
   function leadsBadge() { if (S.scope === 'caller') return; api('/desk/leads?filter=action').then(function (d) { S.leadsAction = n(d.counts && d.counts.need_action); drawSide(); }, function () { /* badge only */ }); }
 
