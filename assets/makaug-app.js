@@ -16287,6 +16287,28 @@ function staffSearchReviewQueue(value = "") {
   }, 300);
 }
 
+// Staff never send WhatsApp (Arthur, 21 Nov 2026): leads and chats get a text
+// (sms:) or a call (tel:) on the company phone, and phones show as •••last 3.
+function staffIsKingLogin() {
+  return ["admin", "super_admin"].includes(String(authState?.user?.role || "").toLowerCase());
+}
+function staffMaskPhone(value) {
+  const d = String(value || "").replace(/[^0-9]/g, "");
+  return d.length >= 7 ? `•••${d.slice(-3)}` : "";
+}
+function staffDialNumber(value) {
+  let d = String(value || "").replace(/[^0-9]/g, "");
+  if (d.length === 10 && d[0] === "0") d = `256${d.slice(1)}`;
+  else if (d.length === 9) d = `256${d}`;
+  return d.length >= 11 && d.length <= 13 ? `+${d}` : "";
+}
+function staffTextCallLinks(value) {
+  const dial = staffDialNumber(value);
+  if (!dial) return "";
+  return `<a href="sms:${adminAttr(dial)}" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-black">✉️ Text</a>
+          <a href="tel:${adminAttr(dial)}" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-black">📞 Call</a>`;
+}
+
 function renderStaffLeads(rows = []) {
   const wrap = document.getElementById("staff-leads-list");
   if (!wrap) return;
@@ -16295,7 +16317,7 @@ function renderStaffLeads(rows = []) {
     return;
   }
   wrap.innerHTML = rows.map((lead) => {
-    const contact = lead.contact_name || lead.contact_phone || lead.contact_email || lead.contact_whatsapp || "Contact pending";
+    const contact = lead.contact_name || staffMaskPhone(lead.contact_phone || lead.contact_whatsapp) || "Contact pending";
     const label = [lead.location, lead.category, lead.listing_title].filter(Boolean).join(" • ") || lead.lead_type || "Lead";
     return `
       <article class="border border-gray-200 rounded-xl p-3">
@@ -16306,7 +16328,7 @@ function renderStaffLeads(rows = []) {
         <div class="mt-3 flex flex-wrap gap-2">
           <button type="button" onclick="staffClaimLead(${adminListingIdArg(lead.id)})" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-black">Claim</button>
           <button type="button" onclick="staffAddLeadNote(${adminListingIdArg(lead.id)})" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-black">Add note</button>
-          ${lead.contact_phone || lead.contact_whatsapp ? `<a href="https://wa.me/${adminAttr(String(lead.contact_whatsapp || lead.contact_phone).replace(/[^0-9]/g, ""))}" target="_blank" rel="noopener noreferrer" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-black">WhatsApp</a>` : ""}
+          ${staffTextCallLinks(lead.contact_phone || lead.contact_whatsapp)}
         </div>
       </article>`;
   }).join("");
@@ -16360,7 +16382,8 @@ function renderStaffWhatsapp(rows = [], whatsapp = {}) {
   const wrap = document.getElementById("staff-whatsapp-list");
   if (!wrap) return;
   const bridge = staffWhatsappBridgeCopy(whatsapp);
-  const banner = `
+  // The bridge heartbeat is a King/engineering detail; staff only read chats here.
+  const banner = !staffIsKingLogin() ? `<div class="rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs text-gray-600">WhatsApp is read only here. Reply with ✉️ Text or 📞 Call, never on WhatsApp.</div>` : `
     <div class="rounded-xl border ${bridge.online ? "border-emerald-100 bg-emerald-50 text-emerald-950" : "border-amber-100 bg-amber-50 text-amber-950"} p-3 text-xs">
       <div class="font-black">WhatsApp bridge: ${adminEscape(bridge.label)}</div>
       <div class="mt-1">${adminEscape(bridge.detail || "No hosted bridge heartbeat returned yet.")}</div>
@@ -16374,12 +16397,12 @@ function renderStaffWhatsapp(rows = [], whatsapp = {}) {
     const phone = String(item.phone || "").replace(/[^0-9]/g, "");
     return `
       <article class="border border-gray-200 rounded-xl p-3">
-        <div class="font-black text-gray-900">${adminEscape(item.phone || "WhatsApp contact")}</div>
+        <div class="font-black text-gray-900">${adminEscape(staffMaskPhone(item.phone) || "WhatsApp contact")}</div>
         <div class="text-xs text-gray-500 mt-1">${adminEscape(item.category || "conversation")} • ${adminEscape(item.priority || "normal")} • ${adminEscape(item.status || "open")}</div>
         ${item.latest_preview ? `<div class="mt-2 text-xs text-gray-700">${adminEscape(item.latest_preview).slice(0, 180)}</div>` : ""}
         <div class="mt-2 text-[11px] text-gray-500">Last message: ${adminEscape(staffDate(item.last_message_at || item.updated_at))} • Intent: ${adminEscape(item.last_intent || "not tagged")}</div>
         <div class="mt-3 flex flex-wrap gap-2">
-          ${phone ? `<a href="https://wa.me/${adminAttr(phone)}" target="_blank" rel="noopener noreferrer" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-black">Open WhatsApp</a>` : ""}
+          ${staffTextCallLinks(phone)}
         </div>
       </article>`;
   }).join("")}`;
@@ -56627,7 +56650,25 @@ async function loadStaffHomeSeekers() {
   }
 }
 
+// King keeps the full home-seekers card (consent tick, alert previews) on
+// King desk › Leads & WhatsApp › Home seekers & consent.
+let staffHomeSeekersMode = "staff";
+async function loadKingHomeSeekers() {
+  staffHomeSeekersMode = "king";
+  await loadStaffHomeSeekers();
+}
 function ensureStaffHomeSeekersSection() {
+  if (staffHomeSeekersMode === "king") {
+    const kingHost = document.getElementById("king-home-seekers");
+    if (!kingHost) return null;
+    let kingSection = kingHost.querySelector("section");
+    if (!kingSection) {
+      kingSection = document.createElement("section");
+      kingHost.appendChild(kingSection);
+    }
+    if (!kingSection.querySelector("[data-home-seekers-body]")) kingSection.innerHTML = staffHomeSeekersShell();
+    return kingSection;
+  }
   let section = document.getElementById("staff-home-seekers");
   if (section) return section;
   const body = document.getElementById("staff-body");
@@ -56635,7 +56676,16 @@ function ensureStaffHomeSeekersSection() {
   section = document.createElement("section");
   section.id = "staff-home-seekers";
   section.className = "bg-white border border-gray-200 rounded-2xl p-6";
-  section.innerHTML = `
+  section.innerHTML = staffHomeSeekersShell();
+  const anchor = document.getElementById("staff-booking-escalations");
+  if (anchor && anchor.parentElement === body) anchor.insertAdjacentElement("afterend", section);
+  else body.insertBefore(section, body.firstChild);
+  return section;
+}
+
+function staffHomeSeekersShell() {
+  const king = staffIsKingLogin();
+  return `
     <div class="flex items-start justify-between gap-4 flex-wrap">
       <div>
         <h3 class="text-lg font-black text-gray-900">New home seekers <span id="staff-home-seekers-badge" class="hidden ml-1 align-middle rounded-full bg-red-500 px-2 py-0.5 text-xs font-black text-white"></span></h3>
@@ -56643,14 +56693,10 @@ function ensureStaffHomeSeekersSection() {
       </div>
       <div class="flex gap-2 flex-wrap">
         <button type="button" onclick="loadStaffHomeSeekers()" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-black text-gray-700">Refresh</button>
-        <button type="button" onclick="runStaffWhatsappDigestPreview()" class="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-black text-emerald-800">Build today's alert previews</button>
+        ${king ? `<button type="button" onclick="runStaffWhatsappDigestPreview()" class="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-black text-emerald-800">Build today's alert previews</button>` : ""}
       </div>
     </div>
     <div data-home-seekers-body class="mt-4 text-sm text-gray-600">Loading…</div>`;
-  const anchor = document.getElementById("staff-booking-escalations");
-  if (anchor && anchor.parentElement === body) anchor.insertAdjacentElement("afterend", section);
-  else body.insertBefore(section, body.firstChild);
-  return section;
 }
 
 function staffShortDate(value) {
@@ -56663,6 +56709,7 @@ function staffShortDate(value) {
 function renderStaffHomeSeekers() {
   const section = ensureStaffHomeSeekersSection();
   if (!section) return;
+  const king = staffIsKingLogin();
   const data = staffHomeSeekersData || {};
   const c = data.counts || {};
   const badge = document.getElementById("staff-home-seekers-badge");
@@ -56676,7 +56723,7 @@ function renderStaffHomeSeekers() {
     .reduce((sum, row) => sum + Number(row.count || 0), 0);
   wa.preview = waCount("preview");
   wa.pending = waCount("pending");
-  const waRecent = (Array.isArray(wa.recent) ? wa.recent : []).slice(0, 5).map((row) => `
+  const waRecent = (king && Array.isArray(wa.recent) ? wa.recent : []).slice(0, 5).map((row) => `
     <li class="py-2 border-t border-gray-100"><span class="text-xs font-semibold text-gray-700">${adminEscape(row.kind)} · ${adminEscape(row.status)} · ${adminEscape(row.phone || "")} · ${Number(row.listing_count || 0)} listings</span>
       <pre class="mt-1 whitespace-pre-wrap text-[11px] text-gray-600 bg-gray-50 rounded-lg p-2">${adminEscape(row.message_preview || "")}</pre></li>`).join("");
   const today = new Date().toISOString().slice(0, 10);
@@ -56684,15 +56731,15 @@ function renderStaffHomeSeekers() {
   const signups = (data.signups || []).map((u) => `
     <tr class="border-t border-gray-100 align-top">
       <td class="py-2 pr-3"><div class="font-semibold text-gray-900">${adminEscape(u.name)}</div><div class="text-xs text-gray-500">${adminEscape(u.audience)} · ${adminEscape(staffShortDate(u.created_at))}</div></td>
-      <td class="py-2 pr-3 text-xs">${adminEscape(u.phone || "")}${u.email ? `<br>${adminEscape(u.email)}` : ""}<br><span class="text-gray-500">Verified: ${adminEscape(u.verified)}</span></td>
+      <td class="py-2 pr-3 text-xs">${king ? `${adminEscape(u.phone || "")}${u.email ? `<br>${adminEscape(u.email)}` : ""}` : adminEscape(staffMaskPhone(u.phone))}<br><span class="text-gray-500">Verified: ${adminEscape(u.verified)}</span></td>
       <td class="py-2 pr-3 text-xs">${u.saves}</td>
-      <td class="py-2 text-xs">
+      <td class="py-2 text-xs">${!king ? `<span class="text-gray-600">${u.marketing_opt_in ? "WhatsApp: yes" : "WhatsApp: no"}</span>` : `
         <label class="inline-flex items-center gap-1.5 font-semibold text-gray-800">
           <input type="checkbox" data-in-person-user="${adminAttr(u.id)}" ${u.marketing_opt_in ? "checked" : ""} class="accent-green-700"> ${u.marketing_opt_in && !["in_person", "staff_in_person"].includes(u.marketing_consent_source) ? "WhatsApp yes (not in person)" : "Agreed in person"}
         </label>
         <input type="date" data-in-person-date="${adminAttr(u.id)}" max="${today}" value="${adminAttr((u.marketing_consent_source === "staff_in_person" && u.marketing_consent_at) ? String(u.marketing_consent_at).slice(0, 10) : today)}" class="mt-1 block border border-gray-200 rounded-lg px-2 py-1 text-xs">
         <button type="button" onclick="saveStaffInPersonConsent('${adminAttr(u.id)}')" class="mt-1 rounded-lg border border-gray-300 px-2 py-1 text-[11px] font-black">Save</button>
-        <div class="mt-1 text-[11px] text-gray-500">${u.marketing_opt_in ? `WhatsApp: yes (${adminEscape(u.marketing_consent_source || "recorded")}${u.marketing_consent_at ? `, ${adminEscape(String(u.marketing_consent_at).slice(0, 10))}` : ""})` : "WhatsApp: no"}</div>
+        <div class="mt-1 text-[11px] text-gray-500">${u.marketing_opt_in ? `WhatsApp: yes (${adminEscape(u.marketing_consent_source || "recorded")}${u.marketing_consent_at ? `, ${adminEscape(String(u.marketing_consent_at).slice(0, 10))}` : ""})` : "WhatsApp: no"}</div>`}
       </td>
     </tr>`).join("");
   const saves = (data.saves || []).slice(0, 20).map((row) => `

@@ -35,6 +35,9 @@ function isStaffSharedKingTool(path, method = 'GET') {
   if (p === '/desk/profile' && m === 'PUT') return true;
   // Staff desk 3b: own pipeline pages (outcome owed, pipeline, agents to approve, owes us money, missed calls).
   if (['/desk/owed', '/desk/pipeline', '/desk/approve', '/desk/owes', '/desk/missed'].includes(p) && m === 'GET') return true;
+  // Staff Leads & WhatsApp (ops 3): read the queue, add a chat as a lead, record an outcome. Never sends.
+  if (p === '/desk/leads' && m === 'GET') return true;
+  if (m === 'POST' && (p === '/desk/leads/from-chat' || /^\/desk\/leads\/(ss:)?[0-9a-f-]{36}\/outcome$/i.test(p))) return true;
   if (m === 'POST' && (/^\/desk\/owed\/[0-9a-f-]{36}$/i.test(p) || /^\/desk\/owes\/[0-9a-f-]{36}\/chase$/i.test(p) || p === '/desk/missed' || /^\/desk\/missed\/\d+\/dismiss$/.test(p))) return true;
   if (p === '/calling/bootstrap' && m === 'GET') return true;
   if (p === '/calling/sessions' && m === 'POST') return true;

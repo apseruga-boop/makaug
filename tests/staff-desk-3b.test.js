@@ -204,6 +204,6 @@ test('client: owed modal, call summary, history, the four pages; no WhatsApp sen
   for (const f of [svc, sd]) { assert.doesNotMatch(f, /wa\.me|send the film|Share on WhatsApp/i); }
   assert.doesNotMatch(svc, /whatsapp_messages[^`]*\b(INSERT|UPDATE|DELETE)\b/i);
   const idx = read('index.html');
-  assert.match(idx, /staff-desk\.js\?v=20261121-sd3/);
+  assert.match(idx, /staff-desk\.js\?v=20261121-(sd3|ops3)/);
   assert.match(idx, /calling-screen\.js\?v=20261121-(pipe1|ops2)/);
 });
