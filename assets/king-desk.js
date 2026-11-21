@@ -25,7 +25,7 @@
   // made of parts of the existing tabs; the chips at the top switch between the parts. Nothing is deleted:
   // every old tab is still reachable from a chip, and "Full calling desk" shows the old page whole.
   var NAV = [
-    ['King', [['k-overview', '👑', 'Overview'], ['v:team', '👥', 'Team & calls'], ['v:staff', '🧾', 'Staff, pay & targets'], ['k-hub', '📣', 'Team hub'], ['v:money', '💳', 'Money in', 'momo_unmatched']]],
+    ['King', [['k-overview', '👑', 'Overview'], ['v:team', '👥', 'Team & calls'], ['v:staff', '🧾', 'Staff, pay & targets'], ['v:hub', '📣', 'Team hub', 'lessons_waiting'], ['v:money', '💳', 'Money in', 'momo_unmatched']]],
     ['To review', [['review:found', '🌐', 'Found online to review', 'found_online'], ['review:agent', '🏠', 'Agent properties to review', 'agent_props'], ['review:stays', '🛏️', 'Short stays', 'short_stays'], ['k-removals', '🗑️', 'Removal requests', 'removal_requests'], ['agent-reports', '🚩', 'Agent reports']]],
     ['Agents & listings', [['v:agents', '👩‍💼', 'Agents & owners'], ['listings', '📋', 'All listings'], ['live', '⭐', 'Live & featured']]],
     ['Leads & calls', [['v:leads', '💬', 'Leads & WhatsApp'], ['v:lists', '📞', 'Calling lists']]],
@@ -36,6 +36,7 @@
   var VIEWS = {
     'v:team': [['Team', 'k-team', null], ['Calls today', 'performance', 'team']],
     'v:staff': [['Staff & pay', 'k-staff', null], ['Commission, targets & logins', 'performance', 'staff'], ['Staff logins (advanced)', 'staff', null]],
+    'v:hub': [['Messages, rules & videos', 'k-hub', null], ['Rejections & lessons', 'k-lessons', null]],
     'v:money': [['Payments & MoMo', 'k-payments', null], ['Cash check & payment SMS proofs', 'performance', 'money'], ['Sales', 'revenue', null], ['Ad slots', 'revenue', 'ads']],
     'v:agents': [['Agents', 'agents', null], ['Owners', 'public', null], ['Find a person', 'accounts', null]],
     'v:leads': [['WhatsApp inbox', 'whatsapp', null], ['Lead desk & CRM', 'notifications', 'leads'], ['Find a person', 'accounts', null], ['Home seekers & consent', 'whatsapp', 'seekers']],
