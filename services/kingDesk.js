@@ -71,12 +71,27 @@ async function overview({ now = new Date() } = {}) {
                  COUNT(*) FILTER (WHERE spoke AND LENGTH(TRIM(COALESCE(transcript->>'text',''))) >= 3)::int AS with_notes,
                  COUNT(*) FILTER (WHERE 'no_transcript' = ANY(flags))::int AS flagged
             FROM call_attempts WHERE tapped_at >= $1 AND status='done'`, [startOf(r.weekStart)]),
-    rows(`SELECT
-            (SELECT COUNT(DISTINCT phone_key) FROM call_attempts WHERE tapped_at >= $1 AND status='done')::int AS contacted,
-            (SELECT COUNT(DISTINCT phone_key) FROM call_attempts WHERE wrapped_at >= $1 AND outcome IN ('interested','signed_up'))::int AS interested,
-            (SELECT COUNT(DISTINCT phone_key) FROM call_attempts WHERE wrapped_at >= $1 AND (checklist->>'asked_hello') IN ('true','auto','manual'))::int AS said_hi,
-            (SELECT COUNT(*) FROM agents WHERE created_at >= $1)::int AS submitted,
-            (SELECT COUNT(*) FROM agents WHERE approved_at >= $1)::int AS approved`, [startOf(r.monthStart)]),
+    // A true funnel (Arthur, 21 Nov 2026): every step counts only the people who passed the step before it,
+    // so no step can be bigger than the one above. Sign-ups that did not come from a call are counted apart.
+    rows(`WITH called AS (
+            SELECT phone_key,
+                   BOOL_OR(outcome IN ('interested','signed_up','promised','will_list')) AS interested,
+                   BOOL_OR((checklist->>'asked_hello') IN ('true','auto','manual')) AS said_hi
+              FROM call_attempts WHERE tapped_at >= $1 AND status='done' AND phone_key IS NOT NULL GROUP BY phone_key),
+          ag AS (
+            SELECT a.id, right(regexp_replace(COALESCE(a.phone,''), '\\D', '', 'g'), 9) AS k, a.approved_at,
+                   EXISTS (SELECT 1 FROM revenue_entries e WHERE e.agent_id = a.id AND e.direction='in' AND e.kind='agent_subscription' AND e.voided_at IS NULL AND e.paid_at >= $1) AS paid
+              FROM agents a WHERE a.created_at >= $1),
+          j AS (SELECT ag.*, c.phone_key IS NOT NULL AND c.interested AND c.said_hi AS from_call FROM ag LEFT JOIN called c ON c.phone_key = ag.k AND length(ag.k) = 9)
+          SELECT (SELECT COUNT(*) FROM called)::int AS contacted,
+                 (SELECT COUNT(*) FROM called WHERE interested)::int AS interested,
+                 (SELECT COUNT(*) FROM called WHERE interested AND said_hi)::int AS said_hi,
+                 (SELECT COUNT(*) FROM j WHERE from_call)::int AS submitted,
+                 (SELECT COUNT(*) FROM j WHERE from_call AND approved_at IS NOT NULL)::int AS approved,
+                 (SELECT COUNT(*) FROM j WHERE from_call AND approved_at IS NOT NULL AND paid)::int AS paid_funnel,
+                 (SELECT COUNT(*) FROM j WHERE NOT from_call)::int AS other_submitted,
+                 (SELECT COUNT(*) FROM j WHERE NOT from_call AND approved_at IS NOT NULL)::int AS other_approved,
+                 (SELECT COUNT(*) FROM called WHERE said_hi AND NOT interested)::int AS said_hi_not_interested`, [startOf(r.monthStart)]),
     rows(`SELECT id, received_at, amount_ugx, counterparty FROM money_sms_inbox WHERE direction='in' AND matched_entry_id IS NULL AND received_at > NOW() - INTERVAL '14 days' ORDER BY received_at DESC LIMIT 5`),
     rows(`SELECT COUNT(*)::int AS v FROM call_attempts WHERE 'no_transcript' = ANY(flags) AND tapped_at >= $1 AND tapped_at < $2`, [startOf(r.yesterday), startOf(r.today)]),
     calling.performance({ now }).catch(() => ({ people: [] })),
@@ -96,13 +111,16 @@ async function overview({ now = new Date() } = {}) {
   const noTxN = num(noTx[0]?.v);
   if (noTxN) needs.push({ kind: 'flag', text: `${noTxN} call${noTxN === 1 ? '' : 's'} yesterday had no live-notes transcript`, open: 'performance' });
   const behind = (perf.people || []).filter((x) => x.targets && x.calls < x.targets.calls_per_day && x.work && x.work.open_ms > 0);
+  const trackedFrom = await calling.trackingSince().catch(() => null);
   return {
     day: r.today,
+    tracking_since: trackedFrom,
+    last_week_tracked: Boolean(trackedFrom && trackedFrom <= r.lastWeekStart),
     money_month: { ugx: num(moneyNow[0]?.v), prev_ugx: num(moneyPrev[0]?.v), change_ugx: num(moneyNow[0]?.v) - num(moneyPrev[0]?.v) },
     paid_agents_month: { n: num(paidNow[0]?.v), prev: num(paidPrev[0]?.v) },
     calls_week: { n: callsWeek, last_week_same_days: callsLastWeekSoFar, change_pct: pctChange(callsWeek, callsLastWeekSoFar), this_week: thisWeek, last_week: lastWeek },
     live_notes: { spoke: num(n.spoke), with_notes: num(n.with_notes), pct: n.spoke ? Math.round((100 * num(n.with_notes)) / num(n.spoke)) : null, flagged: num(n.flagged) },
-    pipeline: { contacted: num(p.contacted), interested: num(p.interested), said_hi: num(p.said_hi), submitted: num(p.submitted), approved: num(p.approved), paid: num(paidNow[0]?.v) },
+    pipeline: { contacted: num(p.contacted), interested: num(p.interested), said_hi: num(p.said_hi), submitted: num(p.submitted), approved: num(p.approved), paid: num(p.paid_funnel), paid_all: num(paidNow[0]?.v), other_submitted: num(p.other_submitted), other_approved: num(p.other_approved), said_hi_not_interested: num(p.said_hi_not_interested) },
     needs_you: needs,
     counts: { removal_requests: num(reqCount), momo_unmatched: unmatched.length, behind: behind.length, targets_unset: await targetsUnset(r.today) },
     staff_today: (perf.people || []).map((x) => {

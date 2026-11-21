@@ -145,11 +145,13 @@
     var tr = (e && e.trends) || {};
     var row = function (unit, a, b) {
       var cur = (tr[unit] || [])[(tr[unit] || []).length - 1] || {}; var prev = (tr[unit] || [])[(tr[unit] || []).length - 2] || {};
-      var cell = function (key, fmt) { var x = cur[key] || 0, y = prev[key] || 0; return '<td><b>' + (fmt ? fmt(x) : x) + '</b> <span class="kd-muted">vs ' + (fmt ? fmt(y) : y) + '</span> ' + delta(x, y, fmt) + '</td>'; };
+      // Before the calling screen started recording, "0" means "no data", not "no calls".
+      var since = e && e.tracking_since; var untracked = Boolean(since && prev.k && prev.k < since && !prev.calls && !prev.talk_s);
+      var cell = function (key, fmt) { var x = cur[key] || 0, y = prev[key] || 0; if (untracked) return '<td><b>' + (fmt ? fmt(x) : x) + '</b> <span class="kd-muted" data-kt-untracked>vs not tracked</span></td>'; return '<td><b>' + (fmt ? fmt(x) : x) + '</b> <span class="kd-muted">vs ' + (fmt ? fmt(y) : y) + '</span> ' + delta(x, y, fmt) + '</td>'; };
       return '<tr data-kt-period="' + unit + '"><td><b>' + a + '</b><div class="kd-muted" style="font-size:11px">vs ' + b + '</div></td>' + cell('calls') + cell('connected') + cell('closes') + cell('talk_s', dur) + '</tr>';
     };
     return '<div class="kd-card" style="margin-top:12px"><h3>Week and month</h3><div class="kd-scroll"><table class="kd-table"><thead><tr><th></th><th>Calls</th><th>Spoke to</th><th>Paid</th><th>Talk time</th></tr></thead><tbody>'
-      + row('week', 'This week', 'last week') + row('month', 'This month', 'last month') + '</tbody></table></div><p class="kd-muted" style="font-size:12px;margin:6px 0 0">This week and this month are so far; last week and last month are complete.</p></div>';
+      + row('week', 'This week', 'last week') + row('month', 'This month', 'last month') + '</tbody></table></div><p class="kd-muted" style="font-size:12px;margin:6px 0 0">This week and this month are so far; last week and last month are complete.' + (e && e.tracking_since ? ' Calls are recorded from ' + U.esc(niceDay(e.tracking_since)) + '; earlier periods show “not tracked”.' : '') + '</p></div>';
   }
   function personName() { var t = T.today || {}; return t.name || (T.names && T.names[T.person]) || T.person; }
   function drawPerson() {
