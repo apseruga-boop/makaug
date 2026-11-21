@@ -91,7 +91,7 @@ test('configured property sponsorship still renders its own image and explicit d
     liveRevenuePlacements: new Map([['rent-grid', { is_active: true, preview_image_url: '/sponsor.webp', headline: 'Sponsor', cta_label: 'View offer', cta_url: 'https://sponsor.example/offer' }]]),
     translateListingLabel: (x) => x, adminAttr: (x) => x, adminEscape: (x) => x
   });
-  vm.runInContext([declaration(app, 'safeHouseAdUrl'), declaration(app, 'buildRevenuePlacementMarkup')].join('\n'), context);
+  vm.runInContext([declaration(app, 'vibeCityAdsSearch'), declaration(app, 'activeHouseAdCampaign'), declaration(app, 'houseAdCampaignImage'), declaration(app, 'safeHouseAdUrl'), declaration(app, 'buildRevenuePlacementMarkup')].join('\n'), context);
   const html = context.buildRevenuePlacementMarkup('rent-grid', 'Rental listings');
   assert.match(html, /data-house-placement="rent-grid"/);
   assert.match(html, /src="\/sponsor.webp"/);

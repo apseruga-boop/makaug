@@ -3135,7 +3135,53 @@
       right: auto;
       left: 14px;
     }
+    /* Vibe Week house banners: dark neon copy panel over the synthwave art.
+       Builds on the #838 campaign styles; used for every public house-ad band. */
+    .mk-house-band--vibe-week {
+      background: linear-gradient(to bottom, #1a063a 0%, #5c1278 35%, #d6348c 62%, #ff8460 70%, #1e083a 70.2%, #0a021a 100%);
+      border-color: rgba(255,46,151,.55);
+      box-shadow: 0 0 0 1px rgba(255,46,151,.25), 0 10px 30px rgba(120,20,140,.25);
+    }
+    .mk-house-band--vibe-week .mk-house-band__scrim {
+      background: linear-gradient(to left, rgba(16,4,38,.72) 12%, rgba(16,4,38,.38) 34%, transparent 58%);
+    }
+    .mk-house-band--vibe-week[data-copy-side="left"] .mk-house-band__scrim {
+      background: linear-gradient(to right, rgba(16,4,38,.72) 12%, rgba(16,4,38,.38) 34%, transparent 58%);
+    }
+    .mk-house-band--vibe-week .mk-house-band__headline {
+      color: #fff;
+      text-shadow: 0 0 6px rgba(255,46,151,.95), 0 0 18px rgba(255,46,151,.6), 0 2px 2px rgba(0,0,0,.4);
+    }
+    .mk-house-band--vibe-week .mk-house-band__subline,
+    .mk-house-band--vibe-week .st-ad-sub,
+    .mk-house-band--vibe-week .st-cd-date {
+      color: #ffe3f2;
+      text-shadow: 0 1px 2px rgba(0,0,0,.6);
+    }
+    .mk-house-band--vibe-week .mk-house-band__pill {
+      background: #ff2e97;
+      box-shadow: 0 0 12px rgba(255,46,151,.65);
+    }
+    .mk-house-band--vibe-week .mk-house-band__pill:hover {
+      background: #e0157f;
+    }
+    .mk-house-band--vibe-week .mk-house-band__tag {
+      background: rgba(16,4,38,.72);
+      border-color: rgba(40,230,255,.5);
+      color: #e9fbff;
+    }
+    .mk-house-band--vibe-week .st-cd-btn-primary,
+    #page-short-term .mk-house-band--vibe-week .st-cd-btn-primary {
+      background: #ff2e97;
+      color: #fff;
+      box-shadow: 0 0 12px rgba(255,46,151,.65);
+    }
+    #page-short-term .mk-house-band--vibe-week .st-cd-btn-primary:hover {
+      background: #e0157f;
+      color: #fff;
+    }
     .mk-paid-placement {
+
       width: 100%;
       min-height: 90px;
     }

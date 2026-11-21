@@ -67,9 +67,12 @@
     var noskin = flagValue(params, 'noskin');
     if (noskin === '1' || noskin === 'true' || noskin === 'yes') return false;
     if (flagValue(params, 'skin') === 'off') return false;
+    var vibe = flagValue(params, 'vibe');
+    if (vibe === 'off') return false;
     if (flag === 'on') return true;
     var skin = flagValue(params, 'skin');
     if (skin === '1' || skin === 'true' || skin === 'on' || skin === 'preview' || skin === 'confirm') return true;
+    if (vibe === 'preview' || vibe === 'on' || vibe === '1') return true;
     var at = params.get('skin_at');
     var t = at ? Date.parse(at) : (opts.now != null ? Number(opts.now) : Date.now());
     if (!isFinite(t)) return false;
