@@ -25,6 +25,9 @@ const THEMES = [
   ['listings', 'Listings / photos', /\b(listings?|photos?|pictures?|upload|post(ing)?|properties)\b/i],
   ['not_agent', 'Not an agent / wrong person', /\b(not an agent|wrong number|landlord|owner|not me|retired)\b/i]
 ];
+// Plain words for event detail codes (no raw codes on King).
+const DETAIL_WORDS = { not_heard: 'did not hear the test words', start_failed: 'live notes could not start', 'not-allowed': 'microphone blocked', 'service-not-allowed': 'microphone blocked', 'audio-capture': 'no microphone found', network: 'no internet for live notes', 'no-speech': 'no speech heard', aborted: 'stopped by the browser' };
+const plainDetail = (v) => { const s = String(v == null ? '' : v).trim(); return DETAIL_WORDS[s] || s.replace(/_/g, ' '); };
 const EVENT_LABELS = {
   link_drop: 'Phone link / audio dropped', link_back: 'Phone link back', notes_check_passed: 'Mic check passed', notes_check_failed: 'Mic check failed',
   notes_start: 'Live notes on', notes_stop: 'Live notes off', notes_error: 'Live notes stopped', hidden: 'Left the screen', visible: 'Back on the screen',
@@ -82,13 +85,13 @@ async function callDetail(attemptId) {
   if (a.shown_at) actions.push({ at: a.shown_at, what: 'Number shown' });
   if (a.tapped_at) actions.push({ at: a.tapped_at, what: 'Call now tapped' });
   if (a.ended_at) actions.push({ at: a.ended_at, what: `Call ended${a.talk_s != null ? ` · ${Math.round(a.talk_s)} s talk` : ''}` });
-  for (const e of inWin) if (EVENT_LABELS[e.kind] && !DROP_KINDS.has(e.kind)) actions.push({ at: e.at, what: EVENT_LABELS[e.kind] + (e.detail ? ` · ${noDigits(e.detail).slice(0, 80)}` : '') });
+  for (const e of inWin) if (EVENT_LABELS[e.kind] && !DROP_KINDS.has(e.kind)) actions.push({ at: e.at, what: EVENT_LABELS[e.kind] + (e.detail ? ` · ${noDigits(plainDetail(e.detail)).slice(0, 80)}` : '') });
   for (const op of a.client_ops || []) actions.push({ at: null, what: `Used: ${String(op).replace(/_/g, ' ').slice(0, 60)}` });
   const ck = a.checklist || {};
   for (const [k, v] of Object.entries(ck)) if (v && v !== 'false') actions.push({ at: null, what: `✓ ${k.replace(/_/g, ' ')}` });
   if (a.wrapped_at) actions.push({ at: a.wrapped_at, what: `Wrap-up saved: ${outcomeDef.label || a.outcome || 'no outcome'}` });
   actions.sort((x, y) => (x.at ? new Date(x.at).getTime() : Infinity) - (y.at ? new Date(y.at).getTime() : Infinity));
-  const drops = inWin.filter((e) => DROP_KINDS.has(e.kind)).map((e) => ({ at: e.at, what: EVENT_LABELS[e.kind] || e.kind, detail: noDigits(e.detail || '').slice(0, 80) }));
+  const drops = inWin.filter((e) => DROP_KINDS.has(e.kind)).map((e) => ({ at: e.at, what: EVENT_LABELS[e.kind] || e.kind, detail: noDigits(plainDetail(e.detail || '')).slice(0, 80) }));
   if (a.tapped_at && a.status !== 'done' && a.status !== 'skipped') drops.push({ at: a.tapped_at, what: 'Call never got an outcome', detail: '' });
   return {
     id: a.id, person_key: a.person_key, task_key: a.task_key, task_name: task.name || a.task_key, direction: a.direction || 'outbound',
@@ -114,4 +117,4 @@ async function saveLesson(attemptId, { note = '', actor = 'King' } = {}) {
   return { attempt_id: d.id, king_note: text, themes: d.lessons.themes };
 }
 
-module.exports = { extractLessons, callDetail, saveLesson, THEMES, windowEvents };
+module.exports = { extractLessons, callDetail, saveLesson, THEMES, windowEvents, plainDetail };

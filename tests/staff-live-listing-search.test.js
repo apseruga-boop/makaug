@@ -117,7 +117,8 @@ test('the dashboard search opens the same editor and badges a live listing', () 
     adminEscape: (value) => String(value ?? ''),
     adminAttr: (value) => String(value ?? ''),
     propertyIdArg: (id) => JSON.stringify(String(id || '')),
-    staffNumber: (value) => String(value)
+    staffNumber: (value) => String(value),
+    plainCodeWords: (_kind, value, fallback) => String(value || fallback || '')
   };
   vm.createContext(sandbox);
   vm.runInContext([

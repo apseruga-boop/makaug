@@ -363,6 +363,12 @@ function mainAccountKey(accounts) {
   return want && accounts.some((a) => a.key === want) ? want : null;
 }
 
+// An account that is no longer on the cash check (e.g. the Absa accounts) still
+// shows by its name, never its key (no raw codes on King).
+function plainAccount(key) {
+  const words = { absa: 'Absa', mtn: 'MTN', momo: 'MoMo', momopay: 'MoMo merchant', ugx: 'UGX', usd: 'USD', airtel: 'Airtel', money: 'Money', revolut: 'Revolut', bank: 'Bank', cash: 'Cash' };
+  return String(key || 'Account').split(/[_\s]+/).filter(Boolean).map((w) => words[w.toLowerCase()] || (w[0].toUpperCase() + w.slice(1))).join(' ');
+}
 async function cashAccounts() {
   const pick = String(process.env.CASH_CHECK_ACCOUNTS || '').split(',').map((x) => x.trim()).filter(Boolean);
   const all = await safeRows("SELECT key, name, kind FROM money_accounts WHERE active AND kind IN ('mobile_money', 'bank') ORDER BY kind DESC, name");
@@ -415,13 +421,14 @@ async function saveCash({ day = kampalaDay(), personKey = '', initials = '', ent
 async function cashLog({ period = 'week', day = kampalaDay() } = {}) {
   const range = periodRange(period, day);
   const accounts = await cashAccounts();
+  const allNames = new Map((await safeRows('SELECT key, name FROM money_accounts')).map((x) => [x.key, x.name]));
   const list = await rows(
     `SELECT day::text AS day, account_key, balance_ugx, balance_date::text AS balance_date, transferred_ugx, previous_balance_ugx, change_ugx, person_key, initials, note, signed_at
        FROM cash_checks WHERE day BETWEEN $1 AND $2 ORDER BY day DESC, account_key`, [range.from, range.to]);
   const today = kampalaDay();
   const days = daysIn(range).filter((d) => d <= today && weekday(d) !== 0).reverse().map((d) => {
     const items = list.filter((r) => r.day === d).map((r) => {
-      const a = accounts.find((x) => x.key === r.account_key) || { name: r.account_key };
+      const a = accounts.find((x) => x.key === r.account_key) || { name: allNames.get(r.account_key) || plainAccount(r.account_key) };
       const flags = [];
       const change = r.change_ugx == null ? null : Number(r.change_ugx);
       // Expected moves are not flags: a wallet down by what went to the bank, the bank up by it.
@@ -459,5 +466,5 @@ async function myMoney(personKey) {
 module.exports = {
   myMoney,
   FEE_UGX, kampalaHour, periodRange, paymentState, momoText, sendPayment, markClaimed,
-  activity, getPlan, savePlan, planResult, plans, cashAccounts, cashStatus, saveCash, cashLog
+  activity, getPlan, savePlan, planResult, plans, cashAccounts, cashStatus, saveCash, cashLog, plainAccount
 };
