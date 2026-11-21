@@ -1,6 +1,7 @@
 'use strict';
 
 const king = require('../services/kingDesk');
+const kingCalls = require('../services/kingCalls');
 
 /**
  * King desk pages (King only). These paths are not in
@@ -20,6 +21,11 @@ function registerKingDeskRoutes(router) {
     }
   };
   router.get('/king/overview', wrap(async (req, res) => res.json({ ok: true, data: await king.overview() })));
+  router.get('/king/calls/:id', wrap(async (req, res) => res.json({ ok: true, data: await kingCalls.callDetail(req.params.id) })));
+  router.put('/king/calls/:id/lesson', wrap(async (req, res) => {
+    const actor = (req.adminAuth && (req.adminAuth.email || req.adminAuth.name)) || 'King';
+    return res.json({ ok: true, data: await kingCalls.saveLesson(req.params.id, { note: req.body?.note, actor }) });
+  }));
   router.get('/king/payments', wrap(async (req, res) => res.json({ ok: true, data: await king.payments({ days: req.query?.days }) })));
 }
 

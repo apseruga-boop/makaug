@@ -3002,7 +3002,7 @@
     var W = 560, L = 16, R = 16, row = 18, H = ss.length * row + 26; var X = function (t) { return L + (W - L - R) * (t - t0) / (t1 - t0); };
     var f = function (v) { return v.toFixed(1); };
     var ticks = ''; for (var h = t0; h <= t1; h += 3600000) ticks += '<line x1="' + f(X(h)) + '" y1="0" x2="' + f(X(h)) + '" y2="' + (H - 16) + '" stroke="#f1f5f9"/><text x="' + f(X(h)) + '" y="' + (H - 4) + '" font-size="9" text-anchor="middle" fill="#64748b">' + esc(kTime(new Date(h).toISOString())) + '</text>';
-    var allCalls = (e.on_call && e.on_call.calls) || [];
+    var allCalls = (e.on_call && e.on_call.calls) || []; K.evCallList = allCalls;
     var hits = '';
     // Busy day: widen the chart (it scrolls sideways) so most calls get at least 8 px to land on.
     var starts = {}; allCalls.forEach(function (c) { (starts[c.session_id] = starts[c.session_id] || []).push(X(new Date(c.from).getTime())); });
@@ -3086,6 +3086,12 @@
     svg.addEventListener('pointerleave', function () { last = null; dirty = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } if (!pinned) hide(); K.evHovering = false; flushEvPending(); });
     svg.addEventListener('pointerenter', function (ev) { if (ev.pointerType !== 'touch') K.evHovering = true; });
     // Tap (mobile) or click: show at once and keep it until the next tap elsewhere.
+    // King: a click on a blue call opens that call's detail (transcript, outcome, lessons) when the King desk is loaded.
+    svg.addEventListener('click', function (ev) {
+      var h = ev.target && ev.target.closest ? ev.target.closest('[data-k-callhit]') : null; if (!h) return;
+      var c = (K.evCallList || [])[Number(h.getAttribute('data-k-callhit'))];
+      if (c && c.attempt_id && window.kingTeam && typeof window.kingTeam.openCall === 'function') window.kingTeam.openCall(c.attempt_id);
+    });
     svg.addEventListener('pointerdown', function (ev) { last = { x: ev.clientX, y: ev.clientY, target: ev.target }; cur = -1; apply(); pinned = !!(last.target.closest && last.target.closest('[data-tip]')); });
     box.__restore = function (pt, call) {
       if (pt) { var t = document.elementFromPoint(pt.x, pt.y); if (t && svg.contains(t)) { last = { x: pt.x, y: pt.y, target: t }; apply(); return; } }
@@ -3212,5 +3218,11 @@
     pending = true;
     setTimeout(function () { pending = false; scan(); }, 250);
   }).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
-  window.makaugCalling = { rescan: scan, refreshKing: function () { var k = q('[data-calling-king-root]'); if (k) renderKing(k); } };
+  window.makaugCalling = {
+    rescan: scan,
+    refreshKing: function () { var k = q('[data-calling-king-root]'); if (k) renderKing(k); },
+    // The King per-staff page shows this same evidence trail (sessions graph, auto-refresh every 30s).
+    evidence: function (host, person) { injectCss(); return loadBoot().then(function () { K.open = null; openEvidence(host, person, true); }); },
+    closeEvidence: function () { K.open = null; stopEvAuto(); }
+  };
 })();

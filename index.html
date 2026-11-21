@@ -8940,6 +8940,7 @@
 
         <!-- King desk pages (assets/king-desk.js). -->
         <div id="king-overview" data-admin-tab-panel="k-overview" data-king-page="k-overview" class="admin-tab-panel hidden"></div>
+        <div id="king-team" data-admin-tab-panel="k-team" data-king-page="k-team" class="admin-tab-panel hidden"></div>
         <div id="king-payments" data-admin-tab-panel="k-payments" data-king-page="k-payments" class="admin-tab-panel hidden"></div>
         <div id="king-removals" data-admin-tab-panel="k-removals" data-king-page="k-removals" class="admin-tab-panel hidden"></div>
         <div id="king-staff" data-admin-tab-panel="k-staff" data-king-page="k-staff" class="admin-tab-panel hidden"></div>
@@ -11200,14 +11201,17 @@
           // only inside the protected staff and King pages.
           if (document.getElementById("staff-calling-card") || document.getElementById("admin-calling-control")) {
             var callingScript = document.createElement("script");
-            callingScript.src = "/assets/calling-screen.js?v=20261121-connect2";
+            callingScript.src = "/assets/calling-screen.js?v=20261121-team1";
             document.body.appendChild(callingScript);
           }
           // King's sidebar desk (Overview, Payments & MoMo, Removal requests, Staff).
           if (document.getElementById("king-overview")) {
             var kingDeskScript = document.createElement("script");
-            kingDeskScript.src = "/assets/king-desk.js?v=20261121-kd1";
+            kingDeskScript.src = "/assets/king-desk.js?v=20261121-kd2";
             document.body.appendChild(kingDeskScript);
+            var kingTeamScript = document.createElement("script");
+            kingTeamScript.src = "/assets/king-team.js?v=20261121-kt1";
+            document.body.appendChild(kingTeamScript);
           }
         };
         document.body.appendChild(script);

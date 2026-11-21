@@ -22,9 +22,9 @@
     });
   }
   var NAV = [
-    ['King', [['k-overview', '👑', 'Overview'], ['performance', '👥', 'Team performance'], ['k-payments', '💳', 'Payments & MoMo', 'momo_unmatched'], ['k-removals', '🗑️', 'Removal requests', 'removal_requests'], ['staff', '🧾', 'Staff, pay & targets']]],
+    ['King', [['k-overview', '👑', 'Overview'], ['k-team', '👥', 'Team performance'], ['k-payments', '💳', 'Payments & MoMo', 'momo_unmatched'], ['k-removals', '🗑️', 'Removal requests', 'removal_requests'], ['staff', '🧾', 'Staff, pay & targets']]],
     ['Pipeline', [['agents', '👩‍💼', 'Agents'], ['review', '🏡', 'Properties to review'], ['listings', '📋', 'All listings'], ['agent-reports', '🚩', 'Agent reports']]],
-    ['Ops', [['whatsapp', '💬', 'Leads & WhatsApp'], ['outreach', '📣', 'Outreach'], ['live', '⭐', 'Live & featured'], ['revenue', '💰', 'Sales & revenue'], ['accounts', '👤', 'Accounts'], ['public', '🌍', 'Public'], ['field-agents', '🧭', 'Field agents'], ['notifications', '🔔', 'Notifications'], ['youtube-sweep', '▶️', 'YouTube sweep']]]
+    ['Ops', [['performance', '📞', 'Calling desk & targets'], ['whatsapp', '💬', 'Leads & WhatsApp'], ['outreach', '📣', 'Outreach'], ['live', '⭐', 'Live & featured'], ['revenue', '💰', 'Sales & revenue'], ['accounts', '👤', 'Accounts'], ['public', '🌍', 'Public'], ['field-agents', '🧭', 'Field agents'], ['notifications', '🔔', 'Notifications'], ['youtube-sweep', '▶️', 'YouTube sweep']]]
   ];
   var LABEL = {}; NAV.forEach(function (g) { g[1].forEach(function (i) { LABEL[i[0]] = i[2]; }); });
   var S = { counts: {}, tab: null, timer: null, mounted: false, drawer: false };
@@ -177,6 +177,7 @@
       + '<div class="kd-card"><h3>Staff today</h3><div class="kd-scroll"><table class="kd-table" data-kd-staff><tr><th>Who</th><th>Calls</th><th>Target</th><th>Paid</th><th>Notes on</th></tr>' + staff + '</table></div></div></div>'
       + '<p class="kd-muted" style="font-size:11px;margin-top:8px" data-kd-updated>Updated ' + esc(when(new Date())) + ' Kampala · refreshes every minute</p></div>';
     bindOpen(el);
+    qa('[data-kd-staffrow]', el).forEach(function (r) { r.style.cursor = 'pointer'; r.title = 'Open their day'; r.onclick = function () { if (window.kingTeam) window.kingTeam.openPerson(r.getAttribute('data-kd-staffrow')); }; });
   }
   function bindOpen(el) { qa('[data-kd-open]', el).forEach(function (b) { b.onclick = function () { go(b.getAttribute('data-kd-open')); }; }); }
   // -------------------------------------------------------------- payments --
@@ -234,5 +235,5 @@
   var pending = false;
   new MutationObserver(function () { if (pending) return; pending = true; setTimeout(function () { pending = false; scan(); }, 200); }).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
   scan();
-  window.kingDesk = { refresh: function () { onTab(currentTab(), true); }, go: go };
+  window.kingDesk = { refresh: function () { onTab(currentTab(), true); }, go: go, util: { api: api, esc: esc, when: when, ago: ago, ugx: ugx, ugxFull: ugxFull, q: q, qa: qa, currentTab: currentTab } };
 })();

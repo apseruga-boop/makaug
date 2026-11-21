@@ -24582,7 +24582,7 @@ async function staffPerfSaveSettings(event, scope) {
 
 
 function setAdminWorkflowTab(tab = "review") {
-  const allowed = ["review", "youtube-sweep", "revenue", "live", "accounts", "outreach", "performance", "agents", "public", "field-agents", "staff", "whatsapp", "agent-reports", "notifications", "listings", "k-overview", "k-payments", "k-removals", "k-staff"];
+  const allowed = ["review", "youtube-sweep", "revenue", "live", "accounts", "outreach", "performance", "agents", "public", "field-agents", "staff", "whatsapp", "agent-reports", "notifications", "listings", "k-overview", "k-payments", "k-removals", "k-staff", "k-team"];
   const previousTab = activeAdminWorkflowTab;
   // Tabs removed in the Oct 2026 King slim-down open where their content now lives.
   const moved = { "student-sweep": "review", actioned: "listings", ads: "revenue" };
