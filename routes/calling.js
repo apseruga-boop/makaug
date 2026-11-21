@@ -26,7 +26,7 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
       res.set('Cache-Control', 'no-store');
       return await fn(req, res);
     } catch (error) {
-      if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+      if (error.status) return res.status(error.status).json({ ok: false, error: error.message, ...(error.code ? { code: error.code } : {}), ...(error.data ? { data: error.data } : {}) });
       return next(error);
     }
   };

@@ -34,7 +34,7 @@
     // Reads give up after 30s with a clear message instead of leaving "Loading…" on screen.
     var method = opts.method || 'GET'; var ctl = (method === 'GET' && typeof AbortController === 'function') ? new AbortController() : null;
     var timer = ctl ? setTimeout(function () { ctl.abort(); }, opts.timeoutMs || 30000) : null;
-    return fetch(API + path, { method: method, credentials: 'same-origin', headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined, keepalive: !!opts.keepalive, signal: ctl ? ctl.signal : undefined })
+    return fetch((path.indexOf('/api/') === 0 ? '' : API) + path, { method: method, credentials: 'same-origin', headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined, keepalive: !!opts.keepalive, signal: ctl ? ctl.signal : undefined })
       .then(function (res) { if (timer) clearTimeout(timer); return res; }, function (err) {
         if (timer) clearTimeout(timer);
         if (err && err.name === 'AbortError') { var t = new Error('This is taking too long. Tap Retry.'); t.status = 0; t.code = 'timeout'; throw t; }
@@ -474,7 +474,48 @@
       refreshSide();
       openPlan(true);
       loadSplit(next);
-    }, function (e) { toast(e.message, 'bad'); if (document.fullscreenElement) document.exitFullscreen().catch(function () {}); });
+    }, function (e) {
+      if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+      if (e.code === 'outcome_owed') { openOwed(function () { startSession(person, task); }); return; }
+      toast(e.message, 'bad');
+    });
+  }
+  // Every dialled call ends with an outcome (Arthur, 21 Nov 2026). Calls left without one
+  // (screen closed, connection lost) are answered here before calling again. There is no "No outcome".
+  function openOwed(done) {
+    api('/api/admin/desk/owed').then(function (list) {
+      list = list || [];
+      if (!list.length) { if (done) done(); return; }
+      var outsFor = function (tk) { var t = ((boot && boot.tasks) || []).filter(function (x) { return x.key === tk; })[0] || ((boot && boot.tasks) || [])[0] || { outcomes: [] }; return (t.outcomes || []).filter(function (o) { return !o.close; }); };
+      var row = function (c, i) {
+        return '<div class="mkc-panel" style="margin:8px 0;padding:10px" data-owed="' + esc(c.id) + '"><b>' + esc(c.name || 'This number') + ' ' + esc(c.phone) + '</b> <span class="mkc-muted">· dialled ' + esc(kDayTime(c.at)) + '</span>'
+          + '<div class="mkc-outs wrap" style="margin-top:6px">' + outsFor(c.task_key).map(function (o) { return '<button type="button" class="mkc-out" data-owed-out="' + esc(o.key) + '" data-date="' + esc(o.date || '') + '" data-spoke="' + (o.spoke ? 1 : 0) + '">' + esc(o.label) + '</button>'; }).join('') + '</div>'
+          + '<div class="mkc-row" style="margin-top:6px;gap:6px;flex-wrap:wrap"><input class="mkc-input" style="flex:2;min-width:160px" data-owed-note placeholder="What happened? (short note)"><input class="mkc-input" style="flex:1;min-width:140px" data-owed-next placeholder="Next step"><input type="datetime-local" class="mkc-input" data-owed-cb style="display:none" min="' + esc(localInput(new Date(Date.now() + 24 * 3600000))) + '"></div>'
+          + '<div data-owed-err></div><button type="button" class="mkc-btn go sm" style="margin-top:6px" data-owed-save>Save outcome</button></div>';
+      };
+      modal('<h3 style="margin:0 0 4px;font-weight:900">' + (list.length === 1 ? 'One call needs' : list.length + ' calls need') + ' an outcome</h3><p class="mkc-muted" style="margin:0 0 6px">These calls were dialled but never wrapped up (screen closed or connection lost). Say what happened, then you can call again.</p>'
+        + '<div data-owed-list>' + list.map(row).join('') + '</div><div class="mkc-row" style="justify-content:flex-end"><button type="button" class="mkc-btn" data-x>Later</button></div>', function (m, close) {
+        q('[data-x]', m).onclick = close;
+        qa('[data-owed]', m).forEach(function (card) {
+          var pick = null;
+          qa('[data-owed-out]', card).forEach(function (b) { b.onclick = function () {
+            pick = b.getAttribute('data-owed-out');
+            qa('[data-owed-out]', card).forEach(function (x) { x.classList.toggle('on', x === b); });
+            q('[data-owed-cb]', card).style.display = b.getAttribute('data-date') ? '' : 'none';
+          }; });
+          q('[data-owed-save]', card).onclick = function () {
+            var err = q('[data-owed-err]', card);
+            if (!pick) { err.innerHTML = '<div class="mkc-err">Tap what happened.</div>'; return; }
+            var cbv = q('[data-owed-cb]', card).value;
+            api('/api/admin/desk/owed/' + encodeURIComponent(card.getAttribute('data-owed')), { method: 'POST', body: { outcome: pick, note: q('[data-owed-note]', card).value, next_step: q('[data-owed-next]', card).value, callback_at: cbv ? new Date(cbv).toISOString() : null } })
+              .then(function () {
+                card.remove(); toast('Outcome saved');
+                if (!q('[data-owed]', m)) { close(); if (done) done(); }
+              }, function (e) { err.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+          };
+        });
+      });
+    }, function (e) { toast(e.message, 'bad'); });
   }
   function ev(kind, detail) { if (S) S.events.push({ kind: kind, detail: detail || '', at: new Date().toISOString() }); }
   function inMeeting() { if (!S || !S.meeting) return false; var w = S.meeting.win; if (w && w.closed) { endMeeting(); return false; } return true; }
@@ -1442,7 +1483,8 @@
     S.loadT0 = Date.now();
     op('/attempts/' + a.id + '/wrapup', { session_id: S.id, outcome: w.outcome, note: w.note, checklist: w.checklist, callback_at: cbIso, next_step: w.next || '', transcript: txPayload() })
       .then(function (done) {
-        S.lastDone = { name: a.name, phone: a.phone, outcome: w.outcome, callback_at: cbIso, task: S.task };
+        S.lastDone = { name: a.name, phone: a.phone, outcome: w.outcome, callback_at: cbIso, task: S.task, label: o.label, note: w.note || '', next: w.next || '',
+          talk_s: S.callStart ? Math.max(0, Math.round(((S.callEnd || Date.now()) - S.callStart) / 1000)) : null, hi: Boolean(w.checklist && w.checklist.asked_hello) };
         S.saved = (S.saved || 0) + 1;
         if (done.queued) toast(T('offline'));
         if (o.close) celebrate();
@@ -1494,12 +1536,22 @@
     // SMS only, from the company phone (Phone Link). We never send WhatsApp messages from calls.
     return '<a class="mkc-btn sm" href="sms:+' + esc(digits) + '?body=' + encodeURIComponent(text) + '">SMS</a>';
   }
+  // Call summary shown as soon as the call is closed (Arthur, 21 Nov 2026).
+  function callSummaryHtml(L) {
+    var bits = ['<b>' + esc(L.label || String(L.outcome).replace(/_/g, ' ')) + '</b>'];
+    if (L.talk_s != null) bits.push(esc(clock(L.talk_s * 1000)) + ' on the call');
+    if (L.hi) bits.push('asked for Hello ✓');
+    return '<div class="mkc-panel" style="padding:8px 10px;margin-bottom:8px;background:#f8fafc" data-mkc-callsum><div style="font-size:12px;font-weight:900;color:#475569">📝 Call summary · ' + esc(L.name || 'Last number') + ' ' + esc('•••' + String(L.phone || '').replace(/\D/g, '').slice(-3)) + '</div>'
+      + '<div style="font-size:13px">' + bits.join(' · ') + '</div>'
+      + (L.note ? '<div style="font-size:13px">“' + esc(L.note) + '”</div>' : '')
+      + (L.next || L.callback_at ? '<div style="font-size:13px"><b>Next:</b> ' + esc(L.next || 'Call back') + (L.callback_at ? ' · ' + esc(kDayTime(L.callback_at)) : '') + '</div>' : '') + '</div>';
+  }
   function lastDoneHtml() {
     var L = S && S.lastDone; if (!L) return '';
     var tpl = boot.templates[L.outcome];
-    if (!tpl) return '<div class="mkc-nudge">Saved: ' + esc(String(L.outcome).replace(/_/g, ' ')) + '.</div>';
+    if (!tpl) return callSummaryHtml(L);
     var text = fillTemplate(tpl, lastCtx(L));
-    return '<div class="mkc-tpl" style="background:#f0fdf4;border-color:#bbf7d0"><b>Saved. Text ' + esc(firstName(L.name) || 'them') + '? (you send it yourself)</b><div style="margin:6px 0">' + esc(text) + '</div>'
+    return callSummaryHtml(L) + '<div class="mkc-tpl" style="background:#f0fdf4;border-color:#bbf7d0"><b>Saved. Text ' + esc(firstName(L.name) || 'them') + '? (you send it yourself)</b><div style="margin:6px 0">' + esc(text) + '</div>'
       + '<div class="mkc-row"><button type="button" class="mkc-btn sm" data-mkc-tcopy>Copy</button>' + sendLinks(L.phone, text)
       + '<button type="button" class="mkc-btn sm ghost" data-mkc-tclose>Done</button></div></div>';
   }
@@ -3243,6 +3295,10 @@
     evidence: function (host, person) { injectCss(); return loadBoot().then(function () { K.open = null; openEvidence(host, person, true); }); },
     closeEvidence: function () { K.open = null; stopEvAuto(); },
     // Staff sidebar "Connect your phone" item opens the same guide.
-    openConnect: function (guide) { injectCss(); return loadBoot().then(function () { openConnect(guide || 'bt'); }); }
+    openConnect: function (guide) { injectCss(); return loadBoot().then(function () { openConnect(guide || 'bt'); }); },
+    // Staff desk: answer calls that were dialled but never given an outcome.
+    openOwed: function (done) { injectCss(); return loadBoot().then(function () { openOwed(done); }); },
+    // Staff desk pipeline: the full contact history of one of my calls.
+    openHistory: function (attemptId) { injectCss(); return loadBoot().then(function () { openTimeline({ attempt_id: attemptId }); }); }
   };
 })();
