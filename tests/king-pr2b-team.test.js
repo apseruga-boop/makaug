@@ -74,8 +74,9 @@ test('migration 244 only adds the lessons table and has a rollback', () => {
 
 test('Team performance is a sidebar page; blue calls in the evidence graph open the call', () => {
   const desk = read('assets/king-desk.js');
-  assert.match(desk, /\['k-team', '👥', 'Team performance'\]/);
-  assert.match(desk, /\['performance', '📞', 'Calling desk & targets'\]/);
+  // Regrouped 21 Nov: "Team & calls" opens Team performance, with the calling desk's call reports as a chip.
+  assert.match(desk, /\['v:team', '👥', 'Team & calls'\]/);
+  assert.match(desk, /'v:team': \[\['Team', 'k-team', null\], \['Calls today', 'performance', 'team'\]\]/);
   const html = read('index.html');
   assert.match(html, /id="king-team" data-admin-tab-panel="k-team"/);
   assert.match(html, /\/assets\/king-team\.js\?v=/);

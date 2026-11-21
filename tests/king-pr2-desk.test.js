@@ -58,7 +58,8 @@ test('sidebar reaches every King tab, and the new pages are real tabs', () => {
   assert.match(app, /makaug:admin-tab/);
   const desk = read('assets/king-desk.js');
   // "review" is reached through its queue views (Found online / Agent properties / Short stays).
-  for (const t of tabs) assert.ok(desk.includes(`['${t}', `) || (t === 'review' && desk.includes("['review:found', ")), `sidebar has ${t}`);
+  // Sidebar items, the review queue views, or a chip on one of the regrouped pages (VIEWS).
+  for (const t of tabs) assert.ok(desk.includes(`['${t}', `) || desk.includes(`', '${t}', `) || (t === 'review' && desk.includes("['review:found', ")), `sidebar has ${t}`);
   const html = read('index.html');
   for (const t of ['k-overview', 'k-payments', 'k-removals', 'k-staff']) assert.match(html, new RegExp(`data-admin-tab-panel="${t}"`));
   assert.match(html, /\/assets\/king-desk\.js\?v=/);

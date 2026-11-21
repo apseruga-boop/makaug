@@ -21,12 +21,32 @@
       return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok || j.ok === false) { var e = new Error(j.error || ('Error ' + r.status)); e.status = r.status; throw e; } return j.data; });
     });
   }
+  // King sidebar, regrouped (Arthur approved 21 Nov 2026): 20 items → 16. Items starting "v:" are pages
+  // made of parts of the existing tabs; the chips at the top switch between the parts. Nothing is deleted:
+  // every old tab is still reachable from a chip, and "Full calling desk" shows the old page whole.
   var NAV = [
-    ['King', [['k-overview', '👑', 'Overview'], ['k-team', '👥', 'Team performance'], ['k-payments', '💳', 'Payments & MoMo', 'momo_unmatched'], ['k-removals', '🗑️', 'Removal requests', 'removal_requests'], ['k-staff', '🧾', 'Staff, pay & targets']]],
-    ['Pipeline', [['agents', '👩‍💼', 'Agents'], ['review:found', '🌐', 'Found online to review', 'found_online'], ['review:agent', '🏠', 'Agent properties to review', 'agent_props'], ['review:stays', '🛏️', 'Short stays', 'short_stays'], ['listings', '📋', 'All listings'], ['agent-reports', '🚩', 'Agent reports']]],
-    ['Ops', [['performance', '📞', 'Calling desk & targets'], ['whatsapp', '💬', 'Leads & WhatsApp'], ['outreach', '📣', 'Outreach'], ['live', '⭐', 'Live & featured'], ['revenue', '💰', 'Sales & revenue'], ['accounts', '👤', 'Accounts'], ['public', '🌍', 'Public'], ['field-agents', '🧭', 'Field agents'], ['notifications', '🔔', 'Notifications'], ['youtube-sweep', '▶️', 'YouTube sweep'], ['staff', '🗂️', 'Staff accounts (advanced)']]]
+    ['King', [['k-overview', '👑', 'Overview'], ['v:team', '👥', 'Team & calls'], ['v:staff', '🧾', 'Staff, pay & targets'], ['v:money', '💳', 'Money in', 'momo_unmatched']]],
+    ['To review', [['review:found', '🌐', 'Found online to review', 'found_online'], ['review:agent', '🏠', 'Agent properties to review', 'agent_props'], ['review:stays', '🛏️', 'Short stays', 'short_stays'], ['k-removals', '🗑️', 'Removal requests', 'removal_requests'], ['agent-reports', '🚩', 'Agent reports']]],
+    ['Agents & listings', [['v:agents', '👩‍💼', 'Agents & owners'], ['listings', '📋', 'All listings'], ['live', '⭐', 'Live & featured']]],
+    ['Leads & calls', [['v:leads', '💬', 'Leads & WhatsApp'], ['v:lists', '📞', 'Calling lists']]],
+    ['Harvest', [['v:harvest', '🔎', 'Harvest']]],
+    ['System', [['v:settings', '⚙️', 'Settings & logs']]]
   ];
+  // [chip label, admin tab, part shown (null = the whole tab)]
+  var VIEWS = {
+    'v:team': [['Team', 'k-team', null], ['Calls today', 'performance', 'team']],
+    'v:staff': [['Staff & pay', 'k-staff', null], ['Commission, targets & logins', 'performance', 'staff'], ['Staff logins (advanced)', 'staff', null]],
+    'v:money': [['Payments & MoMo', 'k-payments', null], ['Cash check & payment SMS proofs', 'performance', 'money'], ['Sales', 'revenue', null], ['Ad slots', 'revenue', 'ads']],
+    'v:agents': [['Agents', 'agents', null], ['Owners', 'public', null], ['Find a person', 'accounts', null]],
+    'v:leads': [['WhatsApp inbox', 'whatsapp', null], ['Lead desk & CRM', 'notifications', 'leads'], ['Find a person', 'accounts', null]],
+    'v:lists': [['Numbers & call-backs', 'performance', 'lists'], ['Outreach', 'outreach', null], ['Full calling desk', 'performance', null]],
+    'v:harvest': [['YouTube & sources', 'youtube-sweep', null], ['Harvest tools & old review queue', 'review', 'legacy']],
+    'v:settings': [['Logs & mortgage rates', 'notifications', 'logs'], ['Field agents (not in use)', 'field-agents', null]]
+  };
   var LABEL = {}; NAV.forEach(function (g) { g[1].forEach(function (i) { LABEL[i[0]] = i[2]; }); });
+  // Where a plain tab lives now (for links and for the old code that jumps to a tab by itself).
+  var HOME = {};
+  Object.keys(VIEWS).forEach(function (v) { VIEWS[v].forEach(function (pt, i) { if (!HOME[pt[1]] && pt[1] !== 'review') HOME[pt[1]] = [v, i]; }); });
   var S = { counts: {}, tab: null, timer: null, mounted: false, drawer: false };
   var CSS = [
     'body.kd-on #page-admin-dashboard > .bg-gray-900{display:none}',
@@ -57,21 +77,71 @@
     '.kd-table{width:100%;border-collapse:collapse;font-size:13px}.kd-table th{text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;padding:6px 4px;border-bottom:1px solid #e2e8f0}.kd-table td{padding:8px 4px;border-bottom:1px solid #f1f5f9;vertical-align:middle}',
     '.kd-bar{height:8px;background:#e2e8f0;border-radius:999px;overflow:hidden;min-width:70px}.kd-bar i{display:block;height:100%;background:#15603f}',
     '.kd-btn{border:0;border-radius:10px;padding:8px 12px;font-weight:800;font-size:13px;cursor:pointer;background:#15603f;color:#fff}.kd-btn.ghost{background:#f1f5f9;color:#0f172a}.kd-btn.red{background:#be123c}',
-    '.kd-scroll{overflow-x:auto}.kd-muted{color:#64748b}.kd-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}'
+    '.kd-scroll{overflow-x:auto}.kd-muted{color:#64748b}.kd-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}',
+    // Pages made of parts of old tabs (see VIEWS)
+    'body.kd-on[data-kd-part="team"] [data-kpart]:not([data-kpart~="team"]){display:none!important}',
+    'body.kd-on[data-kd-part="staff"] [data-kpart]:not([data-kpart~="staff"]){display:none!important}',
+    'body.kd-on[data-kd-part="money"] [data-kpart]:not([data-kpart~="money"]){display:none!important}',
+    'body.kd-on[data-kd-part="lists"] [data-kpart]:not([data-kpart~="lists"]){display:none!important}',
+    'body.kd-on[data-kd-part="leads"] [data-kpart]:not([data-kpart~="leads"]){display:none!important}',
+    'body.kd-on[data-kd-part="logs"] [data-kpart]:not([data-kpart~="logs"]){display:none!important}',
+    'body.kd-on[data-kd-view="v:money"]:not([data-kd-part="ads"]) #admin-advertising-control{display:none!important}body.kd-on[data-kd-part="ads"] #admin-revenue-control{display:none!important}',
+    'body.kd-on[data-kd-view="v:harvest"] #kr-root{display:none!important}',
+    '#kd-viewbar{display:none}body.kd-on #kd-viewbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}',
+    '#kd-viewbar .kd-vt{font-size:22px;font-weight:900;color:#0f172a;margin-right:6px}#kd-viewbar .kd-vchips{display:flex;gap:6px;flex-wrap:wrap}',
+    '#kd-viewbar .kd-vc{border:1px solid #cbd5e1;background:#fff;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:800;cursor:pointer;color:#0f172a}#kd-viewbar .kd-vc.on{background:#15603f;border-color:#15603f;color:#fff}',
+    '@media(max-width:700px){#kd-viewbar .kd-vt{font-size:18px;width:100%}#kd-viewbar .kd-vchips{flex-wrap:nowrap;overflow-x:auto;width:100%;padding-bottom:4px}#kd-viewbar .kd-vc{white-space:nowrap}}'
   ].join('\n');
   function injectCss() { if (q('#kd-css')) return; var st = document.createElement('style'); st.id = 'kd-css'; st.textContent = CSS; document.head.appendChild(st); }
   function adminVisible() { var b = q('#admin-body'); var pg = q('#page-admin-dashboard'); return !!(b && !b.classList.contains('hidden') && pg && pg.offsetParent !== null); }
   function currentTab() { try { return typeof activeAdminWorkflowTab !== 'undefined' ? activeAdminWorkflowTab : S.tab; } catch (x) { return S.tab; } }
   // Review queues are views of the one "review" tab: review:found, review:agent, review:stays.
   function setReviewKind(k) { S.reviewKind = k; document.body.setAttribute('data-kd-review', k); }
-  function go(tab) {
+  function setPart(view, idx) {
+    S.view = view || null; S.part = view ? idx : 0;
+    var pt = view ? VIEWS[view][idx] : null;
+    if (view) document.body.setAttribute('data-kd-view', view); else document.body.removeAttribute('data-kd-view');
+    if (pt && pt[2]) document.body.setAttribute('data-kd-part', pt[2]); else document.body.removeAttribute('data-kd-part');
+  }
+  function go(tab, idx) {
     closeDrawer();
-    var m = /^review:(found|agent|stays)$/.exec(String(tab || ''));
+    tab = String(tab || '');
+    if (VIEWS[tab]) {
+      var i = Math.max(0, Math.min(VIEWS[tab].length - 1, Number(idx) || 0)); var pt = VIEWS[tab][i];
+      setPart(tab, i);
+      if (pt[2] === 'legacy') { document.body.classList.add('kr-legacy'); tab = 'review:found'; }
+      else { document.body.classList.remove('kr-legacy'); tab = pt[1]; }
+    } else {
+      document.body.classList.remove('kr-legacy');
+      var h = HOME[tab]; setPart(h ? h[0] : null, h ? h[1] : 0);
+    }
+    var m = /^review:(found|agent|stays)$/.exec(tab);
     if (m) { setReviewKind(m[1]); tab = 'review'; if (typeof window.closeAdminReviewPanel === 'function') window.closeAdminReviewPanel(); }
-    if (typeof window.setAdminWorkflowTab === 'function') { var was = currentTab(); window.setAdminWorkflowTab(tab); if (m && was === 'review') onTab('review'); } else { S.tab = tab; onTab(tab); }
+    if (typeof window.setAdminWorkflowTab === 'function') { var was = currentTab(); window.setAdminWorkflowTab(tab); if (was === tab) onTab(tab); } else { S.tab = tab; onTab(tab); }
     try { window.scrollTo({ top: 0 }); } catch (x) { window.scrollTo(0, 0); }
   }
-  function itemOn(id, tab) { if (/^review:/.test(id)) return tab === 'review' && id === 'review:' + (S.reviewKind || 'found'); return id === tab; }
+  function itemOn(id, tab) {
+    if (/^review:/.test(id)) return tab === 'review' && !S.view && id === 'review:' + (S.reviewKind || 'found');
+    if (VIEWS[id]) return S.view === id;
+    return !S.view && id === tab;
+  }
+  // The old code sometimes switches tab by itself (after an approval it opens Live & featured):
+  // keep the sidebar and chips in step with the tab actually showing.
+  function syncView(tab) {
+    if (S.view) { var pt = VIEWS[S.view][S.part]; if (pt && (pt[1] === tab || (pt[2] === 'legacy' && tab === 'review'))) return; }
+    var h = HOME[tab]; setPart(h ? h[0] : null, h ? h[1] : 0);
+    if (tab !== 'review') document.body.classList.remove('kr-legacy');
+  }
+  function drawViewbar() {
+    var bar = q('#kd-viewbar');
+    if (!bar) { var anchor = q('#king-overview'); if (!anchor) return; bar = document.createElement('div'); bar.id = 'kd-viewbar'; anchor.parentNode.insertBefore(bar, anchor); }
+    if (!S.view) { bar.innerHTML = ''; bar.style.display = 'none'; return; }
+    bar.style.display = '';
+    bar.innerHTML = '<div class="kd-vt">' + esc(LABEL[S.view]) + '</div><div class="kd-vchips">' + VIEWS[S.view].map(function (pt, i) {
+      return '<button type="button" class="kd-vc' + (i === S.part ? ' on' : '') + '" data-kd-part-go="' + i + '">' + esc(pt[0]) + '</button>';
+    }).join('') + '</div>';
+    qa('[data-kd-part-go]', bar).forEach(function (b) { b.onclick = function () { go(S.view, Number(b.getAttribute('data-kd-part-go'))); }; });
+  }
   window.kingDeskGo = go;
   // The sidebar starts below whatever is pinned at the top (the site header), or below
   // the page's own top while the strips above it are still on screen.
@@ -108,7 +178,7 @@
     qa('[data-kd-go]', side).forEach(function (b) { b.onclick = function () { go(b.getAttribute('data-kd-go')); }; });
     var rf = q('[data-kd-refresh]', side); if (rf) rf.onclick = function () { closeDrawer(); if (typeof window.renderAdminDashboard === 'function') window.renderAdminDashboard(); onTab(currentTab(), true); };
     var ac = q('[data-kd-account]', side); if (ac) ac.onclick = function () { closeDrawer(); if (typeof window.showPage === 'function') window.showPage('account'); };
-    var top = q('#kd-top-title'); if (top) top.textContent = (currentTab() === 'review' ? LABEL['review:' + (S.reviewKind || 'found')] : LABEL[currentTab()]) || 'King';
+    var top = q('#kd-top-title'); if (top) top.textContent = (S.view ? LABEL[S.view] : currentTab() === 'review' ? LABEL['review:' + (S.reviewKind || 'found')] : LABEL[currentTab()]) || 'King';
   }
   function openDrawer() { document.body.classList.add('kd-drawer'); }
   function closeDrawer() { document.body.classList.remove('kd-drawer'); }
@@ -135,7 +205,8 @@
     return api('/king/overview').then(function (o) { S.counts = o.counts || {}; if (window.kingReview) window.kingReview.counts(S.counts); S.overview = o; drawSide(); if (currentTab() === 'k-overview') drawOverview(o); }, function () { drawSide(); });
   }
   function onTab(tab, force) {
-    drawSide();
+    syncView(tab);
+    drawSide(); drawViewbar();
     clearInterval(S.timer); S.timer = null;
     if (tab === 'k-overview') { if (S.overview && !force) drawOverview(S.overview); refreshCounts(); S.timer = setInterval(function () { if (!document.hidden) refreshCounts(); }, 60000); }
     if (tab === 'k-payments') { loadPayments(); S.timer = setInterval(function () { if (!document.hidden) loadPayments(true); }, 30000); }
