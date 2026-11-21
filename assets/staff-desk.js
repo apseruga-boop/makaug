@@ -35,12 +35,13 @@
   // [id, icon, label, sections of the old page it shows, staff (not caller) only]
   var NAV = [
     ['Today', [['home', '🏠', 'Dashboard'], ['calls', '📞', 'Calls', ['staff-calling-card']], ['perf', '📈', 'My performance']]],
+    ['Pipeline', [['pipeline', '🧭', 'My pipeline'], ['approve', '✅', 'Agents to approve'], ['owes', '💸', 'Owes us money'], ['missed', '📵', 'Missed calls']]],
     ['Work', [['review', '🏡', 'Properties to review', ['staff-booking-escalations', 'staff-review-grid'], 1], ['stays', '🛏️', 'Short stays', ['staff-short-term-control', 'staff-video-caption-conflicts'], 1],
       ['leads', '💬', 'Leads & WhatsApp', ['staff-home-seekers', 'staff-leads-grid'], 1], ['harvest', '🔎', 'Harvest', ['staff-source-panel'], 1], ['tools', '🧰', 'Desk tools', ['staff-king-tools'], 1], ['howto', '🎓', 'How to', ['staff-training-panel'], 1]]],
     ['Me', [['pay', '💰', 'My pay'], ['connect', '📱', 'Connect your phone'], ['profile', '🪪', 'Profile'], ['settings', '⚙️', 'Settings', ['staff-settings-panel']]]]
   ];
   var KNOWN = ['staff-calling-card', 'staff-booking-escalations', 'staff-header-card', 'staff-short-term-control', 'staff-video-caption-conflicts', 'staff-settings-panel', 'staff-kpi-grid', 'staff-review-grid', 'staff-source-panel', 'staff-leads-grid', 'staff-home-seekers', 'staff-king-tools', 'staff-training-panel'];
-  var NEW_PAGES = ['home', 'perf', 'pay', 'profile', 'settings'];
+  var NEW_PAGES = ['home', 'perf', 'pay', 'profile', 'settings', 'pipeline', 'approve', 'owes', 'missed'];
   function items() { var out = []; NAV.forEach(function (g) { g[1].forEach(function (i) { out.push(i); }); }); return out; }
   function item(id) { return items().filter(function (i) { return i[0] === id; })[0]; }
   function allowed(i) { return !(i[4] && S.scope === 'caller'); }
@@ -74,6 +75,7 @@
       '#sd-scrim{display:none}body.sd-on.sd-drawer #sd-scrim{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:38}}',
       '.sd-page{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a}',
       '.sd-h1{font-size:26px;font-weight:900;margin:0;line-height:1.2}.sd-sub{color:#64748b;font-size:13px;margin:4px 0 0}',
+      '.sd-stages{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:6px}@media(max-width:1100px){.sd-stages{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:640px){.sd-stages{grid-template-columns:1fr}}.sd-pitem{border-top:1px solid #f1f5f9;padding:8px 0}.sd-count{background:#ecfdf5;color:#15603f;border-radius:999px;padding:1px 8px;font-size:12px;margin-left:4px}.sd-btn.sm{padding:5px 10px;font-size:12px;margin-top:4px}',
       '.sd-card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:14px}.sd-card h3{font-size:16px;font-weight:900;margin:0 0 10px}',
       '.sd-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}@media(max-width:900px){.sd-kpis{grid-template-columns:repeat(2,1fr)}}',
       '.sd-kpi{display:flex;gap:12px;align-items:center}.sd-kpi .l{font-size:12px;color:#64748b;font-weight:700}.sd-kpi .v{font-size:24px;font-weight:900}.sd-kpi .t{font-size:12px;color:#64748b}',
@@ -160,6 +162,10 @@
     else if (page === 'pay') loadPay(host);
     else if (page === 'profile') loadProfile(host);
     else if (page === 'settings') drawSettings(host);
+    else if (page === 'pipeline') loadPipeline(host);
+    else if (page === 'approve') loadApprove(host);
+    else if (page === 'owes') loadOwes(host);
+    else if (page === 'missed') loadMissed(host);
     else if (page === 'calls' && window.makaugCalling && typeof window.makaugCalling.rescan === 'function') { try { window.makaugCalling.rescan(); } catch (x) { /* calling screen redraws itself */ } }
   }
   function openConnect() {
@@ -169,7 +175,15 @@
   }
 
   // ------------------------------------------------------------- home ----
+  function loadOwed() {
+    return api('/desk/owed').then(function (list) { S.owed = (list || []).length; if (S.page === 'home') drawHome(); }, function () { /* the calling screen asks again at Start */ });
+  }
+  function openOwed() {
+    if (window.makaugCalling && typeof window.makaugCalling.openOwed === 'function') window.makaugCalling.openOwed(function () { loadOwed(); });
+    else go('calls');
+  }
   function loadHome() {
+    loadOwed();
     return api('/desk/home').then(function (h) { S.home = h; S.homeErr = ''; S.scope = (h.me && h.me.scope) || S.scope; document.body.classList.toggle('sd-caller', S.scope === 'caller'); drawSide(); if (S.page === 'home') drawHome(); return h; },
       function (e) { S.homeErr = e.message; if (S.page === 'home') drawHome(); throw e; });
   }
@@ -223,6 +237,7 @@
     host.innerHTML = '<div class="sd-page" data-sd-home>'
       + '<div class="sd-row"><div style="display:flex;gap:12px;align-items:center"><div class="sd-av" style="width:52px;height:52px;font-size:20px">' + avatar(m.photo, m.first_name) + '</div><div><h1 class="sd-h1" data-sd-greeting>' + greeting(n(h.now_min)) + ', ' + esc(m.first_name || 'there') + '</h1><p class="sd-sub">' + esc(niceDay(h.day)) + ' · targets today: ' + n(t.calls) + ' calls, ' + n(t.interested) + ' interested, ' + n(t.paid) + ' paid</p></div></div><button type="button" class="sd-btn" data-sd-go-calls>📞 Start calling</button></div>'
       + banner + nudge
+      + (S.owed ? '<div class="sd-card sd-owed" data-sd-owed style="border-color:#fecaca;background:#fef2f2;margin-top:12px"><div class="sd-row"><b>📵 ' + (S.owed === 1 ? 'One call needs' : S.owed + ' calls need') + ' an outcome before you call again.</b><button type="button" class="sd-btn" data-sd-owed-go>Answer now</button></div></div>' : '')
       + '<div class="sd-kpis">' + kpi('Calls today', n(d.calls), n(t.calls), '#15603f') + kpi('Interested', n(d.interested), n(t.interested), '#2563eb') + kpi('Paid', n(d.paid), n(t.paid), '#d97706') + kpi('Talk time', dur(d.talk_s), 0, '', 'on calls today') + '</div>'
       + '<div class="sd-grid2"><div class="sd-card" data-sd-week><div class="sd-row"><h3>This week vs last week</h3><span>' + thisW + ' calls · ' + change(thisW, lastW, 'week') + '</span></div>' + weekChart(wk.this_week, wk.last_week, wk.elapsed_days) + '</div>'
       + '<div class="sd-card" data-sd-month><h3>This month (' + esc(monthName(h.day)) + ')</h3><div class="sd-row"><div><div class="sd-muted" style="font-size:12px">Calls</div><div class="sd-big">' + fmt(mo.calls) + '</div><div style="font-size:12px">' + change(n(mo.calls), n(mo.calls_prev), 'month') + '</div></div><div><div class="sd-muted" style="font-size:12px">Paid</div><div class="sd-big">' + fmt(mo.paid) + '</div><div style="font-size:12px">' + change(n(mo.paid), n(mo.paid_prev), 'month') + '</div></div></div><p class="sd-muted" style="font-size:12px;margin-top:8px">Compared with the same days last month.</p></div></div>'
@@ -231,10 +246,93 @@
     qa('[data-sd-go-calls]', host).forEach(function (b) { b.onclick = function () { go('calls'); }; });
     qa('[data-sd-go-profile]', host).forEach(function (b) { b.onclick = function () { go('profile'); }; });
     qa('[data-sd-go-pay]', host).forEach(function (b) { b.onclick = function () { go('pay'); }; });
+    var og = q('[data-sd-owed-go]', host); if (og) og.onclick = openOwed;
+  }
+
+
+  // ---------------------------------------------------- pipeline (3b) ----
+  function when(at) { if (!at) return ''; try { return new Date(at).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kampala' }); } catch (x) { return String(at).slice(0, 16); } }
+  function pageWrap(title, sub, body) { return '<div class="sd-page"><h1 class="sd-h1">' + esc(title) + '</h1>' + (sub ? '<p class="sd-muted" style="margin:4px 0 12px">' + sub + '</p>' : '') + body + '</div>'; }
+  function failed(host, title, e) { host.innerHTML = pageWrap(title, '', '<div class="sd-card">' + esc(e.message) + '</div>'); }
+  function loadPipeline(host) {
+    host.innerHTML = pageWrap('My pipeline', '', '<div class="sd-card">Loading…</div>');
+    api('/desk/pipeline').then(function (p) {
+      if (S.page !== 'pipeline') return;
+      var cols = (p.stages || []).map(function (st) {
+        var items = st.items.map(function (x) {
+          return '<div class="sd-pitem" data-sd-pitem><b>' + esc(x.name || 'No name') + '</b> <span class="sd-muted">' + esc(x.phone) + '</span>'
+            + '<div class="sd-muted" style="font-size:12px">' + esc(OUTCOME[x.last_outcome] || String(x.last_outcome || '').replace(/_/g, ' ')) + ' · ' + esc(when(x.last_at)) + '</div>'
+            + (x.next_step ? '<div style="font-size:12px"><b>Next:</b> ' + esc(x.next_step) + (x.callback_at ? ' · ' + esc(when(x.callback_at)) : '') + '</div>' : '')
+            + '<button type="button" class="sd-btn ghost sm" data-sd-hist="' + esc(x.attempt_id) + '">History</button></div>';
+        }).join('') || '<p class="sd-muted" style="font-size:13px">Nobody here yet.</p>';
+        return '<div class="sd-card sd-stage" data-sd-stage="' + esc(st.key) + '"><h3>' + esc(st.label) + ' <span class="sd-count">' + st.items.length + '</span></h3>' + items + '</div>';
+      }).join('');
+      host.innerHTML = pageWrap('My pipeline', 'Your own calls from the last ' + n(p.since_days) + ' days. Each number sits at the furthest step it reached: Interested → Said Hi → To close → Paid.', '<div class="sd-stages">' + cols + '</div>');
+      qa('[data-sd-hist]', host).forEach(function (b) { b.onclick = function () { if (window.makaugCalling && window.makaugCalling.openHistory) window.makaugCalling.openHistory(b.getAttribute('data-sd-hist')); }; });
+    }, function (e) { failed(host, 'My pipeline', e); });
+  }
+  function loadApprove(host) {
+    host.innerHTML = pageWrap('Agents to approve', '', '<div class="sd-card">Loading…</div>');
+    api('/desk/approve').then(function (list) {
+      if (S.page !== 'approve') return;
+      var caller = S.scope === 'caller';
+      var rows = (list || []).map(function (a) {
+        return '<tr data-sd-approve-row><td><b>' + esc(a.name || 'No name') + '</b>' + (a.agency ? '<div class="sd-muted" style="font-size:12px">' + esc(a.agency) + '</div>' : '') + '</td><td>' + esc(a.phone) + '</td><td>' + esc(niceDay(String(a.signed_up_at || '').slice(0, 10))) + '<div class="sd-muted" style="font-size:12px">' + n(a.waiting_days) + ' day' + (n(a.waiting_days) === 1 ? '' : 's') + ' waiting</div></td><td>' + (a.mine ? 'You' : esc(a.called_by || '–')) + '</td></tr>';
+      }).join('');
+      host.innerHTML = pageWrap('Agents to approve', caller ? 'Agents you called who signed up and are waiting for approval. King or a moderator approves them.' : 'Everyone who signed up and is waiting. Approve them in Desk tools → Agents.',
+        '<div class="sd-card"><div class="sd-scroll"><table class="sd-table" data-sd-approve><tr><th>Agent</th><th>Phone</th><th>Signed up</th><th>Called by</th></tr>' + (rows || '<tr><td colspan="4" class="sd-muted">Nobody is waiting.</td></tr>') + '</table></div>'
+        + (caller ? '' : '<button type="button" class="sd-btn" style="margin-top:10px" data-sd-go-tools>Open Desk tools</button>') + '</div>');
+      var t = q('[data-sd-go-tools]', host); if (t) t.onclick = function () { go('tools'); };
+    }, function (e) { failed(host, 'Agents to approve', e); });
+  }
+  function loadOwes(host) {
+    host.innerHTML = pageWrap('Owes us money', '', '<div class="sd-card">Loading…</div>');
+    api('/desk/owes').then(function (o) {
+      if (S.page !== 'owes') return;
+      var items = o.items || [];
+      var total = items.reduce(function (a, x) { return a + n(x.owed_ugx); }, 0);
+      var rows = items.map(function (x) {
+        var due = x.never_paid ? 'Never paid' : 'Paid until ' + niceDay(x.paid_until) + ' · ' + n(x.overdue_days) + ' days late';
+        var last = x.last_chase ? 'Chased ' + when(x.last_chase.at) + ' by ' + (x.last_chase.mine ? 'you' : esc(x.last_chase.by)) : 'Not chased yet';
+        return '<tr data-sd-owes-row="' + esc(x.id) + '"><td><b>' + esc(x.name || 'No name') + '</b> <span class="sd-muted">' + esc(x.phone) + '</span><div class="sd-muted" style="font-size:12px">' + esc(due) + '</div></td><td><b>' + ugx(x.owed_ugx) + '</b></td><td style="font-size:12px">' + last + '</td>'
+          + '<td><button type="button" class="sd-btn sm" data-sd-chase="' + esc(x.id) + '">Chase</button></td></tr>';
+      }).join('');
+      host.innerHTML = pageWrap('Owes us money', items.length + ' agent' + (items.length === 1 ? '' : 's') + ' · about ' + ugx(total) + ' at ' + ugx(o.fee_ugx) + ' a month. <b>Chase</b> puts the number at the top of your “Get payments in” calls.',
+        '<div class="sd-card"><div class="sd-scroll"><table class="sd-table" data-sd-owes><tr><th>Agent</th><th>Owes</th><th>Last chase</th><th></th></tr>' + (rows || '<tr><td colspan="4" class="sd-muted">Nobody owes money right now.</td></tr>') + '</table></div></div>');
+      qa('[data-sd-chase]', host).forEach(function (b) { b.onclick = function () {
+        b.disabled = true; b.textContent = 'Chasing…';
+        api('/desk/owes/' + encodeURIComponent(b.getAttribute('data-sd-chase')) + '/chase', { method: 'POST', body: {} }).then(function (r) {
+          b.textContent = r.queued ? 'In your calls ✓' : 'Already in your calls ✓';
+        }, function (e) { b.disabled = false; b.textContent = 'Chase'; window.alert(e.message); });
+      }; });
+    }, function (e) { failed(host, 'Owes us money', e); });
+  }
+  function loadMissed(host) {
+    host.innerHTML = pageWrap('Missed calls', '', '<div class="sd-card">Loading…</div>');
+    api('/desk/missed').then(function (list) {
+      if (S.page !== 'missed') return;
+      var rows = (list || []).map(function (m) {
+        return '<tr data-sd-missed-row><td><b>' + esc(m.name || 'Unknown') + '</b> <span class="sd-muted">' + esc(m.phone) + '</span>' + (m.note ? '<div class="sd-muted" style="font-size:12px">' + esc(m.note) + '</div>' : '') + '</td><td>' + esc(when(m.at)) + '</td><td>'
+          + (m.called_back_at ? '<span style="color:#15803d;font-weight:800">Called back ' + esc(when(m.called_back_at)) + '</span>' : '<span style="color:#b91c1c;font-weight:800">Ring back</span> <span class="sd-muted" style="font-size:12px">(in your calls)</span>') + '</td>'
+          + '<td><button type="button" class="sd-btn ghost sm" data-sd-dismiss="' + esc(m.id) + '">Done</button></td></tr>';
+      }).join('');
+      host.innerHTML = pageWrap('Missed calls', 'Calls you missed on the company phone. Log one and the number goes to the top of your calls. (The phone app will add them by itself later.)',
+        '<div class="sd-card" style="margin-bottom:12px"><h3>Log a missed call</h3><form class="sd-form" data-sd-missed-form><label>Number<input name="phone" placeholder="0772 123 456" required></label><label>Name (if known)<input name="name"></label><label>When<input name="at" type="datetime-local"></label><label>Note<input name="note"></label><div data-sd-missed-err></div><button class="sd-btn" type="submit">Save</button></form></div>'
+        + '<div class="sd-card"><div class="sd-scroll"><table class="sd-table" data-sd-missed><tr><th>Who</th><th>When</th><th>Status</th><th></th></tr>' + (rows || '<tr><td colspan="4" class="sd-muted">No missed calls in the last 14 days.</td></tr>') + '</table></div></div>');
+      var f = q('[data-sd-missed-form]', host);
+      f.onsubmit = function (ev) {
+        ev.preventDefault();
+        var v = function (k) { var el = q('[name="' + k + '"]', f); return el ? el.value : ''; };
+        var at = v('at') ? new Date(v('at')).toISOString() : null;
+        api('/desk/missed', { method: 'POST', body: { phone: v('phone'), name: v('name'), at: at, note: v('note') } }).then(function () { loadMissed(host); },
+          function (e) { q('[data-sd-missed-err]', host).innerHTML = '<p style="color:#b91c1c;font-weight:700">' + esc(e.message) + '</p>'; });
+      };
+      qa('[data-sd-dismiss]', host).forEach(function (b) { b.onclick = function () { api('/desk/missed/' + b.getAttribute('data-sd-dismiss') + '/dismiss', { method: 'POST', body: {} }).then(function () { loadMissed(host); }, function (e) { window.alert(e.message); }); }; });
+    }, function (e) { failed(host, 'Missed calls', e); });
   }
 
   // ------------------------------------------------------ performance ----
-  var OUTCOME = { no_answer: 'No answer', replied: 'Replied / chatting', interested: 'Interested', signed_up: 'Signed up', paid: 'Paid', renewed: 'Renewed', not_interested: 'Not interested', wrong_number: 'Wrong number', call_back: 'Call back', none: 'No outcome' };
+  var OUTCOME = { no_answer: 'No answer', replied: 'Replied / chatting', interested: 'Interested', signed_up: 'Signed up', paid: 'Paid', renewed: 'Renewed', not_interested: 'Not interested', wrong_number: 'Wrong number', call_back: 'Call back', none: 'Needs an outcome' };
   function loadPerf(host) {
     host.innerHTML = '<div class="sd-page"><h1 class="sd-h1">My performance</h1><p class="sd-sub">Loading…</p></div>';
     api('/desk/performance').then(function (p) {

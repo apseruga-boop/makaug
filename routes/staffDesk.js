@@ -1,6 +1,7 @@
 'use strict';
 
 const desk = require('../services/staffDesk');
+const pipe = require('../services/staffPipeline');
 
 /**
  * Staff desk pages (Arthur, 21 Nov 2026). Shared with staff logins through
@@ -32,6 +33,18 @@ function registerStaffDeskRoutes(router) {
     const m = me(req); if (!m.userId) return res.status(401).json({ ok: false, error: 'Sign in first.' });
     return res.json({ ok: true, data: await desk.saveProfile(m.userId, m.personKey, req.body || {}, { actor: m.name }) });
   }));
+  // 3b pipeline pages. Writes always act as the signed-in person.
+  const scopeOf = (req) => { const u = req.userAuth || {}; const p = u.profile_data && typeof u.profile_data === 'object' ? u.profile_data : {}; return String(p.staff_scope || ''); };
+  const needMe = (req) => { const pk = me(req).personKey; if (!pk) { const e = new Error('Your login has no calling name yet. Ask King.'); e.status = 403; throw e; } return pk; };
+  router.get('/desk/owed', wrap(async (req, res) => res.json({ ok: true, data: await pipe.owed(personFor(req)) })));
+  router.post('/desk/owed/:id', wrap(async (req, res) => res.json({ ok: true, data: await pipe.lateOutcome(needMe(req), req.params.id, req.body || {}) })));
+  router.get('/desk/pipeline', wrap(async (req, res) => res.json({ ok: true, data: await pipe.pipeline(personFor(req)) })));
+  router.get('/desk/approve', wrap(async (req, res) => res.json({ ok: true, data: await pipe.toApprove(personFor(req), { caller: !isKing(req) && scopeOf(req) === 'caller' }) })));
+  router.get('/desk/owes', wrap(async (req, res) => res.json({ ok: true, data: await pipe.owes(personFor(req)) })));
+  router.post('/desk/owes/:id/chase', wrap(async (req, res) => res.json({ ok: true, data: await pipe.chase(needMe(req), req.params.id, { note: req.body?.note }) })));
+  router.get('/desk/missed', wrap(async (req, res) => res.json({ ok: true, data: await pipe.missed(personFor(req)) })));
+  router.post('/desk/missed', wrap(async (req, res) => res.status(201).json({ ok: true, data: await pipe.logMissed(needMe(req), req.body || {}) })));
+  router.post('/desk/missed/:id/dismiss', wrap(async (req, res) => res.json({ ok: true, data: await pipe.dismissMissed(needMe(req), req.params.id) })));
   // King only: one staff member's full profile, ID number included.
   router.get('/king/staff/:id/profile', wrap(async (req, res) => {
     if (!isKing(req)) return res.status(403).json({ ok: false, error: 'King only.' });

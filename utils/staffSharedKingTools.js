@@ -33,6 +33,9 @@ function isStaffSharedKingTool(path, method = 'GET') {
   // Staff desk (Arthur, 21 Nov 2026): own home, pay and profile only.
   if (['/desk/home', '/desk/performance', '/desk/pay', '/desk/profile'].includes(p) && m === 'GET') return true;
   if (p === '/desk/profile' && m === 'PUT') return true;
+  // Staff desk 3b: own pipeline pages (outcome owed, pipeline, agents to approve, owes us money, missed calls).
+  if (['/desk/owed', '/desk/pipeline', '/desk/approve', '/desk/owes', '/desk/missed'].includes(p) && m === 'GET') return true;
+  if (m === 'POST' && (/^\/desk\/owed\/[0-9a-f-]{36}$/i.test(p) || /^\/desk\/owes\/[0-9a-f-]{36}\/chase$/i.test(p) || p === '/desk/missed' || /^\/desk\/missed\/\d+\/dismiss$/.test(p))) return true;
   if (p === '/calling/bootstrap' && m === 'GET') return true;
   if (p === '/calling/sessions' && m === 'POST') return true;
   if (/^\/calling\/sessions\/[^/]+\/(heartbeat|task|next|end|claim|inbound)$/.test(p) && m === 'POST') return true;

@@ -433,6 +433,17 @@ async function startSession({ personKey, taskKey, device = '', actorAccount = ''
   }
   const task = await loadTask(taskKey);
   await tidy(now);
+  // Every dialled call ends with an outcome (Arthur, 21 Nov 2026): calls left without one
+  // (screen closed, connection lost) get it before the person's next session starts.
+  // King starting a session for someone is not blocked: the outcome is theirs to give.
+  const owedCalls = isKing ? [] : await rows(
+    `SELECT id FROM call_attempts WHERE person_key = $1 AND tapped_at IS NOT NULL AND outcome IS NULL AND status IN ('calling', 'abandoned')
+        AND tapped_at > $2::timestamptz - INTERVAL '14 days' AND COALESCE(direction, 'outbound') = 'outbound'`, [person.key, now]);
+  if (owedCalls.length) {
+    const e = httpError(409, `${owedCalls.length === 1 ? 'One call needs' : `${owedCalls.length} calls need`} an outcome first.`);
+    e.code = 'outcome_owed'; e.data = { owed: owedCalls.length };
+    throw e;
+  }
   for (const s of await rows('SELECT id FROM call_sessions WHERE person_key = $1 AND ended_at IS NULL', [person.key])) await closeSession(s.id, 'replaced', { at: now });
   const s = (await rows(
     `INSERT INTO call_sessions (person_key, task_key, actor_account, actor_user_id, device, started_at, last_heartbeat_at)
