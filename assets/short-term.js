@@ -2459,23 +2459,53 @@
     }).join('');
   }
 
+  function vibeCityAdsOn() {
+    try {
+      var search = '';
+      try { search = String(window.location.search || ''); } catch (_e) {}
+      var params = new URLSearchParams(search.charAt(0) === '?' ? search.slice(1) : search);
+      var vibe = String(params.get('vibe') || '').trim().toLowerCase();
+      if (vibe === 'off') params.set('noskin', '1');
+      if (vibe === 'preview' || vibe === 'on' || vibe === '1') params.set('skin', 'preview');
+      var api = window.VibeCitySkinWindow;
+      if (api && typeof api.isVibeCitySkinActive === 'function') {
+        return api.isVibeCitySkinActive({ search: '?' + params.toString(), pathname: (window.location && window.location.pathname) || '/' });
+      }
+    } catch (_e) {}
+    var t = Date.now();
+    return t >= Date.parse('2026-11-21T00:00:00+03:00') && t < Date.parse('2026-11-30T00:00:00+03:00');
+  }
+
   function adBannerHtml() {
     var config = window.__makaugShortTerm || {};
     if (!config.countdown) return '';
-    var label = String(config.countdownLabel || 'AFCON 2027');
+    var vibe = vibeCityAdsOn();
+    var label = vibe ? 'Vibe City' : String(config.countdownLabel || 'AFCON 2027');
     // Same markup as the site's house ad placements, so it reads as one of
     // them. --st is a dark scrim: the stadium photograph is a night shot and
-    // the default white scrim would leave the copy unreadable.
+    // the default white scrim would leave the copy unreadable. During Vibe
+    // Week the band reuses the #838 campaign art and the shared skin window.
+    var img = vibe
+      ? '/assets/house-ads-vibe/short-term.webp?v=vibe-week-20261121'
+      : '/assets/img/hoima-stadium.jpg';
+    var imgMobile = vibe
+      ? '/assets/house-ads-vibe/short-term-mobile.webp?v=vibe-week-20261121'
+      : img;
+    var alt = vibe ? 'Vibe City short stays on makaug.com' : 'Hoima Stadium, one of the AFCON 2027 venues in Uganda';
+    var headline = vibe ? 'Stay in Vibe City this week.' : t('adHeadline');
+    var sub = vibe ? 'Find a short stay on makaug.com, or list your place.' : t('adSub');
+    var bandClass = vibe ? 'mk-house-band mk-house-band--st mk-house-band--vibe-week' : 'mk-house-band mk-house-band--st';
     return '<div class="mk-house-band-wrap max-w-7xl mx-auto st-ad-wrap">'
-      + '<section class="mk-house-band mk-house-band--st" id="st-countdown" data-copy-side="left" aria-label="' + esc(label) + '">'
+      + '<section class="' + bandClass + '" id="st-countdown" data-copy-side="left" data-house-placement="short-term" aria-label="' + esc(label) + '">'
       + '<picture>'
-      + '<img class="mk-house-band__image" src="/assets/img/hoima-stadium.jpg" alt="Hoima Stadium, one of the AFCON 2027 venues in Uganda" '
+      + '<source media="(max-width: 640px)" srcset="' + esc(imgMobile) + '">'
+      + '<img class="mk-house-band__image" src="' + esc(img) + '" alt="' + esc(alt) + '" '
       + 'style="object-position:center 42%" loading="lazy" decoding="async">'
       + '</picture>'
       + '<div class="mk-house-band__scrim" aria-hidden="true"></div>'
       + '<div class="mk-house-band__copy">'
-      + '<h2 class="mk-house-band__headline">' + esc(t('adHeadline')) + '</h2>'
-      + '<p class="st-ad-sub">' + esc(t('adSub')) + '</p>'
+      + '<h2 class="mk-house-band__headline">' + esc(headline) + '</h2>'
+      + '<p class="st-ad-sub">' + esc(sub) + '</p>'
       + '<div class="st-cd-units" id="st-countdown-units"></div>'
       + '<p class="st-cd-date" id="st-countdown-date"></p>'
       + '<div class="st-ad-actions">'
@@ -2612,6 +2642,17 @@
     var slot = document.getElementById('st-ai-slot');
     if (slot && shell) slot.appendChild(shell);
 
+    if (!document.getElementById('st-countdown')) {
+      var notice = document.getElementById('st-aggregator');
+      var html = adBannerHtml();
+      if (html && notice && notice.parentNode) {
+        notice.insertAdjacentHTML('afterend', html);
+      } else if (html) {
+        var ai = document.getElementById('st-ai-slot');
+        if (ai && ai.parentNode) ai.insertAdjacentHTML('beforebegin', html);
+      }
+    }
+    window.makaugShortTermAdBanner = adBannerHtml;
     startCountdown();
     wireShortTermLocationFields();
     refreshAskAiCopy();

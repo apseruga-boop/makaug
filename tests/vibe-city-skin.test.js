@@ -43,6 +43,8 @@ test('the campaign is on through the end of 29 Nov 2026 EAT and off after that',
 
 test('?noskin=1 and VIBE_CITY_SKIN=off turn the skin off; preview can force it on', () => {
   assert.equal(isVibeCitySkinActive({ now: IN_WINDOW, search: '?noskin=1', env: {} }), false);
+  assert.equal(isVibeCitySkinActive({ now: IN_WINDOW, search: '?vibe=off', env: {} }), false);
+  assert.equal(isVibeCitySkinActive({ now: AFTER, search: '?vibe=preview', env: {} }), true);
   assert.equal(isVibeCitySkinActive({ now: IN_WINDOW, search: '/land/kira-wakiso?noskin=true', env: {} }), false);
   assert.equal(isVibeCitySkinActive({ now: IN_WINDOW, env: { VIBE_CITY_SKIN: 'off' } }), false);
   assert.equal(envFlag({ VIBE_CITY_SKIN: 'off' }), 'off');

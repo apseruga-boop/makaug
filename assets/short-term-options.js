@@ -239,6 +239,7 @@
       + '<p>Apartments, cottages and guest houses by the night, found online across Uganda.</p></header>'
       + searchFields(helpers, 'is-pill')
       + aggregatorNotice(helpers)
+      + (typeof window.makaugShortTermAdBanner === 'function' ? window.makaugShortTermAdBanner() : '')
       + (narrow ? '' : '<div id="st-ai-slot"></div>')
       + '<div class="st-opt-tools"><div class="st-count" id="st-count">' + helpers.esc(helpers.t('loading')) + '</div><div class="st-opt-tools-end">'
       + sortSelect(helpers)
