@@ -3,6 +3,7 @@
 const king = require('../services/kingDesk');
 const kingCalls = require('../services/kingCalls');
 const kingStaff = require('../services/kingStaff');
+const kingReview = require('../services/kingReview');
 
 /**
  * King desk pages (King only). These paths are not in
@@ -54,6 +55,19 @@ function registerKingDeskRoutes(router, { writeAudit } = {}) {
   }));
   router.put('/king/staff/targets', wrap(async (req, res) => res.json({ ok: true, data: await kingStaff.setTargets(req.body?.targets, { actor: actorOf(req) }) })));
   router.post('/king/staff/targets/keep', wrap(async (req, res) => res.json({ ok: true, data: await kingStaff.keepTargetsForToday({ actor: actorOf(req) }) })));
+  // Review queues: Found online to review / Agent properties to review.
+  router.get('/king/review/counts', wrap(async (req, res) => res.json({ ok: true, data: await kingReview.counts() })));
+  router.get('/king/review/:kind(found|agent)', wrap(async (req, res) => {
+    const [page, counts, week] = await Promise.all([
+      kingReview.queue(req.params.kind, { filter: String(req.query?.filter || ''), limit: req.query?.limit, offset: req.query?.offset }),
+      kingReview.counts(), kingReview.weekStats()]);
+    return res.json({ ok: true, data: { ...page, counts, week } });
+  }));
+  router.post('/king/review/:id/send-back', wrap(async (req, res) => {
+    const out = await kingReview.sendBack(req.params.id, { note: req.body?.note, actor: actorOf(req) });
+    await audit(req, 'king_listing_sent_back', { property_id: out.id, ref: out.ref, note: String(req.body?.note || '').slice(0, 200) });
+    return res.json({ ok: true, data: out });
+  }));
   router.get('/king/payments', wrap(async (req, res) => res.json({ ok: true, data: await king.payments({ days: req.query?.days }) })));
 }
 

@@ -11,6 +11,7 @@ const db = require('../config/database');
 const calling = require('./callingScreen');
 const removals = require('./agentRemovalRequestService');
 const planner = require('./callingPlanner');
+const kingReview = require('./kingReview');
 
 const TZ_OFFSET_H = 3; // Kampala, no DST
 async function rows(sql, params = []) { try { return (await db.query(sql, params)).rows || []; } catch (_) { return []; } }
@@ -132,7 +133,7 @@ async function overview({ now = new Date() } = {}) {
     live_notes: { spoke: num(n.spoke), with_notes: num(n.with_notes), pct: n.spoke ? Math.round((100 * num(n.with_notes)) / num(n.spoke)) : null, flagged: num(n.flagged) },
     pipeline: { contacted: num(p.contacted), interested: num(p.interested), said_hi: num(p.said_hi), submitted: num(p.submitted), approved: num(p.approved), paid: num(p.paid_funnel), paid_all: num(paidNow[0]?.v), other_submitted: num(p.other_submitted), other_approved: num(p.other_approved), said_hi_not_interested: num(p.said_hi_not_interested) },
     needs_you: needs,
-    counts: { removal_requests: num(reqCount), momo_unmatched: unmatched.length, behind: behind.length, targets_unset: await targetsUnset(r.today) },
+    counts: { removal_requests: num(reqCount), momo_unmatched: unmatched.length, behind: behind.length, targets_unset: await targetsUnset(r.today), ...(await kingReview.counts().catch(() => ({}))) },
     staff_today: (perf.people || []).map((x) => {
       const spoke = num(x.connected); const noTxP = num((x.flags || {}).no_transcript);
       return { person_key: x.person_key, name: x.name, calls: num(x.calls), target_calls: num(x.targets?.calls_per_day), paid: num(x.closes), target_paid: num(x.targets?.closes_per_day), notes_pct: spoke ? Math.round((100 * (spoke - noTxP)) / spoke) : null, live: x.live || null };

@@ -37007,7 +37007,7 @@ async function saveAdminListingReview() {
   }
 }
 
-async function adminPersistActiveReviewEditsBeforeStatus(backendId, moderationReason = "", reviewNotes = "", checklist = null) {
+async function adminPersistActiveReviewEditsBeforeStatus(backendId, moderationReason = "", reviewNotes = "", checklist = null, options = {}) {
   if (!adminActiveReview?.id || String(adminActiveReview.id) !== String(backendId)) return null;
   const listingPatch = collectAdminReviewListingPatch();
   const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(adminActiveReview.id)}/review`, {
@@ -37017,7 +37017,9 @@ async function adminPersistActiveReviewEditsBeforeStatus(backendId, moderationRe
       listing: listingPatch,
       checklist: checklist || getAdminReviewChecklistFromDom(),
       notes: reviewNotes || document.getElementById("admin-review-notes")?.value || "",
-      reason: moderationReason || document.getElementById("admin-review-reason")?.value || "",
+      // A reject sends its typed reason with the status change only. Saving it here first made the
+      // server see it as the listing's own stored note and refuse the reject ("Type the reason…").
+      reason: options.skipReason ? "" : (moderationReason || document.getElementById("admin-review-reason")?.value || ""),
       stage: "in_review",
       warning_overrides: getAdminReviewWarningOverrides(adminActiveReview)
     }
@@ -37329,7 +37331,7 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
     try {
       const statusListingPatch = normalizedStatus === "approved" ? collectAdminReviewListingPatch() : null;
       if (normalizedStatus !== "approved" && isLiveApi && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId)) {
-        const savedReview = await adminPersistActiveReviewEditsBeforeStatus(backendId, moderationReason, reviewNotes, checklist);
+        const savedReview = await adminPersistActiveReviewEditsBeforeStatus(backendId, moderationReason, reviewNotes, checklist, { skipReason: normalizedStatus === "rejected" });
         if (savedReview) Object.assign(listing, savedReview);
       }
       const response = await apiRequest(`/api/properties/${encodeURIComponent(backendId)}/status`, {

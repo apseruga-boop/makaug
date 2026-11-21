@@ -11220,8 +11220,11 @@
           // King's sidebar desk (Overview, Payments & MoMo, Removal requests, Staff).
           if (document.getElementById("king-overview")) {
             var kingDeskScript = document.createElement("script");
-            kingDeskScript.src = "/assets/king-desk.js?v=20261121-kd4";
+            kingDeskScript.src = "/assets/king-desk.js?v=20261121-kd5";
             document.body.appendChild(kingDeskScript);
+            var kingReviewScript = document.createElement("script");
+            kingReviewScript.src = "/assets/king-review.js?v=20261121-kr1";
+            document.body.appendChild(kingReviewScript);
             var kingTeamScript = document.createElement("script");
             kingTeamScript.src = "/assets/king-team.js?v=20261121-kt2";
             document.body.appendChild(kingTeamScript);
