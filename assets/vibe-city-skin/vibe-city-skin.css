@@ -1,0 +1,164 @@
+/* Kampala Vibe City skin for makaug.com (21–29 Nov 2026 EAT).
+   Keeps the green header and lowercase logo. The campaign chrome has no third-party marks and no visitor or inventory totals. */
+@font-face{font-family:"VC Bungee";src:url("/assets/vibe-city-skin/fonts/Bungee.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"VC Kaushan";src:url("/assets/vibe-city-skin/fonts/KaushanScript.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"VC Oswald";src:url("/assets/vibe-city-skin/fonts/Oswald.woff2") format("woff2");font-weight:400 700;font-display:swap}
+@font-face{font-family:"VC Luckiest";src:url("/assets/vibe-city-skin/fonts/LuckiestGuy.woff2") format("woff2");font-weight:400;font-display:swap}
+
+:root{--vc-teal:#3ce6d4;--vc-pink:#ff7eb9;--vc-gold:#e8c34a;--vc-navy:#140c22;--vc-green:#157a3b}
+.vc-gold{color:var(--vc-gold)!important}
+
+/* Hide homepage opportunity / visitor-style totals only */
+body.vc-skin #hero-property-counter,
+body.vc-skin #hero-property-count,
+body.vc-skin #hero-property-counter-tooltip,
+body.vc-skin .hero-opportunity-counter,
+body.vc-skin .hero-opportunity-tooltip{display:none!important}
+
+/* Homepage hero: dusk panel; the photo is a lazy <img>, not a CSS background */
+.hero-bg.vc-hero{
+  background-color:#140c22!important;
+  background-image:linear-gradient(90deg,rgba(12,8,28,.62) 0%,rgba(12,8,28,.22) 48%,rgba(12,8,28,.04) 70%)!important;
+  background-size:cover!important;
+  padding-top:2.4rem!important;
+  padding-bottom:2.6rem!important;
+  position:relative;
+  overflow:hidden;
+  isolation:isolate;
+}
+.hero-bg.vc-hero > .vc-hero-art,
+.hero-bg.vc-hero > picture.vc-hero-art{
+  position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;
+}
+.hero-bg.vc-hero > picture.vc-hero-art img,
+.hero-bg.vc-hero > img.vc-hero-art{
+  width:100%;height:100%;object-fit:cover;object-position:78% 42%;display:block;
+}
+.hero-bg.vc-hero > :not(.vc-hero-art){position:relative;z-index:1}
+
+#hero-badge.vc-hero-badge{
+  background:rgba(8,10,20,.45)!important;
+  border:1px solid rgba(60,230,212,.55)!important;
+  color:#e8fffb!important;
+  letter-spacing:.12em!important;
+  text-transform:uppercase;
+  font-weight:700!important;
+}
+#hero-badge.vc-hero-badge i{color:var(--vc-teal)!important}
+.vc-hero-brand{
+  display:block;color:#fff;font-weight:800;font-size:.95rem;margin-bottom:.35rem;letter-spacing:.02em;
+}
+#hero-title.vc-hero-title{
+  display:flex;flex-direction:column;align-items:center;gap:0;
+  margin-bottom:.35rem!important;line-height:.95!important;font-weight:400!important;
+}
+#hero-title .vc-kampala{
+  font-family:"VC Bungee",Impact,sans-serif;
+  font-size:clamp(2.4rem,6.2vw,5.2rem);
+  color:var(--vc-teal);letter-spacing:.02em;
+  text-shadow:0 0 18px rgba(60,230,212,.45),0 3px 0 rgba(12,20,40,.7);line-height:1;
+}
+#hero-title .vc-vibe{
+  font-family:"VC Kaushan","Brush Script MT",cursive;
+  font-size:clamp(2.2rem,5.4vw,4.4rem);
+  color:var(--vc-pink);
+  text-shadow:0 0 16px rgba(255,126,185,.4),0 3px 0 rgba(40,0,40,.65);
+  margin-top:-.12em;line-height:1.05;
+}
+#hero-subtitle.vc-hero-sub{
+  font-family:"VC Oswald","Trebuchet MS",sans-serif;
+  font-size:clamp(1.15rem,2.2vw,1.75rem)!important;
+  font-weight:600!important;color:#f4f1ff!important;
+  text-shadow:0 2px 8px rgba(0,0,0,.55);
+  margin-top:.65rem!important;margin-bottom:.2rem!important;
+}
+
+#vc-thin-banner{
+  display:flex;align-items:center;justify-content:center;gap:1rem;
+  min-height:52px;padding:.45rem 1rem;color:#fff;
+  background-color:#140c22;
+  border-bottom:1px solid rgba(60,230,212,.35);
+  font-family:"VC Oswald","Trebuchet MS",sans-serif;
+  position:relative;z-index:30;overflow:hidden;
+}
+#vc-thin-banner .vc-thin-art{
+  position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:right center;
+  pointer-events:none;z-index:0;
+}
+#vc-thin-banner .vc-thin-inner{
+  position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:1rem;flex-wrap:wrap;
+}
+#vc-thin-banner .vc-thin-brand{font-family:"VC Bungee",Impact,sans-serif;font-size:.95rem;color:var(--vc-teal);letter-spacing:.04em}
+#vc-thin-banner .vc-thin-script{font-family:"VC Kaushan",cursive;color:var(--vc-pink);font-size:1.15rem}
+#vc-thin-banner .vc-thin-mission{font-size:.95rem;font-weight:600;color:#f6f3ff}
+#vc-thin-banner .vc-thin-sep{opacity:.45;color:var(--vc-teal)}
+
+#vc-mission-strip{
+  background:linear-gradient(90deg,#0d5c32 0%,#145c4a 42%,#2a1848 100%);
+  color:#fff;padding:.7rem 1.25rem;
+  display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.6rem 1.2rem;
+  border-bottom:1px solid rgba(60,230,212,.3);
+}
+#vc-mission-strip .vc-mission-line{
+  font-family:"VC Oswald","Trebuchet MS",sans-serif;
+  font-size:clamp(1.15rem,2.2vw,1.7rem);font-weight:700;letter-spacing:.02em;
+  text-shadow:0 2px 6px rgba(0,0,0,.4);
+}
+#vc-mission-strip .vc-area-badge{
+  display:inline-flex;align-items:center;gap:.5rem;
+  background:rgba(8,10,20,.35);border:1px solid rgba(255,255,255,.28);
+  border-radius:999px;padding:.28rem .8rem .28rem .7rem;font-size:.85rem;font-weight:600;
+}
+#vc-mission-strip .vc-area-badge .official{color:#fff}
+#vc-mission-strip .vc-area-badge .game{color:var(--vc-teal);font-family:"VC Oswald",sans-serif;letter-spacing:.04em;text-transform:uppercase}
+#vc-mission-strip .vc-area-badge .dot{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.5)}
+
+#vc-list-hero{
+  color:#fff;padding:1.6rem 1.25rem 1.4rem;text-align:center;
+  background-color:#140c22;position:relative;overflow:hidden;
+}
+#vc-list-hero .vc-list-art{
+  position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:right 28%;
+  pointer-events:none;z-index:0;
+}
+#vc-list-hero .vc-list-inner{position:relative;z-index:1}
+#vc-list-hero .vc-kampala{font-family:"VC Bungee",Impact,sans-serif;color:var(--vc-teal);font-size:clamp(1.6rem,3vw,2.4rem);display:block}
+#vc-list-hero .vc-vibe{font-family:"VC Kaushan",cursive;color:var(--vc-pink);font-size:clamp(1.5rem,2.8vw,2.2rem);display:block;margin-top:-.15em}
+#vc-list-hero .vc-mission-line{font-family:"VC Oswald",sans-serif;font-size:clamp(1.2rem,2.2vw,1.7rem);font-weight:700;margin-top:.45rem}
+#vc-list-hero p{margin:.35rem 0 0;color:#f0ecff;font-weight:600}
+
+#vc-confirm-wrap{
+  background-color:#1a1028;padding:2.2rem 0 2.8rem;min-height:520px;position:relative;overflow:hidden;
+}
+#vc-confirm-wrap .vc-confirm-art{
+  position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:right 30%;
+  pointer-events:none;z-index:0;
+}
+#vc-confirm{max-width:720px;margin:0 auto;padding:0 1rem;position:relative;z-index:5}
+#vc-confirm-band{background:rgba(8,6,16,.88);color:var(--vc-gold);text-align:center;padding:1.4rem 1rem 1.1rem;border-radius:6px 6px 0 0}
+#vc-confirm-band .vc-complete{
+  font-family:"VC Luckiest","Trebuchet MS",sans-serif;
+  font-size:clamp(2rem,5vw,3.2rem);color:#e8c34a;
+  text-shadow:0 3px 0 #1a1200,0 0 16px rgba(232,195,74,.25);line-height:1;
+}
+#vc-confirm-band .vc-complete-sub{color:#fff;font-family:"VC Oswald",sans-serif;font-size:1.15rem;font-weight:600;margin-top:.45rem}
+#vc-confirm-panel{background:rgba(8,10,20,.94);color:#fff;padding:1.1rem 1.3rem 1.3rem;border-radius:0 0 12px 12px}
+#vc-confirm-panel .row{display:flex;justify-content:space-between;align-items:center;padding:.55rem 0;border-bottom:1px solid rgba(255,255,255,.12);font-family:"VC Oswald",sans-serif;font-size:1.05rem}
+#vc-confirm-panel .row:last-child{border-bottom:0}
+#vc-confirm-panel .ok{color:#50e6a0;font-weight:700}
+#vc-confirm-panel .cta{display:block;margin-top:1rem;text-align:center;background:var(--vc-green);color:#fff!important;text-decoration:none;font-weight:800;padding:.7rem 1rem;border-radius:10px}
+#vc-confirm-panel .fine{text-align:center;margin-top:.7rem;font-size:.9rem;color:#ddd8f0}
+
+body.vc-confirm-mode #page-list-property > *:not(#vc-confirm-wrap):not(#vc-list-hero){display:none!important}
+
+@media (max-width:640px){
+  .hero-bg.vc-hero{padding-top:1.4rem!important;padding-bottom:1.7rem!important}
+  .hero-bg.vc-hero > picture.vc-hero-art img,
+  .hero-bg.vc-hero > img.vc-hero-art{object-position:center 18%}
+  #hero-title .vc-kampala{font-size:2.15rem}
+  #hero-title .vc-vibe{font-size:1.95rem}
+  #vc-thin-banner .vc-thin-inner{justify-content:flex-start;gap:.25rem .6rem}
+  #vc-thin-banner .vc-thin-sep{display:none}
+  #vc-mission-strip{padding:.65rem .85rem}
+  #vc-mission-strip .vc-mission-line{font-size:1.2rem}
+}

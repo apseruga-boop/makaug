@@ -121,6 +121,7 @@ const { hasStaffOrAdminAccess } = require('./middleware/auth');
 const { clientIpMiddleware } = require('./utils/clientIp');
 const { apiRateLimitKey, apiRateLimitMax, WINDOW_MS: API_RATE_LIMIT_WINDOW_MS } = require('./utils/apiRateLimit');
 const { lagTrackingMiddleware, startEventLoopLagMonitor } = require('./utils/eventLoopLagMonitor');
+const { injectVibeCitySkinTags } = require('./utils/vibeCitySkinWindow');
 const { buildLandingCopy } = require('./services/publicLandingCopy');
 const {
   loadPublicSeoListings,
@@ -1195,6 +1196,11 @@ function sendBufferResponse(req, res, body, options = {}) {
 }
 
 function sendTextResponse(req, res, html, options = {}) {
+  html = injectVibeCitySkinTags(html, {
+    pathname: req.path || (req.originalUrl || req.url || ''),
+    search: req.originalUrl || req.url || '',
+    env: process.env
+  });
   let cacheControl = options.cacheControl;
   let edgeCacheable = false;
   if (cacheControl === PUBLIC_HTML_CACHE_CONTROL && isProduction && res.statusCode === 200 && !res.locals?.publicHtmlDegraded) {
