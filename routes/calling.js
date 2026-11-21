@@ -43,6 +43,18 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
 
   router.get('/calling/bootstrap', wrap(async (req, res) => res.json({ ok: true, data: await calling.bootstrap({ userId: actorId(req), scope: scope(req), isKing: isKing(req) }) })));
 
+  // Connect your phone: server-side lights. The SMS gateway app is not linked
+  // yet (no table), so it reports not set up; MoMo is the last forwarded SMS.
+  router.get('/calling/connect-status', wrap(async (req, res) => {
+    const db = require('../config/database');
+    let momoLast = null;
+    try { momoLast = (await db.query("SELECT MAX(received_at) AS at FROM money_sms_inbox WHERE direction = 'in'")).rows[0]?.at || null; } catch (_) { momoLast = null; }
+    const fresh = (at, hours) => !!at && (Date.now() - new Date(at).getTime()) < hours * 3600 * 1000;
+    res.json({ ok: true, data: {
+      sms_gateway: { ok: false, last_seen: null, set_up: false },
+      momo: { ok: fresh(momoLast, 48), last_seen: momoLast ? new Date(momoLast).toISOString() : null, set_up: !!momoLast, token_configured: String(process.env.MONEY_SMS_WEBHOOK_TOKEN || '').length >= 16 }
+    } });
+  }));
   router.post('/calling/sessions', wrap(async (req, res) => {
     const out = await calling.startSession({ personKey: req.body?.person_key, taskKey: req.body?.task_key, device: req.body?.device, actorAccount: actorOf(req), actorUserId: actorId(req), isKing: isKing(req) });
     await audit(req, 'calling_session_started', { session_id: out.session.id, person: out.person.key, task: out.task.key });
@@ -80,7 +92,7 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
     return res.json({ ok: true, data: out });
   }));
 
-  router.post('/calling/attempts/:id/tap', wrap(async (req, res) => res.json({ ok: true, data: await calling.tap(req.params.id, opts(req)) })));
+  router.post('/calling/attempts/:id/tap', wrap(async (req, res) => res.json({ ok: true, data: await calling.tap(req.params.id, { ...opts(req), check: req.body?.check || null }) })));
   router.post('/calling/attempts/:id/end', wrap(async (req, res) => res.json({ ok: true, data: await calling.endCall(req.params.id, opts(req)) })));
 
   router.post('/calling/attempts/:id/wrapup', wrap(async (req, res) => {

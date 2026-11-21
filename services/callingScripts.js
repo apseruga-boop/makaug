@@ -238,7 +238,7 @@ const COACH = Object.freeze({
     script: 'Follow the script: step {n} of {total}', next_step: 'Next step', hi: 'Did you ask them to WhatsApp "Hello" to makaug on {wa}?',
     hi_why: 'A must on every call: it registers them as a client and makes their number known, so we can send the film, link and payment details.', hi_done: 'Asked them to say Hello', hi_no: 'They refused',
     end: 'End call', confirm: 'Confirm what happened', save: 'Save and call next', must: 'You must finish this wrap-up before the next call.',
-    close_title: 'Key things to remember to close', offline: 'Offline: saving locally', synced: 'Back online: saved', calls: 'Calls', closes: 'Closes', left: 'Left',
+    close_title: 'Key things to remember to close', offline: 'Offline: saving locally', synced: 'Back online: saved', calls: 'Calls', closes: 'Paid', left: 'Left',
     brk: 'Break', exit: 'Exit', add: '+ Add number', report: 'My report', note: 'Note', what: 'What happened?', skip: 'Skip this number', call_next: 'Call next'
   },
   lg: {

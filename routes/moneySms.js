@@ -64,4 +64,8 @@ router.post('/inbound', express.text({ type: 'text/*', limit: '32kb' }), async (
   }
 });
 
+// Yes/no only (never the value), so King can see in the server log whether
+// the MoMo forwarder can reach us at all.
+console.log(`[money-sms] webhook token configured: ${String(process.env.MONEY_SMS_WEBHOOK_TOKEN || '').trim().length >= 16 ? 'yes' : 'no'}`);
+
 module.exports = router;

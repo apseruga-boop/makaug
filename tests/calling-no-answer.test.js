@@ -17,7 +17,7 @@ test('no answer is kept but not counted: calls, connected, closes, by task, by h
     done({ outcome: 'no_answer', wrapped_at: at(3) }),
     done({ outcome: 'no_answer', wrapped_at: at(2.5) }),
     done({ outcome: 'interested', spoke: true, talk_s: 120, wrapped_at: at(2) }),
-    done({ outcome: 'signed_up', spoke: true, is_close: true, talk_s: 300, wrapped_at: at(1) }),
+    done({ outcome: 'paid', spoke: true, is_close: true, talk_s: 300, wrapped_at: at(1) }), // paid = closed (21 Nov 2026)
     { status: 'skipped', skip_reason: 'Busy', task_key: 'new_agents', shown_at: at(0.5) }
   ];
   const s = c.summarize(list, [{ key: 'new_agents', name: 'New agents' }]);

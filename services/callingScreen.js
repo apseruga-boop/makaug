@@ -52,8 +52,28 @@ const FLAG_LABELS = Object.freeze({
   rapid_tap: 'Tapped under 15 s after the last call',
   no_tap: 'Outcome without tapping to call',
   no_follow_up: 'Interested with no follow-up date',
-  no_end: 'Wrapped up without ending the call'
+  no_end: 'Wrapped up without ending the call',
+  no_transcript: 'Spoke but no live-notes transcript'
 });
+
+// Closed means paid: money received (Arthur, 21 Nov 2026). "Signed up" is
+// interest, not a close. Only these outcomes can ever count as a close, even
+// if a task's outcome list is edited to say otherwise.
+const PAID_OUTCOMES = Object.freeze(new Set(['paid', 'renewed']));
+function closedPaid(a = {}) { return Boolean(a.is_close) && PAID_OUTCOMES.has(String(a.outcome || '')); }
+
+// Call now is locked until the screen has passed its mic + live-notes check
+// (and the phone link / audio device is still there). Old cached screens that
+// don't send the check are refused, so they must reload.
+const NOTES_CHECK_MAX_AGE_MS = 12 * 3600 * 1000;
+function notesCheckOk(check, now = new Date()) {
+  if (!check || typeof check !== 'object') return false;
+  if (check.notes !== 'ok' || check.link === 'down') return false;
+  const at = new Date(check.at || 0).getTime();
+  if (!Number.isFinite(at) || at <= 0) return false;
+  const age = now.getTime() - at;
+  return age >= -5 * 60000 && age <= NOTES_CHECK_MAX_AGE_MS;
+}
 
 const kampalaDay = perf.kampalaDay;
 const addDays = perf.addDays;
@@ -84,7 +104,7 @@ function outcomeDef(task, key) {
  * attempt: tapped_at, ended_at, wrapped_at, callback_at; def: the outcome;
  * prevTapAt: this caller's previous tap (any task), if any.
  */
-function flagsFor(attempt = {}, def = {}, prevTapAt = null) {
+function flagsFor(attempt = {}, def = {}, prevTapAt = null, transcript = null) {
   const flags = [];
   const talk = seconds(attempt.tapped_at, attempt.ended_at || attempt.wrapped_at);
   if (!attempt.tapped_at) flags.push('no_tap');
@@ -95,6 +115,9 @@ function flagsFor(attempt = {}, def = {}, prevTapAt = null) {
     if (gap != null && gap < RAPID_TAP_S) flags.push('rapid_tap');
   }
   if (['interested', 'will_list', 'needs_help'].includes(def.key) && !attempt.callback_at) flags.push('no_follow_up');
+  // They spoke but live notes caught nothing: King sees it on the evidence.
+  const heard = transcript && typeof transcript.text === 'string' ? transcript.text.trim() : '';
+  if (def.spoke && attempt.tapped_at && heard.length < 3) flags.push('no_transcript');
   return flags;
 }
 
@@ -236,7 +259,7 @@ function summarize(attempts = [], tasks = []) {
     calls: done.length,
     not_answered: all.length - done.length,
     connected: done.filter((a) => a.spoke).length,
-    closes: done.filter((a) => a.is_close).length,
+    closes: done.filter(closedPaid).length,
     skipped: attempts.filter((a) => a.status === 'skipped').length,
     skip_reasons: attempts.filter((a) => a.status === 'skipped').reduce((m, a) => { const k = skipCodeOf(a.skip_reason); m[k] = (m[k] || 0) + 1; return m; }, {}),
     abandoned: attempts.filter((a) => a.status === 'abandoned').length,
@@ -258,7 +281,7 @@ function summarize(attempts = [], tasks = []) {
   for (const a of done) {
     out.outcomes[a.outcome] = (out.outcomes[a.outcome] || 0) + 1;
     const bt = out.by_task[a.task_key] || (out.by_task[a.task_key] = { name: a.task_key, calls: 0, closes: 0, connected: 0 });
-    bt.calls += 1; if (a.is_close) bt.closes += 1; if (a.spoke) bt.connected += 1;
+    bt.calls += 1; if (closedPaid(a)) bt.closes += 1; if (a.spoke) bt.connected += 1;
     const hour = Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: TZ }).format(new Date(a.tapped_at || a.wrapped_at))) % 24;
     out.by_hour[hour] = (out.by_hour[hour] || 0) + 1;
     const fl = Array.isArray(a.flags) ? a.flags : [];
@@ -428,7 +451,7 @@ async function openSession(id) {
 // Everything the screen reports: leaving it, breaks (lunch:45 = a 45-minute lunch),
 // idle (idle_end detail = idle ms), open/close and every button pressed.
 const IN_MEETING = 'in meeting';
-const EVENT_KINDS = new Set(['inbound_start', 'fs_exit', 'fs_enter', 'hidden', 'visible', 'break_start', 'break_end', 'kit_send', 'screen_open', 'screen_close', 'idle_start', 'idle_end', 'action', 'work_on', 'work_off', 'meeting_join', 'meeting_end', 'notes_start', 'notes_stop', 'notes_declined', 'notes_error', 'wa_share', 'housekeeping_on', 'housekeeping_off', 'auto_fallback', 'route', 'work_off']);
+const EVENT_KINDS = new Set(['inbound_start', 'fs_exit', 'fs_enter', 'hidden', 'visible', 'break_start', 'break_end', 'kit_send', 'screen_open', 'screen_close', 'idle_start', 'idle_end', 'action', 'work_on', 'work_off', 'meeting_join', 'meeting_end', 'notes_start', 'notes_stop', 'notes_declined', 'notes_error', 'notes_check_passed', 'notes_check_failed', 'link_drop', 'link_back', 'wa_share', 'housekeeping_on', 'housekeeping_off', 'auto_fallback', 'route', 'work_off']);
 
 /**
  * Heartbeat from the screen: running totals (ms) and the events since the last
@@ -823,10 +846,15 @@ async function alreadyApplied(attemptId, op) {
   return (await rows('SELECT * FROM call_attempts WHERE id = $1 AND $2 = ANY(client_ops)', [attemptId, op]))[0] || null;
 }
 
-async function tap(attemptId, { sessionId, now = new Date(), at = null, op = '' } = {}) {
+async function tap(attemptId, { sessionId, now = new Date(), at = null, op = '', check = null } = {}) {
   const opId = cleanOp(op);
   const done = await alreadyApplied(attemptId, opId);
   if (done) return maskedAttempt(done);
+  if (!notesCheckOk(check, now)) {
+    const err = httpError(428, 'Do the mic and live-notes check first (and reconnect the phone if it dropped). If this keeps showing, reload the page.');
+    err.code = 'notes_check_required';
+    throw err;
+  }
   const a = await attemptInSession(attemptId, sessionId);
   if (!['shown', 'calling'].includes(a.status)) throw httpError(409, 'This call is already finished.');
   const when = clientTime(at, a, now);
@@ -928,7 +956,7 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   ))[0];
   const ended = a.ended_at || (a.tapped_at ? null : null);
   const record = { tapped_at: a.tapped_at, ended_at: ended, wrapped_at: now, callback_at: cb };
-  const flags = flagsFor(record, def, prevTap?.tapped_at || null);
+  const flags = flagsFor(record, def, prevTap?.tapped_at || null, tx);
   const talk = a.tapped_at ? seconds(a.tapped_at, a.ended_at || now) : null;
   const wrapS = seconds(a.ended_at || a.tapped_at || a.shown_at, now);
   const gapS = prev?.wrapped_at && a.tapped_at && kampalaDay(prev.wrapped_at) === kampalaDay(a.tapped_at) ? seconds(prev.wrapped_at, a.tapped_at) : null;
@@ -938,7 +966,7 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
         client_ops = CASE WHEN $13 = '' THEN client_ops ELSE array_append(client_ops, $13) END,
         next_step = NULLIF($14, ''), transcript = $15::jsonb
       WHERE id = $1 AND status IN ('shown', 'calling') RETURNING *`,
-    [a.id, now, def.key, Boolean(def.spoke), Boolean(def.close), text, cb, JSON.stringify(ticks), flags, talk, wrapS, gapS, opId, next, tx ? JSON.stringify(tx) : null]
+    [a.id, now, def.key, Boolean(def.spoke), Boolean(def.close) && PAID_OUTCOMES.has(def.key), text, cb, JSON.stringify(ticks), flags, talk, wrapS, gapS, opId, next, tx ? JSON.stringify(tx) : null]
   ))[0];
   if (!out) throw httpError(409, 'This call is already wrapped up.');
   await mirrorToProspect(out, def).catch(() => null);
@@ -1065,10 +1093,15 @@ async function searchCalls(qText = '', { personKey = '', limit = 40 } = {}) {
 async function callsSummary({ from, to } = {}) {
   const start = `${from}T00:00:00+03:00`; const end = `${addDays(to, 1)}T00:00:00+03:00`;
   const list = await rows(
-    `SELECT id, person_key, task_key, direction, phone_key, full_name, status, outcome, is_close, note, next_step, callback_at, transcript, talk_s, COALESCE(wrapped_at, tapped_at, shown_at) AS at
+    `SELECT id, person_key, task_key, direction, phone_key, full_name, status, outcome, is_close, flags, note, next_step, callback_at, transcript, talk_s, COALESCE(wrapped_at, tapped_at, shown_at) AS at
        FROM call_attempts WHERE status IN ('done', 'skipped') AND COALESCE(tapped_at, shown_at) >= $1 AND COALESCE(tapped_at, shown_at) < $2 AND ${sandbox.REAL_PEOPLE()} ORDER BY at`, [start, end]);
   const misses = list.filter(isNoAnswer);
   const done = list.filter(countsAsCall);
+  // Phone link / audio drops and failed mic checks the screen reported, per caller.
+  const drops = (await rows(
+    `SELECT s.person_key, e.kind, e.detail, e.at FROM call_session_events e JOIN call_sessions s ON s.id = e.session_id
+      WHERE e.kind IN ('link_drop', 'notes_check_failed') AND e.at >= $1 AND e.at < $2 ORDER BY e.at`, [start, end]).catch(() => []))
+    .map((e) => ({ by: e.person_key, kind: e.kind, detail: e.detail || '', at: e.at }));
   const by = {}; const outcomes = {};
   for (const a of misses) {
     const p = by[a.person_key] || (by[a.person_key] = { calls: 0, not_answered: 0, outbound: 0, inbound: 0, closes: 0, talk_s: 0 });
@@ -1076,7 +1109,7 @@ async function callsSummary({ from, to } = {}) {
   }
   for (const a of done) {
     const p = by[a.person_key] || (by[a.person_key] = { calls: 0, not_answered: 0, outbound: 0, inbound: 0, closes: 0, talk_s: 0 });
-    p.calls += 1; p[a.direction === 'inbound' ? 'inbound' : 'outbound'] += 1; if (a.is_close) p.closes += 1; p.talk_s += Number(a.talk_s || 0);
+    p.calls += 1; p[a.direction === 'inbound' ? 'inbound' : 'outbound'] += 1; if (closedPaid(a)) p.closes += 1; p.talk_s += Number(a.talk_s || 0);
     outcomes[a.outcome] = (outcomes[a.outcome] || 0) + 1;
   }
   const item = (a) => ({ at: a.at, by: a.person_key, direction: a.direction, name: a.full_name || '', phone: `•••${a.phone_key.slice(-3)}`, outcome: a.outcome, summary: (a.transcript && a.transcript.summary) || a.note || '', next_step: a.next_step || '', callback_at: a.callback_at });
@@ -1087,7 +1120,9 @@ async function callsSummary({ from, to } = {}) {
     from, to, calls: done.length, not_answered: misses.length, outbound: done.filter((a) => a.direction !== 'inbound').length, inbound: done.filter((a) => a.direction === 'inbound').length,
     skipped: list.length - done.length - misses.length, outcomes, by_person: by,
     discussed: done.filter((a) => (a.transcript && a.transcript.summary) || (a.note && a.note.length > 12)).slice(-40).reverse().map(item),
-    closed: done.filter((a) => a.is_close).reverse().map(item),
+    closed: done.filter(closedPaid).reverse().map(item),
+    no_transcript: done.filter((a) => (a.flags || []).includes('no_transcript')).reverse().map(item),
+    link_drops: drops,
     open: [...latest.values()].filter((a) => !a.is_close && !finalNo.has(a.outcome)).sort((x, y) => new Date(x.callback_at || '2999-01-01') - new Date(y.callback_at || '2999-01-01')).slice(0, 60).map(item),
     no_next_step: done.filter((a) => !a.is_close && !finalNo.has(a.outcome) && !a.next_step && !a.callback_at).map(item)
   };
@@ -1316,7 +1351,7 @@ async function roadTo1000() {
 
 async function leaderboard(day) {
   const list = await rows(
-    `SELECT person_key, COUNT(*) FILTER (WHERE ${COUNTED_SQL()})::int AS calls, COUNT(*) FILTER (WHERE status = 'done' AND outcome = '${NO_ANSWER}')::int AS not_answered, COUNT(*) FILTER (WHERE is_close)::int AS closes
+    `SELECT person_key, COUNT(*) FILTER (WHERE ${COUNTED_SQL()})::int AS calls, COUNT(*) FILTER (WHERE status = 'done' AND outcome = '${NO_ANSWER}')::int AS not_answered, COUNT(*) FILTER (WHERE is_close AND outcome IN ('paid', 'renewed'))::int AS closes
        FROM call_attempts WHERE (COALESCE(tapped_at, shown_at) AT TIME ZONE '${TZ}')::date = $1::date AND ${sandbox.REAL_PEOPLE()} GROUP BY person_key ORDER BY closes DESC, calls DESC`,
     [day]
   );
@@ -1393,8 +1428,8 @@ async function moneyToday(personKey, attempts = []) {
   const me = callers.find((c) => c.key === personKey) || {};
   const rate = Number(me.rate_pct || 0);
   const done = attempts.filter((a) => a.status === 'done');
-  const paid = done.filter((a) => a.is_close && a.task_key !== 'new_agents').length;
-  const pending = done.filter((a) => (a.is_close && a.task_key === 'new_agents') || a.outcome === 'promised').length;
+  const paid = done.filter(closedPaid).length;
+  const pending = done.filter((a) => a.outcome === 'signed_up' || a.outcome === 'promised').length;
   const per = Math.round(FEE_UGX * rate / 100);
   return { rate_pct: rate, on_commission: rate > 0, per_payment_ugx: per, earned_ugx: paid * per, at_stake_ugx: pending * per, payments_closed: paid, payments_pending: pending };
 }
@@ -1707,7 +1742,7 @@ async function evidenceTrends(personKey) {
               COUNT(a.id) FILTER (WHERE a.status = 'done' AND a.outcome = '${NO_ANSWER}')::int AS not_answered,
               COALESCE(SUM(a.talk_s) FILTER (WHERE a.status = 'done'), 0)::int AS talk_s,
               COUNT(a.id) FILTER (WHERE a.status = 'done' AND a.spoke)::int AS connected,
-              COUNT(a.id) FILTER (WHERE a.status = 'done' AND a.is_close)::int AS closes
+              COUNT(a.id) FILTER (WHERE a.status = 'done' AND a.is_close AND a.outcome IN ('paid', 'renewed'))::int AS closes
          FROM b LEFT JOIN call_attempts a ON a.person_key = $1 AND date_trunc('${unit}', COALESCE(a.tapped_at, a.shown_at) AT TIME ZONE '${TZ}') = b.k
         GROUP BY b.k ORDER BY b.k`, [personKey, n]);
     const outs = await rows(
@@ -1777,6 +1812,9 @@ module.exports = {
   queueCounts,
   DEFAULT_TARGETS,
   FLAG_LABELS,
+  PAID_OUTCOMES,
+  closedPaid,
+  notesCheckOk,
   flagsFor,
   eligibility,
   variantFor,
