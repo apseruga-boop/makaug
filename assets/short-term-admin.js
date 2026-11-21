@@ -223,6 +223,11 @@
         : '<p class="st-desk-empty">Nothing at this stage.</p>');
   }
 
+  function isTestStay(l) {
+    l = l || {};
+    return String(l.reference || '').toUpperCase() === 'ST-000001' || /^\s*TEST LISTING DO NOT APPROVE/i.test(String(l.title || ''));
+  }
+
   function loadDesk(which, stage) {
     var host = deskHost(which);
     var desk = deskState(which);
@@ -230,8 +235,12 @@
     desk.stage = stage || (which === 'king' ? 'king_review' : 'submitted');
     host.innerHTML = '<p class="st-desk-empty">Loading…</p>';
     return api('/staff/queue?stage=' + encodeURIComponent(desk.stage)).then(function (payload) {
-      desk.listings = payload.listings || [];
-      desk.counts = payload.counts || {};
+      // The end-to-end test stay (ST-000001, "TEST LISTING DO NOT APPROVE") is kept in the database
+      // but left out of the staff lists and counts (Arthur, 21 Nov 2026).
+      var all = payload.listings || [];
+      desk.listings = all.filter(function (l) { return !isTestStay(l); });
+      desk.counts = Object.assign({}, payload.counts || {});
+      if (desk.counts[desk.stage] != null) desk.counts[desk.stage] = Math.max(0, Number(desk.counts[desk.stage] || 0) - (all.length - desk.listings.length));
       if (which !== 'king') {
         var stat = document.getElementById('staff-stat-short-term');
         if (stat) stat.textContent = String((payload.counts && payload.counts.submitted) || 0);

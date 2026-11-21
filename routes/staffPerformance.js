@@ -9,6 +9,20 @@ const commission = require('../services/staffCommission');
  * the points are King-only (PUT /staff-performance/settings is not in
  * utils/staffSharedKingTools.js, so it stays behind the admin check).
  */
+/** Keep one person's rows; with no own calling name, keep only team totals. */
+function ownOnly(data = {}, key = '') {
+  const mine = (x) => Boolean(key) && [x && x.key, x && x.person_key].includes(key);
+  return {
+    ...data,
+    people: (data.people || []).filter(mine),
+    top_today: null,
+    follow_ups: (data.follow_ups || []).filter(mine),
+    activity: (data.activity || []).map((d) => ({ ...d, people: (d.people || []).filter(mine) })),
+    log: (data.log || []).filter(mine),
+    targets_history: (data.targets_history || []).filter(mine)
+  };
+}
+
 function registerStaffPerformanceRoutes(router, { writeAudit, actorLabel } = {}) {
   const actorOf = (req) => {
     const user = req.userAuth || {};
@@ -26,7 +40,11 @@ function registerStaffPerformanceRoutes(router, { writeAudit, actorLabel } = {})
   router.get('/staff-performance', async (req, res, next) => {
     try {
       res.set('Cache-Control', 'no-store');
-      return res.json({ ok: true, data: await perf.getDashboard() });
+      const data = await perf.getDashboard();
+      // A staff login with its own calling name sees only its own people rows (Arthur, 21 Nov 2026).
+      const king = Boolean(req.adminAuth && req.adminAuth.type !== 'moderator');
+      const pd = req.userAuth && req.userAuth.profile_data && typeof req.userAuth.profile_data === 'object' ? req.userAuth.profile_data : {};
+      return res.json({ ok: true, data: king ? data : ownOnly(data, String(pd.person_key || '')) });
     } catch (error) {
       return next(error);
     }
@@ -171,4 +189,4 @@ function registerStaffPerformanceRoutes(router, { writeAudit, actorLabel } = {})
   });
 }
 
-module.exports = { registerStaffPerformanceRoutes };
+module.exports = { ownOnly, registerStaffPerformanceRoutes };

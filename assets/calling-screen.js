@@ -423,13 +423,18 @@
         + '<div class="mkc-row">' + people + '<button type="button" class="mkc-btn go" data-mkc-start style="font-size:16px;padding:12px 22px"><i class="fas fa-play"></i> Start calling</button></div>'
         + '<div data-mkc-carderr></div></div>';
       qa('[data-mkc-task]', host).forEach(function (b) { b.onclick = function () { pick.task = b.getAttribute('data-mkc-task'); renderStaffCard(host); }; });
-      var sel = q('[data-mkc-person]', host); if (sel) sel.onchange = function () { pick.person = sel.value; };
+      // The select's shown value is the truth: a browser can restore a select after a reload without a change event.
+      var sel = q('[data-mkc-person]', host);
+      var syncPerson = function () { if (sel) { pick.person = sel.value; var e0 = q('[data-mkc-carderr]', host); if (e0 && pick.person) e0.innerHTML = ''; } };
+      if (sel) { sel.onchange = syncPerson; sel.oninput = syncPerson; setTimeout(syncPerson, 0); }
       q('[data-mkc-connect]', host).onclick = function () { openConnect('bt'); };
       q('[data-mkc-myreport]', host).onclick = function () {
+        syncPerson();
         if (!pick.person) return showErr(host, 'Choose who is calling first.');
         openReport(pick.person);
       };
       q('[data-mkc-start]', host).onclick = function () {
+        syncPerson();
         if (!pick.person) return showErr(host, 'Choose who is calling first.');
         try { localStorage.setItem('makaug_calling_pick', JSON.stringify(pick)); } catch (e) { /* private mode */ }
         startSession(pick.person, pick.task);
@@ -718,7 +723,7 @@
       + '<div class="who">' + esc(personName(S.person)) + '<small>Work time <span data-mkc-worktime>' + clock(S.totals.open_ms) + '</span>' + fsLink + '</small></div>'
       + commHtml()
       + (st.calls_hit ? '<span class="mkc-hitchip" data-mkc-hit>🎯 Target hit – keep going</span>' : '')
-      + '<div class="mkc-modes" role="tablist" aria-label="Task">' + boot.tasks.map(function (t) { var n = S.counts && S.counts[t.key]; return '<button type="button" role="tab" class="mkc-mode' + (t.key === S.task && S.phase !== 'housekeeping' ? ' on' : '') + (n === 0 ? ' dry' : '') + '" data-mkc-mode="' + esc(t.key) + '" title="' + (n == null ? '' : n + ' numbers left today') + '">' + esc(MODE_LABEL[t.key] || t.name) + '<i title="numbers left">' + (n == null ? '…' : n) + '</i></button>'; }).join('')
+      + '<div class="mkc-modes" role="tablist" aria-label="Task">' + boot.tasks.map(function (t) { var n = S.counts && S.counts[t.key]; return '<button type="button" role="tab" class="mkc-mode' + (t.key === S.task && S.phase !== 'housekeeping' ? ' on' : '') + (n === 0 ? ' dry' : '') + '" data-mkc-mode="' + esc(t.key) + '" title="' + (n == null ? '' : n + ' numbers left today') + '">' + esc(MODE_LABEL[t.key] || t.name) + '<i title="numbers left to call today">' + (n == null ? '…' : n + ' to call') + '</i></button>'; }).join('')
         + '<button type="button" role="tab" class="mkc-mode' + (S.phase === 'housekeeping' ? ' on' : '') + '" data-mkc-mode="housekeeping" title="Follow-ups: ID, photos, unpaid promises">🧹 Housekeeping<i>' + (S.counts && S.counts.housekeeping != null ? S.counts.housekeeping : '…') + '</i></button></div>'
       + (S.counts && S.counts.international ? '<span class="mkc-intlchip" title="Not Ugandan numbers: never offered to call. Follow up on WhatsApp.">🌍 ' + S.counts.international + ' international – WhatsApp only</span>' : '')
       + '<select data-mkc-lang-ui aria-label="Language"><option value="en"' + (S.lang === 'en' ? ' selected' : '') + '>English</option><option value="lg"' + (S.lang === 'lg' ? ' selected' : '') + '>Luganda</option></select>'
@@ -2043,7 +2048,7 @@
     var due = (r.due_tomorrow || []).map(function (d) { return '<li>' + esc(kTime(d.at)) + ' · ' + esc(d.name) + ' ' + esc(d.phone) + ' (' + esc(String(d.outcome).replace(/_/g, ' ')) + ')</li>'; }).join('');
     return '<h3 style="margin:0;font-weight:900">Daily summary · ' + esc(r.name) + '</h3><p class="mkc-muted">' + esc(r.day) + ' · made automatically from the calling log, saved for King</p>'
       + '<div class="mkc-row" style="margin:10px 0">' + box(r.calls + '/' + tg.calls_per_day, 'calls', r.calls_hit) + box(r.closes + '/' + tg.closes_per_day, 'paid (closed)', r.closes_hit) + box(r.connected, 'spoke to') + box(r.payments_chased || 0, 'payments chased') + box(hm((r.talk_s || 0) * 1000), 'talk time') + '</div>'
-      + '<p style="font-size:13px">Work time ' + hm(w.open_ms) + ' (focused ' + hm(w.focus_ms) + ', away ' + hm(w.away_ms) + ', breaks ' + hm(w.break_ms) + ' × ' + (w.breaks || 0) + ', left the screen ' + (w.exits || 0) + '×)'
+      + '<p style="font-size:13px" data-mkc-worktime><b>Work time ' + hm(w.open_ms) + '</b> · focused ' + hm(w.focus_ms) + ' · away ' + hm(w.away_ms) + ' · ' + (w.breaks || 0) + ' break' + ((w.breaks || 0) === 1 ? '' : 's') + ' (' + hm(w.break_ms) + ') · left the screen ' + (w.exits || 0) + ' time' + ((w.exits || 0) === 1 ? '' : 's')
       + (w.first_start ? ' · ' + esc(kTime(w.first_start)) + '–' + esc(w.last_end && !w.open_now ? kTime(w.last_end) : 'now') + ' Kampala' : '') + '</p>'
       + '<p style="font-size:13px">Payments promised ' + (r.payments_promised || 0) + ' · paid or renewed ' + (r.payments_paid || 0) + ' · callbacks booked ' + (r.callbacks_booked || 0) + ' · skipped ' + (r.skipped || 0) + ' · average call ' + (r.avg_talk_s || 0) + ' s</p>'
       + '<div style="margin:6px 0">' + outs + '</div><div style="margin:6px 0">' + flags + '</div>'
@@ -3238,6 +3243,8 @@
     refreshKing: function () { var k = q('[data-calling-king-root]'); if (k) renderKing(k); },
     // The King per-staff page shows this same evidence trail (sessions graph, auto-refresh every 30s).
     evidence: function (host, person) { injectCss(); return loadBoot().then(function () { K.open = null; openEvidence(host, person, true); }); },
-    closeEvidence: function () { K.open = null; stopEvAuto(); }
+    closeEvidence: function () { K.open = null; stopEvAuto(); },
+    // Staff sidebar "Connect your phone" item opens the same guide.
+    openConnect: function (guide) { injectCss(); return loadBoot().then(function () { openConnect(guide || 'bt'); }); }
   };
 })();

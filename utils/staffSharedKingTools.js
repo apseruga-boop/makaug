@@ -30,6 +30,9 @@ function isStaffSharedKingTool(path, method = 'GET') {
   // Calling screen: staff run their own sessions, calls, wrap-ups, added
   // numbers, feed, stats and day report. The team view, evidence trail,
   // targets and number review stay King-only.
+  // Staff desk (Arthur, 21 Nov 2026): own home, pay and profile only.
+  if (['/desk/home', '/desk/performance', '/desk/pay', '/desk/profile'].includes(p) && m === 'GET') return true;
+  if (p === '/desk/profile' && m === 'PUT') return true;
   if (p === '/calling/bootstrap' && m === 'GET') return true;
   if (p === '/calling/sessions' && m === 'POST') return true;
   if (/^\/calling\/sessions\/[^/]+\/(heartbeat|task|next|end|claim|inbound)$/.test(p) && m === 'POST') return true;

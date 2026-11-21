@@ -52,7 +52,7 @@
     '.kd-kpi .l{font-size:12px;color:#64748b;font-weight:700}.kd-kpi .v{font-size:26px;font-weight:900;margin:2px 0}.kd-up{color:#15803d;font-size:12px;font-weight:800}.kd-down{color:#be123c;font-size:12px;font-weight:800}.kd-flat{color:#64748b;font-size:12px;font-weight:700}',
     '.kd-grid2{display:grid;grid-template-columns:1.6fr 1fr;gap:12px;margin-bottom:12px}.kd-grid2b{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:900px){.kd-grid2,.kd-grid2b{grid-template-columns:1fr}}',
     '.kd-funnel div{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:13px;font-weight:700}.kd-funnel span.n{display:inline-block;min-width:28px;color:#fff;border-radius:6px;padding:3px 8px;font-weight:900}.kd-funnel label{width:140px;flex:0 0 140px}',
-    '.kd-need{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:13px}.kd-need:last-child{border:0}.kd-tag{border-radius:6px;padding:2px 8px;font-size:11px;font-weight:900}.kd-tag.removal{background:#ffe4e6;color:#be123c}.kd-tag.momo{background:#fef3c7;color:#92400e}.kd-tag.flag{background:#e2e8f0;color:#334155}.kd-tag.ok{background:#dcfce7;color:#166534}',
+    '.kd-need{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:13px}.kd-need:last-child{border:0}.kd-tag{border-radius:6px;padding:2px 8px;font-size:11px;font-weight:900}.kd-tag.removal{background:#ffe4e6;color:#be123c}.kd-tag.momo{background:#fef3c7;color:#92400e}.kd-tag.flag{background:#e2e8f0;color:#334155}.kd-tag.behind{background:#fef3c7;color:#92400e}.kd-tag.ok{background:#dcfce7;color:#166534}',
     '.kd-need .t{flex:1;min-width:0}.kd-link{background:none;border:0;color:#15603f;font-weight:800;cursor:pointer;font-size:12px;text-decoration:underline}',
     '.kd-table{width:100%;border-collapse:collapse;font-size:13px}.kd-table th{text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;padding:6px 4px;border-bottom:1px solid #e2e8f0}.kd-table td{padding:8px 4px;border-bottom:1px solid #f1f5f9;vertical-align:middle}',
     '.kd-bar{height:8px;background:#e2e8f0;border-radius:999px;overflow:hidden;min-width:70px}.kd-bar i{display:block;height:100%;background:#15603f}',
@@ -158,7 +158,7 @@
     var c = o.counts || {};
     var cw = o.calls_week || {}; var ln = o.live_notes || {};
     var needs = (o.needs_you || []).map(function (n) {
-      return '<div class="kd-need" data-kd-need="' + esc(n.kind) + '"><span class="kd-tag ' + esc(n.kind) + '">' + esc({ removal: 'Removal', momo: 'MoMo', flag: 'Flag' }[n.kind] || n.kind) + '</span><span class="t">' + esc(n.text) + '</span><button type="button" class="kd-link" data-kd-open="' + esc(n.open) + '">Open</button></div>';
+      return '<div class="kd-need" data-kd-need="' + esc(n.kind) + '"><span class="kd-tag ' + esc(n.kind) + '">' + esc({ removal: 'Removal', momo: 'MoMo', flag: 'Flag', behind: 'Behind' }[n.kind] || n.kind) + '</span><span class="t">' + esc(n.text) + '</span><button type="button" class="kd-link" data-kd-open="' + esc(n.open) + '">Open</button></div>';
     }).join('') || '<p class="kd-muted" data-kd-needs-empty>Nothing waiting for you. 🎉</p>';
     var staff = (o.staff_today || []).map(function (s) {
       var pct = s.target_calls ? Math.min(100, Math.round(100 * s.calls / s.target_calls)) : 0;
@@ -178,6 +178,7 @@
       + '<div class="kd-card"><h3>Staff today</h3><div class="kd-scroll"><table class="kd-table" data-kd-staff><tr><th>Who</th><th>Calls</th><th>Target</th><th>Paid</th><th>Notes on</th></tr>' + staff + '</table></div></div></div>'
       + '<p class="kd-muted" style="font-size:11px;margin-top:8px" data-kd-updated>Updated ' + esc(when(new Date())) + ' Kampala · refreshes every minute</p></div>';
     bindOpen(el);
+    qa('[data-kd-person]', el).forEach(function (b) { b.onclick = function () { if (window.kingTeam) window.kingTeam.openPerson(b.getAttribute('data-kd-person')); }; });
     qa('[data-kd-staffrow]', el).forEach(function (r) { r.style.cursor = 'pointer'; r.title = 'Open their day'; r.onclick = function () { if (window.kingTeam) window.kingTeam.openPerson(r.getAttribute('data-kd-staffrow')); }; });
   }
   function bindOpen(el) { qa('[data-kd-open]', el).forEach(function (b) { b.onclick = function () { go(b.getAttribute('data-kd-open')); }; }); }

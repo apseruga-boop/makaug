@@ -243,8 +243,9 @@ async function requireAuthenticatedUser(req, res, next) {
 }
 
 // A 'caller' staff login (set in profile_data.staff_scope) may use the
-// calling screen only: /api/admin/calling/*. Every other staff route says no.
-const CALLER_ALLOWED = /^\/api\/admin\/calling(\/|\?|$)/;
+// calling screen only: /api/admin/calling/*, plus their own desk pages
+// (/api/admin/desk/*: home, performance, pay, profile). Every other staff route says no.
+const CALLER_ALLOWED = /^\/api\/admin\/(calling|desk)(\/|\?|$)/;
 function isCallerOnly(user) {
   return Boolean(user && user.role === 'moderator' && user.profile_data && user.profile_data.staff_scope === 'caller');
 }

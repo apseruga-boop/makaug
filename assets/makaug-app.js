@@ -17537,9 +17537,13 @@ async function staffRunSourceSweep(dryRun = true, profile = "agency") {
   }
 }
 
-function renderStaffActivity(rows = []) {
+// "Opened the dashboard" rows are noise in My recent work; real work only.
+const STAFF_ACTIVITY_NOISE = new Set(["staff_dashboard_opened", "dashboard_view", "dashboard_opened"]);
+
+function renderStaffActivity(allRows = []) {
   const wrap = document.getElementById("staff-activity-list");
   if (!wrap) return;
+  const rows = (Array.isArray(allRows) ? allRows : []).filter((item) => !STAFF_ACTIVITY_NOISE.has(String(item?.action || "").trim()));
   if (!rows.length) {
     wrap.innerHTML = staffEmpty("Your activity trail will appear here.");
     return;
@@ -19811,6 +19815,14 @@ async function resolveAgentBookingFlag(id) {
   }
 }
 
+function staffLoginIsCallerOnly(error) {
+  const profile = authState?.user?.profile_data && typeof authState.user.profile_data === "object" ? authState.user.profile_data : {};
+  if (profile.staff_scope === "caller") return true;
+  // Not the page's "mkc-caller-only" class: it can outlive a caller who signed out
+  // and would then hide a moderator's dashboard on the same tab.
+  return Boolean(error && /calling screen only/i.test(String(error.message || "")));
+}
+
 async function renderStaffDashboardOnce() {
   staffDashboardRenderSeq += 1;
   const gate = document.getElementById("staff-auth-gate");
@@ -19831,6 +19843,9 @@ async function renderStaffDashboardOnce() {
   const userIdentityAtStart = staffAuthIdentityKey(user);
   setTextById("staff-dashboard-name", `${user.first_name || "Staff"} ${user.last_name || ""}`.trim() || "Staff Operations Dashboard");
   setTextById("staff-dashboard-status", `Role: ${mapRoleLabel(user.role)} • ${user.email || user.phone || "staff account"}`);
+  // A calling-only login (Ronald) gets 403 from every staff panel. Asking anyway
+  // used to end in "session expired" and a forced sign-out after three tries.
+  if (staffLoginIsCallerOnly()) return;
   if (!staffDashboardHasLiveData) setStaffDashboardLoadingState();
   // These two do not need the dashboard payload. Started first, they land
   // before the moderator starts clicking queue cards, not after.
@@ -19868,6 +19883,11 @@ async function renderStaffDashboardOnce() {
     const authSessionFailure = isAuthSessionFailure(error);
     const signInRequired = authSessionFailure || error?.status === 401 || error?.status === 403 || /sign in required|jwt|token/i.test(error?.message || "");
     if (staleAuthRequest) {
+      return;
+    }
+    // 403 "calling screen only" is a scope answer, not an expired session: never sign out.
+    if (error?.status === 403 && staffLoginIsCallerOnly(error)) {
+      staffDashboardAuthRetryCount = 0;
       return;
     }
     if (authSessionFailure) {
@@ -27050,16 +27070,15 @@ function renderAdminLiveParitySummary(snapshot = {}, listings = []) {
   const totalRows = safeNumber(parity.total_rows, liveTotal);
   const parityOk = parity.same_as_public_api !== false;
   const statusClass = parityOk ? "border-green-100 bg-green-50 text-green-900" : "border-amber-100 bg-amber-50 text-amber-900";
-  const statusText = parityOk ? "Dashboard matches the public listing API." : "Dashboard count differs from the public listing API.";
+  // Plain words only: no internal API addresses or "matches the API" debug line (Arthur, 21 Nov 2026).
   const html = `
-    <div class="mb-4 rounded-xl border ${statusClass} p-3">
-      <div class="text-xs font-black uppercase tracking-wide">${adminEscape(statusText)}</div>
-      <div class="mt-2 grid sm:grid-cols-3 gap-2 text-xs">
-        <div class="rounded-lg bg-white/70 border border-white p-2"><span class="block text-gray-500">Online public listings</span><strong class="text-lg">${adminEscape(liveTotal)}</strong></div>
-        <div class="rounded-lg bg-white/70 border border-white p-2"><span class="block text-gray-500">Featured online</span><strong class="text-lg">${adminEscape(featuredTotal)}</strong></div>
-        <div class="rounded-lg bg-white/70 border border-white p-2"><span class="block text-gray-500">Rows loaded here</span><strong class="text-lg">${adminEscape(loadedRows)}</strong><span class="text-gray-500"> / ${adminEscape(totalRows)}</span></div>
+    <div class="mb-4 rounded-xl border ${statusClass} p-3" data-live-parity>
+      ${parityOk ? "" : `<div class="text-xs font-bold">These numbers differ from the public site. Press Refresh.</div>`}
+      <div class="${parityOk ? "" : "mt-2 "}grid sm:grid-cols-3 gap-2 text-xs">
+        <div class="rounded-lg bg-white/70 border border-white p-2"><span class="block text-gray-500">Online public listings</span><strong class="text-lg">${adminEscape(liveTotal.toLocaleString("en-GB"))}</strong></div>
+        <div class="rounded-lg bg-white/70 border border-white p-2"><span class="block text-gray-500">Featured online</span><strong class="text-lg">${adminEscape(featuredTotal.toLocaleString("en-GB"))}</strong></div>
+        <div class="rounded-lg bg-white/70 border border-white p-2"><span class="block text-gray-500">Showing below</span><strong class="text-lg">${adminEscape(loadedRows.toLocaleString("en-GB"))}</strong><span class="text-gray-500"> of ${adminEscape(totalRows.toLocaleString("en-GB"))}</span></div>
       </div>
-      <div class="mt-2 text-[11px] text-gray-600 break-words">Public: ${adminEscape(parity.public_api_endpoint || "/api/properties?status=approved&public_only=1")} • Featured: ${adminEscape(parity.featured_api_endpoint || "/api/properties?status=approved&featured=true&public_only=1&sort=featured")}</div>
     </div>`;
   [
     ["admin-live-parity-summary", "staff-live-parity-summary"],
@@ -35570,7 +35589,10 @@ async function adminLoadVideoCaptionConflicts(which = "staff") {
       <h4 class="text-sm font-black text-gray-900">${title}</h4>
       <div class="mt-2 grid gap-2">${items.length ? items.map(card).join("") : `<p class="text-sm text-gray-500">No video caption conflicts are waiting.</p>`}</div>
     </div>`;
-    const html = `<div class="grid gap-4">${section("Live import conflicts", live)}${section("Backfill review list", backfill)}</div>`;
+    // One empty line when nothing is waiting, instead of two identical empty lists.
+    const html = !live.length && !backfill.length
+      ? `<p class="text-sm text-gray-500">No video caption conflicts are waiting.</p>`
+      : `<div class="grid gap-4">${live.length ? section("Live import conflicts", live) : ""}${backfill.length ? section("Backfill review list", backfill) : ""}</div>`;
     if (which === "staff") staffReplaceHtmlAboveQueue(host, html);
     else host.innerHTML = html;
   } catch (error) {
