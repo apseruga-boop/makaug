@@ -31,13 +31,28 @@
     var headers = { Accept: 'application/json' };
     if (opts.body) headers['Content-Type'] = 'application/json';
     if (window.adminApiKey) headers['x-api-key'] = window.adminApiKey;
-    return fetch(API + path, { method: opts.method || 'GET', credentials: 'same-origin', headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined, keepalive: !!opts.keepalive })
+    // Reads give up after 30s with a clear message instead of leaving "Loading…" on screen.
+    var method = opts.method || 'GET'; var ctl = (method === 'GET' && typeof AbortController === 'function') ? new AbortController() : null;
+    var timer = ctl ? setTimeout(function () { ctl.abort(); }, opts.timeoutMs || 30000) : null;
+    return fetch(API + path, { method: method, credentials: 'same-origin', headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined, keepalive: !!opts.keepalive, signal: ctl ? ctl.signal : undefined })
+      .then(function (res) { if (timer) clearTimeout(timer); return res; }, function (err) {
+        if (timer) clearTimeout(timer);
+        if (err && err.name === 'AbortError') { var t = new Error('This is taking too long. Tap Retry.'); t.status = 0; t.code = 'timeout'; throw t; }
+        throw err;
+      })
       .then(function (res) {
         return res.json().catch(function () { return {}; }).then(function (p) {
           if (!res.ok || p.ok === false) { var e = new Error(p.error || 'Something went wrong. Try again.'); e.status = res.status; e.code = p.code || ''; throw e; }
           return p.data;
         });
       });
+  }
+  // A King panel never stays on "Loading…": a slow answer or a drawing error shows the reason and a Retry button.
+  function panelFailed(box, e) {
+    try { console.error('[calling panel]', e); } catch (x) { /* no console */ }
+    if (!box) return;
+    box.innerHTML = '<div class="mkc-err" data-k-panel-err>' + esc((e && e.message) || 'Could not load this part.') + ' <button type="button" class="mkc-btn ghost sm" data-k-retry>Retry</button></div>';
+    var rb = q('[data-k-retry]', box); if (rb) rb.onclick = function () { var k = q('[data-calling-king-root]'); if (k) renderKing(k); };
   }
   function q(sel, root) { return (root || document).querySelector(sel); }
   function qa(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
@@ -2154,7 +2169,7 @@
         + '<h4>🔎 Search all calls</h4>' + searchBoxHtml('all');
       qa('[data-k-callsper]', box).forEach(function (b) { b.onclick = function () { K.callsPeriod = b.getAttribute('data-k-callsper'); drawKCalls(host); }; });
       bindSearch(box);
-    }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+    }).catch(function (e) { panelFailed(box, e); });
   }
   function drawKIntl(host) {
     var box = q('[data-k-intl]', host); if (!box) return;
@@ -2162,7 +2177,7 @@
     api('/international').then(function (list) {
       box.innerHTML = '<h4 style="margin:0 0 6px">🌍 International – WhatsApp only (' + list.length + ')</h4><p class="mkc-muted" style="margin:0 0 6px">Not Ugandan numbers. They are never offered to call (callers ring Ugandan lines only). Follow them up on WhatsApp. Nothing was deleted.</p>'
         + (list.length ? '<div class="mkc-scroll"><table class="mkc-table"><tr><th>Name</th><th>Number</th><th>From</th><th>Queue</th></tr>' + list.map(function (n) { return '<tr><td>' + esc(n.name || '') + '</td><td>' + esc(n.phone) + '</td><td>' + esc(n.source || '') + '</td><td>' + esc(personName(n.person_key)) + ' · ' + esc(taskLabel(n.task)) + '</td></tr>'; }).join('') + '</table></div>' : '<p class="mkc-muted">None right now.</p>');
-    }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+    }).catch(function (e) { panelFailed(box, e); });
   }
   function drawKBlocks(host) {
     var box = q('[data-k-blocks]', host); if (!box) return;
@@ -2173,7 +2188,7 @@
         if (!window.confirm('Remove the do-not-contact block? They can be called again.')) return;
         api('/blocks/' + b.getAttribute('data-k-unblock') + '/remove', { method: 'POST', body: { note: 'Removed by King' } }).then(function () { toast('Block removed'); drawKBlocks(host); }, function (e) { toast(e.message); });
       }; });
-    }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+    }).catch(function (e) { panelFailed(box, e); });
   }
   // ---- SMS from the company SIM + agent video unlock
   function contactHtml(a) {
@@ -2225,7 +2240,7 @@
       qa('[data-kv-no]', box).forEach(function (b) { b.onclick = function () { dec(b.getAttribute('data-kv-no'), false); }; });
       qa('[data-kv-copy]', box).forEach(function (b) { b.onclick = function () { var r = list.filter(function (x) { return x.id === b.getAttribute('data-kv-copy'); })[0]; if (r) copyText(r.fallback.text); }; });
       qa('[data-kv-sent]', box).forEach(function (b) { b.onclick = function () { api('/videos/' + b.getAttribute('data-kv-sent') + '/sent', { method: 'POST', body: {} }).then(function () { drawKVideos(host); }, function (e) { toast(e.message); }); }; });
-    }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+    }).catch(function (e) { panelFailed(box, e); });
   }
   // ---- Learn: for every new employee
   function learnHtml() {
@@ -2447,7 +2462,7 @@
         q('[data-ks-reset]', box).onclick = function () { put({ reset: true }); };
       };
       draw();
-    }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+    }).catch(function (e) { panelFailed(box, e); });
   }
   function drawKMeet(host) {
     var box = q('[data-k-meetings]', host); if (!box) return;
@@ -2480,7 +2495,7 @@
           api('/meeting/report?person_key=' + encodeURIComponent(b.getAttribute('data-km-rep'))).then(function (r) { out.innerHTML = '<div class="mkc-muted" style="margin-bottom:4px"><b>' + esc(r.name) + '</b> · built ' + esc(kDayTime(r.made_at)) + '</div>' + meetReportHtml(r); }, function (e) { out.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
         };
       });
-    }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+    }).catch(function (e) { panelFailed(box, e); });
   }
   // ---- Payment SMS proof: screenshot -> free OCR in the browser -> check -> claim for King
   var OCR = null;
@@ -2657,7 +2672,7 @@
       };
       qa('[data-kp-ok]', box).forEach(function (b) { b.onclick = function () { decide(b.getAttribute('data-kp-ok'), true); }; });
       qa('[data-kp-no]', box).forEach(function (b) { b.onclick = function () { decide(b.getAttribute('data-kp-no'), false); }; });
-    }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+    }).catch(function (e) { panelFailed(box, e); });
   }
   function periodTabs(attr, cur) {
     return '<div class="mkc-modes" style="display:inline-flex">' + [['day', 'Day'], ['week', 'Week'], ['month', 'Month']].map(function (x) { return '<button type="button" class="mkc-mode' + (x[0] === cur ? ' on' : '') + '" ' + attr + '="' + x[0] + '" style="color:#0f172a;background:' + (x[0] === cur ? '#fbbf24' : '#e2e8f0') + '">' + x[1] + '</button>'; }).join('') + '</div>';
@@ -2711,7 +2726,7 @@
       box.innerHTML = '<div class="mkc-row" style="justify-content:space-between"><h4 style="margin:0">⏱ Staff activity · ' + esc(r.from) + (r.to !== r.from ? ' → ' + esc(r.to) : '') + '</h4>' + periodTabs('data-k-per', K.period) + '</div>'
         + '<p class="mkc-muted" style="margin:4px 0 0">Times are Kampala. Bar: <b style="color:#1f2937;white-space:nowrap"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#10b981;vertical-align:-1px"></i> work mode</b>, <b style="color:#1f2937;white-space:nowrap"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f59e0b;vertical-align:-1px"></i> breaks</b>, <b style="color:#1f2937;white-space:nowrap"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#ef4444;vertical-align:-1px"></i> downtime</b> (work mode off or out of full screen), black tick = login. Flags: late start (after 10:00), downtime 30+ min, leaving the screen 5+ min or 20+ min in total, idle 10+ min, breaks over their time, missed working days.</p>' + (people || '<p class="mkc-muted">No activity in this period.</p>');
       qa('[data-k-per]', box).forEach(function (b) { b.onclick = function () { K.period = b.getAttribute('data-k-per'); drawKAct(host); }; });
-    }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+    }).catch(function (e) { panelFailed(box, e); });
   }
   // One day as a bar, 07:00–20:00 Kampala: green work, amber break, red downtime, black tick = login.
   function timelineBar(d) {
@@ -2742,7 +2757,7 @@
         + (r.missed_days.length ? '<div class="mkc-bad" style="margin:4px 0">Missed days: ' + esc(r.missed_days.join(', ')) + '</div>' : '')
         + '<div class="mkc-scroll"><table class="mkc-table"><tr><th>Day</th><th>Account</th><th>Balance</th><th>Change</th><th>Moved to bank</th><th>Flags</th></tr>' + days + '</table></div>';
       qa('[data-k-cper]', box).forEach(function (b) { b.onclick = function () { K.cashPeriod = b.getAttribute('data-k-cper'); drawKCash(host); }; });
-    }, function (e) { box.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
+    }).catch(function (e) { panelFailed(box, e); });
   }
   function renderKing(host) {
     host.innerHTML = '<div class="mkc-panel" style="margin-top:16px"><p class="mkc-muted">Loading Calling…</p></div>';

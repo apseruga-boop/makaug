@@ -1611,6 +1611,7 @@ async function evidence(personKey, day = kampalaDay()) {
     on_call: onCallSegments(attempts, events),
     audit: trackingAudit(sessions, events, attempts),
     trends: await evidenceTrends(key),
+    tracking_since: await trackingSince(),
     flag_labels: FLAG_LABELS
   };
 }
@@ -1733,6 +1734,12 @@ function trackingAudit(sessions = [], events = [], attempts = []) {
 }
 
 /** Calls, talk time, conversations, closes and outcomes for the last days, weeks and months (Kampala time), oldest first. */
+/** The first day the calling screen recorded any call (Kampala). Periods before it were not tracked, so "0" there means "no data", not "no calls". */
+async function trackingSince() {
+  const r = await rows(`SELECT to_char(MIN(COALESCE(tapped_at, shown_at)) AT TIME ZONE '${TZ}', 'YYYY-MM-DD') AS d FROM call_attempts`);
+  return (r[0] && r[0].d) || null;
+}
+
 async function evidenceTrends(personKey) {
   const spans = { day: 14, week: 8, month: 6 };
   const out = {};
@@ -1790,6 +1797,7 @@ module.exports = {
   trackingAudit,
   loginsUsed,
   evidenceTrends,
+  trackingSince,
   taskTime,
   internationalNumbers,
   roadTo1000,

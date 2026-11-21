@@ -1119,6 +1119,10 @@ let adminActiveReview = null;
 let activeAdminWorkflowTab = "review";
 let adminDashboardRendering = false;
 let adminDashboardTabRefreshTimer = null;
+// When the full King snapshot last started loading. Switching tabs only reloads it when it is over a minute old,
+// so each tab's own data is not queued behind a full dashboard reload (21 Nov 2026).
+let adminDashboardLoadedAt = 0;
+const ADMIN_TAB_REFRESH_MIN_MS = 60 * 1000;
 let adminLiveAuthFailure = null;
 let staffModerationRefreshTimer = null;
 const STAFF_MODERATION_WRITE_TIMEOUT_MS = 18000;
@@ -13853,9 +13857,27 @@ async function adminAgentReportSearchAgents(query = "") {
   }
 }
 
+// The date box shows the browser's own format (11/09/2026 on a US browser), so spell the week out.
+function adminAgentReportWeekText(value = "") {
+  const m = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return "";
+  const start = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  const end = new Date(start.getTime() + 6 * 86400000);
+  const D = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]; const M = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const fmt = (d, withYear) => `${D[d.getUTCDay()]} ${d.getUTCDate()} ${M[d.getUTCMonth()]}${withYear ? ` ${d.getUTCFullYear()}` : ""}`;
+  return `${fmt(start, false)} – ${fmt(end, true)}`;
+}
+
+function syncAdminAgentReportWeekLabel() {
+  const week = document.getElementById("admin-agent-report-week");
+  const label = document.getElementById("admin-agent-report-week-label");
+  if (label) label.textContent = adminAgentReportWeekText(week?.value || "");
+}
+
 function initAdminAgentReportsTab() {
   const week = document.getElementById("admin-agent-report-week");
   if (week && !week.value) week.value = adminAgentReportLastMonday();
+  syncAdminAgentReportWeekLabel();
   const search = document.getElementById("admin-agent-report-search");
   if (search && search.dataset.wired !== "true") {
     search.dataset.wired = "true";
@@ -13863,7 +13885,7 @@ function initAdminAgentReportsTab() {
       clearTimeout(adminAgentReportSearchTimer);
       adminAgentReportSearchTimer = setTimeout(() => adminAgentReportSearchAgents(search.value.trim()), 250);
     });
-    week?.addEventListener("change", () => loadAdminAgentReports());
+    week?.addEventListener("change", () => { syncAdminAgentReportWeekLabel(); loadAdminAgentReports(); });
     adminAgentReportSearchAgents("");
   }
   loadAdminAgentReports();
@@ -23517,6 +23539,7 @@ function adminScheduleDashboardRefreshForTab() {
   if (adminDashboardRendering || !canUseLiveAdminApi()) return;
   const body = document.getElementById("admin-body");
   if (!body || body.classList.contains("hidden")) return;
+  if (adminDashboardLoadedAt && Date.now() - adminDashboardLoadedAt < ADMIN_TAB_REFRESH_MIN_MS) return;
   if (adminDashboardTabRefreshTimer) clearTimeout(adminDashboardTabRefreshTimer);
   adminDashboardTabRefreshTimer = null;
   scheduleDashboardRefresh("admin_tab", 80, () => {
@@ -23588,6 +23611,25 @@ function adminDeskEl(kingId, staffId) {
     if (el) return el;
   }
   return document.getElementById(kingId);
+}
+
+let kingLiveRowsAt = 0;
+async function loadKingLiveRows(force = false) {
+  const table = document.getElementById("admin-live-listings-table");
+  if (!table || !authState?.token) return [];
+  if (!force && Date.now() - kingLiveRowsAt < 60 * 1000) return adminLiveListings || [];
+  kingLiveRowsAt = Date.now();
+  const liveRows = await fetchAdminPaginatedRows("/api/admin/properties/live", adminAuthHeaders(), { limit: 50, maxPages: 1 });
+  const liveListings = (Array.isArray(liveRows) ? liveRows : []).map((row) => normalizeRemoteAdminListing({ ...row, admin_live_endpoint: true }));
+  if (!liveListings.length) return [];
+  adminLiveListings = liveListings;
+  if (liveRows?.adminMeta?.public_parity || liveRows?.adminSummary?.public_inventory) {
+    adminPublicInventoryParity = liveRows.adminMeta?.public_parity || liveRows.adminSummary?.public_inventory;
+  }
+  renderAdminLiveParitySummary(adminPublicInventoryParity, adminLiveListings);
+  renderAdminLiveListingsRows(adminLiveListings);
+  renderAdminFeaturedRows(adminLiveListings);
+  return liveListings;
 }
 
 async function loadStaffLiveFeatured() {
@@ -23937,7 +23979,7 @@ function staffPerfSetMe(scope, key) {
 
 function staffPerfEnsureLoaded(scope) {
   const state = staffPerfState(scope);
-  if (state.loading) return;
+  if (state.loading && Date.now() - (state.loadingAt || 0) < 35 * 1000) return;
   if (state.loadedAt && Date.now() - state.loadedAt < 30 * 1000) {
     if (staffPerfRoot(scope) && !staffPerfRoot(scope).dataset.ready) staffPerfRender(scope);
     return;
@@ -23950,16 +23992,25 @@ async function staffPerfLoad(scope) {
   const state = staffPerfState(scope);
   if (!root) return;
   state.loading = true;
+  state.loadingAt = Date.now();
   if (!root.dataset.ready) root.innerHTML = `<p class="text-sm text-gray-500">Loading Staff Performance…</p>`;
   try {
-    const res = await apiRequest("/api/admin/staff-performance", { headers: adminAuthHeaders() });
+    // Never leave "Loading…" on screen: give up after 30s with a Retry button.
+    let timer = null;
+    const res = await Promise.race([
+      apiRequest("/api/admin/staff-performance", { headers: adminAuthHeaders() }),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Staff Performance is taking too long.")), 30 * 1000); })
+    ]).finally(() => clearTimeout(timer));
     state.data = res?.data || null;
     state.error = "";
     state.loadedAt = Date.now();
     staffPerfRender(scope);
   } catch (error) {
     state.error = error?.message || "Could not load Staff Performance.";
-    root.innerHTML = `<p class="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">${adminEscape(state.error)}</p>`;
+    state.loadedAt = 0;
+    root.innerHTML = `<p class="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900" data-perf-error>${adminEscape(state.error)} <button type="button" class="ml-2 underline font-semibold" data-perf-retry>Retry</button></p>`;
+    const retry = root.querySelector("[data-perf-retry]");
+    if (retry) retry.onclick = () => staffPerfLoad(scope);
   } finally {
     state.loading = false;
   }
@@ -28910,6 +28961,7 @@ async function renderAdminDashboard(options = {}) {
 
   gate.classList.add("hidden");
   body.classList.remove("hidden");
+  adminDashboardLoadedAt = Date.now();
   refreshMarketplaceModerationQueue("admin", { silent: true });
   adminLoadVideoCaptionConflicts("admin");
 
@@ -29019,6 +29071,9 @@ async function renderAdminDashboard(options = {}) {
   renderAdminActionedRows(remoteSnap?.actionedListings || remoteSnap?.allListings || localSnap.allListings || []);
   renderAdminLiveParitySummary(remoteSnap || localSnap, adminLiveRows);  renderAdminLiveListingsRows(adminLiveRows);
   renderAdminFeaturedRows(adminLiveRows);
+  // The dashboard snapshot carries counts but not always the rows: fetch the live rows
+  // so "Live & featured" never shows "4950 online" next to an empty table (21 Nov 2026).
+  if (!adminLiveEndpointRows(adminLiveRows).length) loadKingLiveRows().catch(() => {});
   renderAdminFeaturedRotationStatus().catch((error) => {
     console.warn("Unable to load featured rotation status", error);
   });

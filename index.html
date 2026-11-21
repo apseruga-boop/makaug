@@ -9626,6 +9626,7 @@
             </label>
             <label class="text-xs font-bold text-gray-600">Week starting (Monday)
               <input id="admin-agent-report-week" type="date" class="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm">
+              <span id="admin-agent-report-week-label" class="mt-1 block text-[11px] font-semibold text-gray-500" aria-live="polite"></span>
             </label>
             <button type="button" onclick="generateAdminAgentReport()" class="min-h-[40px] rounded-xl bg-gray-900 px-4 text-sm font-bold text-white">Generate report</button>
           </div>
@@ -11201,16 +11202,16 @@
           // only inside the protected staff and King pages.
           if (document.getElementById("staff-calling-card") || document.getElementById("admin-calling-control")) {
             var callingScript = document.createElement("script");
-            callingScript.src = "/assets/calling-screen.js?v=20261121-team1";
+            callingScript.src = "/assets/calling-screen.js?v=20261121-fix1";
             document.body.appendChild(callingScript);
           }
           // King's sidebar desk (Overview, Payments & MoMo, Removal requests, Staff).
           if (document.getElementById("king-overview")) {
             var kingDeskScript = document.createElement("script");
-            kingDeskScript.src = "/assets/king-desk.js?v=20261121-kd2";
+            kingDeskScript.src = "/assets/king-desk.js?v=20261121-kd3";
             document.body.appendChild(kingDeskScript);
             var kingTeamScript = document.createElement("script");
-            kingTeamScript.src = "/assets/king-team.js?v=20261121-kt1";
+            kingTeamScript.src = "/assets/king-team.js?v=20261121-kt2";
             document.body.appendChild(kingTeamScript);
             var kingStaffScript = document.createElement("script");
             kingStaffScript.src = "/assets/king-staff.js?v=20261121-ks1";
