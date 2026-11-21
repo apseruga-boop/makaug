@@ -29,7 +29,7 @@ test('week series counts calls per Kampala weekday', () => {
 
 test('phones are masked to the last 3 digits, words kept', () => {
   assert.equal(kd.mask('+256 700 900 321'), '•••321');
-  assert.equal(kd.maskText('J. NAKATO 0700900321'), 'J. NAKATO •••321');
+  assert.equal(kd.maskText('J. NAKATO 0700000321'), 'J. NAKATO •••321');
   assert.equal(kd.maskText('KATO HOMES'), 'KATO HOMES');
 });
 
