@@ -2209,9 +2209,14 @@
     };
     });
   }
+  // Plain words for the codes the calling screen stores with an event (Arthur, 21 Nov 2026: no raw codes on King).
+  var DETAIL_WORDS = { not_heard: 'did not hear the test words', start_failed: 'live notes could not start', 'not-allowed': 'microphone blocked', 'service-not-allowed': 'microphone blocked', 'audio-capture': 'no microphone found', network: 'no internet for live notes', 'no-speech': 'no speech heard', aborted: 'stopped by the browser' };
+  function plainDetail(v) { var s = String(v == null ? '' : v).trim(); return DETAIL_WORDS[s] || s.replace(/_/g, ' '); }
+  var HOW_WORDS = { missed_call: 'Missed call', referral: 'Friend or referral', listing: 'Saw their listing' };
+  function plainHow(v) { var s = String(v || '').trim(); return HOW_WORDS[s] || s.replace(/_/g, ' '); }
   function dropsCol(list) {
     var lbl = { link_drop: 'Phone link / audio dropped', notes_check_failed: 'Mic check failed' };
-    var rowsH = list.map(function (d) { return '<div class="mkc-hit" style="cursor:default"><b>' + esc(personName(d.by)) + '</b> <span class="mkc-pill">' + esc(lbl[d.kind] || d.kind) + '</span> <span class="mkc-muted">' + esc(kDayTime(d.at)) + (d.detail ? ' · ' + esc(d.detail) : '') + '</span></div>'; }).join('');
+    var rowsH = list.map(function (d) { return '<div class="mkc-hit" style="cursor:default"><b>' + esc(personName(d.by)) + '</b> <span class="mkc-pill">' + esc(lbl[d.kind] || d.kind) + '</span> <span class="mkc-muted">' + esc(kDayTime(d.at)) + (d.detail ? ' · ' + esc(plainDetail(d.detail)) : '') + '</span></div>'; }).join('');
     return '<div data-k-drops><h4>🔌 Link drops & mic checks (' + list.length + ')</h4><div class="mkc-scroll" style="max-height:320px">' + (rowsH || '<p class="mkc-muted">No drops.</p>') + '</div></div>';
   }
   function drawKCalls(host) {
@@ -2842,7 +2847,7 @@
     var teamTasks = d.tasks.map(function (t) { var x = (team.by_task || {})[t.key] || { calls: 0, closes: 0 }; return '<span class="mkc-pill">' + esc(t.name) + ': ' + x.calls + ' calls, ' + x.closes + ' closed</span>'; }).join('');
     var nums = (K.nums || []).map(function (n) {
       var own = n.status === 'own';
-      return '<div class="mkc-kit"><div><b>' + esc(n.name || 'No name') + '</b> ' + esc(n.phone) + (own ? ' <span class="mkc-pill live">Own number · in ' + esc(personName(n.person_key)) + '\'s queue</span>' : '') + '<div class="mkc-muted">by ' + esc(personName(n.person_key)) + ' · ' + esc(kDayTime(n.added_at)) + (n.how_known ? ' · ' + esc(n.how_known) : '') + (n.mode && n.mode !== 'new_agents' ? ' · ' + esc(MODE_LABEL[n.mode] || n.mode) : '') + (n.note ? ' · ' + esc(n.note) : '') + '</div></div>'
+      return '<div class="mkc-kit"><div><b>' + esc(n.name || 'No name') + '</b> ' + esc(n.phone) + (own ? ' <span class="mkc-pill live">Own number · in ' + esc(personName(n.person_key)) + '\'s queue</span>' : '') + '<div class="mkc-muted">by ' + esc(personName(n.person_key)) + ' · ' + esc(kDayTime(n.added_at)) + (n.how_known ? ' · ' + esc(plainHow(n.how_known)) : '') + (n.mode && n.mode !== 'new_agents' ? ' · ' + esc(MODE_LABEL[n.mode] || n.mode) : '') + (n.note ? ' · ' + esc(n.note) : '') + '</div></div>'
         + '<div class="mkc-row" style="flex-wrap:nowrap"><button type="button" class="mkc-btn sm go" data-k-ok="' + esc(n.id) + '">' + (own ? 'OK' : 'Add to queue') + '</button><button type="button" class="mkc-btn sm" data-k-no="' + esc(n.id) + '">' + (own ? 'Remove' : 'Reject') + '</button></div></div>';
     }).join('');
     var cbs = (d.callbacks || []).slice(0, 12).map(function (c) {
@@ -3007,10 +3012,10 @@
     if (x.kind === 'task_switch' || x.kind === 'start') return t + ': ' + taskLabel(String(x.detail || '').split(/\s/)[0]);
     if (x.kind === 'auto_fallback') { var ft = String(x.detail || '').split('>'); return 'List ran out: ' + taskLabel(ft[0]) + ' → ' + taskLabel(ft[1] || ''); }
     if (x.kind === 'end') return t + (x.detail ? ' (' + ({ exited: 'pressed Exit', dropped: 'dropped', replaced: 'new session started' }[x.detail] || x.detail) + ')' : '');
-    if (x.kind === 'notes_error') return t + (x.detail ? ': ' + ({ 'not-allowed': 'mic not allowed', network: 'no internet' }[x.detail] || x.detail) : '');
+    if (x.kind === 'notes_error') return t + (x.detail ? ': ' + ({ 'not-allowed': 'mic not allowed', network: 'no internet' }[x.detail] || plainDetail(x.detail)) : '');
     if (x.kind === 'idle_end') return 'Active again' + (/^\d+$/.test(String(x.detail || '')) ? ' after ' + hm(Number(x.detail)) + ' idle' : '');
     if (x.kind === 'route') return 'Script step: ' + String(x.detail || '').replace(/[_-]/g, ' ');
-    return t + (x.detail && x.kind !== 'hidden' && x.kind !== 'visible' ? ' (' + String(x.detail).replace(/_/g, ' ') + ')' : (x.detail ? ' · ' + x.detail : ''));
+    return t + (x.detail && x.kind !== 'hidden' && x.kind !== 'visible' ? ' (' + plainDetail(x.detail) + ')' : (x.detail ? ' · ' + x.detail : ''));
   }
   var OUT_COLORS = { no_answer: '#94a3b8', callback: '#38bdf8', call_back: '#38bdf8', interested: '#22c55e', signed_up: '#16a34a', paid: '#16a34a', paid_now: '#16a34a', promised: '#f59e0b', rejected: '#ef4444', wont_pay: '#ef4444', not_interested: '#ef4444', wrong_number: '#a855f7', do_not_contact: '#64748b' };
   function outColor(k, i) { return OUT_COLORS[k] || ['#0ea5e9', '#8b5cf6', '#14b8a6', '#f97316', '#e11d48', '#84cc16'][i % 6]; }

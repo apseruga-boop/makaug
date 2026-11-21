@@ -179,8 +179,15 @@
     else if (page === 'approve') loadApprove(host);
     else if (page === 'owes') loadOwes(host);
     else if (page === 'missed') loadMissed(host);
+    else if (page === 'stays') staysOffNote();
     else if (page === 'leads') loadLeads(host);
     else if (page === 'calls' && window.makaugCalling && typeof window.makaugCalling.rescan === 'function') { try { window.makaugCalling.rescan(); } catch (x) { /* calling screen redraws itself */ } }
+  }
+  // Short stays switched off: the box used to say "Loading short stays…" for ever.
+  function staysOffNote() {
+    var box = q('#staff-short-term-queue'); if (!box) return;
+    var off = !(window.__makaugShortTerm && window.__makaugShortTerm.enabled === true);
+    if (off && /Loading short stays/.test(box.textContent || '')) box.innerHTML = '<p class="text-sm text-gray-500" data-st-off>Short stays are switched off, so there is nothing to review here.</p>';
   }
   function openConnect() {
     if (window.makaugCalling && typeof window.makaugCalling.openConnect === 'function') { window.makaugCalling.openConnect('bt'); return; }

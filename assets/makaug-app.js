@@ -15206,7 +15206,7 @@ async function hydrateAdvertiserDashboardPlacements() {
     wrap.innerHTML = rows.slice(0, 8).map((slot) => `
       <div class="rounded-xl border border-gray-200 bg-white p-3">
         <div class="text-xs font-black text-gray-900">${adminEscape(slot.label || slot.key || "Advertising placement")}</div>
-        <div class="text-[11px] text-gray-500 mt-1">${adminEscape(slot.page_key || "makaug")} • ${adminEscape(slot.size_label || slot.slot_type || "placement")}</div>
+        <div class="text-[11px] text-gray-500 mt-1">${adminEscape(plainCodeWords("page", slot.page_key, "makaug.com"))} • ${adminEscape(slot.size_label || plainCodeWords("slot", slot.slot_type, "placement"))}</div>
         <div class="text-sm font-black text-amber-700 mt-2">From ${adminEscape(adMoney(slot.base_price_ugx || 0))}</div>
       </div>
     `).join("");
@@ -15723,7 +15723,7 @@ function staffReviewQueueCardHtml(item = {}, options = {}) {
           <div class="font-black text-gray-900" data-staff-queue-title>${mkRef ? `<span class="mr-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-black text-slate-700" data-mk-ref>${adminEscape(mkRef)}</span>` : ""}${adminEscape(item.title || "Untitled listing")} ${liveListing ? staffLiveListingBadgeHtml() : ""} ${brokerBadge} ${checkPriceTag}</div>
           <div class="text-xs text-gray-500 mt-1">${adminEscape(typeLabel)} • ${adminEscape(location)} • ${adminEscape(price)}</div>
           <div class="text-xs text-gray-500 mt-1">Submitted by ${adminEscape(submitter)}${maskedPhone ? ` • ${adminEscape(maskedPhone)}` : ""}${submittedAt ? ` • ${adminEscape(submittedAt)}` : ""}</div>
-          <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(item.source_platform || item.source || item.listed_via || "website")}${sourceUrl ? ` • <a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="font-black text-blue-700 underline underline-offset-2">open evidence</a>` : ""}</div>
+          <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(plainCodeWords("source", item.source_platform || item.source || item.listed_via, "Website"))}${sourceUrl ? ` • <a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="font-black text-blue-700 underline underline-offset-2">open evidence</a>` : ""}</div>
           ${primaryImageUrl ? `<div class="mt-2 flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-2"><img src="${adminAttr(primaryImageUrl)}" alt="Primary property photo" class="h-16 w-20 rounded-lg border border-emerald-100 object-cover"><div class="text-xs font-black text-emerald-900">${staffNumber(imageCount)} clear property photo${imageCount === 1 ? "" : "s"} attached</div></div>` : ""}
           ${queueNote}
           ${mediaQualityWarning}
@@ -16292,10 +16292,7 @@ function staffSearchReviewQueue(value = "") {
 function staffIsKingLogin() {
   return ["admin", "super_admin"].includes(String(authState?.user?.role || "").toLowerCase());
 }
-function staffMaskPhone(value) {
-  const d = String(value || "").replace(/[^0-9]/g, "");
-  return d.length >= 7 ? `•••${d.slice(-3)}` : "";
-}
+// staffMaskPhone (defined above, with the review queue) masks phones here too.
 function staffDialNumber(value) {
   let d = String(value || "").replace(/[^0-9]/g, "");
   if (d.length === 10 && d[0] === "0") d = `256${d.slice(1)}`;
@@ -16307,6 +16304,64 @@ function staffTextCallLinks(value) {
   if (!dial) return "";
   return `<a href="sms:${adminAttr(dial)}" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-black">✉️ Text</a>
           <a href="tel:${adminAttr(dial)}" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-black">📞 Call</a>`;
+}
+
+// Plain words for codes King and staff used to see raw (Arthur, 21 Nov 2026):
+// insufficient_clean_inventory, native_card, chatbot_native, broker_dashboard…
+const PLAIN_CODE_WORDS = {
+  rotation: {
+    completed: "done",
+    insufficient_clean_inventory: "not enough clean listings to rotate",
+    repairing_unhealthy_pool: "fixing listings that dropped out of the pool"
+  },
+  slot: {
+    native_card: "card among the listings",
+    chatbot_native: "card in the WhatsApp assistant",
+    house_band: "banner strip",
+    leaderboard: "wide banner",
+    hero: "top banner",
+    spotlight: "spotlight box",
+    mpu: "square box"
+  },
+  page: {
+    home: "Home page",
+    sale: "For sale page",
+    rent: "To rent page",
+    land: "Land page",
+    commercial: "Commercial page",
+    student: "Students page",
+    whatsapp: "WhatsApp",
+    makaug: "makaug.com"
+  },
+  source: {
+    found_online: "Found online",
+    found_online_property_source_v1: "Found online",
+    whatsapp: "WhatsApp",
+    whatsapp_employee_intake: "WhatsApp (staff intake)",
+    whatsapp_forward_review: "WhatsApp (forwarded)",
+    direct_agent_whatsapp: "Agent on WhatsApp",
+    admin_direct_agent_onboarding: "Added by King for an agent",
+    broker_dashboard: "Agent dashboard",
+    website: "Website"
+  }
+};
+function plainCodeWords(kind, value, fallback = "") {
+  const raw = String(value == null ? "" : value).trim();
+  if (!raw) return fallback;
+  const words = (PLAIN_CODE_WORDS[kind] || {})[raw.toLowerCase()];
+  if (words) return words;
+  if (!/^[a-z0-9]+(?:_[a-z0-9]+)+$/i.test(raw)) return raw;
+  const text = raw.replace(/_v\d+$/i, "").replace(/_/g, " ").trim();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+function plainBatchWords(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "Source intake";
+  const m = /^(.*?)_(\d{4})(\d{2})(\d{2})$/.exec(raw);
+  if (!m) return plainCodeWords("source", raw, "Source intake");
+  const day = new Date(Date.UTC(Number(m[2]), Number(m[3]) - 1, Number(m[4])));
+  const label = Number.isNaN(day.getTime()) ? `${m[2]}-${m[3]}-${m[4]}` : day.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  return `${plainCodeWords("source", m[1])} (${label})`;
 }
 
 function renderStaffLeads(rows = []) {
@@ -16323,7 +16378,7 @@ function renderStaffLeads(rows = []) {
       <article class="border border-gray-200 rounded-xl p-3">
         <div class="font-black text-gray-900">${adminEscape(contact)}</div>
         <div class="text-xs text-gray-500 mt-1">${adminEscape(label)}</div>
-        <div class="text-xs text-gray-600 mt-1">Status: ${adminEscape(lead.lead_status || "open")} • Priority: ${adminEscape(lead.priority || "normal")} • Claim = assign to you and start contact</div>
+        <div class="text-xs text-gray-600 mt-1">Status: ${adminEscape(plainCodeWords("lead", lead.lead_status, "open"))} • Priority: ${adminEscape(lead.priority || "normal")} • Claim = assign to you and start contact</div>
         ${lead.message ? `<div class="mt-2 text-xs text-gray-700">${adminEscape(lead.message).slice(0, 180)}</div>` : ""}
         <div class="mt-3 flex flex-wrap gap-2">
           <button type="button" onclick="staffClaimLead(${adminListingIdArg(lead.id)})" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-black">Claim</button>
@@ -16526,7 +16581,7 @@ function renderStaffSourceIntake(data = {}) {
       <div><strong>${staffNumber(summary.total_sources || 0)}</strong> source records • <strong>${staffNumber(summary.active_sources || 0)}</strong> active</div>
       <div class="mt-1"><strong>${staffNumber(data.possible_duplicates || 0)}</strong> pending listings have duplicate risk. Preview before approval.</div>
       ${Number(suppressed.pending_count || 0) ? `<div class="mt-1 text-[11px] text-amber-700"><strong>${staffNumber(suppressed.pending_count || 0)}</strong> non-listing construction/design/tutorial rows are hidden from active review.</div>` : ""}
-      <div class="mt-1 text-[11px] text-gray-500">Batch: ${adminEscape(data.batch_id || "source-intake")}</div>`;
+      <div class="mt-1 text-[11px] text-gray-500">Latest batch: ${adminEscape(plainBatchWords(data.batch_id))}</div>`;
   }
   const monitor = data.monitor || {};
   const monitorStatus = document.getElementById("staff-source-monitor-status");
@@ -20736,7 +20791,7 @@ async function moderationLoadIdentityDocument(prefix, propertyId, scope = "staff
     };
     setText("identity-email", data.lister?.email || "");
     setText("identity-phone", data.lister?.phone || "");
-    setText("identity-type", data.lister?.type || data.lister?.listed_via || "");
+    setText("identity-type", plainCodeWords("source", data.lister?.type || data.lister?.listed_via || ""));
     setText("identity-submitted", data.submitted_at ? formatListingDate(data.submitted_at) : "");
     if (!documentData.available || !(documentData.signed_url || documentData.url)) {
       viewer.innerHTML = `<div class="text-xs font-bold text-amber-800">No viewable ID photo is stored for this listing.</div>`;
@@ -28673,7 +28728,7 @@ function adminRenderWhatsappLogFreshness(freshness = null) {
   if (!node) return;
   if (!freshness) { node.textContent = ""; return; }
   const when = (value) => value ? (staffKampalaDateTime(value) || formatListingDate(value)) : "never";
-  node.textContent = `Source: WhatsApp bridge (whatsapp_messages) · last received ${when(freshness.last_inbound_at)} · last sent ${when(freshness.last_outbound_at)} · ${Number(freshness.messages_24h || 0)} in 24 h · as of ${when(freshness.as_of)}`;
+  node.textContent = `Source: WhatsApp bridge · last received ${when(freshness.last_inbound_at)} · last sent ${when(freshness.last_outbound_at)} · ${Number(freshness.messages_24h || 0)} in 24 h · as of ${when(freshness.as_of)}`;
 }
 
 function renderAdminLogRows(id, logs = [], options = {}) {
@@ -28693,12 +28748,12 @@ function renderAdminLogRows(id, logs = [], options = {}) {
     return `<div class="border border-gray-200 rounded-xl p-3 bg-white">
       <div class="flex items-start justify-between gap-2">
         <div class="min-w-0">
-          <div class="font-bold text-gray-800 break-words">${adminEscape(event)}</div>
+          <div class="font-bold text-gray-800 break-words">${adminEscape(plainCodeWords("event", event))}</div>
           <div class="text-xs text-gray-500 mt-1">${adminEscape(target)}${ref ? ` • Ref: ${adminEscape(ref)}` : ""}</div>
-          ${failure ? `<div class="text-xs text-red-700 mt-1">${adminEscape(failure)}</div>` : ""}
+          ${failure ? `<div class="text-xs text-red-700 mt-1">${adminEscape(plainCodeWords("reason", failure))}</div>` : ""}
           <div class="text-[11px] text-gray-400 mt-1">${adminEscape(formatListingDate(row.created_at || row.sent_at || row.createdAt || row.sentAt || new Date().toISOString()))}</div>
         </div>
-        <span class="shrink-0 text-[11px] font-bold px-2 py-1 rounded-full ${adminLogStatusClass(status)}">${adminEscape(status)}</span>
+        <span class="shrink-0 text-[11px] font-bold px-2 py-1 rounded-full ${adminLogStatusClass(status)}">${adminEscape(plainCodeWords("status", status))}</span>
       </div>
     </div>`;
   }).join("");
@@ -30488,7 +30543,7 @@ function renderAdminAdvertisingPlacements(placements) {
         <div class="flex items-start justify-between gap-2">
           <div>
             <div class="font-bold text-gray-900">${adminEscape(slot.label)}</div>
-            <div class="text-[11px] text-gray-500 mt-1">${adminEscape(slot.page_key)} • ${adminEscape(slot.slot_type)} • ${adminEscape(slot.size_label || "-")}</div>
+            <div class="text-[11px] text-gray-500 mt-1">${adminEscape(plainCodeWords("page", slot.page_key))} • ${adminEscape(plainCodeWords("slot", slot.slot_type))} • ${adminEscape(slot.size_label || "-")}</div>
           </div>
           <span class="text-[11px] rounded-full px-2 py-1 ${slot.is_premium ? "bg-amber-100 text-amber-800" : "bg-white text-gray-600"}">${slot.is_premium ? "Premium" : "Standard"}</span>
         </div>
@@ -37559,7 +37614,7 @@ async function renderAdminFeaturedRotationStatus() {
   wrap.innerHTML = `
     <div class="rounded-lg border ${stateClass} px-3 py-2 text-xs">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <strong>Daily 07:00 Kampala rotation: ${adminEscape(latest.status || "awaiting first run")}</strong>
+        <strong>Daily 07:00 Kampala rotation: ${adminEscape(plainCodeWords("rotation", latest.status, "awaiting first run"))}</strong>
         <span>${adminEscape(completed)}</span>
       </div>
       <div class="mt-1">Current pool: ${Number(current.total || 0)} · ${adminEscape(counts)}</div>
@@ -50370,7 +50425,7 @@ async function hydrateAdvertisePricingPreview() {
         ${rows.slice(0, 10).map((slot) => `
           <div class="rounded-xl border border-white bg-white p-3">
             <div class="text-xs font-bold text-gray-900">${adminEscape(slot.label)}</div>
-            <div class="text-[11px] text-gray-500">${adminEscape(slot.page_key)} • ${adminEscape(slot.size_label || slot.slot_type || "")}</div>
+            <div class="text-[11px] text-gray-500">${adminEscape(plainCodeWords("page", slot.page_key))} • ${adminEscape(slot.size_label || plainCodeWords("slot", slot.slot_type))}</div>
             <div class="grid grid-cols-2 gap-1 mt-2 text-[11px]">
               <div class="rounded-lg bg-green-50 px-2 py-1"><strong>Day</strong><br>${adminEscape(slot.price_labels?.day || adMoney(slot.daily_price_ugx || slot.base_price_ugx))}</div>
               <div class="rounded-lg bg-green-50 px-2 py-1"><strong>Week</strong><br>${adminEscape(slot.price_labels?.week || adMoney(slot.weekly_price_ugx || slot.base_price_ugx))}</div>
