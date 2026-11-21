@@ -255,8 +255,8 @@ async function activity({ period = 'day', day = kampalaDay(), personKey = '' } =
     else if (a.tapped_at) { c.calls += 1; c.actions += 1; c[a.direction === 'inbound' ? 'inbound' : 'outbound'] += 1; }
     if (a.status === 'skipped') c.skips += 1;
     c.talk_s += Number(a.talk_s || 0);
-    if (a.is_close) c.closes += 1;
-    if (a.is_close && a.task_key !== 'new_agents') c.payments += 1;
+    // Closed = paid (money received), never "signed up".
+    if (calling.closedPaid(a)) { c.closes += 1; c.payments += 1; }
   }
   for (const p of pays) {
     const c = cell(p.person_key, kampalaDay(p.at)); c.actions += 1;

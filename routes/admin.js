@@ -271,6 +271,7 @@ const agentReportCards = require('../services/agentReportCardService');
 const agentReportVideos = require('../services/agentReportVideoService');
 const agentWelcome = require('../services/agentWelcomeService');
 const agentGoodbye = require('../services/agentGoodbyeService');
+const agentRemovalRequests = require('../services/agentRemovalRequestService');
 
 const { DUPLICATE_CANDIDATES_SQL, classifyDuplicates, duplicateCandidateParams } = require('../utils/duplicateEvidence');
 const router = express.Router();
@@ -10227,7 +10228,47 @@ router.post('/agents/:id/remove', async (req, res, next) => {
     }).catch((error) => console.warn('[agent-goodbye] removal notice not sent:', error.message));
   });
   result.team_notified = true;
+  // A staff removal request for this agent is now done.
+  const closed = await agentRemovalRequests.approveForAgent(agent.id, { decidedBy: String(actor) });
+  if (closed.length) result.removal_requests_closed = closed.length;
   return res.json({ ok: true, data: result });
+});
+
+// Staff can't remove agents (Arthur, 21 Nov 2026): they ask King, with a reason.
+router.post('/agents/:id/removal-request', async (req, res, next) => {
+  try {
+    const out = await agentRemovalRequests.createRequest({
+      agentId: req.params.id,
+      reasonCode: req.body?.reason_code,
+      note: req.body?.reason || req.body?.note,
+      requestedBy: String(adminActorId(req)),
+      requestedByName: await adminActorDisplayName(req).catch(() => adminActorName(req))
+    });
+    await writeAudit('agent_removal_requested', { agent_id: out.agent_id, request_id: out.id, reason_code: out.reason_code, note: out.note }, adminActorId(req));
+    return res.json({ ok: true, data: out });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  }
+});
+
+// King only (not in the staff-shared list).
+router.get('/agent-removal-requests', async (req, res, next) => {
+  try {
+    const list = await agentRemovalRequests.listRequests({ status: String(req.query.status || 'open') });
+    return res.json({ ok: true, data: list, open: await agentRemovalRequests.countOpen() });
+  } catch (error) { return next(error); }
+});
+
+router.post('/agent-removal-requests/:id/decline', async (req, res, next) => {
+  try {
+    const out = await agentRemovalRequests.decline(req.params.id, { decidedBy: String(adminActorId(req)), note: req.body?.note });
+    await writeAudit('agent_removal_request_declined', { request_id: out.id, agent_id: out.agent_id, note: out.decision_note || '' }, adminActorId(req));
+    return res.json({ ok: true, data: out });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  }
 });
 
 // What King shows before Remove: the reasons, what the chosen one does, and

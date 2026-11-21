@@ -57,7 +57,9 @@ function isStaffSharedKingTool(path, method = 'GET') {
   if (p === '/agents' && (m === 'GET' || m === 'POST')) return true;
   if (p === '/agents/invite' || p === '/agents/direct-onboarding') return true;
   if (/^\/agents\/[^/]+\/(status|featured|greeting-name|identity-document|profile-photo|registration-status|public-profile-approval)$/.test(p)) return true;
-  if (/^\/agents\/[^/]+\/(remove|remove-preview|restore)$/.test(p)) return true;
+  // Staff never remove or restore agents (Arthur, 21 Nov 2026): they send King
+  // a removal request with a reason. Remove, preview and restore are King-only.
+  if (/^\/agents\/[^/]+\/removal-request$/.test(p) && m === 'POST') return true;
   return false;
 }
 

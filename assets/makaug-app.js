@@ -18266,6 +18266,7 @@ async function adminAgentManagerLoad(options = {}) {
     root.innerHTML = adminAgentManagerShellHtml();
     root.dataset.agentManagerReady = "1";
   }
+  if (!(typeof deskPageIsStaff === "function" && deskPageIsStaff()) && typeof adminRemovalRequestsLoad === "function") adminRemovalRequestsLoad();
   const s = ADMIN_AGENT_MANAGER_STATE;
   const list = root.querySelector("[data-agent-manager-list]");
   if (!authState?.token) {
@@ -18900,7 +18901,7 @@ function adminAgentManagerDetailHtml(d = {}) {
           ${adminAgentManagerApproveButton(a, "lg")}
         </div>
       </div>` : ""}
-      ${a.removed_at ? `<div class="rounded-xl border border-gray-300 bg-gray-50 p-3 text-sm text-gray-800">Removed ${date(a.removed_at, true)}${a.removed_reason ? ` — “${adminEscape(a.removed_reason)}”` : ""}. Their profile and listings are off the site.${a.personal_deleted_at ? ` Their ID and personal details were deleted on ${date(a.personal_deleted_at)}.` : (a.personal_delete_after ? ` Their ID and personal details will be deleted on ${date(a.personal_delete_after)} unless you restore them first.` : "")}${a.removal_reason_code === "cancelled" && a.goodbye_message_at ? (a.goodbye_film_at ? ` Goodbye message and film sent.` : ` Goodbye message sent; <strong>their goodbye film has not gone yet.</strong> <button type="button" data-goodbye-film-send class="ml-1 rounded-lg bg-amber-600 text-white px-3 py-1.5 text-xs font-bold" onclick="adminGoodbyeFilmMakeAndSend('${id}', '${adminAttr(a.full_name || "")}')">Make and send their film now</button>`) : ""} <button type="button" data-agent-restore class="ml-2 rounded-lg bg-green-700 text-white px-3 py-1.5 text-xs font-bold" onclick="adminAgentManagerRestore('${id}')">Restore agent</button></div>` : ""}
+      ${a.removed_at ? `<div class="rounded-xl border border-gray-300 bg-gray-50 p-3 text-sm text-gray-800">Removed ${date(a.removed_at, true)}${a.removed_reason ? ` — “${adminEscape(a.removed_reason)}”` : ""}. Their profile and listings are off the site.${a.personal_deleted_at ? ` Their ID and personal details were deleted on ${date(a.personal_deleted_at)}.` : (a.personal_delete_after ? ` Their ID and personal details will be deleted on ${date(a.personal_delete_after)} unless you restore them first.` : "")}${a.removal_reason_code === "cancelled" && a.goodbye_message_at ? (a.goodbye_film_at ? ` Goodbye message and film sent.` : ` Goodbye message sent; <strong>their goodbye film has not gone yet.</strong> <button type="button" data-goodbye-film-send class="ml-1 rounded-lg bg-amber-600 text-white px-3 py-1.5 text-xs font-bold" onclick="adminGoodbyeFilmMakeAndSend('${id}', '${adminAttr(a.full_name || "")}')">Make and send their film now</button>`) : ""}${typeof deskPageIsStaff === "function" && deskPageIsStaff() ? "" : ` <button type="button" data-agent-restore class="ml-2 rounded-lg bg-green-700 text-white px-3 py-1.5 text-xs font-bold" onclick="adminAgentManagerRestore('${id}')">Restore agent</button>`}</div>` : ""}
       ${dupes.length ? `<div class="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"><strong>Same phone number on another agent record:</strong> ${dupes.map((x) => `<button type="button" class="underline font-bold" onclick="adminAgentManagerOpen('${adminAttr(x.id)}')">${adminEscape(x.full_name)}</button> (joined ${date(x.created_at)}, ${Number(x.total_listings || 0)} listings${x.removed_at ? ", removed" : ""})`).join(", ")}. If it is the same person, move the listings to one record and remove the other.</div>` : ""}
       <form class="rounded-xl border border-gray-200 p-3" onsubmit="adminAgentManagerSaveDetails(event, '${id}')" data-agent-details-form>
         <h5 class="font-black text-gray-900 mb-2">Details</h5>
@@ -18977,7 +18978,9 @@ function adminAgentManagerDetailHtml(d = {}) {
         ${history.length ? `<ol class="space-y-2" data-agent-history>${history.map((h) => `
           <li class="text-xs"><span class="text-gray-400">${date(h.created_at, true)}</span> · <strong>${adminEscape(historyLabel(h))}</strong> · ${adminEscape(h.details?.by || h.actor_id || "")}${historyDetail(h) ? `<div class="text-gray-500">${adminEscape(historyDetail(h))}</div>` : ""}</li>`).join("")}</ol>` : `<p class="text-xs text-gray-500">No staff changes yet.</p>`}
       </section>
-      ${a.removed_at ? "" : `<section class="rounded-xl border border-red-200 bg-red-50 p-3" data-agent-remove>
+      ${a.removed_at || !(typeof deskPageIsStaff === "function" && deskPageIsStaff()) ? "" : adminAgentManagerRemovalRequestHtml(id)}
+      ${adminAgentManagerKingRequestBanner(id)}
+      ${a.removed_at || (typeof deskPageIsStaff === "function" && deskPageIsStaff()) ? "" : `<section class="rounded-xl border border-red-200 bg-red-50 p-3" data-agent-remove>
         <h5 class="font-black text-red-900 mb-1">Remove agent</h5>
         <p class="text-xs text-red-900 mb-2">Choose why. What happens depends on the reason. Listings are hidden, never deleted: “Restore agent” puts them back.</p>
         <div class="space-y-1" data-remove-reasons>${ADMIN_AGENT_REMOVAL_REASONS.map((r) => `
@@ -19376,6 +19379,7 @@ function adminAgentManagerRemoveReasonCode() {
 
 async function adminAgentManagerRemoveReasonChanged(agentId) {
   const box = document.querySelector("[data-agent-manager-agent] [data-remove-preview]");
+  if (typeof deskPageIsStaff === "function" && deskPageIsStaff()) return;
   const code = adminAgentManagerRemoveReasonCode();
   if (!box || !code) return;
   box.innerHTML = `<p class="text-xs text-gray-600">Loading what happens…</p>`;
@@ -19538,6 +19542,84 @@ async function adminGoodbyeFilmPreviewHere(agentId) {
   }
 }
 
+// Staff can't remove agents (Arthur, 21 Nov 2026). They send King a removal
+// request with a reason; King removes (or declines) from the Agents desk.
+const ADMIN_REMOVAL_REQUESTS = { list: [], loaded: false };
+
+function adminAgentManagerRemovalRequestHtml(id) {
+  return `<section class="rounded-xl border border-amber-300 bg-amber-50 p-3" data-agent-removal-request>
+        <h5 class="font-black text-amber-900 mb-1">Ask King to remove this agent</h5>
+        <p class="text-xs text-amber-900 mb-2">Only King can remove an agent. Pick why and say what happened; King decides.</p>
+        <div class="space-y-1" data-remove-reasons>${ADMIN_AGENT_REMOVAL_REASONS.map((r) => `
+          <label class="flex items-start gap-2 rounded-lg border border-amber-100 bg-white p-2 cursor-pointer">
+            <input type="radio" name="remove_reason_code_${id}" value="${adminAttr(r.code)}" data-remove-reason-code class="mt-1">
+            <span class="min-w-0"><span class="block text-sm font-bold text-gray-900">${adminEscape(r.label)}</span></span>
+          </label>`).join("")}</div>
+        <input type="text" data-remove-reason placeholder="Why? (required) e.g. same phone and photos as Kato Homes" class="mt-2 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm">
+        <div class="mt-2 flex flex-wrap gap-2">
+          <button type="button" data-agent-request-removal class="rounded-lg bg-amber-700 text-white px-4 py-2 text-xs font-bold" onclick="adminAgentManagerRequestRemoval('${id}')">Send removal request to King</button>
+        </div>
+      </section>`;
+}
+
+function adminAgentManagerKingRequestBanner(id) {
+  if (typeof deskPageIsStaff === "function" && deskPageIsStaff()) return "";
+  const r = ADMIN_REMOVAL_REQUESTS.list.find((x) => String(x.agent_id) === String(id) && x.status === "open");
+  if (!r) return "";
+  return `<div class="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" data-agent-removal-banner><strong>${adminEscape(r.requested_by_name || "Staff")} asked to remove this agent</strong> · ${adminEscape(r.reason_label || r.reason_code)}: “${adminEscape(r.note)}”. Remove below to approve, or <button type="button" class="underline font-bold" onclick="adminRemovalRequestDecline('${adminAttr(r.id)}')">decline</button>.</div>`;
+}
+
+async function adminAgentManagerRequestRemoval(agentId) {
+  const code = adminAgentManagerRemoveReasonCode();
+  const note = String(document.querySelector("[data-agent-manager-agent] [data-remove-reason]")?.value || "").trim();
+  if (!code) { toast("Choose why this agent should be removed."); return; }
+  if (note.length < 5) { toast("Say why in a few words, so King can decide."); return; }
+  try {
+    await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/removal-request`, { method: "POST", headers: adminAuthHeaders(), body: { reason_code: code, reason: note } });
+    const box = document.querySelector("[data-agent-manager-agent] [data-agent-removal-request]");
+    if (box) box.innerHTML = `<p class="text-sm font-bold text-amber-900" data-agent-removal-sent>✅ Sent to King. Only King can remove an agent; you'll see the result here.</p>`;
+    toast("Removal request sent to King.");
+  } catch (error) {
+    toast(`Request not sent: ${error?.message || "error"}`);
+  }
+}
+
+async function adminRemovalRequestsLoad() {
+  const root = adminAgentManagerRoot();
+  if (!root || !authState?.token) return;
+  let box = root.querySelector("[data-agent-removal-requests]");
+  if (!box) { box = document.createElement("div"); box.setAttribute("data-agent-removal-requests", ""); box.className = "mb-3"; root.prepend(box); }
+  try {
+    const res = await apiRequest("/api/admin/agent-removal-requests?status=open", { headers: adminAuthHeaders() });
+    ADMIN_REMOVAL_REQUESTS.list = Array.isArray(res?.data) ? res.data : [];
+    ADMIN_REMOVAL_REQUESTS.loaded = true;
+  } catch (_) { box.innerHTML = ""; return; }
+  const list = ADMIN_REMOVAL_REQUESTS.list;
+  if (!list.length) { box.innerHTML = ""; return; }
+  const when = (d) => { try { return new Date(d).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); } catch (_) { return ""; } };
+  box.innerHTML = `<section class="rounded-2xl border-2 border-red-200 bg-red-50 p-3">
+    <h4 class="font-black text-red-900 mb-2">Removal requests <span class="ml-1 rounded-full bg-red-600 text-white px-2 py-0.5 text-xs" data-removal-request-count>${list.length}</span></h4>
+    <div class="space-y-2">${list.map((r) => `
+      <div class="rounded-xl bg-white border border-red-100 p-3 flex flex-wrap items-center gap-2" data-removal-request="${adminAttr(r.id)}">
+        <div class="min-w-0 flex-1"><div class="font-bold text-gray-900">${adminEscape(r.agent_name || "Agent")}</div>
+        <div class="text-xs text-gray-600">${adminEscape(r.reason_label || r.reason_code)} · “${adminEscape(r.note)}” · asked by ${adminEscape(r.requested_by_name || "staff")} · ${adminEscape(when(r.created_at))}</div></div>
+        <button type="button" class="rounded-lg bg-gray-900 text-white px-3 py-1.5 text-xs font-bold" onclick="adminAgentManagerOpen('${adminAttr(r.agent_id)}')">Open agent to remove</button>
+        <button type="button" class="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-bold" onclick="adminRemovalRequestDecline('${adminAttr(r.id)}')">Decline</button>
+      </div>`).join("")}</div></section>`;
+}
+
+async function adminRemovalRequestDecline(id) {
+  const note = window.prompt("Why decline? (they'll see this)", "Keep the agent");
+  if (note === null) return;
+  try {
+    await apiRequest(`/api/admin/agent-removal-requests/${encodeURIComponent(id)}/decline`, { method: "POST", headers: adminAuthHeaders(), body: { note } });
+    toast("Removal request declined.");
+    await adminRemovalRequestsLoad();
+  } catch (error) {
+    toast(`Decline failed: ${error?.message || "error"}`);
+  }
+}
+
 async function adminAgentManagerRemove(agentId) {
   const code = adminAgentManagerRemoveReasonCode();
   const reason = ADMIN_AGENT_REMOVAL_REASONS.find((r) => r.code === code);
@@ -19558,6 +19640,7 @@ async function adminAgentManagerRemove(agentId) {
     if (d.personal_delete_after) bits.push(`their ID and personal details will be deleted on ${staffPeopleDate(d.personal_delete_after)}`);
     if (d.team_notified) bits.push("Arthur and Ronald have been told on WhatsApp");
     await adminAgentManagerRefreshOpen(`${bits.join(", ")}.`);
+    adminRemovalRequestsLoad();
     // The server often has no room to make the film: make it here and send it.
     if (code === "cancelled" && d.goodbye?.status === "sending") setTimeout(() => adminGoodbyeFilmMakeAndSend(agentId, d.full_name || name), 4000);
   } catch (error) {

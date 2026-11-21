@@ -188,6 +188,21 @@
 
   // ------------------------------------------------------------------ css --
   var CSS = [
+    '.mkc-gate.mkc-reconnect{position:fixed;top:84px;left:50%;transform:translateX(-50%);z-index:40;width:calc(100% - 24px);max-width:640px;max-height:calc(100vh - 100px);overflow:auto;box-shadow:0 0 0 100vmax rgba(15,23,42,.6),0 20px 60px rgba(0,0,0,.4)}',
+    '#mkc-connect{position:fixed;inset:0;z-index:2147483100;background:rgba(15,23,42,.6);overflow:auto;padding:16px;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}',
+    '.mkc-cx-box{max-width:980px;margin:0 auto;background:#fff;border-radius:20px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.35)}',
+    '.mkc-cx-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.mkc-cx-head h2{font-size:26px;font-weight:900;margin:0;color:#0f172a}',
+    '.mkc-cx-lights{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}@media(max-width:700px){.mkc-cx-lights{grid-template-columns:repeat(2,1fr)}}',
+    '.mkc-cx-light{display:flex;flex-direction:column;align-items:center;gap:4px;border:3px solid #e2e8f0;border-radius:16px;padding:12px 8px;background:#f8fafc;cursor:pointer;text-align:center}',
+    '.mkc-cx-light b{font-size:15px;color:#0f172a}.mkc-cx-note{font-size:12px;color:#475569}.mkc-cx-ic{font-size:28px}',
+    '.mkc-cx-dot{width:26px;height:26px;border-radius:50%;background:#94a3b8;box-shadow:0 0 0 5px #e2e8f0}',
+    '.mkc-cx-light.ok{border-color:#86efac;background:#f0fdf4}.mkc-cx-light.ok .mkc-cx-dot{background:#16a34a;box-shadow:0 0 0 5px #bbf7d0}',
+    '.mkc-cx-light.bad{border-color:#fca5a5;background:#fef2f2}.mkc-cx-light.bad .mkc-cx-dot{background:#dc2626;box-shadow:0 0 0 5px #fecaca}',
+    '.mkc-cx-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.mkc-cx-tab{border:2px solid #e2e8f0;background:#fff;border-radius:999px;padding:8px 14px;font-weight:800;font-size:14px;cursor:pointer}.mkc-cx-tab.on{background:#15603f;border-color:#15603f;color:#fff}',
+    '.mkc-cx-gt{font-size:20px;font-weight:900;margin:14px 0 8px;color:#0f172a}',
+    '.mkc-cx-steps{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}@media(max-width:900px){.mkc-cx-steps{grid-template-columns:repeat(2,1fr)}}@media(max-width:480px){.mkc-cx-steps{grid-template-columns:1fr}}',
+    '.mkc-cx-steps li{position:relative;border:2px solid #e2e8f0;border-radius:16px;padding:10px;background:#f8fafc}.mkc-cx-steps p{font-size:15px;font-weight:700;margin:6px 0 0;color:#0f172a;line-height:1.3}',
+    '.mkc-cx-n{position:absolute;top:8px;left:8px;width:30px;height:30px;border-radius:50%;background:#15603f;color:#fff;font-weight:900;display:grid;place-items:center;font-size:16px}',
     '.mkc-card{border:1px solid #d1fae5;background:linear-gradient(135deg,#ecfdf5,#fff);border-radius:16px;padding:20px}',
     '.mkc-card h3{font-size:20px;font-weight:900;color:#064e3b;margin:0}',
     '.mkc-muted{color:#6b7280;font-size:13px}',
@@ -201,6 +216,8 @@
     '.mkc-btn.dark{background:#111827;color:#fff}.mkc-btn.red{background:#b91c1c;color:#fff}.mkc-btn.amber{background:#f59e0b;color:#111827}',
     '.mkc-btn.ghost{background:transparent;border:1px solid #d1d5db}.mkc-btn.sm{padding:6px 10px;font-size:12px;border-radius:9px}',
     '.mkc-btn[disabled]{opacity:.45;cursor:not-allowed}',
+    '.mkc-gate{border:2px solid #15603f;background:#f6fbf8;border-radius:16px;padding:16px;text-align:left;margin-top:8px}.mkc-gate p{margin:6px 0}.mkc-gate-t{font-size:20px;font-weight:900;color:#16241d}.mkc-gate-row{display:flex;gap:10px;align-items:center;padding:8px 10px;background:#fff;border:1px solid #e4ece8;border-radius:10px;margin:6px 0}.mkc-gate-row .mkc-muted{margin-left:auto;font-size:12px}.mkc-gate-heard{font-size:15px;font-style:italic;color:#15603f;margin:6px 0}.mkc-gate .mkc-call{margin-top:10px;width:100%}',
+    '.mkc-reconnect{border-color:#b3134f;background:#fff1f4}.mkc-reconnect .mkc-gate-t{color:#b3134f;font-size:22px}.mkc-reconnect ol{margin:8px 0 8px 20px;font-size:15px;line-height:1.55}',
     '.mkc-select,.mkc-input,.mkc-ta{border:1px solid #d1d5db;border-radius:10px;padding:9px 11px;font:inherit;font-size:14px;background:#fff;color:#111827}',
     '.mkc-ta{width:100%;min-height:64px;box-sizing:border-box}',
     '#mkc-overlay{position:fixed;inset:0;z-index:2147483000;background:#f1f5f9;overflow:auto;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111827}',
@@ -386,12 +403,13 @@
         : '<select class="mkc-select" data-mkc-person><option value="">Who is calling?</option>' + boot.callers.map(function (p) { return '<option value="' + esc(p.key) + '"' + (p.key === pick.person ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('') + '</select>';
       host.innerHTML = '<div class="mkc-card">'
         + '<div class="mkc-row" style="justify-content:space-between"><div><h3><i class="fas fa-phone"></i> Calling</h3><p class="mkc-muted" style="margin:4px 0 0">Pick a task, then Start calling. The screen goes full-screen and keeps your work time.</p></div>'
-        + '<button type="button" class="mkc-btn ghost sm" data-mkc-myreport>My report today</button></div>'
+        + '<div class="mkc-row"><button type="button" class="mkc-btn ghost sm" data-mkc-connect="bt">📱 Connect your phone</button><button type="button" class="mkc-btn ghost sm" data-mkc-myreport>My report today</button></div></div>'
         + '<div class="mkc-tasks">' + tasks + '</div>'
         + '<div class="mkc-row">' + people + '<button type="button" class="mkc-btn go" data-mkc-start style="font-size:16px;padding:12px 22px"><i class="fas fa-play"></i> Start calling</button></div>'
         + '<div data-mkc-carderr></div></div>';
       qa('[data-mkc-task]', host).forEach(function (b) { b.onclick = function () { pick.task = b.getAttribute('data-mkc-task'); renderStaffCard(host); }; });
       var sel = q('[data-mkc-person]', host); if (sel) sel.onchange = function () { pick.person = sel.value; };
+      q('[data-mkc-connect]', host).onclick = function () { openConnect('bt'); };
       q('[data-mkc-myreport]', host).onclick = function () {
         if (!pick.person) return showErr(host, 'Choose who is calling first.');
         openReport(pick.person);
@@ -517,7 +535,7 @@
   }
   function teardown() {
     if (!S) return;
-    clearInterval(S.tickT); clearInterval(S.beatT); clearInterval(S.refreshT);
+    clearInterval(S.tickT); clearInterval(S.beatT); clearInterval(S.refreshT); stopLinkWatch(); CHK.notes = 'none'; CHK.link = 'up';
     document.removeEventListener('visibilitychange', onVis);
     document.removeEventListener('fullscreenchange', onFs);
     window.removeEventListener('pagehide', onHide);
@@ -732,7 +750,7 @@
     var calls = st.calls || 0, closes = st.closes || 0;
     return [
       ['First call', calls >= 1], ['10 calls', calls >= 10], ['20 calls', calls >= 20], ['Target ' + tg.calls_per_day, calls >= tg.calls_per_day],
-      ['First close', closes >= 1], [tg.closes_per_day + ' closes', closes >= tg.closes_per_day], ['Hot hour 8+', (st.this_hour || 0) >= 8], ['3-day streak', (st.streak_days || 0) >= 3]
+      ['First paid', closes >= 1], [tg.closes_per_day + ' paid', closes >= tg.closes_per_day], ['Hot hour 8+', (st.this_hour || 0) >= 8], ['3-day streak', (st.streak_days || 0) >= 3]
     ];
   }
   function renderDash() {
@@ -748,7 +766,7 @@
     var got = badges.filter(function (b) { return b[1]; });
     var nextB = badges.filter(function (b) { return !b[1]; })[0];
     el.innerHTML = '<div class="mkc-dcard">' + ring(st.calls || 0, tg.calls_per_day, (st.calls_hit ? '#10b981' : '#0ea5e9'), 'Calls vs target') + '<div><b>' + (toGo ? toGo + ' to go' : 'Target hit – keep going') + '</b><span>calls today' + (toGo ? '' : ' · numbers keep coming') + (st.not_answered ? '<br>Not answered: ' + st.not_answered + ' (not counted, back in 24h)' : '') + '</span></div></div>'
-      + '<div class="mkc-dcard">' + ring(st.closes || 0, tg.closes_per_day, '#f59e0b', 'Closes vs target') + '<div><b>' + (st.closes || 0) + ' closed</b><span>target ' + tg.closes_per_day + '</span></div></div>'
+      + '<div class="mkc-dcard">' + ring(st.closes || 0, tg.closes_per_day, '#f59e0b', 'Paid vs target') + '<div><b>' + (st.closes || 0) + ' paid (closed)</b><span>target ' + tg.closes_per_day + '</span></div></div>'
       + '<div class="mkc-dcard mkc-money"><div><b>' + (money.on_commission ? ugx(money.earned_ugx) : ugx((money.payments_closed || 0) * 50000)) + '</b><span>' + (money.on_commission ? 'earned today (est. ' + money.rate_pct + '%)' : 'payments in today') + '</span></div><div><b style="color:#b45309">' + (money.on_commission ? ugx(money.at_stake_ugx) : (money.payments_pending || 0) + ' to pay') + '</b><span>at stake: sign-ups / promises</span></div></div>'
       + '<div class="mkc-dcard"><div><b>' + hm((st.talk_s || 0) * 1000) + '</b><span>time on calls</span></div><div><b>' + (st.streak_days || 0) + '🔥</b><span>day streak</span></div><div><b>' + (st.queue_left == null ? '–' : st.queue_left) + '</b><span>' + esc(T('left')) + '</span></div></div>'
       + '<div class="mkc-dcard"><div class="mkc-hours" title="Calls per hour today (Kampala)">' + hours.map(function (x) { return '<i class="' + (x === nowH ? 'now' : '') + '" style="height:' + Math.max(3, Math.round(40 * (byH[x] || 0) / maxH)) + 'px" title="' + x + ':00 · ' + (byH[x] || 0) + ' calls"></i>'; }).join('') + '</div><div><b>' + (st.this_hour || 0) + '</b><span>this hour</span></div></div>'
@@ -840,7 +858,9 @@
       + (a.reason ? '<span class="mkc-reason' + (a.source_kind === 'callback' ? ' mkc-cb' : '') + '">' + esc(a.reason) + '</span>' : '')
       + '<div class="mkc-phone">' + esc(boot.sandbox && a.phone_masked && !/^7000001\d{2}$/.test(String(a.phone || '').replace(/\D/g, '').slice(-9)) ? a.phone_masked : prettyPhone(a.phone)) + '</div>';
     var body = '';
-    if (S.phase === 'shown') {
+    if (S.phase === 'shown' && !checkPassed()) {
+      body = gateHtml();
+    } else if (S.phase === 'shown') {
       body = '<a class="mkc-btn go mkc-call" href="' + esc(d.tel) + '" data-mkc-tap title="' + (isPhone() ? 'Opens the phone app' : 'Rings out from the company phone through Phone Link (Bluetooth)') + '"><i class="fas fa-phone"></i>&nbsp;' + (isPhone() ? esc(T('call_next')) : 'Call now') + '</a>'
         + '<div class="mkc-row" style="margin-top:8px;justify-content:center"><button type="button" class="mkc-btn ghost sm" data-mkc-skip>' + esc(T('skip')) + '</button><button type="button" class="mkc-btn ghost sm" data-mkc-tree>History tree</button><button type="button" class="mkc-btn sm mkc-wabtn" data-mkc-washare>🟢 Share on WhatsApp</button></div>'
         + (boot.sandbox ? practiceCallHelp(a) : '');
@@ -855,16 +875,17 @@
     var inCall = S.phase === 'calling' || S.phase === 'wrapup';
     el.innerHTML = head + body + contextHtml(d, true) + (inCall ? (tools ? '<details class="mkc-extras"><summary>💰 Payment · texts · video</summary>' + tools + '</details>' : '') : tools);
     bindPay(el, a); bindContact(el, a);
-    bindTx(el);
+    bindTx(el); bindGate(el);
     bindLastDone(el);
     var tapEl = q('[data-mkc-tap]', el);
     if (tapEl) tapEl.onclick = function (e) {
       if (!S.work) { e.preventDefault(); toast('Turn work mode on to call.', 'bad'); setWork(true, 'to call'); return; }
+      if (!checkPassed()) { e.preventDefault(); toast('Do the mic check first.', 'bad'); renderNum(); return; }
       // The tel: link opens the dialler by itself; we only log the time.
       S.callStart = Date.now(); S.phase = 'calling'; S.lastDone = null;
       if (txSupported() && !TX) startTx(true); // live notes start with the call (your mic only)
       renderNum(); renderScript();
-      op('/attempts/' + a.id + '/tap', { session_id: S.id }).catch(function (e) { toast(e.message, 'bad'); });
+      op('/attempts/' + a.id + '/tap', { session_id: S.id, check: checkPayload() }).catch(function (e) { if (e.status === 428) { CHK.notes = 'none'; } toast(e.message, 'bad'); });
     };
     qa('[data-mkc-washare]', el).forEach(function (b) { b.onclick = function () { openShare(a); }; });
     var endIt = endCallNow;
@@ -960,7 +981,9 @@
         if (code === 'no-speech' || code === 'aborted') return; // silence: it restarts on its own
         if (TX) TX.stopped = true;
         S.tx = 'error'; S.txErr = code === 'not-allowed' || code === 'service-not-allowed' ? 'Microphone blocked: click the 🎤 in the address bar and allow it.' : code === 'network' ? 'Live notes need the internet (Chrome/Edge send speech to their service).' : 'Live notes stopped (' + code + ').';
-        ev('notes_error', code || ''); if (S.phase === 'calling') renderNum();
+        ev('notes_error', code || '');
+        if (code === 'audio-capture') linkDown('audio lost during a call'); else CHK.notes = 'none';
+        if (S.phase === 'calling') renderNum();
       };
       r.onend = function () { if (TX && !TX.stopped) { try { r.start(); } catch (x) { /* ignore */ } } };
       r.start();
@@ -973,6 +996,230 @@
     TX.stopped = true; TX.secs = Math.round((Date.now() - TX.start) / 1000);
     try { TX.sr.stop(); } catch (x) { /* ignore */ }
     S.tx = 'done'; ev('notes_stop', TX.secs + 's');
+  }
+  // ---- Mic + live-notes check and phone-link watch (Arthur, 21 Nov 2026).
+  // Call now stays locked until the mic is allowed and live notes have heard a
+  // test phrase. If the phone link / Bluetooth audio device disappears, or live
+  // notes lose the mic, calls pause behind a reconnect card until the check
+  // passes again. Every pass, fail and drop is logged for King.
+  var BT_RE = /bluetooth|hands-?free|headset|phone link|airpods|buds|galaxy|iphone|pixel|tecno|infinix|itel|redmi|xiaomi|nokia|samsung|oppo|vivo|\bbt\b/i;
+  var CHK = { notes: 'none', at: null, watch: [], bt: '', link: 'up', running: false, heard: '', why: '' };
+  var LINKT = null;
+  var CHECK_EVERY_MS = 2 * 3600 * 1000; // re-check every 2 hours of calling
+  function checkPassed() {
+    if (CHK.notes === 'ok' && CHK.at && Date.now() - Date.parse(CHK.at) > CHECK_EVERY_MS) { CHK.notes = 'none'; CHK.why = ''; }
+    return CHK.notes === 'ok' && CHK.link !== 'down';
+  }
+  function checkPayload() { return { notes: CHK.notes, at: CHK.at, link: CHK.link, bt: CHK.bt ? 'yes' : 'no' }; }
+  function audioInputs() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return Promise.resolve([]);
+    return navigator.mediaDevices.enumerateDevices().then(function (l) { return l.filter(function (d) { return d.kind === 'audioinput' || d.kind === 'audiooutput'; }); }).catch(function () { return []; });
+  }
+  function checkFail(why, code) {
+    CHK.running = false; CHK.notes = 'failed'; CHK.why = why; ev('notes_check_failed', code || why.slice(0, 60)); beat(); renderNum();
+  }
+  function runCheck() {
+    if (CHK.running) return;
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR || !txSupported()) { checkFail('Live notes only work in Chrome or Edge on the laptop. Open makaug.com there to call.', 'unsupported'); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { checkFail('This browser cannot use the microphone.', 'no_media'); return; }
+    CHK.running = true; CHK.heard = ''; CHK.why = ''; renderNum();
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      var track = stream.getAudioTracks()[0]; var micLabel = track ? track.label : '';
+      stream.getTracks().forEach(function (t) { t.stop(); });
+      return audioInputs().then(function (devs) {
+        var bt = devs.filter(function (d) { return d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications' && BT_RE.test(d.label || ''); });
+        var mics = devs.filter(function (d) { return d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications'; });
+        var watch = (bt.length ? bt : mics).map(function (d) { return d.deviceId; });
+        var r; var ended = false; var timer;
+        var finish = function (ok, why, code) {
+          if (ended) return; ended = true; clearTimeout(timer); try { r.abort(); } catch (x) { /* ignore */ }
+          if (!ok) { checkFail(why, code); return; }
+          var wasDown = CHK.link === 'down';
+          CHK.running = false; CHK.notes = 'ok'; CHK.at = new Date().toISOString(); CHK.watch = watch; CHK.bt = bt.length ? (bt[0].label || 'Bluetooth device') : ''; CHK.link = 'up'; CHK.why = '';
+          ev('notes_check_passed', (micLabel || 'mic') + (CHK.bt ? ' · phone link: ' + CHK.bt : ' · no Bluetooth device seen'));
+          if (wasDown) ev('link_back', CHK.bt || micLabel || '');
+          beat(); startLinkWatch(); renderNum();
+        };
+        try {
+          r = new SR(); r.continuous = true; r.interimResults = true; r.lang = 'en-UG';
+          r.onresult = function (e) {
+            var t = ''; for (var i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+            CHK.heard = t; var live = q('[data-mkc-chkheard]'); if (live) live.textContent = '“' + t + '”';
+            if (t.replace(/\s+/g, '').length >= 3) finish(true);
+          };
+          r.onerror = function (e) {
+            var code = e && e.error;
+            if (code === 'no-speech' || code === 'aborted') return;
+            finish(false, code === 'not-allowed' || code === 'service-not-allowed' ? 'The microphone is blocked. Click the 🎤 or 🔒 at the left of the address bar, choose Allow for the microphone, then check again.' : code === 'audio-capture' ? 'No microphone found. Reconnect the headset or the phone link, then check again.' : code === 'network' ? 'Live notes need the internet. Check the Wi-Fi, then check again.' : 'Live notes did not start (' + code + '). Check again.', code);
+          };
+          r.start();
+        } catch (x) { finish(false, 'Live notes could not start in this browser.', 'start_failed'); return; }
+        timer = setTimeout(function () { finish(false, 'We didn’t hear you. Say “testing one two three” clearly, close to the mic, then check again.', 'not_heard'); }, 15000);
+      });
+    }, function (err) {
+      var n = err && err.name;
+      checkFail(n === 'NotAllowedError' ? 'The microphone is blocked. Click the 🎤 or 🔒 at the left of the address bar, choose Allow for the microphone, then check again.' : 'No microphone found. Plug in or reconnect the headset / phone link, then check again.', n || 'mic_error');
+    });
+  }
+  function linkDown(detail) {
+    if (CHK.link === 'down') return;
+    CHK.link = 'down'; CHK.notes = 'none'; ev('link_drop', detail || ''); beat();
+    if (S && S.phase === 'calling') toast('The phone link / audio dropped. Finish this call, then reconnect.', 'bad');
+    renderNum();
+  }
+  function checkLink() {
+    if (!S || CHK.notes !== 'ok' || !CHK.watch.length) return;
+    audioInputs().then(function (devs) {
+      var have = devs.map(function (d) { return d.deviceId; });
+      var still = CHK.watch.some(function (id) { return have.indexOf(id) >= 0; });
+      if (!still) linkDown(CHK.bt ? CHK.bt + ' disconnected' : 'microphone disconnected');
+    });
+  }
+  function startLinkWatch() {
+    if (LINKT) return;
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', checkLink);
+    LINKT = setInterval(checkLink, 15000);
+  }
+  function stopLinkWatch() {
+    if (navigator.mediaDevices && navigator.mediaDevices.removeEventListener) navigator.mediaDevices.removeEventListener('devicechange', checkLink);
+    clearInterval(LINKT); LINKT = null;
+  }
+  function gateHtml() {
+    if (CHK.link === 'down') {
+      return '<div class="mkc-gate mkc-reconnect" data-mkc-reconnect><div class="mkc-gate-t">🔌 The phone link dropped. Calls are paused.</div>'
+        + '<p>Nobody can hear the call, so live notes can’t work. Reconnect, then check again:</p><ol>'
+        + '<li><b>On the company phone:</b> unlock it and make sure <b>Bluetooth is ON</b>.</li>'
+        + '<li><b>On the laptop:</b> open <b>Phone Link</b> (Start ⊞ → type “Phone Link”). If it says Disconnected, click <b>Reconnect</b>.</li>'
+        + '<li>Still not connected? <b>Settings → Bluetooth &amp; devices</b> → click the phone → <b>Connect</b>. Not listed? <b>Add device → Bluetooth</b> → pick the phone, then open Phone Link again.</li>'
+        + '<li>Using a headset? Turn it off and on, then pick it in <b>Settings → System → Sound → Input</b>.</li></ol>'
+        + '<button type="button" class="mkc-btn go mkc-call" data-mkc-mcheck>✅ I’ve reconnected – check again</button>'
+        + '<button type="button" class="mkc-btn ghost" style="margin-top:8px;width:100%" data-mkc-connect="fix">📱 Show me with pictures</button></div>';
+    }
+    var row = function (ok, label, note) { return '<div class="mkc-gate-row"><span>' + (ok === true ? '✅' : ok === false ? '❌' : '⬜') + '</span><b>' + label + '</b>' + (note ? '<span class="mkc-muted">' + note + '</span>' : '') + '</div>'; };
+    var failed = CHK.notes === 'failed';
+    var body = '<div class="mkc-gate" data-mkc-gate><div class="mkc-gate-t">🎙 Mic check before you call</div>'
+      + '<p>Calls stay locked until live notes can hear you. Put the phone on speaker near the laptop (or use the headset).</p>'
+      + row(failed && /blocked|microphone|No microphone/i.test(CHK.why) ? false : (CHK.running || CHK.notes === 'ok') ? true : null, 'Microphone allowed')
+      + row(failed ? false : CHK.notes === 'ok' ? true : null, 'Live notes hear you', CHK.running ? 'Say: “testing one two three”' : '')
+      + (CHK.running ? '<div class="mkc-gate-heard" data-mkc-chkheard>Listening…</div>' : '')
+      + (failed ? '<div class="mkc-err" data-mkc-chkwhy>' + esc(CHK.why) + '</div>' : '')
+      + '<button type="button" class="mkc-btn go mkc-call" data-mkc-mcheck' + (CHK.running ? ' disabled' : '') + '>' + (CHK.running ? 'Listening…' : failed ? '🔁 Check again' : '🎙 Start the mic check') + '</button>'
+      + '<button type="button" class="mkc-btn ghost sm" style="margin-top:8px" data-mkc-connect="bt">📱 Connect your phone (pictures)</button>'
+      + '<p class="mkc-muted" style="font-size:12px;margin-top:6px">Only text is kept, never audio. 🔒 Call now unlocks when both are ✅.</p></div>';
+    return body;
+  }
+  function bindGate(el) {
+    qa('[data-mkc-mcheck]', el).forEach(function (b) { b.onclick = function () { runCheck(); }; });
+    qa('[data-mkc-connect]', el).forEach(function (b) { b.onclick = function () { openConnect(b.getAttribute('data-mkc-connect') || ''); }; });
+  }
+  // ---- Connect your phone (Arthur, 21 Nov 2026). One big, visual page:
+  // live lights for the phone link, the mic, the SMS gateway app and the
+  // MoMo forwarder, then picture-by-picture guides. Few words on purpose.
+  var CONNECT = { open: false, srv: null, timer: null, guide: 'bt' };
+  var G = '#15603f';
+  function svgWrap(inner) { return '<svg viewBox="0 0 240 150" width="100%" height="150" role="img" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">' + inner + '</svg>'; }
+  function svPhone(x, y, screen) { return '<rect x="' + x + '" y="' + y + '" width="62" height="118" rx="10" fill="#0f172a"/><rect x="' + (x + 5) + '" y="' + (y + 12) + '" width="52" height="92" rx="4" fill="#fff"/><circle cx="' + (x + 31) + '" cy="' + (y + 111) + '" r="3" fill="#475569"/>' + (screen || ''); }
+  function svLaptop(x, y, screen) { return '<rect x="' + x + '" y="' + y + '" width="120" height="78" rx="6" fill="#0f172a"/><rect x="' + (x + 6) + '" y="' + (y + 6) + '" width="108" height="66" rx="3" fill="#fff"/><path d="M' + (x - 12) + ' ' + (y + 82) + 'h144l-8 10h-128z" fill="#334155"/>' + (screen || ''); }
+  function svBt(cx, cy, s, col) { s = s || 1; col = col || '#2563eb'; return '<g transform="translate(' + cx + ' ' + cy + ') scale(' + s + ')"><circle r="14" fill="' + col + '"/><path d="M-5 -6l10 9-5 4.5v-15l5 4.5-10 9" stroke="#fff" stroke-width="2.4" fill="none" stroke-linejoin="round"/></g>'; }
+  function svTick(cx, cy) { return '<g transform="translate(' + cx + ' ' + cy + ')"><circle r="13" fill="#16a34a"/><path d="M-6 0l4 5 8-9" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/></g>'; }
+  function svCross(cx, cy) { return '<g transform="translate(' + cx + ' ' + cy + ')"><circle r="13" fill="#dc2626"/><path d="M-5 -5l10 10M5 -5l-10 10" stroke="#fff" stroke-width="3" stroke-linecap="round"/></g>'; }
+  function svArrow(x1, y, x2) { return '<path d="M' + x1 + ' ' + y + 'H' + (x2 - 8) + '" stroke="' + G + '" stroke-width="4" stroke-dasharray="6 5"/><path d="M' + (x2 - 10) + ' ' + (y - 7) + 'l10 7-10 7z" fill="' + G + '"/>'; }
+  function svToggle(x, y, on) { return '<rect x="' + x + '" y="' + y + '" width="30" height="16" rx="8" fill="' + (on ? '#16a34a' : '#cbd5e1') + '"/><circle cx="' + (x + (on ? 22 : 8)) + '" cy="' + (y + 8) + '" r="6" fill="#fff"/>'; }
+  function svText(x, y, t, size, col) { return '<text x="' + x + '" y="' + y + '" font-size="' + (size || 10) + '" font-weight="700" fill="' + (col || '#0f172a') + '" font-family="Inter,Arial,sans-serif">' + esc(t) + '</text>'; }
+  function svWin(x, y) { return '<g transform="translate(' + x + ' ' + y + ')"><rect width="7" height="7" fill="#2563eb"/><rect x="8" width="7" height="7" fill="#2563eb"/><rect y="8" width="7" height="7" fill="#2563eb"/><rect x="8" y="8" width="7" height="7" fill="#2563eb"/></g>'; }
+  function svMoney(cx, cy) { return '<g transform="translate(' + cx + ' ' + cy + ')"><rect x="-18" y="-11" width="36" height="22" rx="4" fill="#facc15" stroke="#a16207" stroke-width="2"/>' + svText(-9, 4, 'UGX', 8, '#713f12') + '</g>'; }
+  function svCloud(cx, cy) { return '<g transform="translate(' + cx + ' ' + cy + ')"><path d="M-26 10a12 12 0 0 1 2-23 16 16 0 0 1 30-4 12 12 0 0 1 20 9 11 11 0 0 1-2 18z" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>' + svText(-20, 4, 'makaug', 10, '#0c4a6e') + '</g>'; }
+  var GUIDES = {
+    bt: { title: '🔵 Pair the phone with the laptop', steps: [
+      ['Phone: swipe down, turn Bluetooth ON', svgWrap(svPhone(89, 16, '<rect x="99" y="34" width="42" height="20" rx="4" fill="#eff6ff"/>' + svBt(110, 44, .55) + svToggle(117, 36, true)))],
+      ['Laptop: Start ⊞ → Settings → Bluetooth & devices', svgWrap(svLaptop(60, 20, svWin(74, 34) + svText(94, 44, 'Settings', 11) + '<rect x="74" y="54" width="92" height="22" rx="4" fill="#eff6ff"/>' + svBt(87, 65, .55) + svText(98, 69, 'Bluetooth', 10)))],
+      ['Click “Add device” → Bluetooth → pick the phone', svgWrap(svLaptop(14, 20, '<rect x="26" y="34" width="96" height="18" rx="4" fill="' + G + '"/>' + svText(36, 46, '+ Add device', 10, '#fff') + '<rect x="26" y="58" width="96" height="18" rx="4" fill="#eff6ff"/>' + svText(36, 70, '📱 Company phone', 9)) + svArrow(140, 60, 168) + svPhone(172, 16, svBt(203, 62, .8)))],
+      ['Same number on both? Tap Pair. Done ✅', svgWrap(svLaptop(14, 20, svText(42, 50, '482 913', 16, G)) + svPhone(168, 16, svText(178, 64, '482 913', 12, G)) + svTick(120, 132))]
+    ] },
+    link: { title: '🖥️ Phone Link on Windows', steps: [
+      ['Start ⊞ → type “Phone Link” → open it', svgWrap(svLaptop(60, 20, '<rect x="72" y="34" width="96" height="18" rx="9" fill="#f1f5f9" stroke="#94a3b8"/>' + svText(82, 47, '🔍 Phone Link', 10) + svWin(74, 58)))],
+      ['Choose Android, scan the QR code with the phone', svgWrap(svLaptop(14, 20, '<g fill="#0f172a"><rect x="44" y="34" width="10" height="10"/><rect x="74" y="34" width="10" height="10"/><rect x="44" y="62" width="10" height="10"/><rect x="58" y="48" width="6" height="6"/><rect x="66" y="58" width="8" height="8"/></g>') + svArrow(140, 60, 168) + svPhone(172, 16, '<rect x="185" y="44" width="36" height="36" rx="4" fill="none" stroke="' + G + '" stroke-width="3" stroke-dasharray="6 4"/>'))],
+      ['Allow everything it asks on the phone (calls, contacts)', svgWrap(svPhone(89, 16, '<rect x="97" y="40" width="46" height="18" rx="4" fill="' + G + '"/>' + svText(107, 53, 'Allow', 11, '#fff') + '<rect x="97" y="64" width="46" height="18" rx="4" fill="' + G + '"/>' + svText(107, 77, 'Allow', 11, '#fff')))],
+      ['In Phone Link click Calls → Set up. Calls now ring on the laptop', svgWrap(svLaptop(14, 20, svText(28, 44, 'Calls', 12) + '<rect x="28" y="52" width="60" height="18" rx="4" fill="' + G + '"/>' + svText(36, 65, 'Set up', 10, '#fff')) + svBt(150, 64, .9) + svPhone(172, 16, '') + svTick(120, 132))]
+    ] },
+    sms: { title: '💬 SMS gateway app (sends our texts)', steps: [
+      ['On the company phone open Play Store, install “SMS Gateway for Android”', svgWrap(svPhone(89, 16, '<path d="M108 40l26 16-26 16z" fill="#16a34a"/>' + svText(98, 92, 'Install', 11, G)))],
+      ['Open it, allow SMS, turn “Cloud server” ON', svgWrap(svPhone(89, 16, svText(98, 48, 'Cloud', 10) + svToggle(124, 38, true) + svText(98, 76, 'SMS ✓', 10, G)))],
+      ['Show King the username & password on its screen. King links it', svgWrap(svPhone(30, 16, svText(38, 56, 'user ••••', 9) + svText(38, 72, 'pass ••••', 9)) + svArrow(100, 74, 140) + svCloud(185, 74))],
+      ['Keep it open, phone charging, Wi-Fi or data ON. The light turns green', svgWrap(svPhone(89, 16, '<rect x="104" y="96" width="32" height="6" rx="2" fill="#16a34a"/>' + svText(103, 60, '⚡ 📶', 14)) + svTick(190, 74))]
+    ] },
+    momo: { title: '💰 MoMo forwarder (tells us when an agent pays)', steps: [
+      ['Install “SMS to URL Forwarder” from the Play Store', svgWrap(svPhone(89, 16, '<path d="M108 40l26 16-26 16z" fill="#16a34a"/>' + svText(98, 92, 'Install', 11, G)))],
+      ['Add a rule: sender “MTN MoMo” (and “AirtelMoney”)', svgWrap(svPhone(89, 16, svText(97, 46, 'From:', 9) + '<rect x="97" y="52" width="46" height="16" rx="3" fill="#fef9c3"/>' + svText(100, 64, 'MTN MoMo', 8)))],
+      ['Paste the makaug link King sends you. Never share it', svgWrap(svPhone(30, 16, '<rect x="38" y="52" width="46" height="16" rx="3" fill="#eff6ff"/>' + svText(41, 64, '🔒 link', 9)) + svArrow(100, 74, 140) + svCloud(185, 74))],
+      ['An agent pays → the SMS goes to makaug → they show as Paid ✅', svgWrap(svMoney(36, 74) + svArrow(58, 74, 86) + svPhone(90, 16, '') + svArrow(156, 74, 176) + svTick(200, 74))]
+    ] },
+    fix: { title: '🔌 Calls dropping? Fix it', steps: [
+      ['Phone unlocked, Bluetooth ON, phone close to the laptop', svgWrap(svPhone(40, 16, svBt(71, 62, .8)) + '<path d="M112 74h40" stroke="#94a3b8" stroke-width="3"/>' + svText(116, 68, '< 2 m', 11) + svLaptop(160, 34, ''))],
+      ['Laptop: open Phone Link. Says Disconnected? Click Reconnect', svgWrap(svLaptop(60, 20, svCross(84, 46) + svText(102, 50, 'Disconnected', 9, '#dc2626') + '<rect x="96" y="58" width="60" height="16" rx="4" fill="' + G + '"/>' + svText(102, 70, 'Reconnect', 9, '#fff')))],
+      ['Still no? Turn Bluetooth OFF and ON on both, then Connect', svgWrap(svPhone(30, 16, svToggle(46, 54, false) + svText(40, 86, 'off → on', 9)) + svLaptop(110, 20, svToggle(150, 44, true) + svText(132, 74, 'Connect', 10, G)))],
+      ['Back on the calling screen press “Check again”. Green = go', svgWrap(svLaptop(60, 20, '<rect x="74" y="38" width="92" height="24" rx="6" fill="' + G + '"/>' + svText(84, 54, '✅ Check again', 10, '#fff')) + svTick(196, 120))]
+    ] }
+  };
+  function ageText(iso) {
+    if (!iso) return 'never';
+    var m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+    if (!isFinite(m)) return 'never';
+    return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' days ago';
+  }
+  function connectLights() {
+    var srv = CONNECT.srv || {};
+    var linkOk = CHK.notes === 'ok' && CHK.link !== 'down';
+    var L = [
+      { key: 'link', ok: CHK.link === 'down' ? false : CHK.notes === 'ok' ? true : null, icon: '📱', name: 'Phone link / Bluetooth', note: CHK.link === 'down' ? 'Dropped – reconnect' : linkOk ? (CHK.bt ? esc(CHK.bt) : 'Connected') : 'Press “Check now”', guide: CHK.link === 'down' ? 'fix' : 'bt' },
+      { key: 'mic', ok: CHK.notes === 'ok' ? true : CHK.notes === 'failed' ? false : null, icon: '🎙', name: 'Mic & live notes', note: CHK.notes === 'ok' ? 'Hearing you' : CHK.notes === 'failed' ? esc(CHK.why || 'Not working') : 'Press “Check now”', guide: 'fix' },
+      { key: 'sms', ok: srv.sms_gateway && srv.sms_gateway.ok, icon: '💬', name: 'SMS gateway app', note: srv.sms_gateway && srv.sms_gateway.last_seen ? 'Last seen ' + ageText(srv.sms_gateway.last_seen) : 'Not set up yet', guide: 'sms' },
+      { key: 'momo', ok: srv.momo && srv.momo.ok, icon: '💰', name: 'MoMo forwarder', note: srv.momo && srv.momo.last_seen ? 'Last SMS ' + ageText(srv.momo.last_seen) : 'Not set up yet', guide: 'momo' }
+    ];
+    return '<div class="mkc-cx-lights">' + L.map(function (l) {
+      var cls = l.ok === true ? 'ok' : l.ok === false || l.key === 'sms' || l.key === 'momo' ? 'bad' : 'wait';
+      return '<button type="button" class="mkc-cx-light ' + cls + '" data-mkc-cxlight="' + l.key + '" data-mkc-cxguide="' + l.guide + '"><span class="mkc-cx-dot"></span><span class="mkc-cx-ic">' + l.icon + '</span><b>' + l.name + '</b><span class="mkc-cx-note">' + l.note + '</span></button>';
+    }).join('') + '</div>';
+  }
+  function connectHtml() {
+    var g = GUIDES[CONNECT.guide] || GUIDES.bt;
+    var tabs = Object.keys(GUIDES).map(function (k) { return '<button type="button" class="mkc-cx-tab' + (k === CONNECT.guide ? ' on' : '') + '" data-mkc-cxguide="' + k + '">' + esc(GUIDES[k].title.split(' (')[0]) + '</button>'; }).join('');
+    return '<div class="mkc-cx-box" role="dialog" aria-label="Connect your phone">'
+      + '<div class="mkc-cx-head"><h2>📱 Connect your phone</h2><button type="button" class="mkc-btn ghost" data-mkc-cxclose>✕ Close</button></div>'
+      + '<div data-mkc-cxlights>' + connectLights() + '</div>'
+      + '<div class="mkc-row" style="justify-content:center;margin:10px 0"><button type="button" class="mkc-btn go" style="font-size:18px;padding:12px 26px" data-mkc-cxcheck' + (CHK.running ? ' disabled' : '') + '>' + (CHK.running ? '🎙 Listening… say “testing one two three”' : '🔁 Check now') + '</button></div>'
+      + '<div class="mkc-cx-tabs">' + tabs + '</div>'
+      + '<h3 class="mkc-cx-gt" data-mkc-cxtitle>' + esc(g.title) + '</h3>'
+      + '<ol class="mkc-cx-steps">' + g.steps.map(function (s, i) { return '<li data-mkc-cxstep><div class="mkc-cx-n">' + (i + 1) + '</div><div class="mkc-cx-pic">' + s[1] + '</div><p>' + esc(s[0]) + '</p></li>'; }).join('') + '</ol></div>';
+  }
+  function renderConnect() {
+    var el = document.getElementById('mkc-connect'); if (!el) return;
+    el.innerHTML = connectHtml();
+    q('[data-mkc-cxclose]', el).onclick = closeConnect;
+    q('[data-mkc-cxcheck]', el).onclick = function () { runCheck(); setTimeout(renderConnect, 50); };
+    qa('[data-mkc-cxguide]', el).forEach(function (b) { b.onclick = function () { CONNECT.guide = b.getAttribute('data-mkc-cxguide'); renderConnect(); }; });
+  }
+  function refreshConnectLights() {
+    var box = q('#mkc-connect [data-mkc-cxlights]'); if (!box) return;
+    box.innerHTML = connectLights();
+    qa('[data-mkc-cxlight]', box).forEach(function (b) { b.onclick = function () { CONNECT.guide = b.getAttribute('data-mkc-cxguide'); renderConnect(); }; });
+    var btn = q('#mkc-connect [data-mkc-cxcheck]'); if (btn) { btn.disabled = !!CHK.running; btn.textContent = CHK.running ? '🎙 Listening… say “testing one two three”' : '🔁 Check now'; }
+  }
+  function loadConnectStatus() { return api('/connect-status').then(function (d) { CONNECT.srv = d || {}; refreshConnectLights(); }, function () { /* keep last */ }); }
+  function openConnect(guide) {
+    if (guide) CONNECT.guide = guide;
+    var el = document.getElementById('mkc-connect');
+    if (!el) { el = document.createElement('div'); el.id = 'mkc-connect'; el.addEventListener('click', function (e) { if (e.target === el) closeConnect(); }); document.body.appendChild(el); }
+    CONNECT.open = true; renderConnect(); loadConnectStatus();
+    clearInterval(CONNECT.timer);
+    CONNECT.timer = setInterval(function () { if (!document.getElementById('mkc-connect')) { clearInterval(CONNECT.timer); return; } refreshConnectLights(); }, 1000);
+    CONNECT.srvTimer = setInterval(loadConnectStatus, 30000);
+  }
+  function closeConnect() {
+    CONNECT.open = false; clearInterval(CONNECT.timer); clearInterval(CONNECT.srvTimer);
+    var el = document.getElementById('mkc-connect'); if (el) el.remove();
+    renderNum();
   }
   // Free "AI" summary: rules over the live notes plus what the coach recorded. No paid API.
   var WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -1621,12 +1868,12 @@
     var num = function (k, v) { return editable ? '<input class="mkc-input" type="number" min="0" max="500" style="width:70px" data-pl-' + k + ' value="' + esc(v) + '">' : esc(v); };
     return '<div class="mkc-row" style="justify-content:space-between"><h3 style="margin:0;font-weight:900">📋 Today\'s plan · ' + esc(p.day) + '</h3>'
       + (p.agreed_by ? '<span class="mkc-pill live">Agreed with ' + esc(p.agreed_by) + '</span>' : '<span class="mkc-pill flag">Not agreed with King yet</span>') + '</div>'
-      + '<div class="mkc-targets" style="grid-template-columns:auto auto auto;margin-top:8px"><span class="mkc-muted">Calls</span><span class="mkc-muted">Closes</span><span class="mkc-muted">Payments</span>'
+      + '<div class="mkc-targets" style="grid-template-columns:auto auto auto;margin-top:8px"><span class="mkc-muted">Calls</span><span class="mkc-muted">Paid (closed)</span><span class="mkc-muted">Payments</span>'
       + '<b>' + num('calls', p.calls_target) + '</b><b>' + num('closes', p.closes_target) + '</b><b>' + num('pays', p.payments_target || 0) + '</b></div>'
       + '<h4 style="margin:10px 0 4px">Which numbers / what first</h4>' + (editable ? '<input class="mkc-input" style="width:100%;box-sizing:border-box" data-pl-focus value="' + esc(p.focus || '') + '">' : '<div>' + esc(p.focus || '–') + '</div>')
       + '<h4 style="margin:10px 0 4px">What I will achieve today</h4>' + (editable ? '<textarea class="mkc-input" style="width:100%;box-sizing:border-box" rows="2" data-pl-goal placeholder="e.g. 2 unpaid sign-ups pay, 5 new agents interested">' + esc(p.goal || '') + '</textarea>' : '<div>' + esc(p.goal || '–') + '</div>')
       + (editable ? '<h4 style="margin:10px 0 4px">Numbers agreed (optional)</h4><input class="mkc-input" style="width:100%;box-sizing:border-box" data-pl-nums placeholder="Paste numbers, comma separated">' + ((p.numbers || []).length ? '<div class="mkc-muted">Already: ' + esc(p.numbers.join(', ')) + '</div>' : '') : ((p.numbers || []).length ? '<div class="mkc-muted">Numbers: ' + esc(p.numbers.join(', ')) + '</div>' : ''))
-      + '<h4 style="margin:12px 0 4px">So far</h4>' + line('Calls', x.calls, p.calls_target, x.calls_hit) + line('Closes', x.closes, p.closes_target, x.closes_hit) + line('Payments in', x.payments, p.payments_target || 0, x.payments_hit)
+      + '<h4 style="margin:12px 0 4px">So far</h4>' + line('Calls', x.calls, p.calls_target, x.calls_hit) + line('Paid (closed)', x.closes, p.closes_target, x.closes_hit) + line('Payments in', x.payments, p.payments_target || 0, x.payments_hit)
       + (x.numbers_planned ? line('Agreed numbers called', x.numbers_reached, x.numbers_planned, x.numbers_reached >= x.numbers_planned) : '');
   }
   function planBody(m) {
@@ -1780,7 +2027,7 @@
     var calls = (r.calls_list || []).map(function (c) { return '<tr><td>' + esc(kTime(c.at)) + '</td><td>' + esc(c.name) + ' ' + esc(c.phone) + '</td><td>' + esc(String(c.outcome).replace(/_/g, ' ')) + '</td><td>' + (c.talk_s == null ? '–' : c.talk_s + ' s') + '</td><td>' + esc(c.summary || c.note) + (c.live_notes ? ' <span class="mkc-pill" title="Live notes were on">🎙</span>' : '') + '</td><td>' + esc(c.next_step || '') + '</td></tr>'; }).join('');
     var due = (r.due_tomorrow || []).map(function (d) { return '<li>' + esc(kTime(d.at)) + ' · ' + esc(d.name) + ' ' + esc(d.phone) + ' (' + esc(String(d.outcome).replace(/_/g, ' ')) + ')</li>'; }).join('');
     return '<h3 style="margin:0;font-weight:900">Daily summary · ' + esc(r.name) + '</h3><p class="mkc-muted">' + esc(r.day) + ' · made automatically from the calling log, saved for King</p>'
-      + '<div class="mkc-row" style="margin:10px 0">' + box(r.calls + '/' + tg.calls_per_day, 'calls', r.calls_hit) + box(r.closes + '/' + tg.closes_per_day, 'closes', r.closes_hit) + box(r.connected, 'spoke to') + box(r.payments_chased || 0, 'payments chased') + box(hm((r.talk_s || 0) * 1000), 'talk time') + '</div>'
+      + '<div class="mkc-row" style="margin:10px 0">' + box(r.calls + '/' + tg.calls_per_day, 'calls', r.calls_hit) + box(r.closes + '/' + tg.closes_per_day, 'paid (closed)', r.closes_hit) + box(r.connected, 'spoke to') + box(r.payments_chased || 0, 'payments chased') + box(hm((r.talk_s || 0) * 1000), 'talk time') + '</div>'
       + '<p style="font-size:13px">Work time ' + hm(w.open_ms) + ' (focused ' + hm(w.focus_ms) + ', away ' + hm(w.away_ms) + ', breaks ' + hm(w.break_ms) + ' × ' + (w.breaks || 0) + ', left the screen ' + (w.exits || 0) + '×)'
       + (w.first_start ? ' · ' + esc(kTime(w.first_start)) + '–' + esc(w.last_end && !w.open_now ? kTime(w.last_end) : 'now') + ' Kampala' : '') + '</p>'
       + '<p style="font-size:13px">Payments promised ' + (r.payments_promised || 0) + ' · paid or renewed ' + (r.payments_paid || 0) + ' · callbacks booked ' + (r.callbacks_booked || 0) + ' · skipped ' + (r.skipped || 0) + ' · average call ' + (r.avg_talk_s || 0) + ' s</p>'
@@ -1888,17 +2135,22 @@
     };
     });
   }
+  function dropsCol(list) {
+    var lbl = { link_drop: 'Phone link / audio dropped', notes_check_failed: 'Mic check failed' };
+    var rowsH = list.map(function (d) { return '<div class="mkc-hit" style="cursor:default"><b>' + esc(personName(d.by)) + '</b> <span class="mkc-pill">' + esc(lbl[d.kind] || d.kind) + '</span> <span class="mkc-muted">' + esc(kDayTime(d.at)) + (d.detail ? ' · ' + esc(d.detail) : '') + '</span></div>'; }).join('');
+    return '<div data-k-drops><h4>🔌 Link drops & mic checks (' + list.length + ')</h4><div class="mkc-scroll" style="max-height:320px">' + (rowsH || '<p class="mkc-muted">No drops.</p>') + '</div></div>';
+  }
   function drawKCalls(host) {
     var box = q('[data-k-calls]', host); if (!box) return;
     api('/calls-summary?period=' + K.callsPeriod).then(function (r) {
       var line = function (i) { return '<div class="mkc-hit" style="cursor:default"><b>' + esc(i.name || 'Unknown') + ' ' + esc(i.phone) + '</b> ' + (i.direction === 'inbound' ? '<span class="mkc-pill in">inbound</span> ' : '') + '<span class="mkc-pill">' + esc(String(i.outcome || '').replace(/_/g, ' ')) + '</span> <span class="mkc-muted">' + esc(kDayTime(i.at)) + ' · ' + esc(personName(i.by)) + '</span>' + (i.summary ? '<div>' + esc(i.summary) + '</div>' : '') + (i.next_step ? '<div><b>Next:</b> ' + esc(i.next_step) + (i.callback_at ? ' · ' + esc(kDayTime(i.callback_at)) : '') + '</div>' : '') + '</div>'; };
       var col = function (title, list, empty) { return '<div><h4>' + title + ' (' + list.length + ')</h4><div class="mkc-scroll" style="max-height:320px">' + (list.map(line).join('') || '<p class="mkc-muted">' + empty + '</p>') + '</div></div>'; };
-      var ppl = Object.keys(r.by_person).map(function (k) { var p = r.by_person[k]; return '<span class="mkc-pill">' + esc(personName(k)) + ': ' + p.outbound + ' out · ' + p.inbound + ' in · ' + p.closes + ' closed</span>'; }).join(' ');
+      var ppl = Object.keys(r.by_person).map(function (k) { var p = r.by_person[k]; return '<span class="mkc-pill">' + esc(personName(k)) + ': ' + p.outbound + ' out · ' + p.inbound + ' in · ' + p.closes + ' paid</span>'; }).join(' ');
       var outs = Object.keys(r.outcomes).map(function (k) { return esc(k.replace(/_/g, ' ')) + ' ' + r.outcomes[k]; }).join(' · ');
       box.innerHTML = '<div class="mkc-row" style="justify-content:space-between"><h4 style="margin:0">🗂 Calls summary · ' + esc(r.from) + (r.to !== r.from ? ' → ' + esc(r.to) : '') + '</h4>' + periodTabs('data-k-callsper', K.callsPeriod) + '</div>'
-        + '<div style="margin:6px 0"><b>' + r.calls + ' calls</b> (' + r.outbound + ' outbound · ' + r.inbound + ' inbound) · ' + (r.not_answered ? 'Not answered: ' + r.not_answered + ' · ' : '') + r.skipped + ' skipped · ' + r.closed.length + ' closed' + (r.no_next_step.length ? ' · <span class="mkc-bad">' + r.no_next_step.length + ' with no next step</span>' : '') + '</div>'
+        + '<div style="margin:6px 0"><b>' + r.calls + ' calls</b> (' + r.outbound + ' outbound · ' + r.inbound + ' inbound) · ' + (r.not_answered ? 'Not answered: ' + r.not_answered + ' · ' : '') + r.skipped + ' skipped · ' + r.closed.length + ' paid (closed)' + (r.no_next_step.length ? ' · <span class="mkc-bad">' + r.no_next_step.length + ' with no next step</span>' : '') + '</div>'
         + '<div class="mkc-muted">' + outs + '</div><div style="margin:4px 0">' + ppl + '</div>'
-        + '<div class="mkc-grid" style="padding:0;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">' + col('✅ Closed', r.closed, 'Nothing closed.') + col('⏳ Open – next steps', r.open, 'No open loops.') + col('💬 What was discussed', r.discussed, 'No call notes.') + '</div>'
+        + '<div class="mkc-grid" style="padding:0;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">' + col('✅ Paid (closed)', r.closed, 'Nobody paid yet.') + col('🎙 No transcript', r.no_transcript || [], 'Every call had live notes.') + dropsCol(r.link_drops || []) + col('⏳ Open – next steps', r.open, 'No open loops.') + col('💬 What was discussed', r.discussed, 'No call notes.') + '</div>'
         + '<h4>🔎 Search all calls</h4>' + searchBoxHtml('all');
       qa('[data-k-callsper]', box).forEach(function (b) { b.onclick = function () { K.callsPeriod = b.getAttribute('data-k-callsper'); drawKCalls(host); }; });
       bindSearch(box);
@@ -2659,7 +2911,7 @@
   }
 
   // ---- Evidence trail v2: charts with trends, session bars, plain-English timeline, drop-offs, audit.
-  var EV_LABELS = { fs_exit: 'Left full screen', fs_enter: 'Back to full screen', hidden: 'Switched away from the screen', visible: 'Came back to the screen', break_start: 'Started a break', break_end: 'Break over', kit_send: 'Sent a sales-kit item', task_switch: 'Switched task', start: 'Started calling', end: 'Stopped calling', screen_open: 'Opened the calling screen', screen_close: 'Closed the calling screen', idle_start: 'No mouse or keyboard for a while', idle_end: 'Active again', work_on: 'Work mode on', work_off: 'Work mode off', meeting_join: 'Joined the team meeting', meeting_end: 'Left the team meeting', inbound_start: 'Took an incoming call', notes_start: 'Live notes on', notes_stop: 'Live notes off', notes_declined: 'Declined live notes', notes_error: 'Live notes stopped (browser)', wa_share: 'Shared on WhatsApp', housekeeping_on: 'Started housekeeping', housekeeping_off: 'Back to calling', auto_fallback: 'List ran out: moved to the next task', route: 'Script step' };
+  var EV_LABELS = { notes_check_passed: 'Mic check passed', notes_check_failed: 'Mic check failed', link_drop: 'Phone link / audio dropped', link_back: 'Phone link reconnected', fs_exit: 'Left full screen', fs_enter: 'Back to full screen', hidden: 'Switched away from the screen', visible: 'Came back to the screen', break_start: 'Started a break', break_end: 'Break over', kit_send: 'Sent a sales-kit item', task_switch: 'Switched task', start: 'Started calling', end: 'Stopped calling', screen_open: 'Opened the calling screen', screen_close: 'Closed the calling screen', idle_start: 'No mouse or keyboard for a while', idle_end: 'Active again', work_on: 'Work mode on', work_off: 'Work mode off', meeting_join: 'Joined the team meeting', meeting_end: 'Left the team meeting', inbound_start: 'Took an incoming call', notes_start: 'Live notes on', notes_stop: 'Live notes off', notes_declined: 'Declined live notes', notes_error: 'Live notes stopped (browser)', wa_share: 'Shared on WhatsApp', housekeeping_on: 'Started housekeeping', housekeeping_off: 'Back to calling', auto_fallback: 'List ran out: moved to the next task', route: 'Script step' };
   var ACT_LABELS = { 'mkc-tap': 'Tapped Call now', 'mkc-end': 'Ended the call', 'mkc-save': 'Saved the wrap-up', 'mkc-skip': 'Skipped the number', 'mkc-start': 'Pressed Start calling', 'mkc-add': 'Opened Add number', 'mkc-myreport': 'Opened My report', 'mkc-sidefull': 'Opened the side panel', 'mkc-endroute': 'Finished the script', 'mkc-hello': 'Asked them to say Hello on WhatsApp', 'mkc-washare': 'Opened Share on WhatsApp', 'mkc-work': 'Toggled work mode', 'mkc-break': 'Break button', 'mkc-exit': 'Exit button', 'mkc-quick': 'Picked a call-back time', 'mkc-hkgo': 'Opened a housekeeping item', 'mkc-hkdone': 'Finished a housekeeping item', 'mkc-tclose': 'Closed the texts panel', 'mkc-ans': 'Marked answered', 'mkc-rep': 'Opened the report', 'mkc-rbg': 'Opened the report', 'mkc-live': 'Opened the live site', 'mkc-live2': 'Opened the live site preview', 'mkc-tree': 'Opened the history tree', 'mkc-chip': 'Picked a quick option', 'mkc-rback': 'Went back a script step', sms_sent: 'Logged an SMS', video_requested: 'Asked King to approve a video', cash_check_signed: 'Signed the cash check' };
   var SIDE_TABS = { wa: 'WhatsApp', leads: 'Leads', live: 'Live', search: 'Search', learn: 'Learn', team: 'Team' };
   function actionText(detail) {
@@ -2855,7 +3107,7 @@
     return out.length ? '<ul class="mkc-evtl" data-k-evtl>' + out.join('') + '</ul>' : '<p class="mkc-muted">Nothing logged today.</p>';
   }
   function outcomeCell(a) {
-    if (a.status === 'done') return '<b>' + esc(String(a.outcome || '').replace(/_/g, ' ')) + '</b>' + (a.is_close ? ' <span class="mkc-good">✓ close</span>' : '');
+    if (a.status === 'done') return '<b>' + esc(String(a.outcome || '').replace(/_/g, ' ')) + '</b>' + (a.is_close && (a.outcome === 'paid' || a.outcome === 'renewed') ? ' <span class="mkc-good">✓ paid (closed)</span>' : '');
     if (a.status === 'skipped') return 'Skipped' + (a.skip_reason ? ': ' + esc(a.skip_reason) : '');
     if (a.status === 'released') return '<span class="mkc-muted">Not called (released when switching)</span>';
     if (a.status === 'shown') return '<span class="mkc-muted">On screen now</span>';
