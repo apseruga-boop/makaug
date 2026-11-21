@@ -50566,6 +50566,47 @@ const HOUSE_AD_SAMPLES = {
   }
 };
 
+// Vibe Week: a time-boxed house-banner campaign. Between `starts` and `ends`
+// (Kampala time) every bundled house banner swaps to its synthwave version in
+// /assets/house-ads-vibe/ with Vibe City copy. Sold or staff-configured banners
+// (a custom image) are never touched. Add ?vibe=preview to any page to see it
+// outside the dates, and ?vibe=off to see the normal banners.
+const HOUSE_AD_CAMPAIGN = {
+  key: "vibe-week",
+  starts: "2026-11-21T00:00:00+03:00",
+  ends: "2026-11-29T23:59:59+03:00",
+  imageDir: "/assets/house-ads-vibe/",
+  version: "vibe-week-20261121",
+  copy: {
+    "home-featured": { headline: "Welcome to Vibe City, Kampala.", subline: "Every property in Uganda, in one search on makaug." },
+    "home-brokers": { headline: "Your crew knows these streets.", subline: "Message a makaug agent who knows the area." },
+    "sale-grid": { headline: "Pick your block. Make it home.", subline: "From Kololo to Munyonyo, search homes by area." },
+    "rent-grid": { headline: "New rentals drop here first.", subline: "Save a search on makaug and get them before anyone." },
+    "student-grid": { headline: "Campus Hill living, sorted.", subline: "Rooms and hostels near your university." },
+    "commercial-grid": { headline: "Set up shop downtown.", subline: "Shops and offices from Kikuubo to Ntinda." },
+    "land-grid": { headline: "Walk the plot before you buy.", subline: "Read our land safety tips, then visit with the seller." },
+    "marketplace-results": { headline: "Build your crew.", subline: "Surveyors, lawyers and builders on makaug." },
+    "brokers-grid": { headline: "Agents who run these streets.", subline: "Open a profile to see their live listings." },
+    "mortgage-results": { headline: "Plan the big move.", subline: "Work out your home loan before you view." },
+    "property-detail": { headline: "Like this one? Make the call.", subline: "WhatsApp 0780 863 394 with the listing link." }
+  }
+};
+
+function activeHouseAdCampaign(now = Date.now()) {
+  let override = "";
+  try { override = (/[?&]vibe=([^&#]*)/.exec(String(window.location.search || "")) || [])[1] || ""; } catch (_) {}
+  if (override === "off") return null;
+  if (override === "preview") return HOUSE_AD_CAMPAIGN;
+  const starts = Date.parse(HOUSE_AD_CAMPAIGN.starts);
+  const ends = Date.parse(HOUSE_AD_CAMPAIGN.ends);
+  return now >= starts && now <= ends ? HOUSE_AD_CAMPAIGN : null;
+}
+
+function houseAdCampaignImage(campaign, bundledPath) {
+  const file = String(bundledPath || "").split("/").pop();
+  return file ? `${campaign.imageDir}${file}` : bundledPath;
+}
+
 const liveRevenuePlacements = new Map();
 let revenuePlacementCatalogPromise = null;
 
@@ -50582,22 +50623,32 @@ function buildRevenuePlacementMarkup(slotKey, context) {
   if (configured?.is_active === false) return "";
   const image = safeHouseAdUrl(configured?.preview_image_url, fallback.image);
   const usingBundledImage = image === fallback.image;
+  const campaign = usingBundledImage ? activeHouseAdCampaign() : null;
+  const campaignCopy = campaign?.copy?.[slotKey] || null;
   const mobileImage = usingBundledImage ? fallback.mobileImage : image;
-  const imageUrl = usingBundledImage ? `${image}?v=house-banners-20261023` : image;
-  const mobileImageUrl = usingBundledImage ? `${mobileImage}?v=house-banners-20261023` : mobileImage;
-  const headlineKey = String(configured?.headline || fallback.headline).trim();
+  const imageUrl = campaign
+    ? `${houseAdCampaignImage(campaign, image)}?v=${campaign.version}`
+    : (usingBundledImage ? `${image}?v=house-banners-20261023` : image);
+  const mobileImageUrl = campaign
+    ? `${houseAdCampaignImage(campaign, mobileImage)}?v=${campaign.version}`
+    : (usingBundledImage ? `${mobileImage}?v=house-banners-20261023` : mobileImage);
+  const headlineKey = String((campaignCopy?.headline) || configured?.headline || fallback.headline).trim();
   const headline = translateListingLabel(headlineKey);
-  const sublineValue = configured && Object.prototype.hasOwnProperty.call(configured, "subline")
-    ? configured.subline
-    : fallback.subline;
+  const sublineValue = campaignCopy
+    ? campaignCopy.subline
+    : (configured && Object.prototype.hasOwnProperty.call(configured, "subline")
+      ? configured.subline
+      : fallback.subline);
   const subline = translateListingLabel(String(sublineValue || "").trim());
   const ctaLabel = translateListingLabel(String(configured?.cta_label || "Advertise here").trim());
   const ctaUrl = safeHouseAdUrl(configured?.cta_url, "/advertise");
   const copySide = String(configured?.copy_side || fallback.copySide || "right").toLowerCase() === "left" ? "left" : "right";
   const backgroundPosition = String(configured?.background_position || fallback.backgroundPosition || "left center").trim();
-  const scrimClass = fallback.studentsScrim
-    ? " mk-house-band--students"
-    : (fallback.strongScrim ? " mk-house-band--strong" : "");
+  const scrimClass = campaign
+    ? ` mk-house-band--${campaign.key}`
+    : (fallback.studentsScrim
+      ? " mk-house-band--students"
+      : (fallback.strongScrim ? " mk-house-band--strong" : ""));
   const sponsorLabel = `${translateListingLabel("Sponsored")} — ${ctaLabel}`;
   return `
     <div class="mk-house-band-wrap max-w-7xl mx-auto">
