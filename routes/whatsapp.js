@@ -18,6 +18,7 @@ const { handleHostStayReply } = require('../services/shortTermBookingService');
 const shortStayWhatsapp = require('../services/whatsappShortStayService');
 const agentFilm = require('../services/agentFilmReplyService');
 const replyPlaybook = require('../services/whatsappReplyPlaybook');
+const personThread = require('../services/whatsappPersonThreadService');
 const controlRoom = require('../services/agent007ControlRoom');
 const filmLanguages = require('../services/filmLanguageService');
 const filmLinks = require('../services/filmLinkService');
@@ -8916,11 +8917,189 @@ function agentConversationalAside({ data = {}, cleanBody = '' } = {}) {
   return null;
 }
 
+/**
+ * Words meant for the assistant, whoever else is in the chat: the ones the
+ * agent menu names (MENU, SHARE, STATUS, HELP), agreeing to the terms, and
+ * the short questions about posting it has an answer to. "I will share the
+ * details tomorrow" is not one of them: asking for their link starts with it.
+ */
+function agentAsksTheAssistant(text = '') {
+  const said = normalizeInput(text);
+  if (!said) return false;
+  if (/^\s*(?:menu|main menu|start|home|stop|unsubscribe|share|status|help)\s*[.!?]*\s*$/i.test(said)) return true;
+  if (AGENT_HELP.test(said) || AGENT_TERMS_AGREE.isAgreeReply(said)) return true;
+  if (said.split(/\s+/).filter(Boolean).length > 6) return false;
+  return /^\s*(?:please\s+|pls\s+|kindly\s+)?(?:share\b|send me (?:my|the) (?:link|card|profile)\b|how do i share\b|agent card\b|my (?:link|card|profile|page|listings?|properties)\b)/i.test(said)
+    || AGENT_HOW_TO_POST.test(said)
+    || WANTS_TO_POST.test(said)
+    || AGENT_IS_IT_DONE.test(said)
+    || isAgentProfilePhotoRequest(said);
+}
+
+/**
+ * What an agent typed, when it is talk and not a property: 'greeting',
+ * 'courtesy' or 'other'. '' when it is for the assistant (above), or is not
+ * words at all ("2", "?").
+ */
+function agentTalkKind(text = '') {
+  const said = normalizeInput(text);
+  if (!said || agentAsksTheAssistant(said)) return '';
+  if (AGENT_GREETING.test(said)) return 'greeting';
+  if (AGENT_COURTESY.test(said)) return 'courtesy';
+  return /\p{L}{2,}/u.test(said) ? 'other' : '';
+}
+
+/** One of ours: Arthur, Ronald, or staff added to Agent 007 in King. Their own chats are never left unanswered. */
+function isTeamNumber(phone = '') {
+  return Boolean(staffNameForNumber(phone))
+    || employeeIntakePhoneAllowed(phone, { ownerAuthorized: isAiCeoOwnerPhone(phone) });
+}
+
+// How a voice note the assistant cannot hear is shown in the team's note.
+const AGENT_VOICE_NOTE_LINE = 'Voice note (listen to it in the chat)';
+
+// What an agent has typed that is waiting to go to the team, by number: a few
+// lines sent together make one note, sent once the line has been quiet.
+const agentTalkNotes = new Map();
+// When the team was last sent a note of what the assistant could not place, by number.
+const agentUnplacedNotedAt = new Map();
+
+/** The note itself: now, or at 7am when it is night in Kampala. */
+async function sendAgentTalkNote({ phone = '', agent = {}, lines = [], typed = null } = {}) {
+  const body = personThread.teamNote({
+    name: agent.full_name || '',
+    company: agent.company_name || '',
+    phone,
+    lines,
+    typed,
+    siteUrl: HOME_URL
+  });
+  return require('../services/leadDeskService').holdOrSendToTeam(db, {
+    conversationPhone: phone,
+    body,
+    type: typed ? 'agent_wrote_back_to_person' : 'agent_message_not_placed',
+    kind: 'needs_person',
+    extraRecipients: agentFilm.agentJoinAlertRecipients()
+  });
+}
+
+/**
+ * Keep an agent's line for the team's note. `typed` is the message somebody
+ * on our team last typed to them, when the line is an answer to a person;
+ * absent, the line is one the assistant could not place.
+ */
+function noteAgentTalkForTeam({ phone = '', agent = {}, said = '', typed = null } = {}) {
+  const key = String(phone || '').replace(/\D/g, '');
+  const line = normalizeInput(said);
+  if (key.length < 9 || !line) return;
+  const waiting = agentTalkNotes.get(key) || { lines: [], agent: {}, typed: null, timer: null };
+  if (waiting.timer) clearTimeout(waiting.timer);
+  if (waiting.lines.length < 12) waiting.lines.push(line.slice(0, 300));
+  if (agent && (agent.full_name || agent.id)) waiting.agent = agent;
+  if (typed) waiting.typed = typed;
+  waiting.timer = setTimeout(() => {
+    agentTalkNotes.delete(key);
+    if (!waiting.typed) {
+      if (agentUnplacedNotedAt.size > 2000) agentUnplacedNotedAt.clear();
+      agentUnplacedNotedAt.set(key, Date.now());
+    }
+    deferWhatsappWork('agent talk note to the team', () => sendAgentTalkNote({ phone: key, agent: waiting.agent, lines: waiting.lines, typed: waiting.typed }));
+  }, agentTalkNoteDelayMs({ answerToAPerson: Boolean(waiting.typed), lastNotedAt: agentUnplacedNotedAt.get(key) || 0 }));
+  if (typeof waiting.timer.unref === 'function') waiting.timer.unref();
+  agentTalkNotes.set(key, waiting);
+}
+
+/**
+ * How long the team's note waits. An answer to a person goes as soon as the
+ * line is quiet. What the assistant could not place is no hurry: one note per
+ * agent in half an hour, with everything they wrote in that time.
+ */
+function agentTalkNoteDelayMs({ answerToAPerson = false, lastNotedAt = 0, now = Date.now(), quietMs = personThread.noteQuietMs() } = {}) {
+  if (answerToAPerson) return quietMs;
+  return Math.max(quietMs, AGENT_UNPLACED_THANKS_MINUTES * 60 * 1000 - (now - (Number(lastNotedAt) || 0)));
+}
+
+/**
+ * A person on our team is talking to this agent (personThread, 21 Nov 2026).
+ *
+ * True when somebody on the team typed them a message in the last few days
+ * and this is talk: the line is kept for the team's note, and the assistant
+ * sends nothing. False for anything the assistant should answer as before.
+ */
+async function agentTalkIsForAPerson({ phone = '', agent = {}, said = '' } = {}) {
+  if (!agentTalkKind(said) || isTeamNumber(phone)) return false;
+  const typed = await personThread.lastTypedByTeam(db, phone).catch((error) => {
+    logger.warn('Could not check whether a person is talking to this agent:', error.message || String(error));
+    return null;
+  });
+  if (!typed) return false;
+  noteAgentTalkForTeam({ phone, agent, said, typed });
+  return true;
+}
+
+/**
+ * The posting session is left without an answer on purpose. Marked on the
+ * session so the batch summary sweeper, which answers a session the assistant
+ * has said nothing to, lets it be.
+ */
+async function markTalkLeftUnanswered(phone) {
+  // The database's clock, the one their message was stored with, so the
+  // mark is never earlier than the message it is about.
+  await db.query(
+    `UPDATE whatsapp_sessions
+        SET session_data = COALESCE(session_data, '{}'::jsonb)
+              || jsonb_build_object('talk_left_unanswered_at', to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+      WHERE phone = $1`,
+    [phone]
+  ).catch((error) => logger.warn('Could not mark talk left unanswered:', error.message || String(error)));
+}
+
+const AGENT_UNPLACED_THANKS_MINUTES = 30;
+const AGENT_HOW_TO_SEND_A_PROPERTY = 'send the photos or a short video with a caption: what it is, the area and the price.';
+// When each agent was last thanked for a message that went to the team, by
+// number. Kept here, not on the session: after a restart the worst that
+// happens is one more thank-you.
+const agentUnplacedThankedAt = new Map();
+
+/**
+ * An agent's message the assistant cannot place: not a property, and not one
+ * of the things it has an answer to.
+ *
+ * Until 21 Nov 2026 it was answered "I did not save that, because it does not
+ * describe a property and I did not want to create an empty one", the
+ * sentence the politeness fix of 30 Sep was written to stop. Words now go to
+ * the team with a short thank-you, said once in half an hour (the next lines
+ * join the same note, unanswered). Anything that is not words gets how to
+ * post, in one line. Returns { message, leftUnanswered }.
+ */
+async function agentUnplacedReply({ phone = '', data = {}, cleanBody = '' } = {}) {
+  const agent = data.agent || {};
+  if (agentTalkKind(cleanBody) !== 'other' || isTeamNumber(phone)) {
+    return { message: `To post a property, ${AGENT_HOW_TO_SEND_A_PROPERTY}\n\nReply *MENU* for everything else I can do.`, leftUnanswered: false };
+  }
+  noteAgentTalkForTeam({ phone, agent, said: cleanBody });
+  const key = String(phone || '').replace(/\D/g, '');
+  const thankedAt = agentUnplacedThankedAt.get(key) || 0;
+  if (Date.now() - thankedAt < AGENT_UNPLACED_THANKS_MINUTES * 60 * 1000) {
+    await markTalkLeftUnanswered(phone);
+    return { message: '', leftUnanswered: true };
+  }
+  if (agentUnplacedThankedAt.size > 2000) agentUnplacedThankedAt.clear();
+  agentUnplacedThankedAt.set(key, Date.now());
+  const first = agentGreetingName(agent, '');
+  return {
+    message: `👍 Thanks${first ? ` ${first}` : ''}, I have passed that to our team.\n\nIf it was a property, ${AGENT_HOW_TO_SEND_A_PROPERTY}`,
+    leftUnanswered: false
+  };
+}
+
 // "Hi makaug" too: it is what the link staff send a new agent types for them (17 Nov 2026).
 // "Hlo" (19 Nov 2026): a new agent's first word to us, his welcome waiting
 // for it, was not read as hello, and he was sent the customer menu and the
 // language list on top of his welcome. The ways people here write hello.
-const AGENT_GREETING = /^\s*(hi|hii+|hie|hy|hey|hello+|hellow|helo|hlo+|hlw|hallo|halo|yo|good\s*(morning|afternoon|evening|day)|gu?d\s*(morning|afternoon|evening|day)|morning|afternoon|evening|greetings|start|menu|hi there|gyebale ?ko|oli otya)(?:\s+(?:makaug(?:\.com)?|team|sir|boss))?\b[\s.!,👋😊🙏]*$/i;
+// "Good afternoon Brother" (21 Nov 2026) was not read as hello either: who a
+// hello is said to (brother, madam, a name on our team) does not change it.
+const AGENT_GREETING = /^\s*(hi|hii+|hie|hy|hey|hello+|hellow|helo|hlo+|hlw|hallo|halo|yo|good\s*(morning|afternoon|evening|day)|gu?d\s*(morning|afternoon|evening|day)|morning|afternoon|evening|greetings|start|menu|hi there|gyebale ?ko|oli otya)(?:\s+(?:makaug(?:\.com)?|team|sir|boss|brother|bro|sister|sis|madam|dear|my friend|friend|ssebo|nnyabo|nyabo|phillip|philip|ronald))?\b[\s.!,👋😊🙏]*$/i;
 const AGENT_TERMS_AGREE = require('../services/agentTermsService');
 const AGENT_SHARE_REQUEST = /\b(share|my (link|card|profile|page|listings?|properties)|send me (my|the) (link|card|profile)|how do i share|agent card)\b/i;
 
@@ -11876,7 +12055,13 @@ async function handleEmployeeWhatsappIntake({
             return { handled: true, nextStep: currentStep, message: AGENT_TERMS_AGREE.thanksMessage({ name: agentGreetingName(askingAgent, ''), repeat: !accepted.recorded }) };
           }
         }
-        if (agentVoiceOnly) return { handled: true, nextStep: currentStep, message: agentVoiceNoteReply() };
+        if (agentVoiceOnly) {
+          // A voice note back to somebody on our team is theirs to listen to.
+          if (await agentTalkIsForAPerson({ phone, agent: askingAgent, said: AGENT_VOICE_NOTE_LINE })) {
+            return { handled: true, nextStep: currentStep, message: '', leftUnanswered: true };
+          }
+          return { handled: true, nextStep: currentStep, message: agentVoiceNoteReply() };
+        }
         if (AGENT_HELP.test(askedText)) {
           alertTeamAgentNeedsHelp({ agent: askingAgent, phone, said: askedText });
           return { handled: true, nextStep: currentStep, message: agentHelpReply(askingAgent) };
@@ -11913,6 +12098,11 @@ async function handleEmployeeWhatsappIntake({
         // on top of it (17 Nov 2026).
         if (AGENT_GREETING.test(askedText) && await agentWelcomeIsWaiting(phone)) {
           return { handled: true, nextStep: currentStep, message: agentWelcomeArrivingReply(askingAgent) };
+        }
+        // Somebody on our team is talking to them: a hello or a question
+        // back is for that person, not for the menu (21 Nov 2026).
+        if (await agentTalkIsForAPerson({ phone, agent: askingAgent, said: askedText })) {
+          return { handled: true, nextStep: currentStep, message: '', leftUnanswered: true };
         }
         // An agent's question that is not a property goes to a person, with
         // the lead we last sent them beside it (18 Nov 2026: "Is it a mistake
@@ -13008,6 +13198,11 @@ async function handleEmployeeWhatsappIntake({
         if (pinReply) return { handled: true, nextStep: currentStep, message: pinReply };
       }
       if (!cleanBody && !hasMediaCandidates && /audio|ogg|opus|voice/.test(String(runtime.mediaType || ''))) {
+        // A voice note back to somebody on our team is theirs to listen to.
+        if (await agentTalkIsForAPerson({ phone, agent: data.agent || {}, said: AGENT_VOICE_NOTE_LINE })) {
+          await markTalkLeftUnanswered(phone);
+          return { handled: true, nextStep: currentStep, message: '', leftUnanswered: true };
+        }
         return { handled: true, nextStep: currentStep, message: agentVoiceNoteReply() };
       }
     }
@@ -13516,16 +13711,32 @@ async function handleEmployeeWhatsappIntake({
             if (status) return { handled: true, nextStep: currentStep, message: status };
           }
         }
-        return {
-          handled: true,
-          nextStep: currentStep,
+        const payLinkAnswer = await agentPayLinkAside({ agent: data.agent || {}, cleanBody });
+        if (payLinkAnswer) return { handled: true, nextStep: currentStep, message: payLinkAnswer };
+        if (data.whatsapp_agent_self_intake === true) {
+          // Somebody on our team is talking to them: a hello, an "ok" or an
+          // answer is for that person, and the assistant says nothing
+          // (21 Nov 2026: "I'm always available", to a question about a
+          // meeting, was answered with the sentence below, twice).
+          if (await agentTalkIsForAPerson({ phone, agent: data.agent || {}, said: cleanBody })) {
+            await markTalkLeftUnanswered(phone);
+            return { handled: true, nextStep: currentStep, message: '', leftUnanswered: true };
+          }
           // Tuyisengye said "Okay please" and was told his politeness did not
           // describe a property and that an empty one had been avoided. A
           // person being courteous should not be answered with an explanation
           // of our data model.
-          message: await agentPayLinkAside({ agent: data.agent || {}, cleanBody })
-            || agentConversationalAside({ data, cleanBody })
-            || 'I did not save that, because it does not describe a property and I did not want to create an empty one.\n\nSend a property caption with the type, exact location and price — for example "Selling 5 bedroom house in Kololo @600m UGX" — or send the media first.\n\nType *COMPLETE* when the batch is finished, or *CANCEL* to close it and walk away.'
+          const aside = agentConversationalAside({ data, cleanBody });
+          if (aside) return { handled: true, nextStep: currentStep, message: aside };
+          // Nor should anything else an agent says: it goes to the team.
+          const unplaced = await agentUnplacedReply({ phone, data, cleanBody });
+          return { handled: true, nextStep: currentStep, message: unplaced.message, leftUnanswered: unplaced.leftUnanswered };
+        }
+        return {
+          handled: true,
+          nextStep: currentStep,
+          // A staff batch: the person typing knows what a batch is.
+          message: 'I did not save that, because it does not describe a property and I did not want to create an empty one.\n\nSend a property caption with the type, exact location and price — for example "Selling 5 bedroom house in Kololo @600m UGX" — or send the media first.\n\nType *COMPLETE* when the batch is finished, or *CANCEL* to close it and walk away.'
         };
       }
 
@@ -17172,6 +17383,14 @@ async function sweepEmployeeBatchSummaries() {
         WHERE s.current_step = 'employee_property_media'
           AND li.last_at IS NOT NULL
           AND li.last_at < NOW() - ($2 || ' seconds')::interval
+          -- Talk left unanswered on purpose (a person on our team is talking
+          -- to them, or it has gone to the team) is not a batch nobody summed up.
+          AND NOT (
+            CASE WHEN COALESCE(s.session_data->>'talk_left_unanswered_at', '') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?Z$'
+                 THEN (s.session_data->>'talk_left_unanswered_at')::timestamptz >= li.last_at
+                 ELSE FALSE
+            END
+          )
           AND NOT EXISTS (
             SELECT 1 FROM outbound_message_queue q
              WHERE q.user_phone = s.phone AND q.created_at > li.last_at
@@ -21628,6 +21847,10 @@ async function handleReplyPlaybook({ phone, body = '', step = '', conversationCo
   const lastSent = String(sent[0].text || '');
   const agent = await agentForReply(phone);
   const role = replyRole(agent);
+  // Somebody on our team is talking to this agent: their "thanks" or "ok" is
+  // an answer to that person, and is left for them further on (21 Nov 2026).
+  if (role === 'agent' && String(agent.status || '') === 'approved' && ['thanks', 'praise', 'ack'].includes(kind)
+    && !isTeamNumber(phone) && await personThread.lastTypedByTeam(db, phone).catch(() => null)) return null;
   const first = role === 'other' ? agentFilm.personalFirstName(contactName) : agentGreetingName(agent, '');
   const digits = String(phone || '').replace(/\D/g, '');
   const name = normalizeInput(agent?.full_name || contactName || '');
@@ -25252,6 +25475,9 @@ async function processInboundRuntimeUnlocked({
     // summary once the burst has gone quiet: what saved, and what still needs what.
     const batchSummaryApplies = provider === 'web_bridge'
       && !employeeIntake.batchComplete
+      // Talk left for a person on our team, or already passed to the team:
+      // nothing was sent in, so there is nothing to sum up.
+      && !employeeIntake.leftUnanswered
       && (employeeIntake.nextStep || sessionStep) === 'employee_property_media'
       && (sessionForMessage.session_data?.property_batch_mode || 'multiple') === 'multiple';
     // An agent's typed message is answered there and then, so a summary still
@@ -25304,6 +25530,7 @@ async function processInboundRuntimeUnlocked({
         property_id: employeeIntake.propertyId || null,
         duplicate: Boolean(employeeIntake.duplicate),
         batch_complete: Boolean(employeeIntake.batchComplete),
+        ...(employeeIntake.leftUnanswered ? { left_unanswered: true } : {}),
         review_only: true
       },
       modelUsed: WHATSAPP_EMPLOYEE_AGENT_007_MARKER
@@ -25569,6 +25796,21 @@ async function processInboundRuntimeUnlocked({
       message: [transcriptEcho, humanHandoffAck(activeLang)].filter(Boolean).join('\n\n'),
       nextStep: sessionStep
     };
+  }
+
+  // An approved agent somebody on our team is talking to, with no posting
+  // session open (21 Nov 2026): talk the assistant finds no request in is for
+  // that person, not for the menu. A search, a listing, MENU and the rest
+  // carry on below as before.
+  if (AGENT_FILM_RESTING_STEPS.has(String(sessionStep || '').trim().toLowerCase())
+    && !effectiveMediaUrl && !inboundPhotoCandidates.length && !inboundMediaCandidates.length
+    && !sharedLocation && !transcriptRecord?.text
+    && ['', 'unknown', 'greeting'].includes(String(intentResult?.intent || '').trim().toLowerCase())
+    && agentTalkKind(effectiveBody)) {
+    const talkingAgent = await findApprovedAgentByPhone(phone).catch(() => null);
+    if (talkingAgent && await agentTalkIsForAPerson({ phone, agent: talkingAgent, said: effectiveBody })) {
+      return { message: '', nextStep: sessionStep };
+    }
   }
 
   if (!transcriptRecord?.text && customerGivingUp(effectiveBody) && ASSISTANT_FREE_STEPS.has(String(sessionStep || '').trim().toLowerCase())) {
@@ -27167,6 +27409,16 @@ module.exports.__test = {
   searchBriefFromFilters,
   recentlyClosedEmployeeBatchReply,
   agentConversationalAside,
+  agentAsksTheAssistant,
+  agentTalkKind,
+  agentTalkIsForAPerson,
+  agentUnplacedReply,
+  agentTalkNotes,
+  agentTalkNoteDelayMs,
+  agentUnplacedThankedAt,
+  agentUnplacedNotedAt,
+  noteAgentTalkForTeam,
+  sendAgentTalkNote,
   agentPayLinkAside,
   agentPayLinkAnswer,
   outstandingAgentPayLink,
