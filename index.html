@@ -3,6 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Desk first paint (Arthur, 22 Nov 2026): on the King desk (/admin, /king) and the staff
+       desk (/staff-dashboard) the public site chrome and the old dashboard layout must never
+       flash before the desk appears. From the first paint they stay hidden behind a short
+       "Loading" note (the sign-in box still shows on top) until the desk app shell is on (body.mk-app), the URL leaves the desk
+       (e.g. the sign-in page), or 10 seconds pass, so the page is never stuck blank. -->
+  <style id="mk-desk-boot-css">
+    html.mk-desk-boot body > .mk-top-strip,html.mk-desk-boot body > nav,html.mk-desk-boot body > #language-spotlight,html.mk-desk-boot body > footer,html.mk-desk-boot body > #floating-whatsapp-link{display:none!important}
+    html.mk-desk-boot body:not(.kd-on):not(.sd-on) .page{visibility:hidden!important}
+    html.mk-desk-boot body:not(.kd-on):not(.sd-on)::before{content:"Loading your desk\2026";position:fixed;inset:0;display:grid;place-items:center;background:#f8fafc;color:#15803d;font:800 16px/1.4 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;z-index:5;pointer-events:none}
+  </style>
+  <script>
+    (function () {
+      var desk = /^\/(?:admin|king|staff-dashboard)(?:\/|$)/;
+      if (!desk.test(location.pathname)) return;
+      var root = document.documentElement; var t0 = Date.now();
+      root.classList.add("mk-desk-boot");
+      var timer = setInterval(function () {
+        var b = document.body;
+        if ((b && b.classList.contains("mk-app")) || !desk.test(location.pathname) || Date.now() - t0 > 10000) {
+          root.classList.remove("mk-desk-boot"); clearInterval(timer);
+        }
+      }, 50);
+    })();
+  </script>
   <title>makaug.com | Uganda Property Portal</title>
   <meta name="description" content="Uganda's free property portal. Buy, rent, sell and find brokers across all districts.">
   <meta name="robots" content="index,follow,max-image-preview:large">
@@ -11251,7 +11275,7 @@
           // only inside the protected staff and King pages.
           if (document.getElementById("staff-calling-card") || document.getElementById("admin-calling-control")) {
             var callingScript = document.createElement("script");
-            callingScript.src = "/assets/calling-screen.js?v=20261121-ops6";
+            callingScript.src = "/assets/calling-screen.js?v=20261122-cx1";
             document.body.appendChild(callingScript);
           }
           // Staff sidebar desk (Dashboard, My performance, My pay, Profile, Settings).
