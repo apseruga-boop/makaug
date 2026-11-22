@@ -1929,7 +1929,7 @@
     var col = { confirmed: '#dcfce7;border-color:#86efac', arrived: '#dcfce7;border-color:#86efac', claimed: '#fef9c3;border-color:#fde047', sent: '#eff6ff;border-color:#bfdbfe', none: '#f8fafc;border-color:#e2e8f0' }[p.state] || '#f8fafc';
     var done = p.state === 'confirmed';
     return '<div class="mkc-pay" data-mkc-paybox style="background:' + col + '"><div class="mkc-row" style="justify-content:space-between"><b>💰 ' + esc(p.label) + '</b><span class="mkc-muted">' + ugx(p.amount_ugx) + ' · MoMo ' + esc(p.momo_code) + '</span></div>'
-      + (done ? '' : '<div class="mkc-row" style="margin-top:6px"><button type="button" class="mkc-btn sm go" data-pay="link">Send pay link</button><button type="button" class="mkc-btn sm" data-pay="momo">Send MoMo code</button>'
+      + (done ? '' : '<div class="mkc-row" style="margin-top:6px"><button type="button" class="mkc-btn sm go" data-pay="link">Text pay link</button><button type="button" class="mkc-btn sm" data-pay="momo">Text MoMo code</button>'
         + (p.state === 'claimed' || p.state === 'arrived' ? '' : '<button type="button" class="mkc-btn sm amber" data-pay="claim">They say they paid</button>') + '<button type="button" class="mkc-btn sm dark" data-pay="sms">📷 Upload payment SMS</button></div>')
       + (S.payOut && S.payOut.id === a.id ? S.payOut.html : '') + '</div>';
   }
@@ -1950,10 +1950,9 @@
         b.disabled = true;
         api('/attempts/' + a.id + '/pay', { method: 'POST', body: { how: k, person_key: S.person } }).then(function (r) {
           S.pay[a.id] = r.state;
-          S.payOut = { id: a.id, html: r.sent ? '<p style="margin:6px 0 0;color:#047857;font-weight:800">✓ Sent on makaug WhatsApp</p>'
-            : '<div class="mkc-tpl" style="margin-top:6px"><b>Not sent automatically</b> <span class="mkc-muted">(' + esc(r.reason || '') + ')</span> – send it yourself:<div style="font-size:12px;white-space:pre-wrap;max-height:90px;overflow:auto">' + esc(r.text) + '</div>'
-              + '<div class="mkc-row" style="margin-top:6px"><button type="button" class="mkc-btn sm" data-paycopy>Copy</button><a class="mkc-btn sm go" target="_blank" rel="noopener" href="' + esc(r.wa_url) + '">Open in WhatsApp</a></div></div>' };
-          S.payText = r.text; toast(r.sent ? 'Sent' : 'Copy it or open WhatsApp', r.sent ? '' : 'bad');
+          S.payOut = { id: a.id, html: '<div class="mkc-tpl" style="margin-top:6px"><b>Text it from the phone (SMS)</b><div style="font-size:12px;white-space:pre-wrap;max-height:90px;overflow:auto">' + esc(r.text) + '</div>'
+              + '<div class="mkc-row" style="margin-top:6px"><button type="button" class="mkc-btn sm" data-paycopy>Copy</button><a class="mkc-btn sm go" href="' + esc(r.sms_url) + '" data-pay-sms>Text it (SMS)</a></div></div>' };
+          S.payText = r.text; toast('Ready: text it from the phone');
           renderNum();
         }, function (e) { b.disabled = false; toast(e.message, 'bad'); });
       };
@@ -2193,10 +2192,10 @@
         return;
       }
       api('/lookup?phone=' + encodeURIComponent(ph.value)).then(function (r) {
-        if (!r.found) { who.innerHTML = '<div class="mkc-tpl">New caller – no history with us. Ask their name and how they heard of makaug.</div>'; return; }
+        if (!r.found) { who.innerHTML = '<div class="mkc-tpl" data-in-kind="unknown"><span class="mkc-pill">Unknown number</span> New caller – no history with us. Ask their name and how they heard of makaug.</div>'; return; }
         var n = q('[data-in-name]', m); if (r.name && !n.value) n.value = r.name;
         who.innerHTML = (r.blocked ? '<div class="mkc-bad" style="font-weight:900">⛔ On the do-not-contact list' + (r.blocked.reason ? ': ' + esc(r.blocked.reason) : '') + '. They rang us, so you can talk, but do not call them back.</div>' : '')
-          + '<div class="mkc-tpl"><b>' + esc(r.name || 'Known number') + ' ' + esc(r.phone) + '</b> · ' + r.calls + ' call' + (r.calls === 1 ? '' : 's') + (r.inbound ? ' (' + r.inbound + ' inbound)' : '') + (r.said_hello ? ' · said Hello ✓' : '')
+          + '<div class="mkc-tpl" data-in-kind="' + esc(r.kind || 'unknown') + '"><span class="mkc-pill">' + esc(r.kind_label || 'Known number') + '</span> <b>' + esc(r.name || 'Known number') + ' ' + esc(r.phone) + '</b> · ' + r.calls + ' call' + (r.calls === 1 ? '' : 's') + (r.inbound ? ' (' + r.inbound + ' inbound)' : '') + (r.said_hello ? ' · said Hello ✓' : '')
           + (r.last ? '<div>Last: ' + esc(kDayTime(r.last.at)) + ' · ' + esc(personName(r.last.by)) + ' · ' + esc(String(r.last.outcome || '').replace(/_/g, ' ')) + (r.last.summary || r.last.note ? ' – ' + esc(r.last.summary || r.last.note) : '') + '</div>' : '')
           + (r.last && r.last.next_step ? '<div><b>Next step was:</b> ' + esc(r.last.next_step) + '</div>' : '') + '<div class="mkc-muted">' + esc(r.pick_up || '') + '</div>'
           + (r.last_attempt_id ? '<button type="button" class="mkc-btn sm ghost" data-in-tree>Full history</button>' : '') + '</div>';
@@ -2228,7 +2227,7 @@
     api('/calls-summary?period=' + K.callsPeriod).then(function (r) {
       var line = function (i) { return '<div class="mkc-hit" style="cursor:default"><b>' + esc(i.name || 'Unknown') + ' ' + esc(i.phone) + '</b> ' + (i.direction === 'inbound' ? '<span class="mkc-pill in">inbound</span> ' : '') + '<span class="mkc-pill">' + esc(String(i.outcome || '').replace(/_/g, ' ')) + '</span> <span class="mkc-muted">' + esc(kDayTime(i.at)) + ' · ' + esc(personName(i.by)) + '</span>' + (i.summary ? '<div>' + esc(i.summary) + '</div>' : '') + (i.next_step ? '<div><b>Next:</b> ' + esc(i.next_step) + (i.callback_at ? ' · ' + esc(kDayTime(i.callback_at)) : '') + '</div>' : '') + '</div>'; };
       var col = function (title, list, empty) { return '<div><h4>' + title + ' (' + list.length + ')</h4><div class="mkc-scroll" style="max-height:320px">' + (list.map(line).join('') || '<p class="mkc-muted">' + empty + '</p>') + '</div></div>'; };
-      var ppl = Object.keys(r.by_person).map(function (k) { var p = r.by_person[k]; return '<span class="mkc-pill">' + esc(personName(k)) + ': ' + p.outbound + ' out · ' + p.inbound + ' in · ' + p.closes + ' paid</span>'; }).join(' ');
+      var ppl = Object.keys(r.by_person).map(function (k) { var p = r.by_person[k]; return '<span class="mkc-pill">' + esc(personName(k)) + ': ' + p.outbound + ' out · ' + p.inbound + ' in · ' + p.closes + ' paid' + (p.away_s ? ' · away ' + Math.round(p.away_s / 60) + ' min' : '') + '</span>'; }).join(' ');
       var outs = Object.keys(r.outcomes).map(function (k) { return esc(k.replace(/_/g, ' ')) + ' ' + r.outcomes[k]; }).join(' · ');
       box.innerHTML = '<div class="mkc-row" style="justify-content:space-between"><h4 style="margin:0">🗂 Calls summary · ' + esc(r.from) + (r.to !== r.from ? ' → ' + esc(r.to) : '') + '</h4>' + periodTabs('data-k-callsper', K.callsPeriod) + '</div>'
         + '<div style="margin:6px 0"><b>' + r.calls + ' calls</b> (' + r.outbound + ' outbound · ' + r.inbound + ' inbound) · ' + (r.not_answered ? 'Not answered: ' + r.not_answered + ' · ' : '') + r.skipped + ' skipped · ' + r.closed.length + ' paid (closed)' + (r.no_next_step.length ? ' · <span class="mkc-bad">' + r.no_next_step.length + ' with no next step</span>' : '') + '</div>'
@@ -2293,13 +2292,13 @@
     var box = q('[data-k-videos]', host); if (!box) return;
     api('/videos').then(function (list) {
       var waiting = list.filter(function (r) { return r.status === 'requested' || r.status === 'approved'; });
-      box.innerHTML = '<h4 style="margin:0 0 6px">🎬 Agent video requests (' + waiting.length + ' waiting)</h4><p class="mkc-muted" style="margin:0 0 6px">Only numbers that messaged our WhatsApp first can be requested. Approve sends a ref-tagged link from makaug\'s WhatsApp; if that sender is off, copy it or open WhatsApp and send by hand.</p>'
+      box.innerHTML = '<h4 style="margin:0 0 6px">🎬 Agent video requests (' + waiting.length + ' waiting)</h4><p class="mkc-muted" style="margin:0 0 6px">Approve, then text the ref-tagged link from the phone (SMS). Calls never send on WhatsApp.</p>'
         + (list.length ? '<div class="mkc-scroll"><table class="mkc-table"><tr><th>Who</th><th>Video</th><th>Asked by</th><th>Status</th><th></th></tr>' + list.slice(0, 30).map(function (r) {
-          var act = r.status === 'requested' ? '<button type="button" class="mkc-btn sm go" data-kv-ok="' + esc(r.id) + '">Approve & send</button> <button type="button" class="mkc-btn sm ghost" data-kv-no="' + esc(r.id) + '">Reject</button>'
-            : r.status === 'approved' && r.fallback ? '<div class="mkc-muted">' + esc(r.send_reason || 'Not sent automatically') + '</div><a class="mkc-btn sm" target="_blank" rel="noopener" href="' + esc(r.fallback.wa_url) + '">Open WhatsApp</a> <button type="button" class="mkc-btn sm ghost" data-kv-copy="' + esc(r.id) + '">Copy</button> <button type="button" class="mkc-btn sm dark" data-kv-sent="' + esc(r.id) + '">Mark sent</button>' : '';
-          return '<tr><td><b>' + esc(r.name || '') + '</b> ' + esc(r.phone) + '<div class="mkc-muted">messaged us ' + esc(kDayTime(r.hello_at)) + '</div></td><td>' + esc(r.video) + '<div class="mkc-muted">ref ' + esc(r.ref) + (r.opens ? ' · opened ' + r.opens + '×' : '') + '</div></td><td>' + esc(personName(r.by)) + '<div class="mkc-muted">' + esc(kDayTime(r.requested_at)) + '</div></td><td><span class="mkc-pill' + (r.status === 'sent' ? ' live' : r.status === 'rejected' ? ' flag' : ' warn') + '">' + esc(r.status) + '</span>' + (r.sent_via ? '<div class="mkc-muted">' + esc(r.sent_via.replace(/_/g, ' ')) + '</div>' : '') + '</td><td>' + act + '</td></tr>';
+          var act = r.status === 'requested' ? '<button type="button" class="mkc-btn sm go" data-kv-ok="' + esc(r.id) + '">Approve</button> <button type="button" class="mkc-btn sm ghost" data-kv-no="' + esc(r.id) + '">Reject</button>'
+            : r.status === 'approved' && r.fallback ? '<div class="mkc-muted">' + esc(r.send_reason || 'Not sent automatically') + '</div><a class="mkc-btn sm" href="' + esc(r.fallback.sms_url) + '">Text it (SMS)</a> <button type="button" class="mkc-btn sm ghost" data-kv-copy="' + esc(r.id) + '">Copy</button> <button type="button" class="mkc-btn sm dark" data-kv-sent="' + esc(r.id) + '">Mark sent</button>' : '';
+          return '<tr><td><b>' + esc(r.name || '') + '</b> ' + esc(r.phone) + '<div class="mkc-muted">' + (r.hello_at ? 'messaged us ' + esc(kDayTime(r.hello_at)) : 'asked ' + esc(kDayTime(r.requested_at))) + '</div></td><td>' + esc(r.video) + '<div class="mkc-muted">ref ' + esc(r.ref) + (r.opens ? ' · opened ' + r.opens + '×' : '') + '</div></td><td>' + esc(personName(r.by)) + '<div class="mkc-muted">' + esc(kDayTime(r.requested_at)) + '</div></td><td><span class="mkc-pill' + (r.status === 'sent' ? ' live' : r.status === 'rejected' ? ' flag' : ' warn') + '">' + esc(r.status) + '</span>' + (r.sent_via ? '<div class="mkc-muted">' + esc(r.sent_via.replace(/_/g, ' ')) + '</div>' : '') + '</td><td>' + act + '</td></tr>';
         }).join('') + '</table></div>' : '<p class="mkc-muted">No requests yet.</p>');
-      var dec = function (id, ok) { api('/videos/' + id + '/decide', { method: 'POST', body: { approve: ok } }).then(function (r) { toast(r.status === 'sent' ? 'Sent from makaug WhatsApp' : r.status === 'approved' ? 'Approved – send it by hand (sender off)' : 'Rejected'); drawKVideos(host); }, function (e) { toast(e.message); }); };
+      var dec = function (id, ok) { api('/videos/' + id + '/decide', { method: 'POST', body: { approve: ok } }).then(function (r) { toast(r.status === 'approved' ? 'Approved – text the link from the phone' : 'Rejected'); drawKVideos(host); }, function (e) { toast(e.message); }); };
       qa('[data-kv-ok]', box).forEach(function (b) { b.onclick = function () { dec(b.getAttribute('data-kv-ok'), true); }; });
       qa('[data-kv-no]', box).forEach(function (b) { b.onclick = function () { dec(b.getAttribute('data-kv-no'), false); }; });
       qa('[data-kv-copy]', box).forEach(function (b) { b.onclick = function () { var r = list.filter(function (x) { return x.id === b.getAttribute('data-kv-copy'); })[0]; if (r) copyText(r.fallback.text); }; });
@@ -2329,7 +2328,7 @@
         + '<li>Read the card: where the number came from and its history. Press <b>Call from laptop (Phone Link)</b>.</li>'
         + '<li>Did they answer? Say the "I am taking notes" line, then follow the 6 steps in the script. Objections are under the script.</li>'
         + '<li>Ask them to WhatsApp "Hi" to 0780 863 394. Not on WhatsApp yet? Press <b>Text them our WhatsApp number</b>.</li>'
-        + '<li>Once they have messaged us, <b>Request video send</b> – King approves and makaug\'s WhatsApp sends it.</li>'
+        + '<li>Want the agent film? Text them the link by SMS. Calls never send films or messages on WhatsApp.</li>'
         + '<li>Money: <b>Send pay link</b> or <b>Send MoMo code</b>; if they say they paid, press <b>They say they paid</b>. Admin confirms.</li>'
         + '<li>End the call, check the wrap-up, always write a <b>next step</b>. Asked not to be called? Pick <b>Don\'t contact again</b>.</li>'
         + '<li>Someone rang the company phone? Answer in Phone Link and press <b>📲 Incoming call</b>.</li>'
@@ -2339,7 +2338,7 @@
         + '<p><b>"Is there a free trial?"</b> No free trial. You see real listings and enquiries from day one.</p>'
         + '<p><b>"My listing is already on makaug – who put it there?"</b> We find listings online and show where they came from. Join and it becomes yours, with your name and phone.</p>'
         + '<p><b>"How do I pay?"</b> MoMo merchant code 27248497, then WhatsApp the confirmation to 0780 863 394.</p>' + lg('Sasula ku MoMo merchant code 27248497, oluvannyuma oweereze obubaka ku WhatsApp 0780 863 394.')
-        + '<p><b>"Send me details."</b> Ask them to WhatsApp "Hi" to 0780 863 394 first (WhatsApp won\'t let us message first), then request the video.</p>'
+        + '<p><b>"Send me details."</b> Text them the link from the Texts box (SMS). We never send on WhatsApp from calls.</p>'
         + '<p><b>"I\'m busy."</b> Book a callback with a time; it comes back to you.</p><p><b>"Don\'t call me again."</b> Say sorry and pick <b>Don\'t contact again</b> – the number is blocked everywhere.</p>')
       + '</div>';
   }

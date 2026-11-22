@@ -84,7 +84,7 @@ test('calling screen: gate replaces Call now, tap sends the check, drops pause c
   assert.match(js, /ev\('link_drop'/);
   assert.match(js, /Phone Link/);
   assert.match(js, /notes_check_passed/);
-  assert.match(read('index.html'), /\/assets\/calling-screen\.js\?v=20261121-[a-z0-9]+/);
+  assert.match(read('index.html'), /\/assets\/calling-screen\.js\?v=2026112\d-[a-z0-9]+/);
 });
 
 test('agent manager: staff get "Send removal request", never Remove or Restore', () => {

@@ -8,6 +8,7 @@
  */
 const db = require('../config/database');
 const calling = require('./callingScreen');
+const rules = require('./callingRules');
 const planner = require('./callingPlanner');
 const day = require('./callingDay');
 const kd = require('./kingDesk');
@@ -74,7 +75,7 @@ async function home(personKey, { now = new Date() } = {}) {
     planner.dayPlan(pk, { now }),
     rows(`SELECT tapped_at AS at FROM call_attempts WHERE person_key = $1 AND tapped_at >= $2 AND tapped_at < $3 AND status = 'done' AND COALESCE(outcome, '') <> 'no_answer'`, [pk, startOf(r.lastWeekStart), startOf(r.tomorrow)]),
     rows(`SELECT COUNT(*) FILTER (WHERE status = 'done' AND COALESCE(outcome, '') <> 'no_answer')::int AS calls,
-                 COUNT(*) FILTER (WHERE status = 'done' AND outcome = 'interested')::int AS interested,
+                 COUNT(*) FILTER (WHERE status = 'done' AND outcome IN ('interested', 'will_list') AND ${rules.textSentSql('call_attempts')})::int AS interested,
                  COUNT(*) FILTER (WHERE status = 'done' AND is_close AND outcome IN ('paid', 'renewed'))::int AS paid,
                  COALESCE(SUM(talk_s) FILTER (WHERE status = 'done'), 0)::int AS talk_s
             FROM call_attempts WHERE person_key = $1 AND tapped_at >= $2`, [pk, startOf(r.today)]),
@@ -100,6 +101,7 @@ async function home(personKey, { now = new Date() } = {}) {
     pace: p,
     checklist: await checklist(pk, plan, r.today, nowMin, targets, todayCounts),
     profile_missing: prof.missing,
+    low_list: await calling.freshLeft(pk, { now }).catch(() => null),
     money: money ? { earned_ugx: num(money.earned_ugx), due_next_payday_ugx: num(money.due_next_payday_ugx), next_payday: money.next_payday, rate_pct: num(money.rate_pct) } : null
   };
 }
@@ -114,7 +116,7 @@ async function performance(personKey, { now = new Date() } = {}) {
     rows(`SELECT to_char(tapped_at AT TIME ZONE 'Africa/Kampala', 'YYYY-MM-DD') AS day,
                  COUNT(*) FILTER (WHERE status = 'done')::int AS dialled,
                  COUNT(*) FILTER (WHERE status = 'done' AND COALESCE(outcome, '') <> 'no_answer')::int AS calls,
-                 COUNT(*) FILTER (WHERE status = 'done' AND outcome = 'interested')::int AS interested,
+                 COUNT(*) FILTER (WHERE status = 'done' AND outcome IN ('interested', 'will_list') AND ${rules.textSentSql('call_attempts')})::int AS interested,
                  COUNT(*) FILTER (WHERE status = 'done' AND is_close AND outcome IN ('paid', 'renewed'))::int AS paid,
                  COALESCE(SUM(talk_s) FILTER (WHERE status = 'done'), 0)::int AS talk_s
             FROM call_attempts WHERE person_key = $1 AND tapped_at >= $2 GROUP BY 1 ORDER BY 1 DESC`, [pk, from]),

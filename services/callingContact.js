@@ -6,12 +6,9 @@
  * SMS: the screen opens an sms: link (Phone Link / the phone sends it from the
  * company SIM). We only log that it was opened as "SMS sent".
  *
- * Agent video: locked for a number until that number has messaged our
- * WhatsApp (an inbound row in whatsapp_messages). Then the caller can request
- * a send; King approves; only then makaug's WhatsApp sends a ref-tagged link
- * (/v/<ref>) through the existing sender. If the sender isn't available the
- * request stays "approved" with a copy / wa.me fallback. Nothing is ever sent
- * to a number that hasn't messaged us first.
+ * Agent video: the caller asks, King approves, then the ref-tagged link
+ * (/v/<ref>) goes out as a text (SMS) from the phone. Since 22 Nov 2026 the
+ * calling flow never sends anything on WhatsApp.
  */
 
 const crypto = require('crypto');
@@ -81,15 +78,14 @@ async function videoState(attemptId) {
 async function requestVideo(attemptId, { personKey = '', videoKey = 'join_agent' } = {}) {
   const a = await attemptOf(attemptId);
   const sbx = require('./callingSandbox');
-  if (sbx.isTestKey(a.phone_key) || await sbx.isSandbox(a.person_key)) throw httpError(409, `${sbx.PRACTICE_MSG} asks King to send the agent video on WhatsApp.`);
+  if (sbx.isTestKey(a.phone_key) || await sbx.isSandbox(a.person_key)) throw httpError(409, `${sbx.PRACTICE_MSG} asks King to approve the agent video text.`);
   if (!VIDEOS[videoKey]) throw httpError(400, 'Pick a video.');
-  const hello = await helloOf(a.phone_key);
-  if (!hello) throw httpError(409, 'Locked: they have not messaged our WhatsApp yet. Ask them to send "Hi" to 0780 863 394 first.');
+  const hello = await helloOf(a.phone_key).catch(() => null);
   const ref = `av${crypto.randomBytes(4).toString('hex')}`;
   const r = (await rows(
     `INSERT INTO call_video_requests (phone_key, phone, full_name, attempt_id, person_key, video_key, ref_code, hello_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (phone_key) WHERE status IN ('requested', 'approved') DO NOTHING RETURNING id, status`,
-    [a.phone_key, a.phone, a.full_name, a.id, cleanKey(personKey) || a.person_key, videoKey, ref, hello.at]))[0];
+    [a.phone_key, a.phone, a.full_name, a.id, cleanKey(personKey) || a.person_key, videoKey, ref, hello ? hello.at : null]))[0];
   if (!r) throw httpError(409, 'A video request for this number is already waiting.');
   return { id: r.id, status: r.status };
 }
@@ -106,11 +102,17 @@ async function listVideoRequests({ status = '' } = {}) {
     id: r.id, phone: mask(r.phone_key), name: r.full_name || '', by: r.person_key, video: (VIDEOS[r.video_key] || {}).title || r.video_key, status: r.status,
     hello_at: r.hello_at, requested_at: r.requested_at, decided_by: r.decided_by, decided_at: r.decided_at, sent_at: r.sent_at, sent_via: r.sent_via, send_reason: r.send_reason,
     opens: r.opens, ref: r.ref_code, link: videoLink(r.ref_code),
-    fallback: r.status === 'approved' ? { text: videoMessage(r), wa_url: `https://wa.me/${String(r.phone).replace(/\D+/g, '')}?text=${encodeURIComponent(videoMessage(r))}` } : null
+    fallback: r.status === 'approved' ? smsFallback(r) : null
   }));
 }
 
-/** King only. Approve → send through makaug's existing WhatsApp sender; otherwise stays approved with a fallback. */
+/** Calls send texts only (Arthur, 22 Nov 2026): the film link goes out as an SMS from the phone, never WhatsApp. */
+function smsFallback(r) {
+  const text = videoMessage(r);
+  return { text, sms_url: `sms:${String(r.phone || '').replace(/[^\d+]/g, '')}?body=${encodeURIComponent(text)}` };
+}
+
+/** King only. Approve → the caller texts the film link (SMS). Nothing is sent on WhatsApp from the calling flow. */
 async function decideVideo(id, { approve = false, actor = '', note = '' } = {}) {
   const r = (await rows('SELECT * FROM call_video_requests WHERE id::text = $1', [String(id)]))[0];
   if (!r) throw httpError(404, 'Request not found.');
@@ -120,18 +122,10 @@ async function decideVideo(id, { approve = false, actor = '', note = '' } = {}) 
     await db.query("UPDATE call_video_requests SET status = 'rejected', decided_by = $2, decided_at = NOW(), decision_note = $3 WHERE id = $1", [r.id, String(actor).slice(0, 80), String(note).slice(0, 200)]);
     return { status: 'rejected' };
   }
-  if (!(await helloOf(r.phone_key))) throw httpError(409, 'They have not messaged our WhatsApp. Nothing sent.');
-  let delivery = 'not_sent'; let reason = null;
-  try {
-    const out = await require('./leadHandoffService').deliverWhatsapp({ to: r.phone, body: videoMessage(r), kind: 'calling_agent_video', leadId: null, nonce: r.ref_code });
-    delivery = out.status || 'unknown'; reason = out.reason || null;
-  } catch (e) { reason = e.message; }
-  const sent = /^(sent|queued|delivered|ok)$/i.test(delivery);
   await db.query(
-    `UPDATE call_video_requests SET status = $2, decided_by = COALESCE(decided_by, $3), decided_at = COALESCE(decided_at, NOW()), decision_note = $4,
-        sent_at = CASE WHEN $2 = 'sent' THEN NOW() ELSE sent_at END, sent_via = CASE WHEN $2 = 'sent' THEN 'makaug_whatsapp' ELSE sent_via END, send_reason = $5 WHERE id = $1`,
-    [r.id, sent ? 'sent' : 'approved', String(actor).slice(0, 80), String(note).slice(0, 200), sent ? null : String(reason || 'Not sent automatically').slice(0, 200)]);
-  return { status: sent ? 'sent' : 'approved', sent, reason: sent ? null : (reason || 'Not sent automatically'), fallback: sent ? null : { text: videoMessage(r), wa_url: `https://wa.me/${String(r.phone).replace(/\D+/g, '')}?text=${encodeURIComponent(videoMessage(r))}` } };
+    `UPDATE call_video_requests SET status = 'approved', decided_by = COALESCE(decided_by, $2), decided_at = COALESCE(decided_at, NOW()), decision_note = $3, send_reason = 'Text it (SMS)' WHERE id = $1`,
+    [r.id, String(actor).slice(0, 80), String(note).slice(0, 200)]);
+  return { status: 'approved', sent: false, reason: 'Text it from the phone (SMS).', fallback: smsFallback(r) };
 }
 
 /** King: sent it by hand from the company WhatsApp (fallback). */

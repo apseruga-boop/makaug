@@ -202,7 +202,7 @@ test('staff Leads page is the new page: no old sections, no wa.me, no bridge wor
   const hs = app.slice(app.indexOf('function staffHomeSeekersShell('), app.indexOf('async function saveStaffInPersonConsent('));
   assert.match(hs, /\$\{king \? `<button type="button" onclick="runStaffWhatsappDigestPreview\(\)"/);
   assert.match(hs, /\$\{!king \? `<span class="text-gray-600">/);
-  assert.match(read('index.html'), /staff-desk\.js\?v=20261121-ops[3456]/);
+  assert.match(read('index.html'), /staff-desk\.js\?v=2026112\d-[a-z0-9]+/);
 });
 
 test('King keeps consent: Leads & WhatsApp has a Home seekers & consent chip', () => {

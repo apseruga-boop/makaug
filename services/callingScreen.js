@@ -27,6 +27,7 @@ const CALLBACK_MIN_HOURS = 24;
 const perf = require('./staffPerformance');
 const { staffSenderChoices, maskPhoneLast3 } = require('./outreachSenderName');
 const sandbox = require('./callingSandbox');
+const rules = require('./callingRules');
 const { phoneKey9, canonicalUgPhone, isUgandanPhone } = require('../utils/ugPhone');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
@@ -336,15 +337,21 @@ async function safeRows(sql, params = []) {
   try { return await rows(sql, params); } catch (_) { return []; }
 }
 
+/** House rules on top of the stored outcomes: an interested outcome always needs a follow-up date. */
+function withRules(t) {
+  if (t && Array.isArray(t.outcomes)) t.outcomes = t.outcomes.map((o) => (o && rules.INTERESTED_OUTCOMES.includes(o.key) ? { ...o, date: 'required' } : o));
+  return t;
+}
+
 async function loadTasks({ all = false } = {}) {
-  return rows(`SELECT key, name, description, queue_kind, sort_order, active, script_variants, checklist, outcomes, config
-                 FROM call_tasks ${all ? '' : 'WHERE active'} ORDER BY sort_order, key`);
+  return (await rows(`SELECT key, name, description, queue_kind, sort_order, active, script_variants, checklist, outcomes, config
+                 FROM call_tasks ${all ? '' : 'WHERE active'} ORDER BY sort_order, key`)).map(withRules);
 }
 
 async function loadTask(key) {
   const t = (await rows('SELECT key, name, description, queue_kind, sort_order, active, script_variants, checklist, outcomes, config FROM call_tasks WHERE key = $1', [key]))[0];
   if (!t || !t.active) throw httpError(400, 'Pick a task.');
-  return t;
+  return withRules(t);
 }
 
 /** Everyone who can call: Arthur, Ronald, staff added to Agent 007, commission staff, and anyone with a target or calls. */
@@ -610,6 +617,17 @@ async function rawCandidates(task, personKey, { today = kampalaDay(), limit = 40
     for (const r of listings) {
       const k = phoneKey9(r.phone); if (!k) continue;
       out.push({ phone: canonicalUgPhone(r.phone) || r.phone, phone_key: k, full_name: r.full_name, source_kind: 'listing', source_label: `Listing ${kampalaDay(r.created_at)}${r.found_online ? ' · found online' : ' · listed it themselves'}`, reason: [String(r.title || '').replace(/\*+/g, '').slice(0, 70), r.area].filter(Boolean).join(' · '), found_online: Boolean(r.found_online) });
+    }
+    // Older found-online posters nobody has called yet (Arthur, 22 Nov 2026): they never drop out of the feed.
+    const older = await safeRows(
+      `SELECT p.lister_phone AS phone, p.lister_name AS full_name, p.title, p.area, p.created_at
+         FROM properties p
+        WHERE p.agent_id IS NULL AND COALESCE(p.lister_phone, '') <> '' AND p.created_at <= NOW() - INTERVAL '30 days' AND ${foundOnlinePropertySql('p')}
+          AND NOT EXISTS (SELECT 1 FROM call_attempts ca WHERE ca.phone_key = RIGHT(regexp_replace(p.lister_phone, '\\D', '', 'g'), 9))
+        ORDER BY p.created_at DESC LIMIT $1`, [Math.min(limit, 200)]);
+    for (const r of older) {
+      const k = phoneKey9(r.phone); if (!k) continue;
+      out.push({ phone: canonicalUgPhone(r.phone) || r.phone, phone_key: k, full_name: r.full_name, source_kind: 'listing', source_label: `Listing ${kampalaDay(r.created_at)} · found online · never called`, reason: [String(r.title || '').replace(/\*+/g, '').slice(0, 70), r.area].filter(Boolean).join(' · '), found_online: true });
     }
     for (const r of prospects) {
       const when = r.pitched_at ? kampalaDay(r.pitched_at) : '';
@@ -930,16 +948,26 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   const task = await loadTask(a.task_key).catch(async () => (await loadTasks({ all: true })).find((t) => t.key === a.task_key));
   const def = outcomeDef(task, outcome);
   if (!def) throw httpError(400, 'Pick what happened on the call.');
+  // No outcome without the Call tap (Arthur, 22 Nov 2026). Only "wrong number" can be logged without dialling.
+  if (!a.tapped_at && !rules.NO_DIAL_OK.has(def.key)) throw httpError(409, 'Tap Call first. An outcome can only be saved after you rang the number.');
   // A note is needed when they spoke; for no answer / wrong number the outcome is the note.
   let text = String(note || '').trim().slice(0, 1000);
   if (text.length < 3 && !def.spoke) text = def.label || def.key.replace(/_/g, ' ');
   if (text.length < 3) throw httpError(400, 'Write a short note about the call (or tap one of the quick notes).');
-  const cb = parseCallback(callbackAt, now);
+  let cb = parseCallback(callbackAt, now);
+  if (rules.INTERESTED_OUTCOMES.includes(def.key) && !cb) throw httpError(400, 'Interested: pick the follow-up date and time.');
   if (def.date === 'required' && !cb) throw httpError(400, 'Pick the date and time to call back.');
   // Call backs are at least 24 hours away (Arthur, 16 Nov 2026). Ten minutes of slack for slow saves.
   if (cb && cb.getTime() < now.getTime() + CALLBACK_MIN_HOURS * 3600000 - 10 * 60000) throw httpError(400, `Call backs are at least ${CALLBACK_MIN_HOURS} hours away. Pick tomorrow or later.`);
   // Every call ends with a close, a final no, or a next step.
   let next = String(nextStep || '').trim().slice(0, 300);
+  // An open follow-up that did not answer comes back by itself: next day, then every 2 days.
+  if (def.key === 'no_answer' && !cb) {
+    const earlier = await rows(
+      `SELECT outcome FROM call_attempts WHERE phone_key = $1 AND id <> $2 AND status = 'done' ORDER BY COALESCE(wrapped_at, shown_at) DESC LIMIT 12`, [a.phone_key, a.id]);
+    const auto = rules.autoRetryAt(earlier, now);
+    if (auto) { cb = auto; if (!next) next = 'Follow-up: no answer, try again'; }
+  }
   if (!next && def.key === 'no_answer') next = 'Try again next working day';
   if (!next && cb) next = 'Call back';
   if (!next && !closesLoop(def)) throw httpError(400, 'Pick the next step (call back, chase payment, send the film…).');
@@ -970,6 +998,7 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   const ended = a.ended_at || (a.tapped_at ? null : null);
   const record = { tapped_at: a.tapped_at, ended_at: ended, wrapped_at: now, callback_at: cb };
   const flags = flagsFor(record, def, prevTap?.tapped_at || null, tx);
+  if (!a.tapped_at) flags.push('no_dial');
   const talk = a.tapped_at ? seconds(a.tapped_at, a.ended_at || now) : null;
   const wrapS = seconds(a.ended_at || a.tapped_at || a.shown_at, now);
   const gapS = prev?.wrapped_at && a.tapped_at && kampalaDay(prev.wrapped_at) === kampalaDay(a.tapped_at) ? seconds(prev.wrapped_at, a.tapped_at) : null;
@@ -1124,6 +1153,12 @@ async function callsSummary({ from, to } = {}) {
     const p = by[a.person_key] || (by[a.person_key] = { calls: 0, not_answered: 0, outbound: 0, inbound: 0, closes: 0, talk_s: 0 });
     p.calls += 1; p[a.direction === 'inbound' ? 'inbound' : 'outbound'] += 1; if (closedPaid(a)) p.closes += 1; p.talk_s += Number(a.talk_s || 0);
     outcomes[a.outcome] = (outcomes[a.outcome] || 0) + 1;
+  }
+  // Screen hidden / switched away (visibilitychange), per caller, so King sees it next to the calls.
+  for (const w of await rows(`SELECT person_key, SUM(away_ms)::bigint AS away_ms, SUM(oncall_hidden_ms)::bigint AS oncall_ms, SUM(exit_count)::int AS exits
+      FROM call_sessions WHERE started_at >= $1 AND started_at < $2 GROUP BY person_key`, [start, end]).catch(() => [])) {
+    const p = by[w.person_key]; if (!p) continue;
+    p.away_s = Math.round(Number(w.away_ms || 0) / 1000); p.away_on_call_s = Math.round(Number(w.oncall_ms || 0) / 1000); p.exits = Number(w.exits || 0);
   }
   const item = (a) => ({ at: a.at, by: a.person_key, direction: a.direction, name: a.full_name || '', phone: `•••${a.phone_key.slice(-3)}`, outcome: a.outcome, summary: (a.transcript && a.transcript.summary) || a.note || '', next_step: a.next_step || '', callback_at: a.callback_at });
   const finalNo = new Set(['rejected', 'do_not_contact', 'wrong_number', 'not_renewing']);
@@ -1448,6 +1483,17 @@ async function moneyToday(personKey, attempts = []) {
 }
 
 /** Numbers waiting in each mode for this person (for the mode switch). */
+/** Fresh (never-called) new-agent numbers left for one caller, for the low-list warning. */
+async function freshLeft(personKey, { now = new Date() } = {}) {
+  const key = cleanKey(personKey);
+  const tasks = await loadTasks({ all: true });
+  const task = tasks.find((t) => t.queue_kind === 'new_agents' && t.active !== false);
+  if (!key || !task) return { fresh: null, low: false, threshold: rules.LOW_LIST_AT };
+  const q = await eligibleQueue(task, key, { now, tasks, limit: 400 });
+  const fresh = q.filter((c) => c.kind === 'fresh').length;
+  return { fresh, low: fresh < rules.LOW_LIST_AT, threshold: rules.LOW_LIST_AT };
+}
+
 async function queueCounts(personKey, { now = new Date() } = {}) {
   const key = cleanKey(personKey);
   const tasks = await loadTasks({ all: true });
@@ -1833,6 +1879,7 @@ module.exports = {
   bestTimeFrom,
   moneyToday,
   queueCounts,
+  freshLeft,
   DEFAULT_TARGETS,
   FLAG_LABELS,
   PAID_OUTCOMES,

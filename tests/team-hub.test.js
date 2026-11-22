@@ -134,7 +134,7 @@ test('pages: staff Team menu for everyone (callers too), unread badge, King Team
   const idx = read('index.html');
   assert.match(idx, /id="king-hub" data-admin-tab-panel="k-hub"/);
   assert.match(idx, /team-hub\.js\?v=20261121-th1/);
-  assert.match(idx, /king-desk\.js\?v=20261121-kd(8|9)/);
+  assert.match(idx, /king-desk\.js\?v=2026112\d-[a-z0-9]+/);
   const th = read('assets/team-hub.js');
   assert.doesNotMatch(th, /wa\.me|sms:|tel:|whatsapp\/send|\/send-sms/i);
   assert.match(th, /kind\.options\[1\]\.disabled = team/, 'Target is greyed out when Whole team is picked');

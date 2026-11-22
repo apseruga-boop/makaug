@@ -141,7 +141,9 @@ const OBJECTIONS = Object.freeze({
     ['It is too expensive', 'One tenant or one sale pays it back many times. It is less than UGX 1,700 a day for a month of buyers and renters seeing your places.'],
     ['Can I try it free first?', 'There is no free trial. You can stop any month; there is no long contract.'],
     ['Where did you get my number?', 'From your own public post online. If you do not want calls, I will mark you and nobody will call again.'],
-    ['I already use Jiji or Facebook', 'Keep them. makaug brings listings from everywhere so people search in one place, and your places carry your name.'],
+    ['I already use another site (Jiji, Facebook…)', 'Keep them. makaug brings listings from everywhere so people search in one place, and your places carry your name.'],
+    ["I'm the owner, not an agent", 'No problem: owners list too, UGX 20,000 a month per place, and buyers and renters call you directly.'],
+    ['Send it on WhatsApp', "We don't send on WhatsApp from calls; I'll text you the makaug.com link by SMS now."],
     ['Who books the viewings?', 'Clients contact you directly. makaug is not responsible for bookings or payments between you and them.'],
     ['Call me later', 'Of course. What day and time is best? (pick Call back)']
   ],

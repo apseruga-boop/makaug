@@ -56,11 +56,11 @@ const NEW_AGENTS = {
     },
     pitch_agent: {
       say: 'makaug.com shows your places to buyers and renters all over Uganda, with your name and number on every listing, and the enquiries come straight to you. Agents pay UGX 50,000 a month, no contract. How many places do you have right now?',
-      replies: [['Sounds good, how do I join?', 'close_ask'], ['Price / fees too high', 'price'], ['How does it work?', 'how'], ['Already listed elsewhere (Jiji, Facebook…)', 'elsewhere'], ['Wants to meet first', 'meet'], ['Not interested', 'notint']]
+      replies: [['Sounds good, how do I join?', 'close_ask'], ['Price / fees too high', 'price'], ['How does it work?', 'how'], ['I already use another site (Jiji, Facebook…)', 'elsewhere'], ["I'm the owner, not an agent", 'pitch_owner'], ['Not interested', 'notint']]
     },
     pitch_owner: {
       say: 'makaug.com shows your place to buyers and renters all over Uganda, and they call you directly. For owners it is UGX 20,000 a month, no contract.',
-      replies: [['OK, how do I start?', 'close_ask'], ['Price / fees too high', 'price'], ['How does it work?', 'how'], ['Has a place to list right now', 'list_now'], ['Wants to meet first', 'meet'], ['Not interested', 'notint']]
+      replies: [['OK, how do I start?', 'close_ask'], ['Price / fees too high', 'price'], ['How does it work?', 'how'], ['Has a place to list right now', 'list_now'], ['Send it on WhatsApp', 'send_wa'], ['Not interested', 'notint']]
     },
     caretaker: {
       say: 'Thank you! Who decides on renting or selling it: the owner, or an agent? Can you give me their number, or shall I tell you how it works so you can pass it on?',
@@ -77,15 +77,21 @@ const NEW_AGENTS = {
     angry: angry('pitch_agent'),
     how: {
       say: 'Say "Hi" on WhatsApp to {wa} and send your places there (photos, price, area), or list them yourself on makaug.com. We put them up with your name and number, and buyers and renters call you directly. You pay monthly by MoMo and can stop any month.',
-      replies: [['Sounds good, how do I join?', 'close_ask'], ['Price / fees too high', 'price'], ['Has a place to list right now', 'list_now'], ['Wants to meet first', 'meet'], ['Let me think about it', 'think']]
+      replies: [['Sounds good, how do I join?', 'close_ask'], ['Price / fees too high', 'price'], ['Has a place to list right now', 'list_now'], ['Send it on WhatsApp', 'send_wa'], ['Wants to meet first', 'meet'], ['Let me think about it', 'think']]
     },
+    // "Send it on WhatsApp" (Arthur, 22 Nov 2026): calls never send on WhatsApp; we text the link.
+    send_wa: {
+      say: 'We do not send from calls on WhatsApp, so I will text you the makaug.com link by SMS right now. It has everything: how it works and the price. Is this number OK for the text?',
+      replies: [['OK, text me ✓', 'send_wa_ok'], ['Let me think about it', 'think'], ['Not interested', 'notint']]
+    },
+    send_wa_ok: { end: { outcome: 'interested', note: 'Asked for WhatsApp; agreed to get the link by text', next: 'Text them the makaug.com link (Texts tab), then call back', when: '24h' } },
     price: {
       say: 'One tenant or one sale pays it back many times. It is less than UGX 1,700 a day for a month of buyers and renters seeing your places, and you can stop any month. There is no free trial and no long contract.',
       replies: [['OK, let us do it', 'close_ask'], ['How does it work?', 'how'], ['Let me think about it', 'think'], ['Still too much', 'no_price']]
     },
     elsewhere: {
       say: 'Keep them! makaug brings listings together so people search in one place, and your places carry your name and number. Many agents list on both.',
-      replies: [['OK, how do I join?', 'close_ask'], ['Price / fees too high', 'price'], ['Let me think about it', 'think'], ['Not interested', 'no_other']]
+      replies: [['OK, how do I join?', 'close_ask'], ['Price / fees too high', 'price'], ['Send it on WhatsApp', 'send_wa'], ['Let me think about it', 'think'], ['Not interested', 'no_other']]
     },
     meet: {
       say: 'We do everything by phone and WhatsApp, so you can start today. If you still want to meet, I will note it and the team will call you to agree a time.',

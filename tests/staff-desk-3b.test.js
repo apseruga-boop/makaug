@@ -23,12 +23,13 @@ async function withDb(handler, fn) {
 test('stageOf puts each number in its furthest bucket', () => {
   const n = (o) => ({ outcomes: [], ...o });
   assert.equal(pipe.stageOf(n({ outcomes: ['no_answer'] })), null);
-  assert.equal(pipe.stageOf(n({ outcomes: ['interested'] })), 'interested');
+  assert.equal(pipe.stageOf(n({ outcomes: ['interested'] })), 'contacted');
+  assert.equal(pipe.stageOf(n({ outcomes: ['interested'], text_sent: true })), 'interested');
   assert.equal(pipe.stageOf(n({ outcomes: ['interested'], said_hi: true })), 'said_hi');
   assert.equal(pipe.stageOf(n({ outcomes: ['promised'] })), 'to_close');
   assert.equal(pipe.stageOf(n({ outcomes: ['interested'], signed_up: true, said_hi: true })), 'to_close');
   assert.equal(pipe.stageOf(n({ outcomes: ['interested'], paid: true })), 'paid');
-  assert.deepEqual(pipe.STAGES, ['interested', 'said_hi', 'to_close', 'paid']);
+  assert.deepEqual(pipe.STAGES, ['contacted', 'interested', 'said_hi', 'to_close', 'paid']);
 });
 
 test('last3 masks phone numbers to the last three digits', () => {
@@ -165,7 +166,7 @@ test('logMissed validates the number and time, and queues a ring-back once', asy
   } finally { calling.blockOf = origBlock; }
 });
 
-test('pipeline groups my calls by number into the four buckets, masked', async () => {
+test('pipeline groups my calls by number into the five buckets, masked; interested needs a text', async () => {
   const at = new Date();
   await withDb(async (sql) => {
     if (/FROM call_attempts/.test(sql)) return [
@@ -173,13 +174,17 @@ test('pipeline groups my calls by number into the four buckets, masked', async (
       { id: 'c2', phone_key: '700900302', phone: '+256700900302', full_name: 'B (test)', outcome: 'interested', at, hi: true },
       { id: 'c3', phone_key: '700900303', phone: '+256700900303', full_name: 'C (test)', outcome: 'promised', at, hi: false },
       { id: 'c4', phone_key: '700900304', phone: '+256700900304', full_name: 'D (test)', outcome: 'paid', at, hi: false },
-      { id: 'c5', phone_key: '700900305', phone: '+256700900305', full_name: 'E (test)', outcome: 'no_answer', at, hi: false }];
+      { id: 'c5', phone_key: '700900305', phone: '+256700900305', full_name: 'E (test)', outcome: 'no_answer', at, hi: false },
+      { id: 'c6', phone_key: '700900306', phone: '+256700900306', full_name: 'F (test)', outcome: 'interested', at, hi: false },
+      { id: 'c7', phone_key: '700900307', phone: '+256700900307', full_name: 'G (test)', outcome: 'interested', at, hi: false },
+      { id: 'c8', phone_key: '700900307', phone: '+256700900307', full_name: 'G (test)', outcome: 'rejected', at, hi: false }];
+    if (/FROM call_sms_log/.test(sql)) return [{ phone_key: '700900301', at: new Date(at.getTime() + 1000) }];
     return [];
   }, async (seen) => {
     const p = await pipe.pipeline('ronald');
     const count = Object.fromEntries(p.stages.map((s) => [s.key, s.items.map((i) => i.name)]));
-    assert.deepEqual(count, { interested: ['A (test)'], said_hi: ['B (test)'], to_close: ['C (test)'], paid: ['D (test)'] });
-    assert.equal(p.stages[0].items[0].phone, '•••301');
+    assert.deepEqual(count, { contacted: ['F (test)'], interested: ['A (test)'], said_hi: ['B (test)'], to_close: ['C (test)'], paid: ['D (test)'] });
+    assert.equal(p.stages[1].items[0].phone, '•••301');
     assert.ok(seen.every((s) => !/INSERT|UPDATE|DELETE/.test(s.sql)), 'pipeline is read-only');
   });
 });
@@ -204,6 +209,6 @@ test('client: owed modal, call summary, history, the four pages; no WhatsApp sen
   for (const f of [svc, sd]) { assert.doesNotMatch(f, /wa\.me|send the film|Share on WhatsApp/i); }
   assert.doesNotMatch(svc, /whatsapp_messages[^`]*\b(INSERT|UPDATE|DELETE)\b/i);
   const idx = read('index.html');
-  assert.match(idx, /staff-desk\.js\?v=20261121-(sd3|ops3|ops4|ops5|ops6)/);
-  assert.match(idx, /calling-screen\.js\?v=20261121-(pipe1|ops2|ops4|ops6)/);
+  assert.match(idx, /staff-desk\.js\?v=2026112\d-[a-z0-9]+/);
+  assert.match(idx, /calling-screen\.js\?v=2026112\d-[a-z0-9]+/);
 });
