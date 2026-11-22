@@ -84,7 +84,7 @@ async function overview({ now = new Date() } = {}) {
           ag AS (
             SELECT a.id, right(regexp_replace(COALESCE(a.phone,''), '\\D', '', 'g'), 9) AS k, a.approved_at,
                    EXISTS (SELECT 1 FROM revenue_entries e WHERE e.agent_id = a.id AND e.direction='in' AND e.kind='agent_subscription' AND e.voided_at IS NULL AND e.paid_at >= $1) AS paid
-              FROM agents a WHERE a.created_at >= $1),
+              FROM agents a WHERE a.created_at >= $1 AND NOT (a.status = 'pending' AND COALESCE(a.agent_application_channel, '') = 'calling_interested')),
           j AS (SELECT ag.*, c.phone_key IS NOT NULL AND c.interested AND c.said_hi AS from_call FROM ag LEFT JOIN called c ON c.phone_key = ag.k AND length(ag.k) = 9)
           SELECT (SELECT COUNT(*) FROM called)::int AS contacted,
                  (SELECT COUNT(*) FROM called WHERE interested)::int AS interested,

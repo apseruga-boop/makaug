@@ -47,7 +47,7 @@ const NEW_AGENTS = {
   nodes: {
     open: {
       say: '{greeting} {name}? It is {caller} from makaug.com. {opener} I saw your property post online. Are you the agent, the owner, or the caretaker?',
-      replies: [['I am an agent', 'pitch_agent'], ['I am the owner', 'pitch_owner'], ['I am the caretaker', 'caretaker'], ['Busy / call me later', 'later'], ['Wrong person / who is this?', 'wrong_person'], ['Speak Luganda, please', 'luganda']]
+      replies: [['I am an agent', 'pitch_agent'], ['I am the owner', 'pitch_owner'], ['I am the caretaker', 'caretaker'], ['Busy / call me later', 'later'], ['Wrong person / looking for a place?', 'wrong_person'], ['Speak Luganda, please', 'luganda']]
     },
     luganda: {
       lang: 'lg',
@@ -68,7 +68,7 @@ const NEW_AGENTS = {
     },
     wrong_person: {
       say: 'Sorry about that! Who am I speaking to? I am {caller} from makaug.com, the property site.',
-      replies: [['Wrong number', 'wrong'], ['Knows the owner / agent', 'referral'], ['Looking for a place to rent or buy', 'seeker'], ['Where did you get my number?', 'who'], ['Angry / hung up', 'angry']]
+      replies: [['Looking for a place to rent or buy', 'seeker'], ['Wrong number', 'wrong'], ['Knows the owner / agent', 'referral'], ['Where did you get my number?', 'who'], ['Angry / hung up', 'angry']]
     },
     who: {
       say: 'It is {caller} from makaug.com, the property search site. I got your number from your own public post online. If you do not want calls I will mark it and nobody will call again.',
@@ -113,9 +113,13 @@ const NEW_AGENTS = {
       say: 'Thank you for your time. Can I ask why, so we can do better?',
       replies: [['Price', 'no_price'], ['Uses another site', 'no_other'], ['Not an agent / no property', 'no_agent'], ['Looking for a place, not listing', 'seeker'], ['Just not interested', 'no_plain'], ['Do not call again', 'dnc']]
     },
+    // Looking for a property (Arthur, 22 Nov 2026): the caller fills in area, budget, type and
+    // bedrooms; that logs a home-seeker lead and opens a friendly text with a makaug.com search
+    // link for the area. The call then ends as "Seeker, text sent".
     seeker: {
-      say: 'No problem! makaug.com has places to rent and buy all over Uganda. What are you looking for, and where? I can text you a search link now.',
-      replies: [['Text me the search link ✓', 'seeker_link'], ['Will search myself', 'seeker_self'], ['Has a place to list too', 'list_now']]
+      form: 'seeker',
+      say: 'No problem, we can help! makaug.com has places to rent and buy all over Uganda. Which area, what budget, to rent or to buy, and how many bedrooms? I will text you a search link for that area now.',
+      replies: [['Search link texted ✓', 'seeker_link'], ['Will search myself', 'seeker_self'], ['Has a place to list too', 'list_now']]
     },
     later: null,
     wrong: WRONG,
@@ -131,7 +135,7 @@ const NEW_AGENTS = {
     think_mon: { end: { outcome: 'interested', note: 'Wants to think about it, call next week', next: 'Call back; ask them to say Hi on WhatsApp', when: 'mon' } },
     signed_today: { end: { outcome: 'signed_up', note: 'Signed up, paying by MoMo today', next: 'Confirm their first payment by MoMo', checks: true, hello: true } },
     signed_tomorrow: { end: { outcome: 'signed_up', note: 'Signed up, will pay tomorrow', next: 'Confirm their first payment by MoMo', when: '24h', checks: true, hello: true } },
-    seeker_link: { end: { outcome: 'rejected', note: 'Seeker looking for a place, not a lister; texted the search link', next: 'Text them the search link (Texts tab)' } },
+    seeker_link: { end: { outcome: 'seeker_texted', note: 'Looking for a place: home-seeker lead logged, search link texted' } },
     seeker_self: { end: { outcome: 'rejected', note: 'Seeker looking for a place, not a lister' } },
     no_price: { end: { outcome: 'rejected', note: 'Not interested: price too high' } },
     no_other: { end: { outcome: 'rejected', note: 'Not interested: uses another site' } },

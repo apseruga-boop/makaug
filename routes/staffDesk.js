@@ -25,7 +25,11 @@ function registerStaffDeskRoutes(router) {
       return next(error);
     }
   };
-  router.get('/desk/home', wrap(async (req, res) => res.json({ ok: true, data: await desk.home(personFor(req)) })));
+  router.get('/desk/home', wrap(async (req, res) => {
+    const pk = personFor(req);
+    if (!pk && isKing(req)) return res.json({ ok: true, data: { king_view: true, me: { first_name: 'King', name: 'King', scope: '', king: true, photo: '' }, profile_missing: [] } });
+    return res.json({ ok: true, data: await desk.home(pk) });
+  }));
   router.get('/desk/performance', wrap(async (req, res) => res.json({ ok: true, data: await desk.performance(personFor(req)) })));
   router.get('/desk/pay', wrap(async (req, res) => res.json({ ok: true, data: await desk.myPay(personFor(req)) })));
   router.get('/desk/profile', wrap(async (req, res) => {
@@ -46,6 +50,27 @@ function registerStaffDeskRoutes(router) {
   router.get('/desk/owes', wrap(async (req, res) => res.json({ ok: true, data: await pipe.owes(personFor(req)) })));
   router.post('/desk/owes/:id/chase', wrap(async (req, res) => res.json({ ok: true, data: await pipe.chase(needMe(req), req.params.id, { note: req.body?.note }) })));
   router.get('/desk/missed', wrap(async (req, res) => res.json({ ok: true, data: await pipe.missed(personFor(req)) })));
+  router.post('/desk/missed/wa/:id/call-back', wrap(async (req, res) => res.json({ ok: true, data: await pipe.takeWhatsappMissed(needMe(req), req.params.id) })));
+  // Sidebar badges (Arthur, 22 Nov 2026): each count comes from the same function as its page.
+  router.get('/desk/badges', wrap(async (req, res) => {
+    const pk = personFor(req);
+    const caller = !isKing(req) && scopeOf(req) === 'caller';
+    const calling = require('../services/callingScreen');
+    const [queue, due, approve, owes, missed, owed] = await Promise.all([
+      pk ? calling.queueCounts(pk).catch(() => null) : Promise.resolve(null),
+      pipe.followUpsDue(pk).catch(() => 0),
+      pipe.toApprove(pk, { caller }).catch(() => []),
+      pipe.owes(pk).catch(() => ({ items: [] })),
+      pipe.missed(pk).catch(() => []),
+      pipe.owed(pk).catch(() => [])
+    ]);
+    const toCall = queue ? Object.entries(queue).filter(([k]) => !['housekeeping', 'international'].includes(k)).reduce((t, [, v]) => t + (Number(v) || 0), 0) : null;
+    return res.json({ ok: true, data: {
+      to_call: toCall, follow_ups_due: due, approve: approve.length, owes: (owes.items || []).length,
+      missed: missed.filter((m) => !m.called_back_at).length, missed_whatsapp: missed.filter((m) => m.source === 'whatsapp' && !m.called_back_at).length,
+      outcome_owed: owed.length, king_view: isKing(req) && !pk, at: new Date().toISOString()
+    } });
+  }));
   router.post('/desk/missed', wrap(async (req, res) => res.status(201).json({ ok: true, data: await pipe.logMissed(needMe(req), req.body || {}) })));
   router.post('/desk/missed/:id/dismiss', wrap(async (req, res) => res.json({ ok: true, data: await pipe.dismissMissed(needMe(req), req.params.id) })));
   // Staff Leads & WhatsApp (read only). Callers do not get this page.

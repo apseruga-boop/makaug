@@ -182,3 +182,63 @@ async function liveSite({ now = new Date() } = {}) {
   };
 }
 module.exports.liveSite = liveSite;
+
+// ------------------------------------------------------- seeker branch --
+// "Looking for a place" on a call (Arthur, 22 Nov 2026): what they want (area, budget, type,
+// bedrooms) becomes a home-seeker lead on the Leads desk, and the caller opens a friendly text
+// with a makaug.com search link for that area. The text is logged like any Texts-tab text.
+const SEEKER_TYPES = Object.freeze({ rent: { path: '/to-rent', word: 'to rent' }, buy: { path: '/for-sale', word: 'to buy' }, land: { path: '/land', word: 'land' } });
+
+function seekerLink(type, area) {
+  const t = SEEKER_TYPES[type] || SEEKER_TYPES.rent;
+  // Always the public address, written the way the brand is (lowercase makaug.com).
+  return `makaug.com${t.path}${area ? `?area=${encodeURIComponent(area)}` : ''}`;
+}
+
+async function seekerLead(attemptId, { personKey = '', area = '', budget = '', type = 'rent', bedrooms = '', lang = 'en', name = '', caller = '' } = {}) {
+  const a = await attemptOf(attemptId);
+  const place = String(area || '').replace(/[^\p{L}\p{N}\s,.'-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  if (place.length < 2) throw httpError(400, 'Type the area they want (e.g. Ntinda).');
+  const kind = SEEKER_TYPES[type] ? type : '';
+  if (!kind) throw httpError(400, 'Pick rent, buy or land.');
+  const money = Math.round(Number(String(budget || '').replace(/[^\d.]/g, '')) || 0);
+  if (String(budget || '').trim() && !(money > 0)) throw httpError(400, 'Type the budget in UGX, or leave it empty.');
+  const beds = String(bedrooms || '').trim();
+  if (beds && !/^([1-9]|10|\d\+)$/.test(beds)) throw httpError(400, 'Pick the number of bedrooms, or leave it empty.');
+  const link = seekerLink(kind, place);
+  const who = String(name || a.full_name || '').trim().split(/\s+/)[0] || '';
+  const by = String(caller || '').trim().split(/\s+/)[0] || 'the makaug team';
+  const tpl = scripts.FIRST_TEXTS.find((t) => t.key === 'first_seeker');
+  const text = String(lang === 'lg' ? tpl.text_lg : tpl.text)
+    .replace(/\{name\}/g, who).replace(/\{caller\}/g, by).replace(/\{area\}/g, place).replace(/\{link\}/g, link)
+    .replace(/\s+,/g, ',').replace(/\s{2,}/g, ' ');
+  const isTest = /^7000001\d{2}$/.test(String(a.phone_key || ''));
+  const want = `Looking for ${beds ? `${beds} bedroom${beds === '1' ? '' : 's'} ` : ''}${kind === 'land' ? 'land' : `a place ${SEEKER_TYPES[kind].word}`} in ${place}${money ? `, budget UGX ${money.toLocaleString('en-US')}` : ''}`;
+  const client = db.getClient ? await db.getClient() : null;
+  const q = (sql, params) => (client || db).query(sql, params);
+  let leadId = null;
+  try {
+    if (client) await q('BEGIN');
+    const found = (await q(`SELECT id FROM contacts WHERE RIGHT(REGEXP_REPLACE(COALESCE(phone, whatsapp, ''), '\\D', '', 'g'), 9) = $1 ORDER BY created_at LIMIT 1`, [a.phone_key])).rows[0];
+    const contactId = found ? found.id : (await q(
+      `INSERT INTO contacts (name, phone, whatsapp, phone_key, preferred_contact_channel, role_type, location_interest, budget_range)
+       VALUES ($1, $2, $2, $3, 'phone', 'seeker', $4, $5) RETURNING id`,
+      [who || null, a.phone ? (String(a.phone).startsWith('+') ? a.phone : `+${String(a.phone).replace(/\D/g, '')}`) : `+256${a.phone_key}`, a.phone_key, place, money ? String(money) : null])).rows[0].id;
+    leadId = (await q(
+      `INSERT INTO leads (contact_id, source, channel, lead_type, message, lead_status, lifecycle_stage, location, budget, category, is_test, metadata)
+       VALUES ($1, 'calling_seeker', 'phone', 'property_need', $2, 'open', 'new', $3, $4, $5, $6, $7::jsonb) RETURNING id`,
+      [contactId, want, place, money || null, kind === 'buy' ? 'sale' : kind, isTest,
+        JSON.stringify({ search_type: kind, preferred_area: place, bedrooms: beds || null, attempt_id: a.id, called_by: cleanKey(personKey) || a.person_key, search_link: link })])).rows[0].id;
+    await q('INSERT INTO call_sms_log (phone_key, attempt_id, person_key, lang, template) VALUES ($1, $2, $3, $4, $5)', [a.phone_key, a.id, cleanKey(personKey) || a.person_key, lang === 'lg' ? 'lg' : 'en', 'first_seeker']);
+    if (client) await q('COMMIT');
+  } catch (e) {
+    if (client) { try { await q('ROLLBACK'); } catch (_) { /* ignore */ } }
+    throw e;
+  } finally {
+    if (client && client.release) client.release();
+  }
+  return { lead_id: leadId, link, text, want };
+}
+
+module.exports.seekerLead = seekerLead;
+module.exports.seekerLink = seekerLink;

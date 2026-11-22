@@ -197,7 +197,31 @@ const WHATSAPP_DISPLAY = '0780 863 394';
 // Ready texts for the Texts tab. Sent by SMS from the company phone (an sms: link opens the
 // texting app through Phone Link with the number and text filled in). Inbound-first: we ask
 // them to say "Hi" on our WhatsApp; we never send WhatsApp messages or films from calls.
+// First-contact texts (Arthur, 22 Nov 2026): warm, short (1–2 SMS), makaug.com in lowercase,
+// English and Luganda. Sent by the caller right after the call. {link} and {area} are filled in
+// for the seeker text by the seeker form; {callback} is the agreed call-back time.
+const FIRST_TEXTS = Object.freeze([
+  { key: 'first_agent', label: 'First text: interested agent', kind: 'agent',
+    text: "Hi {name}, it's {caller} from makaug.com, I just called you. Thanks for your time! Reply Hi to this number (or WhatsApp Hi to " + WHATSAPP_DISPLAY + ") and we'll set up your agent account so you can load your properties. makaug.com/agents",
+    text_lg: "Gyebale {name}, nze {caller} ow'e makaug.com, nkukubidde kati. Webale okumpa obudde! Weereza Hi ku nnamba eno (oba Hi ku WhatsApp " + WHATSAPP_DISPLAY + ") tukuteekere akawunti ya agent otandike okuteeka amayumba go. makaug.com/agents" },
+  { key: 'first_owner', label: 'First text: owner', kind: 'owner',
+    text: "Hi {name}, it's {caller} from makaug.com, I just called you. Thanks for your time! Reply Hi to this number (or WhatsApp Hi to " + WHATSAPP_DISPLAY + ") and we'll help you put your place on makaug.com.",
+    text_lg: "Gyebale {name}, nze {caller} ow'e makaug.com, nkukubidde kati. Webale nnyo okumpa obudde! Weereza Hi ku nnamba eno (oba Hi ku WhatsApp " + WHATSAPP_DISPLAY + ") tukuyambe okuteeka ekifo kyo ku makaug.com." },
+  { key: 'first_seeker', label: 'First text: looking for a place', kind: 'seeker',
+    text: "Hi {name}, it's {caller} from makaug.com, I just called you. Thanks for your time! Here are places in {area} for you: {link} . Reply Hi to this number and we'll help you find one.",
+    text_lg: "Gyebale {name}, nze {caller} ow'e makaug.com, nkukubidde kati. Webale nnyo! Laba ebifo mu {area} ebiyinza okukugasa: {link} . Weereza Hi ku nnamba eno tukuyambe okufuna ekifo." },
+  { key: 'first_no_answer', label: 'First text: no answer', kind: 'no_answer',
+    text: "Hi {name}, it's {caller} from makaug.com. I tried to call you just now, sorry I missed you! Reply Hi to this number and I'll call you back at a good time. makaug.com",
+    text_lg: "Gyebale {name}, nze {caller} ow'e makaug.com. Ngezezzaako okukukubira kati naye sikufunye, nsonyiwa! Weereza Hi ku nnamba eno nkukubire mu kiseera ekikusaanidde. makaug.com" },
+  { key: 'first_call_back', label: 'First text: call back', kind: 'call_back',
+    text: "Hi {name}, it's {caller} from makaug.com. Thanks for picking up! As agreed, I'll call you back {callback}. Reply Hi to this number if another time suits you better. makaug.com",
+    text_lg: "Gyebale {name}, nze {caller} ow'e makaug.com. Webale okukwata essimu! Nga bwe tukkiriziganyizza, nja kukukubira {callback}. Weereza Hi ku nnamba eno singa ekiseera ekirala kye kikusaanira. makaug.com" }
+]);
+// Which first-contact text the after-call box offers, by outcome.
+const FIRST_TEXT_FOR = Object.freeze({ interested: 'first_agent', signed_up: 'first_agent', no_answer: 'first_no_answer', call_back: 'first_call_back', seeker_texted: 'first_seeker' });
+
 const SMS_TEXTS = Object.freeze([
+  ...FIRST_TEXTS,
   { key: 'say_hi', label: 'Say Hi on WhatsApp', text: 'Hi {name}, it is {caller} from makaug.com. Please say "Hi" on WhatsApp to ' + WHATSAPP_DISPLAY + ' and our team will answer you there.' },
   { key: 'site_link', label: 'The makaug.com link', text: 'Hi {name}, it is {caller} from makaug.com, where buyers and renters all over Uganda find places. See it here: ' + SITE + ' . Agents UGX 50,000 a month, owners UGX 20,000, by MoMo merchant code ' + MOMO_CODE + '. Questions? Say "Hi" on WhatsApp to ' + WHATSAPP_DISPLAY + '.' },
   { key: 'seeker_search', label: 'Seeker search link', text: 'Hi {name}, it is {caller} from makaug.com. Find places to rent here: ' + SITE + '/to-rent and to buy here: ' + SITE + '/for-sale . Say "Hi" on WhatsApp to ' + WHATSAPP_DISPLAY + ' and we will help you find one.' }
@@ -290,6 +314,8 @@ function fill(text = '', vars = {}) {
 
 module.exports = {
   SMS_TEXTS,
+  FIRST_TEXTS,
+  FIRST_TEXT_FOR,
   SMS_TEXT_KEYS,
   MOMO_CODE,
   WHATSAPP_NUMBER,

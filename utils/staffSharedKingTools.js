@@ -34,7 +34,7 @@ function isStaffSharedKingTool(path, method = 'GET') {
   if (['/desk/home', '/desk/performance', '/desk/pay', '/desk/profile'].includes(p) && m === 'GET') return true;
   if (p === '/desk/profile' && m === 'PUT') return true;
   // Staff desk 3b: own pipeline pages (outcome owed, pipeline, agents to approve, owes us money, missed calls).
-  if (['/desk/owed', '/desk/pipeline', '/desk/approve', '/desk/owes', '/desk/missed'].includes(p) && m === 'GET') return true;
+  if (['/desk/owed', '/desk/pipeline', '/desk/approve', '/desk/owes', '/desk/missed', '/desk/badges'].includes(p) && m === 'GET') return true;
   // Staff Leads & WhatsApp (ops 3): read the queue, add a chat as a lead, record an outcome. Never sends.
   if (p === '/desk/leads' && m === 'GET') return true;
   if (m === 'POST' && (p === '/desk/leads/from-chat' || /^\/desk\/leads\/(ss:)?[0-9a-f-]{36}\/outcome$/i.test(p))) return true;
@@ -43,12 +43,12 @@ function isStaffSharedKingTool(path, method = 'GET') {
   if (p === '/desk/hub/read' && m === 'POST') return true;
   // Rejections & lessons (ops 3c part 2): read, and suggest a lesson. Only King approves (/king/lessons).
   if (p === '/desk/lessons' && (m === 'GET' || m === 'POST')) return true;
-  if (m === 'POST' && (/^\/desk\/owed\/[0-9a-f-]{36}$/i.test(p) || /^\/desk\/owes\/[0-9a-f-]{36}\/chase$/i.test(p) || p === '/desk/missed' || /^\/desk\/missed\/\d+\/dismiss$/.test(p))) return true;
+  if (m === 'POST' && (/^\/desk\/owed\/[0-9a-f-]{36}$/i.test(p) || /^\/desk\/owes\/[0-9a-f-]{36}\/chase$/i.test(p) || p === '/desk/missed' || /^\/desk\/missed\/\d+\/dismiss$/.test(p) || /^\/desk\/missed\/wa\/[0-9a-f-]{36}\/call-back$/i.test(p))) return true;
   if (p === '/calling/bootstrap' && m === 'GET') return true;
   if (p === '/calling/sessions' && m === 'POST') return true;
   if (/^\/calling\/sessions\/[^/]+\/(heartbeat|task|next|end|claim|inbound)$/.test(p) && m === 'POST') return true;
   if (/^\/calling\/attempts\/[^/]+\/contact$/.test(p) && m === 'GET') return true;
-  if (/^\/calling\/attempts\/[^/]+\/(sms|video-request)$/.test(p) && m === 'POST') return true;
+  if (/^\/calling\/attempts\/[^/]+\/(sms|video-request|seeker)$/.test(p) && m === 'POST') return true;
   if (['/calling/sms-proof/parse', '/calling/sms-proof'].includes(p) && m === 'POST') return true;
   if (['/calling/meeting', '/calling/meeting/report'].includes(p) && m === 'GET') return true;
   if (p === '/calling/meeting/notes' && m === 'POST') return true;

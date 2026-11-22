@@ -36,7 +36,7 @@
   var NAV = [
     ['Today', [['home', '🏠', 'Dashboard'], ['calls', '📞', 'Calls', ['staff-calling-card']], ['perf', '📈', 'My performance']]],
     ['Pipeline', [['pipeline', '🧭', 'My pipeline'], ['approve', '✅', 'Agents to approve'], ['owes', '💸', 'Owes us money'], ['missed', '📵', 'Missed calls']]],
-    ['Work', [['review', '🏡', 'Properties to review', ['staff-booking-escalations', 'staff-review-grid'], 1], ['stays', '🛏️', 'Short stays', ['staff-short-term-control', 'staff-video-caption-conflicts'], 1],
+    ['Work', [['review', '🏡', 'Agent properties to review', ['staff-booking-escalations', 'staff-review-grid'], 1], ['found', '🌐', 'Found online to review', ['staff-source-panel'], 1], ['stays', '🛏️', 'Short stays', ['staff-short-term-control', 'staff-video-caption-conflicts'], 1],
       ['leads', '💬', 'Leads & WhatsApp', [], 1], ['harvest', '🔎', 'Harvest', ['staff-source-panel'], 1], ['tools', '🧰', 'Desk tools', ['staff-king-tools'], 1], ['howto', '🎓', 'How to', ['staff-training-panel'], 1]]],
     ['Team', [['msgs', '📣', 'Messages from King'], ['rules', '📘', 'Rules, T&Cs & hours'], ['videos', '🎬', 'How-to videos'], ['lessons', '💡', 'Rejections & lessons']]],
     ['Me', [['pay', '💰', 'My pay'], ['connect', '📱', 'Connect your phone'], ['profile', '🪪', 'Profile'], ['settings', '⚙️', 'Settings', ['staff-settings-panel']]]]
@@ -84,7 +84,9 @@
       '.sd-banner{border-radius:14px;padding:12px 14px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:12px;font-weight:700;font-size:14px}',
       '.sd-chip{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:800}.sd-chip.warn{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}',
       '.sd-banner.behind{background:#fff7ed;border:1px solid #fdba74;color:#9a3412}.sd-banner.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}.sd-banner.info{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a}',
-      '#sd-side .sd-b.red{background:#dc2626;color:#fff}.sl-red{display:inline-block;background:#dc2626;color:#fff;border-radius:999px;font-size:12px;font-weight:900;padding:1px 8px;vertical-align:middle;margin-left:6px}',
+      '#sd-side .sd-b.red{background:#e11d48;color:#fff;box-shadow:0 0 0 2px rgba(225,29,72,.25)}',
+      '.sd-king{background:#fef3c7;border:1px solid #fcd34d;color:#78350f;border-radius:12px;padding:10px 14px;font-weight:700;margin-bottom:12px}',
+      '#sd-side .sd-b.red{background:#e11d48;color:#fff}.sl-red{display:inline-block;background:#dc2626;color:#fff;border-radius:999px;font-size:12px;font-weight:900;padding:1px 8px;vertical-align:middle;margin-left:6px}',
       '.sl-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}@media(max-width:900px){.sl-kpis{grid-template-columns:repeat(2,1fr)}}.sl-kpi .v{font-size:24px;font-weight:900}.sl-kpi .v.red{color:#dc2626}.sl-kpi .l{font-size:12px;color:#64748b;font-weight:700}',
       '.sl-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.sl-chip{border:1px solid #cbd5e1;background:#fff;border-radius:999px;padding:6px 12px;font-weight:800;font-size:13px;cursor:pointer;color:#0f172a}.sl-chip.on{background:#14532d;border-color:#14532d;color:#fff}',
       '.sl-cols{display:grid;grid-template-columns:1.35fr 1fr;gap:12px;align-items:start}@media(max-width:1023px){.sl-cols{grid-template-columns:1fr}}',
@@ -140,15 +142,30 @@
 
   function me() { return (S.home && S.home.me) || {}; }
   function avatar(photo, name) { return photo ? '<img alt="" src="' + esc(photo) + '">' : esc((String(name || '?').trim()[0] || '?').toUpperCase()); }
+  // Red count badges (Arthur, 22 Nov 2026): every action queue, each count from the same source as its page.
+  var BADGE_OF = { calls: ['to_call', 'numbers to call today'], pipeline: ['follow_ups_due', 'follow-ups due now'], approve: ['approve', 'agents waiting for approval'], owes: ['owes', 'agents who owe us money'],
+    missed: ['missed', 'missed calls to ring back'], review: ['review_agent', 'agent properties waiting for review'], found: ['review_found', 'found-online properties waiting for review'] };
+  function sideCount(id) {
+    var b = S.badges || {}; var def = BADGE_OF[id]; if (!def) return null;
+    var v = b[def[0]]; if (!(Number(v) > 0)) return null;
+    return { n: Number(v), title: Number(v) + ' ' + def[1] };
+  }
+  function loadBadges() {
+    if (S.badgesBusy) return; S.badgesBusy = true;
+    var jobs = [api('/desk/badges').then(function (d) { var b = S.badges || {}; ['to_call', 'follow_ups_due', 'approve', 'owes', 'missed', 'missed_whatsapp', 'outcome_owed'].forEach(function (k) { b[k] = d[k]; }); S.badges = b; }, function () { /* badges only */ })];
+    if (S.scope !== 'caller') jobs.push(api('/properties/review-counts', { root: '/api/staff' }).then(function (d) { var b = S.badges || {}; b.review_agent = d.agent; b.review_found = d.found_online; S.badges = b; }, function () { /* badges only */ }));
+    return Promise.all(jobs).then(function () { S.badgesBusy = false; S.badgesAt = Date.now(); drawSide(); if (S.page === 'home' && S.home && S.home.king_view) drawHome(); if (S.page === 'pipeline') duePipelineNote(); }, function () { S.badgesBusy = false; });
+  }
   function drawSide() {
     var side = q('#sd-side'); if (!side) return;
     var m = me(); var behind = S.home && S.home.pace && S.home.pace.behind;
-    side.innerHTML = '<div class="sd-me" data-sd-go="profile"><div class="sd-av">' + avatar(m.photo, m.first_name) + '</div><div><b>' + esc(m.first_name || 'Staff') + '</b><div style="font-size:12px;color:#86b39a">' + (S.scope === 'caller' ? 'Calling team' : 'Staff') + '</div></div></div>'
+    side.innerHTML = '<div class="sd-me" data-sd-go="profile"><div class="sd-av">' + avatar(m.photo, m.first_name) + '</div><div><b>' + esc(m.first_name || 'Staff') + '</b><div style="font-size:12px;color:#86b39a">' + (S.home && S.home.king_view ? 'Viewing as King' : (S.scope === 'caller' ? 'Calling team' : 'Staff')) + '</div></div></div>'
       + NAV.map(function (g) {
         var list = g[1].filter(allowed);
         if (!list.length) return '';
         return '<div class="sd-g">' + esc(g[0]) + '</div>' + list.map(function (i) {
-          var badge = i[0] === 'home' && behind ? '<span class="sd-b" data-sd-badge="behind">behind</span>' : (i[0] === 'profile' && S.home && (S.home.profile_missing || []).length ? '<span class="sd-b" data-sd-badge="profile">' + S.home.profile_missing.length + '</span>' : (i[0] === 'leads' && S.leadsAction ? '<span class="sd-b red" data-sd-badge="leads">' + S.leadsAction + '</span>' : (i[0] === 'msgs' && S.hubUnread ? '<span class="sd-b red" data-sd-badge="msgs">' + S.hubUnread + '</span>' : '')));
+          var count = sideCount(i[0]);
+          var badge = count ? '<span class="sd-b red" data-sd-badge="' + esc(i[0]) + '" title="' + esc(count.title) + '">' + esc(count.n > 99 ? '99+' : count.n) + '</span>' : (i[0] === 'home' && behind ? '<span class="sd-b" data-sd-badge="behind">behind</span>' : (i[0] === 'profile' && S.home && (S.home.profile_missing || []).length ? '<span class="sd-b" data-sd-badge="profile">' + S.home.profile_missing.length + '</span>' : (i[0] === 'leads' && S.leadsAction ? '<span class="sd-b red" data-sd-badge="leads">' + S.leadsAction + '</span>' : (i[0] === 'msgs' && S.hubUnread ? '<span class="sd-b red" data-sd-badge="msgs">' + S.hubUnread + '</span>' : ''))));
           return '<button type="button" class="sd-i' + (i[0] === S.page ? ' on' : '') + '" data-sd-go="' + i[0] + '"><span>' + i[1] + '</span><span>' + esc(i[2]) + '</span>' + badge + '</button>';
         }).join('');
       }).join('')
@@ -165,6 +182,12 @@
     var it = item(page);
     if (!it || !allowed(it)) page = 'home';
     closeDrawer();
+    // King on the staff desk has no calling name: one person's own pages say so instead of an error.
+    if (S.home && S.home.king_view && ['perf', 'pay', 'pipeline'].indexOf(page) >= 0) {
+      S.page = page; document.body.setAttribute('data-sd-page', page); clearInterval(S.timer); S.timer = null; drawSide();
+      var kh = q('#sd-pages'); if (kh) kh.innerHTML = pageWrap(it[2], '', kingNote() + '<div class="sd-card sd-muted">This page shows one caller\'s own numbers. Open King → Staff to see a person\'s numbers.</div>');
+      return;
+    }
     if (page === 'connect') { openConnect(); return; }
     S.page = page; try { sessionStorage.setItem('sd-page', page); } catch (x) { /* private mode */ }
     document.body.setAttribute('data-sd-page', page);
@@ -182,6 +205,8 @@
     else if (page === 'owes') loadOwes(host);
     else if (page === 'missed') loadMissed(host);
     else if (page === 'stays') staysOffNote();
+    else if (page === 'review') { if (typeof window.staffLoadAgentReviewQueue === 'function') window.staffLoadAgentReviewQueue().then(function () { loadBadges(); }); }
+    else if (page === 'found') { setTimeout(function () { var el = q('#staff-source-queue-list'); var box = el && el.closest('.rounded-xl'); if (box && box.scrollIntoView) box.scrollIntoView({ block: 'start' }); }, 50); }
     else if (page === 'leads') loadLeads(host);
     else if (page === 'msgs' || page === 'rules' || page === 'videos') loadHub(page, host);
     else if (page === 'lessons') loadLessons(host);
@@ -209,7 +234,7 @@
   }
   function loadHome() {
     loadOwed();
-    return api('/desk/home').then(function (h) { S.home = h; S.homeErr = ''; S.scope = (h.me && h.me.scope) || S.scope; document.body.classList.toggle('sd-caller', S.scope === 'caller'); drawSide(); if (S.scope !== 'caller' && (!S.leadsBadgeAt || Date.now() - S.leadsBadgeAt > 60000)) { S.leadsBadgeAt = Date.now(); leadsBadge(); } if (!S.hubBadgeAt || Date.now() - S.hubBadgeAt > 60000) { S.hubBadgeAt = Date.now(); hubBadge(); } if (S.page === 'home') drawHome(); return h; },
+    return api('/desk/home').then(function (h) { S.home = h; S.homeErr = ''; S.scope = (h.me && h.me.scope) || S.scope; document.body.classList.toggle('sd-caller', S.scope === 'caller'); drawSide(); if (S.scope !== 'caller' && (!S.leadsBadgeAt || Date.now() - S.leadsBadgeAt > 60000)) { S.leadsBadgeAt = Date.now(); leadsBadge(); } if (!S.hubBadgeAt || Date.now() - S.hubBadgeAt > 60000) { S.hubBadgeAt = Date.now(); hubBadge(); } if (!S.badgesAt || Date.now() - S.badgesAt > 30000) loadBadges(); if (S.page === 'home') drawHome(); return h; },
       function (e) { S.homeErr = e.message; if (S.page === 'home') drawHome(); throw e; });
   }
   function greeting(min) { return min < 12 * 60 ? 'Good morning' : (min < 17 * 60 ? 'Good afternoon' : 'Good evening'); }
@@ -241,6 +266,15 @@
     var host = q('#sd-pages'); if (!host || S.page !== 'home') return;
     var h = S.home;
     if (!h) { host.innerHTML = '<div class="sd-page"><div class="sd-card" data-sd-home-wait>' + (S.homeErr ? esc(S.homeErr) : 'Loading your day…') + '</div></div>'; return; }
+    if (h.king_view) {
+      var bd = S.badges || {}; var tile = function (id, label, v) { return '<button type="button" class="sd-card sd-kpi" style="text-align:left;cursor:pointer" data-sd-go-tile="' + id + '"><div><div class="l">' + esc(label) + '</div><div class="v">' + esc(v == null ? '–' : v) + '</div></div></button>'; };
+      host.innerHTML = '<div class="sd-page" data-sd-home data-sd-king-view><h1 class="sd-h1">Staff desk</h1>' + kingNote()
+        + '<div class="sd-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">'
+        + tile('review', 'Agent properties to review', bd.review_agent) + tile('found', 'Found online to review', bd.review_found) + tile('approve', 'Agents to approve', bd.approve)
+        + tile('owes', 'Owes us money', bd.owes) + tile('missed', 'Missed calls', bd.missed) + '</div></div>';
+      qa('[data-sd-go-tile]', host).forEach(function (b) { b.onclick = function () { go(b.getAttribute('data-sd-go-tile')); }; });
+      return;
+    }
     var m = h.me || {}; var t = h.targets || {}; var d = h.today || {}; var p = h.pace || {};
     var wk = h.week || {}; var mo = h.month || {};
     var sum = function (a, k) { return (a || []).slice(0, k).reduce(function (x, y) { return x + y; }, 0); };
@@ -280,8 +314,15 @@
 
   // ---------------------------------------------------- pipeline (3b) ----
   function when(at) { if (!at) return ''; try { return new Date(at).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kampala' }); } catch (x) { return String(at).slice(0, 16); } }
+  function kingNote() { return '<div class="sd-king" data-sd-king-note>👑 Viewing as King. This is the staff desk as your team sees it; counts here are for the whole team.</div>'; }
   function pageWrap(title, sub, body) { return '<div class="sd-page"><h1 class="sd-h1">' + esc(title) + '</h1>' + (sub ? '<p class="sd-muted" style="margin:4px 0 12px">' + sub + '</p>' : '') + body + '</div>'; }
   function failed(host, title, e) { host.innerHTML = pageWrap(title, '', '<div class="sd-card">' + esc(e.message) + '</div>'); }
+  function duePipelineNote() {
+    var host = q('#sd-pages'); if (!host) return; var box = q('[data-sd-due]', host); var due = n((S.badges || {}).follow_ups_due);
+    var html = due ? '<div class="sd-banner info" data-sd-due>⏰ ' + due + ' follow-up' + (due === 1 ? '' : 's') + ' due now. They come first in your calls. <button type="button" class="sd-btn" data-sd-due-go>Start calling</button></div>' : '';
+    if (box) { if (!due) box.remove(); else box.outerHTML = html; } else if (due) { var pg = q('.sd-page', host); if (pg) { var h1 = q('.sd-h1', pg); if (h1) h1.insertAdjacentHTML('afterend', html); } }
+    var b = q('[data-sd-due-go]', host); if (b) b.onclick = function () { go('calls'); };
+  }
   function loadPipeline(host) {
     host.innerHTML = pageWrap('My pipeline', '', '<div class="sd-card">Loading…</div>');
     api('/desk/pipeline').then(function (p) {
@@ -297,6 +338,7 @@
       }).join('');
       host.innerHTML = pageWrap('My pipeline', 'Every number you called stays here until they pay or say a clear no. Interested only counts once you sent the follow-up text (Texts tab); until then they wait in Contacted.', '<div class="sd-stages">' + cols + '</div>');
       qa('[data-sd-hist]', host).forEach(function (b) { b.onclick = function () { if (window.makaugCalling && window.makaugCalling.openHistory) window.makaugCalling.openHistory(b.getAttribute('data-sd-hist')); }; });
+      duePipelineNote();
     }, function (e) { failed(host, 'My pipeline', e); });
   }
   function loadApprove(host) {
@@ -340,11 +382,11 @@
     api('/desk/missed').then(function (list) {
       if (S.page !== 'missed') return;
       var rows = (list || []).map(function (m) {
-        return '<tr data-sd-missed-row><td><b>' + esc(m.name || 'Unknown') + '</b> <span class="sd-muted">' + esc(m.phone) + '</span>' + (m.note ? '<div class="sd-muted" style="font-size:12px">' + esc(m.note) + '</div>' : '') + '</td><td>' + esc(when(m.at)) + '</td><td>'
+        return '<tr data-sd-missed-row' + (m.source === 'whatsapp' ? ' data-sd-missed-wa' : '') + '><td>' + (m.source === 'whatsapp' || m.via === 'whatsapp' ? '<span class="sl-red" style="background:#16a34a">WhatsApp</span> ' : '') + '<b>' + esc(m.name || 'Unknown') + '</b> <span class="sd-muted">' + esc(m.phone) + '</span>' + (m.note ? '<div class="sd-muted" style="font-size:12px">' + esc(m.note) + '</div>' : '') + '</td><td>' + esc(when(m.at)) + '</td><td>'
           + (m.called_back_at ? '<span style="color:#15803d;font-weight:800">Called back ' + esc(when(m.called_back_at)) + '</span>' : '<span style="color:#b91c1c;font-weight:800">Ring back</span> <span class="sd-muted" style="font-size:12px">(in your calls)</span>') + '</td>'
-          + '<td><button type="button" class="sd-btn ghost sm" data-sd-dismiss="' + esc(m.id) + '">Done</button></td></tr>';
+          + '<td>' + (m.source === 'whatsapp' ? (m.called_back_at ? '' : '<button type="button" class="sd-btn sm" data-sd-wa-callback="' + esc(m.wa_event_id) + '">📞 Call back</button>') : '<button type="button" class="sd-btn ghost sm" data-sd-dismiss="' + esc(m.id) + '">Done</button>') + '</td></tr>';
       }).join('');
-      host.innerHTML = pageWrap('Missed calls', 'Calls you missed on the company phone. Log one and the number goes to the top of your calls. (The phone app will add them by itself later.)',
+      host.innerHTML = pageWrap('Missed calls', 'Calls you missed on the company phone, plus missed WhatsApp calls to our line (green tag) when they reach us. Log one, or tap Call back, and the number goes to the top of your calls.',
         '<div class="sd-card" style="margin-bottom:12px"><h3>Log a missed call</h3><form class="sd-form" data-sd-missed-form><label>Number<input name="phone" placeholder="0772 123 456" required></label><label>Name (if known)<input name="name"></label><label>When<input name="at" type="datetime-local"></label><label>Note<input name="note"></label><div data-sd-missed-err></div><button class="sd-btn" type="submit">Save</button></form></div>'
         + '<div class="sd-card"><div class="sd-scroll"><table class="sd-table" data-sd-missed><tr><th>Who</th><th>When</th><th>Status</th><th></th></tr>' + (rows || '<tr><td colspan="4" class="sd-muted">No missed calls in the last 14 days.</td></tr>') + '</table></div></div>');
       var f = q('[data-sd-missed-form]', host);
@@ -355,7 +397,8 @@
         api('/desk/missed', { method: 'POST', body: { phone: v('phone'), name: v('name'), at: at, note: v('note') } }).then(function () { loadMissed(host); },
           function (e) { q('[data-sd-missed-err]', host).innerHTML = '<p style="color:#b91c1c;font-weight:700">' + esc(e.message) + '</p>'; });
       };
-      qa('[data-sd-dismiss]', host).forEach(function (b) { b.onclick = function () { api('/desk/missed/' + b.getAttribute('data-sd-dismiss') + '/dismiss', { method: 'POST', body: {} }).then(function () { loadMissed(host); }, function (e) { window.alert(e.message); }); }; });
+      qa('[data-sd-dismiss]', host).forEach(function (b) { b.onclick = function () { api('/desk/missed/' + b.getAttribute('data-sd-dismiss') + '/dismiss', { method: 'POST', body: {} }).then(function () { loadMissed(host); loadBadges(); }, function (e) { window.alert(e.message); }); }; });
+      qa('[data-sd-wa-callback]', host).forEach(function (b) { b.onclick = function () { b.disabled = true; api('/desk/missed/wa/' + b.getAttribute('data-sd-wa-callback') + '/call-back', { method: 'POST', body: {} }).then(function () { loadMissed(host); loadBadges(); }, function (e) { b.disabled = false; window.alert(e.message); }); }; });
     }, function (e) { failed(host, 'Missed calls', e); });
   }
 
@@ -600,6 +643,8 @@
     var start = ''; try { start = sessionStorage.getItem('sd-page') || ''; } catch (x) { /* private mode */ }
     var asked = (location.hash.match(/sd=([a-z]+)/) || [])[1];
     go(asked || start || 'home');
+    loadBadges();
+    S.badgeTimer = setInterval(function () { if (!document.hidden && staffVisible()) loadBadges(); }, 60000);
   }
   function tick() {
     var vis = staffVisible();

@@ -112,7 +112,7 @@ test('if the list itself fails, it is still a 503 (nothing to show)', async () =
 test('the review queue waits up to 3 s for a connection, not 900 ms', () => {
   const source = require('node:fs').readFileSync(require.resolve('../routes/staff'), 'utf8');
   assert.match(source, /STAFF_REVIEW_QUEUE_ACQUIRE_TIMEOUT_MS \|\| '3000'/);
-  assert.equal((source.match(/acquireTimeoutMs: STAFF_REVIEW_QUEUE_ACQUIRE_TIMEOUT_MS/g) || []).length, 2, 'both the list and the count');
+  assert.equal((source.match(/acquireTimeoutMs: STAFF_REVIEW_QUEUE_ACQUIRE_TIMEOUT_MS/g) || []).length, 3, 'the list, the count and the desk badge counts');
   assert.match(source, /Math\.min\(timeoutMs, Number\(options\.acquireTimeoutMs\) \|\| 900\)/, 'other staff queries keep 900 ms');
 });
 

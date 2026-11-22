@@ -57,10 +57,13 @@ test('calling screen has no Share on WhatsApp and no wa.me send links', () => {
 
 test('Texts tab: three ready SMS texts with sms: links that are logged', () => {
   const scripts = require('../services/callingScripts');
-  assert.deepEqual(scripts.SMS_TEXTS.map((t) => t.key), ['say_hi', 'site_link', 'seeker_search']);
-  for (const t of scripts.SMS_TEXTS) assert.ok(t.text.includes('0780 863 394'), t.key);
-  assert.match(scripts.SMS_TEXTS[1].text, /https:\/\/makaug\.com/);
-  assert.match(scripts.SMS_TEXTS[2].text, /\/to-rent/);
+  // The first texts after a call (22 Nov 2026) come first, then the three ready texts.
+  const first = scripts.FIRST_TEXTS.map((t) => t.key);
+  assert.deepEqual(scripts.SMS_TEXTS.map((t) => t.key), [...first, 'say_hi', 'site_link', 'seeker_search']);
+  const ready = scripts.SMS_TEXTS.slice(first.length);
+  for (const t of ready) assert.ok(t.text.includes('0780 863 394'), t.key);
+  assert.match(ready[1].text, /https:\/\/makaug\.com/);
+  assert.match(ready[2].text, /\/to-rent/);
   const src = read('assets/calling-screen.js');
   assert.match(src, /function textsHtml\(a, ctx\)/);
   assert.match(src, /'sms:\+' \+ d \+ '\?body='/);
