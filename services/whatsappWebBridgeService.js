@@ -869,6 +869,39 @@ async function setNumberPaused(phone, paused, { by = '', note = '' } = {}) {
 }
 
 let lastWaitingSweepAt = 0;
+let lastNoLongerLiveSweepAt = 0;
+
+/**
+ * A "your property is live" that is still waiting is dropped when the listing
+ * is no longer live. 22 Nov 2026: an agent who had never written had eight
+ * waiting, one of them for a copy of a listing that staff had since hidden as
+ * a duplicate; the day he wrote, he would have been sent its link.
+ */
+async function letGoOfLiveNoticesNoLongerTrue({ force = false } = {}) {
+  if (!force && Date.now() - lastNoLongerLiveSweepAt < 60000) return 0;
+  lastNoLongerLiveSweepAt = Date.now();
+  try {
+    const result = await db.query(
+      `UPDATE outbound_message_queue
+          SET status = 'failed',
+              last_error = 'Not sent: the listing is no longer live.',
+              metadata = COALESCE(metadata, '{}'::jsonb) || '{"failure_class":"listing_no_longer_live","retry_suppressed":true}'::jsonb,
+              updated_at = NOW()
+        WHERE channel = 'whatsapp'
+          AND status IN ('pending', 'retry')
+          AND COALESCE(metadata->>'message_kind', '') = 'listing_status_approved'
+          AND COALESCE(metadata->>'listing_id', '') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          AND NOT EXISTS (
+            SELECT 1 FROM properties p
+             WHERE p.id = (outbound_message_queue.metadata->>'listing_id')::uuid
+               AND p.status = 'approved'
+          )`
+    );
+    return result.rowCount || 0;
+  } catch (_error) {
+    return 0;
+  }
+}
 
 /**
  * What is waiting for somebody who has not written lately does not wait for
@@ -934,6 +967,7 @@ async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient 
   await letGoOfExpiredCodes();
   await letGoOfWhatNobodyCameFor();
   if (await bridgeSessionCannotSend(normalizedClientId)) return [];
+  await letGoOfLiveNoticesNoLongerTrue();
   const recipientDigits = String(recipient || '').replace(/\D/g, '');
   const normalizedAllowedSources = (Array.isArray(allowedSources) ? allowedSources : String(allowedSources || '').split(','))
     .map((value) => String(value || '').trim().toLowerCase())
@@ -1096,6 +1130,7 @@ async function getWhatsappWebBridgeStatus() {
 }
 
 module.exports = {
+  letGoOfLiveNoticesNoLongerTrue,
   wroteWithinDays,
   waitsForThem,
   notSentUntilTheyWrite,

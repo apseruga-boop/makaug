@@ -305,7 +305,11 @@ test('LIST starts their listing, sends the how-to once, and tells Arthur and Ron
     assert.ok(calls.some((c) => /UPDATE agent_prospects/i.test(c.sql) && c.params[1] === 'interested'), 'the Outreach list shows they said yes');
     await settle(150);
     assert.match(text(), /Owner wants to list — started on WhatsApp/);
-    assert.match(text(), /Sarah Nakato · \+256772123456/);
+    // 22 Nov 2026: a note to the team shows the number by its last three
+    // digits; the WhatsApp link to them stays as it is.
+    assert.match(text(), /Sarah Nakato · …456/);
+    assert.doesNotMatch(text(), /Sarah Nakato · \+256772123456/);
+    assert.match(text(), /WhatsApp: https:\/\/wa\.me\/256772123456/);
     assert.match(text(), /from Arthur/);
     assert.match(text(), /makaug-owner-how-to-list-v5\.mp4/, 'the how-to video goes with it');
     for (const staff of ['447757773202', '256709402189']) assert.ok(text().includes(staff), `${staff} is told`);

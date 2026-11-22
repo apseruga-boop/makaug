@@ -23716,7 +23716,12 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '4') return respond(offPlanWhereQuestion(), 'off_plan_where');
     if (cleanBody === '5') return respond(await agentJoinRequestReply({ phone, text: 'Menu: join makaug as an agent' }), 'main_menu');
     if (cleanBody === '6') return respond(await talkToPersonReply({ phone, lang, contactName: runtime.contactName || sessionData.contact_name || '', text: cleanBody }), 'main_menu');
-    return respond(`${friendlyGreetingReply(lang, sessionData)}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
+    // 22 Nov 2026: "Hai" got the menu (1 to 6) with a numbered language list
+    // under it (1. English…). The reply "1" was read as English and the same
+    // menu came back; the person who wanted to list a property heard nothing
+    // more. One numbered list only: the menu, which already says LANGUAGE
+    // opens the language list, and a number after it means the menu.
+    return respond(friendlyGreetingReply(lang, sessionData), 'main_menu');
   }
 
   // CHOOSE LANGUAGE
