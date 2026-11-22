@@ -1095,6 +1095,20 @@ async function listAgentTrials(db, { includeClosed = false } = {}) {
       LIMIT 300`,
     [FIRST_PAYMENT_TRACKED_FROM]
   )).rows;
+  // 22 Nov 2026: the digest said "payment link sent" for five new agents whose
+  // payment link, welcome and how-to were all still in the queue: they had
+  // never written to the makaug number, which only writes to people who have.
+  const linkWaiting = new Set();
+  try {
+    const held = await db.query(
+      `SELECT DISTINCT RIGHT(regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g'), 9) AS tail
+         FROM outbound_message_queue
+        WHERE channel = 'whatsapp'
+          AND status IN ('pending', 'retry')
+          AND COALESCE(metadata->>'message_kind', '') IN ('agent_fee_link_on_approval', 'agent_pay_link_staff_sent')`
+    );
+    for (const r of held.rows || []) if (r.tail) linkWaiting.add(String(r.tail));
+  } catch (error) { /* the tracker still works without it */ }
   const termsSigned = new Map();
   try {
     const signed = await db.query(`SELECT details->>'agent_id' AS agent_id, MIN(created_at) AS at FROM audit_logs WHERE action = 'agent_terms_accepted' GROUP BY 1`);
@@ -1119,6 +1133,7 @@ async function listAgentTrials(db, { includeClosed = false } = {}) {
       remind_on: ends && !payNow ? revenue.addDays(ends, -remindDays) : '',
       days_left: Math.round((Date.parse(`${ends}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000),
       paid_until: revenue.isoDay(row.paid_until),
+      pay_link_waiting: linkWaiting.has(String(row.whatsapp || row.phone || '').replace(/\D/g, '').slice(-9)),
       terms_accepted_at: termsSigned.get(String(row.id)) || null,
       state,
       closed: state === 'paid'
@@ -1145,7 +1160,9 @@ function formatTrialLine(row) {
   const left = row.days_left;
   let when;
   if (row.kind === 'no_free_days' || row.state === 'unpaid') {
-    when = `approved ${prettyDate(row.started || row.ends)} (${daysAgo(left)}), payment link sent`;
+    when = `approved ${prettyDate(row.started || row.ends)} (${daysAgo(left)}), ${row.pay_link_waiting
+      ? 'payment link NOT delivered: they have not written to the makaug number, so it is waiting'
+      : 'payment link sent'}`;
   } else if (row.state === 'overdue' || row.state === 'taken_down') {
     when = `ended ${prettyDate(row.ends)} (${Math.abs(left)} day${Math.abs(left) === 1 ? '' : 's'} ago)`;
   } else {
@@ -1168,6 +1185,10 @@ function buildTrialDigest(rows = []) {
   group('Unpaid after the trial — chase today', urgent.filter((row) => ['overdue', 'taken_down'].includes(row.state)));
   group('Trial ending in the next few days', urgent.filter((row) => row.state === 'ending_soon'));
   if (fresh.length) lines.push(`${fresh.length} new agent${fresh.length === 1 ? '' : 's'} approved today ${fresh.length === 1 ? 'has' : 'have'} the payment link already.`);
+  const notDelivered = rows.filter((row) => row.pay_link_waiting && ['unpaid', 'overdue', 'taken_down', 'ending_soon'].includes(row.state)).length;
+  if (notDelivered) {
+    lines.push(`${notDelivered} payment link${notDelivered === 1 ? ' is' : 's are'} waiting for the agent to write to the makaug number first, and ${notDelivered === 1 ? 'it is' : 'they are'} dropped after 7 days. Send them this from your phone to tap and send: ${require('./filmLinkService').helloLink()}`);
+  }
   const waiting = rows.filter((row) => row.state === 'on_trial').length;
   if (waiting) lines.push(`${waiting} more agent${waiting === 1 ? ' is' : 's are'} still comfortably inside the free period.`);
   lines.push('Reply *UNPAID* any time for the full list. A payment closes the loop and I will tell you here.');

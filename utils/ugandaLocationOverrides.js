@@ -384,6 +384,9 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
   // "Kikyusa town council, village Wabusana" went live under Lyantonde on
   // 15 Nov 2026. Kikyusa town council is in Bamunanika county, Luwero.
   ...rows(['Kikyusa', 'Wabusana'], 'Luwero', 'Kikyusa'),
+  // 22 Nov 2026: land "via Kasana Luwero" was saved in King as Kasana,
+  // Kayunga, the only Kasana the list knew. Kasana is Luwero's main town.
+  ...rows(['Kasana'], 'Luwero', 'Luwero'),
 
   {
     // Written "Budo" as often as "Buddo" (King's College Budo).

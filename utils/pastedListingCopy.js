@@ -115,6 +115,22 @@ function offerPlace(offer, fallbackArea = '') {
   return cleanText(offer?.place || fallbackArea);
 }
 
+/**
+ * The text without the extra copies of a title at its front: "Land for sale in
+ * Kasana Land for sale in Kasana, Luwero…" becomes "Land for sale in Kasana,
+ * Luwero…". One copy is kept; nothing else changes.
+ */
+function withoutRepeatedLead(text = '', leads = []) {
+  let out = String(text || '');
+  for (const raw of leads) {
+    const lead = String(raw || '').trim();
+    if (lead.length < 8) continue;
+    const twice = `${lead} ${lead}`.toLowerCase();
+    while (out.toLowerCase().startsWith(twice)) out = out.slice(lead.length + 1);
+  }
+  return out;
+}
+
 function cleanPastedListingCopy(row = {}) {
   const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
   const raw = [row.title, row.description, extra.source_caption, extra.source_title]
@@ -163,14 +179,32 @@ function cleanPastedListingCopy(row = {}) {
     }).join('; ');
     description = `${sentenceCase(`${firstSize} for sale in ${firstPlace}`)}${firstPrice}.${featureText} The same advert also offers ${follow}. ${splitNote}`.replace(/\s+/g, ' ').trim();
   } else {
-    const compact = stripPastedMarkup(plain)
+    // 22 Nov 2026: this description was built from the title, the description
+    // and the source caption joined together, so every save in King's review
+    // put the title in front again ("Land for sale in Kasana Land for sale in
+    // Kasana Land for sale in Kasana, Luwero, listed at…") and cut the end
+    // off at 420 characters. 9 of the 20 newest live listings had it. A
+    // description is now tidied from itself, keeps its length, and gets the
+    // title in front only when it is not there already. With no description,
+    // the pasted copy is used as before.
+    const ownDescription = cleanText(row.description || '');
+    const source = ownDescription
+      ? String(row.description)
+      : [looksLikePastedWhatsAppCopy(row.title) ? row.title : '', extra.source_caption, extra.source_title]
+        .filter((part) => typeof part === 'string' && part.trim())
+        .join('\n');
+    const compact = stripPastedMarkup(source)
       .replace(/\bmoney needed urgently!?\b/gi, '')
       .replace(/\s+/g, ' ')
       .trim();
     const lead = factualListingTitle(row);
-    const shortened = compact.length > 420 ? `${compact.slice(0, 417).replace(/\s+\S*$/, '')}…` : compact;
+    const deduped = withoutRepeatedLead(compact, [cleanText(row.title || ''), lead]);
+    const limit = ownDescription ? 2000 : 420;
+    const shortened = deduped.length > limit ? `${deduped.slice(0, limit - 3).replace(/\s+\S*$/, '')}…` : deduped;
+    const opensWithLead = [lead, cleanText(row.title || '')]
+      .some((text) => text && shortened.toLowerCase().startsWith(text.toLowerCase()));
     description = shortened
-      ? (shortened.toLowerCase().startsWith(lead.toLowerCase()) ? sentenceCase(shortened) : `${lead}. ${sentenceCase(shortened)}`)
+      ? (opensWithLead ? sentenceCase(shortened) : `${lead}. ${sentenceCase(shortened)}`)
       : `${lead}.`;
   }
 
@@ -194,5 +228,6 @@ module.exports = {
   stripPastedMarkup,
   parseOfferBlocks,
   cleanPastedListingCopy,
-  shouldRewriteListingCopy
+  shouldRewriteListingCopy,
+  withoutRepeatedLead
 };

@@ -844,6 +844,27 @@ async function buildDailyReport(db) {
   if (agentQueue && agentQueue.waiting) {
     lines.push('', `Agent properties waiting for review: ${agentQueue.waiting} (oldest ${agentQueue.oldest_hours}h) — approve them in Admin › Listings.`);
   }
+  // 22 Nov 2026: two requests had waited on an agent's answer since 16 and 18
+  // Nov, and the report only ever counted them. Over two days, say which.
+  const stale = await db.query(
+    `SELECT l.want, l.area, MIN(x.sent_at) AS sent_at, MIN(x.agent_name) AS agent_name
+       FROM demand_leads l
+       JOIN demand_lead_referrals x ON x.demand_lead_id = l.id
+      WHERE l.archived_at IS NULL
+        AND x.response = 'awaiting'
+        AND x.sent_at < NOW() - INTERVAL '2 days'
+      GROUP BY l.id, l.want, l.area
+      ORDER BY MIN(x.sent_at) ASC
+      LIMIT 5`
+  ).then((r) => r.rows).catch(() => []);
+  if (stale.length) {
+    lines.push('', `No answer from the agent for more than 2 days — chase them or send the request to another agent:`);
+    for (const row of stale) {
+      const days = Math.max(2, Math.floor((Date.now() - new Date(row.sent_at).getTime()) / 86400000));
+      const what = [row.want && row.want !== 'any' ? row.want : 'a request', row.area ? `in ${row.area}` : ''].filter(Boolean).join(' ');
+      lines.push(`• ${what}${row.agent_name ? `, sent to ${row.agent_name}` : ''} ${days} days ago`);
+    }
+  }
   // Money: what came in yesterday, what nobody has checked, who is behind.
   const moneyRow = await db.query(
     `SELECT
@@ -990,8 +1011,45 @@ async function teamRecipientsNow(db, extraRecipients = []) {
   return teamRecipients(extras);
 }
 
+/**
+ * Phone numbers in a note to the team, shown by their last three digits.
+ *
+ * Arthur's rule: a number is shown in full only in the chat with that person;
+ * in any note, log or message to anybody else, only its last three digits. The
+ * team notes carried agents' numbers in full ("Agent: +256704…"), some of them
+ * malformed ("+0752…"). Links are left as they are.
+ *
+ * A number is 9 to 15 digits standing on its own: "+256 772 123456",
+ * "0772-123-456", "+44 7700 900123". Digits inside a reference or an id
+ * ("MK-20261122-30ABA7", a uuid) are not one, a line break or a short number
+ * after it is not part of it ("…456\n2 listings", "…456 3 bedrooms"), and an
+ * amount or a payment's transaction ID stays as it is, so the team can still
+ * check it against the statement.
+ */
+const NUMBER_IN_NOTE = /(?<![\w+.\/-])\+?\d+(?:[ -]\d{3,})*(?!\w)/g;
+const AMOUNT_BEFORE = /(?:UGX|USh|Shs|USD|KES|ZAR|\$|£|€)\s*$/i;
+const AMOUNT_AFTER = /^\s*(?:UGX|USh|Shs|\/=)/i;
+const ID_BEFORE = /(?:\b(?:transaction|txn|tx|trans|momo|payment|report|inquiry|lead|call|receipt|invoice|order|booking)\s*(?:id|ref(?:erence)?)|\btxid|\btid|\bref(?:erence)?|\breceipt|\binvoice)\s*(?:no\.?)?\s*[:#]?\s*$/i;
+
+function maskNumbersForTeam(text = '') {
+  return String(text || '')
+    .split(/((?:https?:\/\/|wa\.me\/)\S+)/i)
+    .map((part, index) => (index % 2 === 1
+      ? part
+      : part.replace(NUMBER_IN_NOTE, (match, offset, whole) => {
+        const digits = match.replace(/\D/g, '');
+        if (digits.length < 9 || digits.length > 15) return match;
+        const before = whole.slice(Math.max(0, offset - 32), offset);
+        if (AMOUNT_BEFORE.test(before) || ID_BEFORE.test(before)) return match;
+        if (AMOUNT_AFTER.test(whole.slice(offset + match.length, offset + match.length + 8))) return match;
+        return `…${digits.slice(-3)}`;
+      })))
+    .join('');
+}
+
 async function sendToTeam(db, body, type, { extraRecipients = [] } = {}) {
   const results = [];
+  body = maskNumbersForTeam(body);
   for (const recipient of await teamRecipientsNow(db, extraRecipients)) {
     const delivery = await deliverWhatsapp({ to: recipient, body, kind: type, leadId: null, nonce: Date.now() });
     results.push({ to: recipient, status: delivery.status });
@@ -1397,6 +1455,7 @@ async function deskCsv(db, { view = 'all' } = {}) {
 }
 
 module.exports = {
+  maskNumbersForTeam,
   judgeDemandLead,
   ARCHIVE_REASONS,
   inQuietHours,
