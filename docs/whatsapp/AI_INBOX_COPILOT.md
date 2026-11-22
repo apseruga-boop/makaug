@@ -39,6 +39,40 @@ Each conversation has an AI mode:
 - `off`
   - AI stops auto-handling and the thread becomes human-led.
 
+## When a person on the team writes to an agent (21 Nov 2026)
+
+An approved agent's posting session answers before the AI mode above is looked
+at, so switching an agent's chat to `copilot` or `off` does not stop the
+assistant answering what they type there. On 21 Nov 2026 an agent answered a
+message typed in the inbox ("When are you free next week?") with "I'm always
+available", and was told twice that his words did not describe a property.
+
+The rule now (`services/whatsappPersonThreadService.js`, used in
+`routes/whatsapp.js`):
+
+- For 72 hours after somebody on the team sends an agent a message from the
+  inbox, what that agent types back that is talk (a hello, an "ok", an answer,
+  a question, a voice note) gets no automatic answer. `WHATSAPP_PERSON_THREAD_HOURS`
+  changes the 72.
+- The team gets one WhatsApp note with the agent's words and what we last wrote
+  to them. Lines sent within 45 seconds of each other go in the same note; at
+  night it waits for the morning round-up. The number is shown by its last
+  three digits, and the reply goes from the inbox.
+- Everything the assistant acts on carries on as before: photos and videos,
+  a property caption, COMPLETE and CANCEL, MENU, HELP, STATUS, SHARE, how to
+  post, a question about a payment link, agreeing to the terms.
+- It applies to approved agents, with or without a posting session open. Staff
+  numbers (Arthur, Ronald, staff added to Agent 007 in King) are never left
+  unanswered. Customers are not affected: their chats still follow the AI mode.
+- A message "sent from the inbox" is one the reply route queued with
+  `reply_kind` `admin_human_reply` or `admin_ai_reply`. Automatic messages
+  (the Morning Brief, a go-live notice, a lead) do not start the 72 hours.
+
+Outside those 72 hours, an agent's message that is neither a property nor
+something the assistant has an answer to is no longer told "I did not save
+that, because it does not describe a property...". It gets a short thank-you
+(once in half an hour) and goes to the team in the same kind of note.
+
 ## Best production setup
 
 For real production use, the recommended path is:
