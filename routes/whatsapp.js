@@ -19,6 +19,7 @@ const shortStayWhatsapp = require('../services/whatsappShortStayService');
 const agentFilm = require('../services/agentFilmReplyService');
 const replyPlaybook = require('../services/whatsappReplyPlaybook');
 const personThread = require('../services/whatsappPersonThreadService');
+const sendOrder = require('../services/whatsappSendOrder');
 const controlRoom = require('../services/agent007ControlRoom');
 const filmLanguages = require('../services/filmLanguageService');
 const filmLinks = require('../services/filmLinkService');
@@ -4911,7 +4912,9 @@ function employeePendingStoredMedia(sessionData = {}) {
       degradedFromVideo: item?.degradedFromVideo === true || item?.degraded_from_video === true,
       publicEligible: item?.evidenceOnly === true ? false : item?.publicEligible !== false,
       evidenceOnly: item?.evidenceOnly === true,
-      mediaValidation: item?.mediaValidation && typeof item.mediaValidation === 'object' ? item.mediaValidation : null
+      mediaValidation: item?.mediaValidation && typeof item.mediaValidation === 'object' ? item.mediaValidation : null,
+      // When the phone sent it, if WhatsApp told us (employeeOwnerBySendOrder).
+      senderMs: Number(item?.senderMs || item?.sender_ms || 0) > 0 ? Number(item?.senderMs || item?.sender_ms) : 0
     }))
     .filter((item) => item.url && ['image', 'video', 'document'].includes(item.kind))
     .slice(0, 20);
@@ -13207,6 +13210,8 @@ async function handleEmployeeWhatsappIntake({
       }
     }
     const employeeBurstSize = noteEmployeeSenderTime(data, Number(runtime.senderMs || 0) || Date.now());
+    // Only a time WhatsApp gave us can say what was sent before what.
+    data.current_sender_ms_known = Number(runtime.senderMs || 0) > 0;
     if (isEmployeeIntakeComplete(cleanBody)) {
       // Save anything that is already finished before deciding the batch cannot
       // be closed. Without this, a property needing nothing still counted as an
@@ -13482,6 +13487,9 @@ async function handleEmployeeWhatsappIntake({
       // twice and listed twice in Ronald's summary.
       const sameWords = (value = '') => normalizeInput(stripForwardMarkers(value)).replace(/\s+/g, ' ').toLowerCase();
       const theseWords = sameWords(cleanBody);
+      // A description in words alone: photos sent after it are not the
+      // previous advert's any more (employeeOwnerBySendOrder).
+      if (looksLikePropertyCaption(cleanBody)) noteEmployeeCaptionMark(data, { album: false });
       if (theseWords.length >= 24
         && data.whatsapp_agent_self_intake !== true
         && [pendingCaption, ...employeePendingSubmissionQueue(data).map((entry) => entry.caption)].some((kept) => sameWords(kept) === theseWords)) {
@@ -13880,10 +13888,17 @@ async function handleEmployeeWhatsappIntake({
     // A captionless photo in the middle of a forwarded burst: hold it, do not guess.
     // A photo that is part of an album (media_count > 1) still follows its
     // captioned first photo, as WhatsApp sends albums in order.
+    // When the send order names a different owner than the property being
+    // built (a repeat or a description in words came in between), or names
+    // none, it is held too, and placed by that order (22 Nov 2026).
+    const ownerByOrder = !caption
+      ? employeeOwnerBySendOrder(data, { senderMs: data.current_sender_ms_known === true ? mediaSenderMs : 0 })
+      : undefined;
+    const sendOrderDisagrees = ownerByOrder !== undefined && ownerByOrder !== String(data.current_property_id || '');
     const heldFromBurst = !caption
       && Boolean(data.current_property_id)
       && Number(runtime.mediaCount || 0) <= 1
-      && employeeInForwardedBurst(data);
+      && (employeeInForwardedBurst(data) || sendOrderDisagrees);
     if (heldFromBurst) data.pending_media_from_burst = true;
     if (
       !shouldStartProperty
@@ -13902,9 +13917,15 @@ async function handleEmployeeWhatsappIntake({
           inboundMessageId,
           provider: runtime.provider
         });
-        rememberEmployeePendingMedia(data, pendingStoredMedia, inboundMessageId);
+        // Each parked photo keeps the time it was sent, so it can be placed by
+        // what it was sent after (employeeOwnerBySendOrder).
+        const sentMs = data.current_sender_ms_known === true ? mediaSenderMs : 0;
+        rememberEmployeePendingMedia(data, pendingStoredMedia.map((item) => ({ ...item, senderMs: sentMs })), inboundMessageId);
         if (caption) data.pending_property_caption = caption;
-        if (caption && ownMediaCaption) data.pending_caption_sender_ms = mediaSenderMs;
+        if (caption && ownMediaCaption) {
+          data.pending_caption_sender_ms = mediaSenderMs;
+          noteEmployeeCaptionMark(data, { album: true });
+        }
         await replaceEmployeeSession(phone, currentStep, data);
         if (!caption) await settleEmployeeOrphanMedia({ phone, data, currentStep, inboundMessageId });
       } catch (error) {
@@ -13925,6 +13946,7 @@ async function handleEmployeeWhatsappIntake({
           inboundMessageId,
           provider: runtime.provider
         });
+        if (ownMediaCaption) noteEmployeeCaptionMark(data, { album: true });
         if (
           pendingStoredMediaBeforeMessage.length
           && pendingCaptionBeforeMessage
@@ -14010,6 +14032,9 @@ async function handleEmployeeWhatsappIntake({
         }
         if (propertyAttemptRecorded) data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
         noteEmployeeBatchDuplicate(data, caption, existingProperty);
+        // Photos sent after a repeat belong to that repeat, not to the
+        // property before it.
+        if (ownMediaCaption) noteEmployeeCaptionMark(data, { album: true });
         if (data.whatsapp_agent_self_intake === true && String(existingProperty.status) === 'pending' && candidates.length) {
           const fresh = await storeEmployeeMedia(candidates, { privateMedia: false, phone, inboundMessageId, provider: runtime.provider }).catch(() => []);
           const toppedUp = await agentTopUpExistingProperty({ data, existingProperty, storedMedia: fresh, phone, inboundMessageId });
@@ -14098,6 +14123,7 @@ async function handleEmployeeWhatsappIntake({
         const propertyId = await createEmployeeReviewProperty({ phone, inboundMessageId, caption, facts, storedMedia, sessionData: data });
         data.current_property_id = propertyId;
         noteEmployeePropertyCreated(data, propertyId, storedMedia, caption);
+        noteEmployeeCaptionMark(data, { owner: propertyId, album: ownMediaCaption });
         data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
         if (data.employee_intake_recovery_skip_existing_matches !== true) {
           data.total_media_count = Number(data.total_media_count || 0) + storedMedia.length;
@@ -14139,8 +14165,17 @@ async function handleEmployeeWhatsappIntake({
       });
       if (!attachment.duplicate) {
         data.total_media_count = Number(data.total_media_count || 0) + attachment.attached;
+        // 22 Nov 2026: three photos of a Kira house had been parked in a burst,
+        // so as not to guess whose they were. The next photo, given to the
+        // property being built, cleared everything parked, and the three were
+        // gone without a word: the house went up with one picture. Photos
+        // parked with no description of their own stay parked until they are
+        // placed, or the batch is closed and they are named.
+        const parked = normalizeInput(data.pending_property_caption || '') ? [] : employeePendingStoredMedia(data);
+        const parkedMessageId = normalizeInput(data.pending_property_media_message_id || '');
         delete data.pending_property_caption;
         clearEmployeePendingMedia(data);
+        if (parked.length) rememberEmployeePendingMedia(data, parked, parkedMessageId);
         promoteEmployeeQueuedSubmission(data);
         await replaceEmployeeSession(phone, currentStep, data);
       }
@@ -16915,6 +16950,55 @@ function employeeMediaFamily(item = {}) {
 // Captionless media this long after the agent last wrote starts a new property.
 const EMPLOYEE_STALE_CURRENT_PROPERTY_MS = 20 * 60 * 1000;
 const EMPLOYEE_ORPHAN_MEDIA_WINDOW_MS = 45000;
+// A photo sent this soon after a captioned photo or video is part of that advert.
+const EMPLOYEE_ALBUM_FOLLOW_MS = 30 * 1000;
+
+/**
+ * Every description in a batch, by the time the phone sent it: the ones that
+ * came on a photo or video (album: true) and the ones in words alone, with the
+ * property each one made, when it made one. Kept only when WhatsApp gave us
+ * the time.
+ */
+function noteEmployeeCaptionMark(data = {}, { owner = null, album = false } = {}) {
+  if (data.current_sender_ms_known !== true) return;
+  const sent = Number(data.current_sender_ms || 0);
+  if (!(sent > 0)) return;
+  const marks = (Array.isArray(data.employee_caption_marks) ? data.employee_caption_marks : [])
+    .filter((mark) => mark && Number(mark.sent) > 0 && !(Number(mark.sent) === sent && !mark.owner && owner));
+  marks.push({ sent, owner: owner ? String(owner) : null, album: Boolean(album) });
+  data.employee_caption_marks = marks.sort((a, b) => Number(a.sent) - Number(b.sent)).slice(-80);
+}
+
+/**
+ * Whose is this parked photo, going by what it was sent after?
+ *
+ * 22 Nov 2026: forwarded adverts each came as a captioned photo or video and
+ * then that advert's other photos. Once the messages are handled in the order
+ * they were sent (whatsappSendOrder), a photo with no caption belongs to the
+ * captioned photo or video sent last before it, as an album does. It is placed
+ * only when that is unambiguous: the description just before it came on a
+ * photo or video, made a property in this batch, and was sent less than half a
+ * minute before. After a description in words alone, or a repeat of a property
+ * already on makaug, nothing is guessed.
+ *
+ * Returns the property id; null when the send order says not to place it;
+ * undefined when there is no send order to go by (the old rules apply).
+ */
+function employeeOwnerBySendOrder(data = {}, item = {}) {
+  const itemMs = Number(item.senderMs || item.sender_ms || 0);
+  const marks = (Array.isArray(data.employee_caption_marks) ? data.employee_caption_marks : [])
+    .filter((mark) => mark && Number(mark.sent) > 0);
+  if (!(itemMs > 0) || !marks.length) return undefined;
+  let closest = null;
+  for (const mark of marks) {
+    if (Number(mark.sent) <= itemMs && (!closest || Number(mark.sent) >= Number(closest.sent))) closest = mark;
+  }
+  const batch = new Set((Array.isArray(data.property_ids) ? data.property_ids : []).map(String));
+  if (!closest || closest.album !== true || !closest.owner || !batch.has(String(closest.owner))) return null;
+  if (itemMs - Number(closest.sent) > EMPLOYEE_ALBUM_FOLLOW_MS) return null;
+  return String(closest.owner);
+}
+
 async function settleEmployeeOrphanMedia({ phone, data = {}, currentStep = 'employee_property_media', inboundMessageId = '', final = false } = {}) {
   const placed = [];
   if (normalizeInput(data.pending_property_caption || '')) return placed;
@@ -16927,17 +17011,23 @@ async function settleEmployeeOrphanMedia({ phone, data = {}, currentStep = 'empl
     .filter((id) => meta[id])
     .map((id, index) => ({ id, index, ...meta[id] }))
     .sort((a, b) => (Number(b.at) - Number(a.at)) || (b.index - a.index));
-  if (!all.length) return placed;
   const recent = final ? all : all.filter((entry) => now - Number(entry.at) < EMPLOYEE_ORPHAN_MEDIA_WINDOW_MS);
-  if (!recent.length) return placed;
 
   const groups = new Map();
   for (const item of pending) {
-    const family = employeeMediaFamily(item);
-    const sameKind = recent.filter((entry) => entry.family === family);
+    const byOrder = employeeOwnerBySendOrder(data, item);
+    // The send order says this one is not simple: leave it parked, and it is
+    // named when the batch is closed.
+    if (byOrder === null) continue;
     let target = null;
-    if (sameKind.length === 1) target = sameKind[0];
-    else if (final) target = sameKind[0] || recent[0];
+    if (byOrder) {
+      target = all.find((entry) => entry.id === byOrder) || { id: byOrder, label: 'Property' };
+    } else {
+      const family = employeeMediaFamily(item);
+      const sameKind = recent.filter((entry) => entry.family === family);
+      if (sameKind.length === 1) target = sameKind[0];
+      else if (final) target = sameKind[0] || recent[0] || null;
+    }
     if (!target) continue;
     if (!groups.has(target.id)) groups.set(target.id, { target, items: [] });
     groups.get(target.id).items.push(item);
@@ -25989,10 +26079,18 @@ async function processInboundRuntime(input = {}) {
     || input.metadata?.image_previews?.length
     || input.metadata?.media_previews?.length
   );
-  return queueWhatsappRuntimeForPhone(input.phone, async () => {
+  const run = () => queueWhatsappRuntimeForPhone(input.phone, async () => {
     if (hasMedia) await deferForSenderBurst(input.phone);
     return processInboundRuntimeUnlocked(input);
   });
+  // In the order the phone sent them, not the order they were ready in: a
+  // forwarded advert's photos overtook its captioned video and went onto the
+  // property before it (22 Nov 2026, services/whatsappSendOrder.js).
+  return sendOrder.runInSendOrder(
+    normalizeBridgeInboundKey(input.phone || '') || String(input.phone || 'unknown').trim(),
+    { senderMs: employeeSenderMs(input.metadata || {}), media: hasMedia, seq: Number(input.arrivalSeq || 0) },
+    run
+  );
 }
 
 function processWhatsappCallEvent(input = {}) {
@@ -26477,6 +26575,9 @@ router.post('/web-bridge/employee-video-recovery/:id', asyncRoute(async (req, re
 router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
 
+  // Its place in arrival order, taken before anything is awaited: it breaks
+  // ties between messages sent in the same millisecond (whatsappSendOrder).
+  const arrivalSeq = sendOrder.nextArrivalSeq();
   const phone = normalizeBridgeInboundKey(req.body.phone || req.body.chat_key || req.body.contact_key);
   const body = normalizeInput(req.body.body || req.body.text || '');
   let mediaUrl = normalizeInput(req.body.media_url || req.body.mediaUrl);
@@ -26870,7 +26971,8 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
       mediaType,
       sharedLocation,
       provider: 'web_bridge',
-      metadata: runtimeMetadata
+      metadata: runtimeMetadata,
+      arrivalSeq
     });
   } catch (error) {
     // The bridge may have hung up already, so 'finish' never comes: give the id
@@ -27506,6 +27608,11 @@ module.exports.__test = {
   settleEmployeeOrphanMedia,
   employeeMediaFamily,
   noteEmployeePropertyCreated,
+  noteEmployeeCaptionMark,
+  employeeOwnerBySendOrder,
+  employeePendingStoredMedia,
+  rememberEmployeePendingMedia,
+  employeeSenderMs,
   agentMissingPhrases,
   applyAgentCorrection,
   isOwnAgentSelfIntake,
@@ -27592,11 +27699,9 @@ module.exports.__test = {
   employeePropertyMediaCandidates,
   employeeMediaValidationIsIdentityDocument,
   storeEmployeeMediaCandidate,
-  employeePendingStoredMedia,
   employeeVideoEvidenceOnly,
   employeePropertyFacts,
   noteEmployeeBatchDuplicate,
-  employeeSenderMs,
   employeeShouldHoldUnassignedMedia,
   employeeHoldReason,
   EMPLOYEE_FORWARD_RUN_GAP_MS,
