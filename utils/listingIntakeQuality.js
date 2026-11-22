@@ -150,6 +150,42 @@ function captionsDescribeDifferentListings(left = '', right = '') {
   return union > 0 && shared / union < 0.34;
 }
 
+/** The land a caption states, in decimals ("50 decimals", "1 acre" = 100, "1 hectare" = 247). */
+function captionLandDecimals(caption = '') {
+  const match = String(caption || '').toLowerCase().match(/\b(\d+(?:\.\d+)?)\s*(decimals?|dec\b|acres?|hectares?|ha\b)/);
+  if (!match) return 0;
+  const value = Number(match[1]);
+  if (!(value > 0)) return 0;
+  const unit = match[2];
+  if (unit.startsWith('acre')) return value * 100;
+  if (unit.startsWith('hectare') || unit === 'ha') return value * 247.1;
+  return value;
+}
+
+/** The bedrooms a caption states ("5 bedrooms", "4bedroom", "3 bed"), or 0. */
+function captionBedrooms(caption = '') {
+  const match = String(caption || '').toLowerCase().match(/\b(\d{1,2})\s*-?\s*(?:bed(?:room)?s?|bdrms?|br)\b/);
+  return match ? Number(match[1]) : 0;
+}
+
+/**
+ * Two captions that state different facts: a different amount of land, or a
+ * different number of bedrooms. 22 Nov 2026: "50 decimals Commercial plot
+ * Mbalwa namugongo road UGX 600 million" was skipped as a repeat of the same
+ * agent's "Mbalwa Kyaliwajjala road 5 bedrooms, staff quarters 14 decimals plot
+ * UGX 600 million": same agent, same area, same price, and enough words in
+ * common (Mbalwa, road, decimals, plot) to pass for the same advert. Fifty
+ * decimals is not fourteen.
+ */
+function captionsStateDifferentFacts(left = '', right = '') {
+  const leftLand = captionLandDecimals(left);
+  const rightLand = captionLandDecimals(right);
+  if (leftLand > 0 && rightLand > 0 && Math.abs(leftLand - rightLand) > 0.1 * Math.max(leftLand, rightLand)) return true;
+  const leftBeds = captionBedrooms(left);
+  const rightBeds = captionBedrooms(right);
+  return leftBeds > 0 && rightBeds > 0 && leftBeds !== rightBeds;
+}
+
 function modestPriceDrop(nextPrice, currentPrice) {
   const next = Number(nextPrice);
   const current = Number(currentPrice);
@@ -213,7 +249,8 @@ function decideIntakeRepeat(incoming = {}, rows = []) {
       && rowCaption.length >= 24
       && incomingCaption === rowCaption;
     const differentDescription = Boolean(incoming.caption && row.source_caption)
-      && captionsDescribeDifferentListings(incoming.caption, row.source_caption);
+      && (captionsDescribeDifferentListings(incoming.caption, row.source_caption)
+        || captionsStateDifferentFacts(incoming.caption, row.source_caption));
     const sameListing = sameVideo
       || sameHash
       || (samePhone && sameArea && samePrice && !differentDescription)
@@ -229,7 +266,10 @@ function decideIntakeRepeat(incoming = {}, rows = []) {
 }
 
 module.exports = {
+  captionBedrooms,
+  captionLandDecimals,
   captionsDescribeDifferentListings,
+  captionsStateDifferentFacts,
   decideIntakeRepeat,
   isApartmentBlockText,
   localPhone,
