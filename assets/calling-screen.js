@@ -217,6 +217,7 @@
     '.mkc-cx-gt{font-size:20px;font-weight:900;margin:14px 0 8px;color:#0f172a}',
     '.mkc-cx-steps{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}@media(max-width:900px){.mkc-cx-steps{grid-template-columns:repeat(2,1fr)}}@media(max-width:480px){.mkc-cx-steps{grid-template-columns:1fr}}',
     '.mkc-cx-steps li{position:relative;border:2px solid #e2e8f0;border-radius:16px;padding:10px;background:#f8fafc}.mkc-cx-steps p{font-size:15px;font-weight:700;margin:6px 0 0;color:#0f172a;line-height:1.3}',
+    '.mkc-cx-dl{display:inline-block;margin-top:8px;text-decoration:none;font-size:14px}',
     '.mkc-cx-n{position:absolute;top:8px;left:8px;width:30px;height:30px;border-radius:50%;background:#15603f;color:#fff;font-weight:900;display:grid;place-items:center;font-size:16px}',
     '.mkc-card{border:1px solid #d1fae5;background:linear-gradient(135deg,#ecfdf5,#fff);border-radius:16px;padding:20px}',
     '.mkc-card h3{font-size:20px;font-weight:900;color:#064e3b;margin:0}',
@@ -1198,22 +1199,24 @@
       ['Same number on both? Tap Pair. Done ✅', svgWrap(svLaptop(14, 20, svText(42, 50, '482 913', 16, G)) + svPhone(168, 16, svText(178, 64, '482 913', 12, G)) + svTick(120, 132))]
     ] },
     link: { title: '🖥️ Phone Link on Windows', steps: [
-      ['Start ⊞ → type “Phone Link” → open it', svgWrap(svLaptop(60, 20, '<rect x="72" y="34" width="96" height="18" rx="9" fill="#f1f5f9" stroke="#94a3b8"/>' + svText(82, 47, '🔍 Phone Link', 10) + svWin(74, 58)))],
+      ['Phone Link works only with an Android phone or iPhone, not a keypad phone: put the calling SIM in the Android phone. Laptop: Start ⊞ → type “Phone Link” → open it', svgWrap(svLaptop(60, 20, '<rect x="72" y="34" width="96" height="18" rx="9" fill="#f1f5f9" stroke="#94a3b8"/>' + svText(82, 47, '🔍 Phone Link', 10) + svWin(74, 58)))],
       ['Choose Android, scan the QR code with the phone', svgWrap(svLaptop(14, 20, '<g fill="#0f172a"><rect x="44" y="34" width="10" height="10"/><rect x="74" y="34" width="10" height="10"/><rect x="44" y="62" width="10" height="10"/><rect x="58" y="48" width="6" height="6"/><rect x="66" y="58" width="8" height="8"/></g>') + svArrow(140, 60, 168) + svPhone(172, 16, '<rect x="185" y="44" width="36" height="36" rx="4" fill="none" stroke="' + G + '" stroke-width="3" stroke-dasharray="6 4"/>'))],
       ['Allow everything it asks on the phone (calls, contacts)', svgWrap(svPhone(89, 16, '<rect x="97" y="40" width="46" height="18" rx="4" fill="' + G + '"/>' + svText(107, 53, 'Allow', 11, '#fff') + '<rect x="97" y="64" width="46" height="18" rx="4" fill="' + G + '"/>' + svText(107, 77, 'Allow', 11, '#fff')))],
       ['In Phone Link click Calls → Set up. Calls now ring on the laptop', svgWrap(svLaptop(14, 20, svText(28, 44, 'Calls', 12) + '<rect x="28" y="52" width="60" height="18" rx="4" fill="' + G + '"/>' + svText(36, 65, 'Set up', 10, '#fff')) + svBt(150, 64, .9) + svPhone(172, 16, '') + svTick(120, 132))]
     ] },
     sms: { title: '💬 SMS gateway app (sends our texts)', steps: [
-      ['On the company phone open Play Store, install “SMS Gateway for Android”', svgWrap(svPhone(89, 16, '<path d="M108 40l26 16-26 16z" fill="#16a34a"/>' + svText(98, 92, 'Install', 11, G)))],
-      ['Open it, allow SMS, turn “Cloud server” ON', svgWrap(svPhone(89, 16, svText(98, 48, 'Cloud', 10) + svToggle(124, 38, true) + svText(98, 76, 'SMS ✓', 10, G)))],
+      ['Use the Android phone (the itel), not the keypad phone. Open Chrome, tap the green link below, then tap “app-release.apk”. It is free. It is not in the Play Store', svgWrap(svPhone(89, 16, '<path d="M108 40l26 16-26 16z" fill="#16a34a"/>' + svText(98, 92, 'Install', 11, G))), { href: 'https://github.com/capcom6/android-sms-gateway/releases/latest', label: '⬇️ Download SMS Gateway (free)' }],
+      ['Tap the download. Blocked? Tap Settings → turn ON “Allow from this source” → back → Install. Play Protect warning? Tap More details → Install anyway', svgWrap(svPhone(89, 16, svText(97, 46, 'Settings', 9) + svToggle(104, 54, true) + '<rect x="97" y="78" width="46" height="16" rx="3" fill="' + G + '"/>' + svText(103, 90, 'Install', 9, '#fff')))],
+      ['Open “SMS Gateway”, tap Allow for SMS, then turn “Cloud server” ON and tap Online', svgWrap(svPhone(89, 16, svText(98, 48, 'Cloud', 10) + svToggle(124, 38, true) + svText(98, 76, 'SMS ✓', 10, G)))],
       ['Show King the username & password on its screen. King links it', svgWrap(svPhone(30, 16, svText(38, 56, 'user ••••', 9) + svText(38, 72, 'pass ••••', 9)) + svArrow(100, 74, 140) + svCloud(185, 74))],
-      ['Keep it open, phone charging, Wi-Fi or data ON. The light turns green', svgWrap(svPhone(89, 16, '<rect x="104" y="96" width="32" height="6" rx="2" fill="#16a34a"/>' + svText(103, 60, '⚡ 📶', 14)) + svTick(190, 74))]
+      ['Keep it open, phone charging, data ON. Settings → Apps → SMS Gateway → Battery → Unrestricted. The light turns green once King has linked it', svgWrap(svPhone(89, 16, '<rect x="104" y="96" width="32" height="6" rx="2" fill="#16a34a"/>' + svText(103, 60, '⚡ 📶', 14)) + svTick(190, 74))]
     ] },
     momo: { title: '💰 MoMo forwarder (tells us when an agent pays)', steps: [
-      ['Install “SMS to URL Forwarder” from the Play Store', svgWrap(svPhone(89, 16, '<path d="M108 40l26 16-26 16z" fill="#16a34a"/>' + svText(98, 92, 'Install', 11, G)))],
-      ['Add a rule: sender “MTN MoMo” (and “AirtelMoney”)', svgWrap(svPhone(89, 16, svText(97, 46, 'From:', 9) + '<rect x="97" y="52" width="46" height="16" rx="3" fill="#fef9c3"/>' + svText(100, 64, 'MTN MoMo', 8)))],
-      ['Paste the makaug link King sends you. Never share it', svgWrap(svPhone(30, 16, '<rect x="38" y="52" width="46" height="16" rx="3" fill="#eff6ff"/>' + svText(41, 64, '🔒 link', 9)) + svArrow(100, 74, 140) + svCloud(185, 74))],
-      ['An agent pays → the SMS goes to makaug → they show as Paid ✅', svgWrap(svMoney(36, 74) + svArrow(58, 74, 86) + svPhone(90, 16, '') + svArrow(156, 74, 176) + svTick(200, 74))]
+      ['On the MoMo phone open Chrome, tap the green link below, then tap “Download APK”. It is free. It is not in the Play Store', svgWrap(svPhone(89, 16, '<path d="M108 40l26 16-26 16z" fill="#16a34a"/>' + svText(98, 92, 'Install', 11, G))), { href: 'https://f-droid.org/packages/tech.bogomolov.incomingsmsgateway/', label: '⬇️ Download SMS to URL Forwarder (free)' }],
+      ['Tap the download. Blocked? Tap Settings → turn ON “Allow from this source” → back → Install. Play Protect warning? Tap More details → Install anyway', svgWrap(svPhone(89, 16, svText(97, 46, 'Settings', 9) + svToggle(104, 54, true) + '<rect x="97" y="78" width="46" height="16" rx="3" fill="' + G + '"/>' + svText(103, 90, 'Install', 9, '#fff')))],
+      ['Open it, tap Allow for SMS, then tap + to add a rule. Sender: type the MoMo sender name exactly as it shows in Messages. Add a second rule for Airtel Money', svgWrap(svPhone(89, 16, svText(97, 46, 'From:', 9) + '<rect x="97" y="52" width="46" height="16" rx="3" fill="#fef9c3"/>' + svText(100, 64, 'MTN MoMo', 8)))],
+      ['In “Webhook URL” paste the makaug link King sends you. Never share it. Tap Save, then Test', svgWrap(svPhone(30, 16, '<rect x="38" y="52" width="46" height="16" rx="3" fill="#eff6ff"/>' + svText(41, 64, '🔒 link', 9)) + svArrow(100, 74, 140) + svCloud(185, 74))],
+      ['Settings → Apps → SMS to URL Forwarder → Battery → Unrestricted. An “F” at the top of the screen means it is working. An agent pays → they show as Paid ✅', svgWrap(svMoney(36, 74) + svArrow(58, 74, 86) + svPhone(90, 16, '') + svArrow(156, 74, 176) + svTick(200, 74))]
     ] },
     fix: { title: '🔌 Calls dropping? Fix it', steps: [
       ['Phone unlocked, Bluetooth ON, phone close to the laptop', svgWrap(svPhone(40, 16, svBt(71, 62, .8)) + '<path d="M112 74h40" stroke="#94a3b8" stroke-width="3"/>' + svText(116, 68, '< 2 m', 11) + svLaptop(160, 34, ''))],
@@ -1251,7 +1254,7 @@
       + '<div class="mkc-row" style="justify-content:center;margin:10px 0"><button type="button" class="mkc-btn go" style="font-size:18px;padding:12px 26px" data-mkc-cxcheck' + (CHK.running ? ' disabled' : '') + '>' + (CHK.running ? '🎙 Listening… say “testing one two three”' : '🔁 Check now') + '</button></div>'
       + '<div class="mkc-cx-tabs">' + tabs + '</div>'
       + '<h3 class="mkc-cx-gt" data-mkc-cxtitle>' + esc(g.title) + '</h3>'
-      + '<ol class="mkc-cx-steps">' + g.steps.map(function (s, i) { return '<li data-mkc-cxstep><div class="mkc-cx-n">' + (i + 1) + '</div><div class="mkc-cx-pic">' + s[1] + '</div><p>' + esc(s[0]) + '</p></li>'; }).join('') + '</ol></div>';
+      + '<ol class="mkc-cx-steps">' + g.steps.map(function (s, i) { return '<li data-mkc-cxstep><div class="mkc-cx-n">' + (i + 1) + '</div><div class="mkc-cx-pic">' + s[1] + '</div><p>' + esc(s[0]) + '</p>' + (s[2] ? '<a class="mkc-btn go sm mkc-cx-dl" href="' + esc(s[2].href) + '" target="_blank" rel="noopener" data-mkc-cxdl>' + esc(s[2].label) + '</a>' : '') + '</li>'; }).join('') + '</ol></div>';
   }
   function renderConnect() {
     var el = document.getElementById('mkc-connect'); if (!el) return;
