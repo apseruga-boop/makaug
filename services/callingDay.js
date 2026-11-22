@@ -100,10 +100,9 @@ function momoText(amountUgx = FEE_UGX) {
 }
 
 /**
- * Send the pay link or the MoMo code to the number on screen. It goes out
- * through makaug's normal WhatsApp sending (no new sending code). If it can't
- * go (no bridge, they never said Hello), the text comes back for Ronald to
- * copy or open in WhatsApp himself.
+ * The pay link or the MoMo code for the number on screen. Calls send texts
+ * only (Arthur, 22 Nov 2026): nothing goes out on WhatsApp; the text comes
+ * back as an SMS link for the caller to send from the phone.
  */
 async function practiceGuard(a, personKey, what) {
   const sbx = require('./callingSandbox');
@@ -112,30 +111,24 @@ async function practiceGuard(a, personKey, what) {
 
 async function sendPayment(attemptId, { how = 'link', personKey = '', actor = 'calling' } = {}) {
   const a = await phoneOfAttempt(attemptId);
-  await practiceGuard(a, personKey, how === 'momo' ? 'sends the MoMo code on makaug WhatsApp' : 'sends the pay link on makaug WhatsApp');
+  await practiceGuard(a, personKey, how === 'momo' ? 'texts the MoMo code' : 'texts the pay link');
   const person = cleanKey(personKey) || a.person_key;
   const agent = await agentFor(a.phone_key);
   const payLinks = require('./payLinkService');
-  let code = null; let text = ''; let delivery = 'not_sent'; let reason = null; let url = null;
+  let code = null; let text = ''; let url = null;
   if (how === 'link') {
     // Reuses their open link if there is one (createPayLink does that).
     const { link } = await payLinks.createPayLink(db, agent ? { purpose: 'agent_subscription', agent_id: agent.id, payer_phone: a.phone } : { purpose: 'other', amount_ugx: FEE_UGX, payer_phone: a.phone, description: 'makaug agent subscription — 1 month' }, `calling:${person}`);
     code = link.code; url = payLinks.payUrl(link.code);
     text = payLinks.payLinkMessage(link, {});
-    try { const r = await payLinks.sendPayLink(db, { code, to: a.phone, actor: `calling:${person}` }); delivery = r.status || 'unknown'; reason = r.reason || null; } catch (e) { reason = e.message; }
   } else {
     text = momoText();
-    try {
-      const r = await require('./leadHandoffService').deliverWhatsapp({ to: a.phone, body: text, kind: 'calling_momo_code', leadId: null, nonce: `${a.id}:${Date.now()}` });
-      delivery = r.status || 'unknown'; reason = r.reason || null;
-    } catch (e) { reason = e.message; }
   }
-  const sent = /^(sent|queued|delivered|ok)$/i.test(delivery);
   await db.query(
     `INSERT INTO call_payment_actions (phone_key, attempt_id, person_key, kind, pay_link_code, amount_ugx, delivery, note) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [a.phone_key, a.id, person, how === 'link' ? 'link_sent' : 'momo_sent', code, FEE_UGX, sent ? delivery : `not_sent:${String(reason || '').slice(0, 80)}`, null]);
-  const wa = `https://wa.me/${String(a.phone || '').replace(/\D+/g, '')}?text=${encodeURIComponent(text)}`;
-  return { sent, delivery, reason: sent ? null : (reason || 'Not sent automatically'), text, url, wa_url: wa, state: await paymentState(a.phone_key) };
+    [a.phone_key, a.id, person, how === 'link' ? 'link_sent' : 'momo_sent', code, FEE_UGX, 'sms_by_caller', null]);
+  const smsUrl = `sms:${String(a.phone || '').replace(/[^\d+]/g, '')}?body=${encodeURIComponent(text)}`;
+  return { sent: false, delivery: 'sms_by_caller', reason: 'Text it from the phone (SMS).', text, url, sms_url: smsUrl, state: await paymentState(a.phone_key) };
 }
 
 /** "They say they paid": a pending claim for admin to verify against MoMo. */

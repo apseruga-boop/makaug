@@ -428,13 +428,28 @@ async function timeline({ attemptId = '', phoneKey = '' } = {}) {
 }
 
 /** Who is this? For the "Incoming call" box: a short, masked history by phone_key. */
+const KIND_LABELS = { agent: 'Agent on makaug', poster: 'Posted a property', prospect: 'Prospect (outreach list)', unknown: 'Unknown number' };
+
+/** Who an incoming number is: a signed-up agent, someone who posted a property, an outreach prospect, or unknown. */
+async function callerKind(key) {
+  const k9 = `RIGHT(REGEXP_REPLACE(COALESCE(%s, ''), '[^0-9]', '', 'g'), 9) = $1`;
+  const agent = (await safeRows(`SELECT full_name, status FROM agents WHERE removed_at IS NULL AND (${k9.replace('%s', 'phone')} OR ${k9.replace('%s', 'whatsapp')}) LIMIT 1`, [key]))[0];
+  if (agent) return { kind: 'agent', kind_label: `${KIND_LABELS.agent} (${agent.status || 'agent'})`, name: agent.full_name || '' };
+  const poster = (await safeRows(`SELECT lister_name, COUNT(*) OVER ()::int AS n FROM properties WHERE ${k9.replace('%s', 'lister_phone')} ORDER BY created_at DESC LIMIT 1`, [key]))[0];
+  if (poster) return { kind: 'poster', kind_label: `${KIND_LABELS.poster} (${poster.n} listing${poster.n === 1 ? '' : 's'})`, name: poster.lister_name || '' };
+  const prospect = (await safeRows(`SELECT full_name FROM agent_prospects WHERE phone_key = $1 OR ${k9.replace('%s', 'phone')} LIMIT 1`, [key]))[0];
+  if (prospect) return { kind: 'prospect', kind_label: KIND_LABELS.prospect, name: prospect.full_name || '' };
+  return { kind: 'unknown', kind_label: KIND_LABELS.unknown, name: '' };
+}
+
 async function lookup(phone = '') {
   const key = String(phone || '').replace(/\D/g, '').slice(-9);
   if (key.length !== 9) return { found: false };
-  let t; try { t = await timeline({ phoneKey: key }); } catch (_) { return { found: false, phone: `•••${key.slice(-3)}` }; }
+  const who = await callerKind(key).catch(() => ({ kind: 'unknown', kind_label: KIND_LABELS.unknown, name: '' }));
+  let t; try { t = await timeline({ phoneKey: key }); } catch (_) { return { found: who.kind !== 'unknown', phone: `•••${key.slice(-3)}`, ...who, calls: 0, inbound: 0, last: null }; }
   const calls = t.nodes.filter((n) => n.outcome !== 'skipped');
   const last = calls.slice(-1)[0];
-  return { found: t.nodes.length > 0 || t.outreach.length > 0, phone: t.phone_key_masked, name: t.name, calls: calls.length, inbound: calls.filter((n) => n.direction === 'inbound').length,
+  return { found: t.nodes.length > 0 || t.outreach.length > 0 || who.kind !== 'unknown', phone: t.phone_key_masked || `•••${key.slice(-3)}`, kind: who.kind, kind_label: who.kind_label, name: t.name || who.name, calls: calls.length, inbound: calls.filter((n) => n.direction === 'inbound').length,
     last: last ? { at: last.wrapped_at || last.shown_at, by: last.by, outcome: last.outcome, note: last.note, next_step: last.next_step, summary: last.transcript && last.transcript.summary } : null,
     pick_up: t.pick_up, blocked: t.blocked, said_hello: Boolean(t.said_hello), last_attempt_id: (t.nodes.slice(-1)[0] || {}).id || null };
 }

@@ -76,12 +76,13 @@
       '#sd-scrim{display:none}body.sd-on.sd-drawer #sd-scrim{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:38}}',
       '.sd-page{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a}',
       '.sd-h1{font-size:26px;font-weight:900;margin:0;line-height:1.2}.sd-sub{color:#64748b;font-size:13px;margin:4px 0 0}',
-      '.sd-stages{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:6px}@media(max-width:1100px){.sd-stages{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:640px){.sd-stages{grid-template-columns:1fr}}.sd-pitem{border-top:1px solid #f1f5f9;padding:8px 0}.sd-count{background:#ecfdf5;color:#15603f;border-radius:999px;padding:1px 8px;font-size:12px;margin-left:4px}.sd-btn.sm{padding:5px 10px;font-size:12px;margin-top:4px}',
+      '.sd-stages{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:6px}@media(max-width:1100px){.sd-stages{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:640px){.sd-stages{grid-template-columns:1fr}}.sd-pitem{border-top:1px solid #f1f5f9;padding:8px 0}.sd-count{background:#ecfdf5;color:#15603f;border-radius:999px;padding:1px 8px;font-size:12px;margin-left:4px}.sd-btn.sm{padding:5px 10px;font-size:12px;margin-top:4px}',
       '.sd-card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:14px}.sd-card h3{font-size:16px;font-weight:900;margin:0 0 10px}',
       '.sd-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}@media(max-width:900px){.sd-kpis{grid-template-columns:repeat(2,1fr)}}',
       '.sd-kpi{display:flex;gap:12px;align-items:center}.sd-kpi .l{font-size:12px;color:#64748b;font-weight:700}.sd-kpi .v{font-size:24px;font-weight:900}.sd-kpi .t{font-size:12px;color:#64748b}',
       '.sd-grid2{display:grid;grid-template-columns:1.3fr 1fr;gap:12px;margin-bottom:12px}@media(max-width:900px){.sd-grid2{grid-template-columns:1fr}}',
       '.sd-banner{border-radius:14px;padding:12px 14px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:12px;font-weight:700;font-size:14px}',
+      '.sd-chip{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:800}.sd-chip.warn{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}',
       '.sd-banner.behind{background:#fff7ed;border:1px solid #fdba74;color:#9a3412}.sd-banner.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}.sd-banner.info{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a}',
       '#sd-side .sd-b.red{background:#dc2626;color:#fff}.sl-red{display:inline-block;background:#dc2626;color:#fff;border-radius:999px;font-size:12px;font-weight:900;padding:1px 8px;vertical-align:middle;margin-left:6px}',
       '.sl-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}@media(max-width:900px){.sl-kpis{grid-template-columns:repeat(2,1fr)}}.sl-kpi .v{font-size:24px;font-weight:900}.sl-kpi .v.red{color:#dc2626}.sl-kpi .l{font-size:12px;color:#64748b;font-weight:700}',
@@ -261,9 +262,10 @@
     host.innerHTML = '<div class="sd-page" data-sd-home>'
       + '<div class="sd-row"><div style="display:flex;gap:12px;align-items:center"><div class="sd-av" style="width:52px;height:52px;font-size:20px">' + avatar(m.photo, m.first_name) + '</div><div><h1 class="sd-h1" data-sd-greeting>' + greeting(n(h.now_min)) + ', ' + esc(m.first_name || 'there') + '</h1><p class="sd-sub">' + esc(niceDay(h.day)) + ' · targets today: ' + n(t.calls) + ' calls, ' + n(t.interested) + ' interested, ' + n(t.paid) + ' paid</p></div></div><button type="button" class="sd-btn" data-sd-go-calls>📞 Start calling</button></div>'
       + banner + nudge
+      + (h.low_list && h.low_list.low ? '<div class="sd-banner behind" data-sd-low-list>📉 Only ' + n(h.low_list.fresh) + ' fresh numbers left in your list (under ' + n(h.low_list.threshold) + '). King has been told to upload more.</div>' : '')
       + (S.hubUnread ? '<div class="sd-banner info" data-sd-hub-nudge>📣 ' + (S.hubUnread === 1 ? 'One new message' : S.hubUnread + ' new messages') + ' from King. <button type="button" class="sd-btn" data-sd-go-msgs>Read</button></div>' : '')
       + (S.owed ? '<div class="sd-card sd-owed" data-sd-owed style="border-color:#fecaca;background:#fef2f2;margin-top:12px"><div class="sd-row"><b>📵 ' + (S.owed === 1 ? 'One call needs' : S.owed + ' calls need') + ' an outcome before you call again.</b><button type="button" class="sd-btn" data-sd-owed-go>Answer now</button></div></div>' : '')
-      + '<div class="sd-kpis">' + kpi('Calls today', n(d.calls), n(t.calls), '#15603f') + kpi('Interested', n(d.interested), n(t.interested), '#2563eb') + kpi('Paid', n(d.paid), n(t.paid), '#d97706') + kpi('Talk time', dur(d.talk_s), 0, '', 'on calls today') + '</div>'
+      + '<div class="sd-kpis">' + kpi('Calls today', n(d.calls), n(t.calls), '#15603f') + kpi('Interested · text sent', n(d.interested), n(t.interested), '#2563eb') + kpi('Paid', n(d.paid), n(t.paid), '#d97706') + kpi('Talk time', dur(d.talk_s), 0, '', 'on calls today') + '</div>'
       + '<div class="sd-grid2"><div class="sd-card" data-sd-week><div class="sd-row"><h3>This week vs last week</h3><span>' + thisW + ' calls · ' + change(thisW, lastW, 'week') + '</span></div>' + weekChart(wk.this_week, wk.last_week, wk.elapsed_days) + '</div>'
       + '<div class="sd-card" data-sd-month><h3>This month (' + esc(monthName(h.day)) + ')</h3><div class="sd-row"><div><div class="sd-muted" style="font-size:12px">Calls</div><div class="sd-big">' + fmt(mo.calls) + '</div><div style="font-size:12px">' + change(n(mo.calls), n(mo.calls_prev), 'month') + '</div></div><div><div class="sd-muted" style="font-size:12px">Paid</div><div class="sd-big">' + fmt(mo.paid) + '</div><div style="font-size:12px">' + change(n(mo.paid), n(mo.paid_prev), 'month') + '</div></div></div><p class="sd-muted" style="font-size:12px;margin-top:8px">Compared with the same days last month.</p></div></div>'
       + '<div class="sd-grid2"><div class="sd-card"><h3>Today’s checklist</h3><ul class="sd-check" data-sd-checklist>' + check + '</ul></div><div class="sd-card"><h3>Day planner</h3><div class="sd-plan" data-sd-plan>' + plan + '</div></div></div>'
@@ -293,7 +295,7 @@
         }).join('') || '<p class="sd-muted" style="font-size:13px">Nobody here yet.</p>';
         return '<div class="sd-card sd-stage" data-sd-stage="' + esc(st.key) + '"><h3>' + esc(st.label) + ' <span class="sd-count">' + st.items.length + '</span></h3>' + items + '</div>';
       }).join('');
-      host.innerHTML = pageWrap('My pipeline', 'Your own calls from the last ' + n(p.since_days) + ' days. Each number sits at the furthest step it reached: Interested → Said Hi → To close → Paid.', '<div class="sd-stages">' + cols + '</div>');
+      host.innerHTML = pageWrap('My pipeline', 'Every number you called stays here until they pay or say a clear no. Interested only counts once you sent the follow-up text (Texts tab); until then they wait in Contacted.', '<div class="sd-stages">' + cols + '</div>');
       qa('[data-sd-hist]', host).forEach(function (b) { b.onclick = function () { if (window.makaugCalling && window.makaugCalling.openHistory) window.makaugCalling.openHistory(b.getAttribute('data-sd-hist')); }; });
     }, function (e) { failed(host, 'My pipeline', e); });
   }
@@ -320,7 +322,7 @@
       var rows = items.map(function (x) {
         var due = x.never_paid ? 'Never paid' : 'Paid until ' + niceDay(x.paid_until) + ' · ' + n(x.overdue_days) + ' days late';
         var last = x.last_chase ? 'Chased ' + when(x.last_chase.at) + ' by ' + (x.last_chase.mine ? 'you' : esc(x.last_chase.by)) : 'Not chased yet';
-        return '<tr data-sd-owes-row="' + esc(x.id) + '"><td><b>' + esc(x.name || 'No name') + '</b> <span class="sd-muted">' + esc(x.phone) + '</span><div class="sd-muted" style="font-size:12px">' + esc(due) + '</div></td><td><b>' + ugx(x.owed_ugx) + '</b></td><td style="font-size:12px">' + last + '</td>'
+        return '<tr data-sd-owes-row="' + esc(x.id) + '"><td><b>' + esc(x.name || 'No name') + '</b> <span class="sd-muted">' + esc(x.phone) + '</span>' + (x.remove_flag ? ' <span class="sd-chip warn" data-sd-remove-flag title="Unpaid 30+ days. King decides.">Remove? · ' + n(x.unpaid_days) + ' days unpaid</span>' : '') + '<div class="sd-muted" style="font-size:12px">' + esc(due) + '</div></td><td><b>' + ugx(x.owed_ugx) + '</b></td><td style="font-size:12px">' + last + '</td>'
           + '<td><button type="button" class="sd-btn sm" data-sd-chase="' + esc(x.id) + '">Chase</button></td></tr>';
       }).join('');
       host.innerHTML = pageWrap('Owes us money', items.length + ' agent' + (items.length === 1 ? '' : 's') + ' · about ' + ugx(total) + ' at ' + ugx(o.fee_ugx) + ' a month. <b>Chase</b> puts the number at the top of your “Get payments in” calls.',

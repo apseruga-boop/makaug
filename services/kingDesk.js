@@ -9,6 +9,7 @@
  */
 const db = require('../config/database');
 const calling = require('./callingScreen');
+const rules = require('./callingRules');
 const removals = require('./agentRemovalRequestService');
 const planner = require('./callingPlanner');
 const kingReview = require('./kingReview');
@@ -77,7 +78,7 @@ async function overview({ now = new Date() } = {}) {
     // so no step can be bigger than the one above. Sign-ups that did not come from a call are counted apart.
     rows(`WITH called AS (
             SELECT phone_key,
-                   BOOL_OR(outcome IN ('interested','signed_up','promised','will_list')) AS interested,
+                   BOOL_OR(outcome IN ('signed_up','promised') OR (outcome IN ('interested','will_list') AND ${rules.textSentSql('call_attempts')})) AS interested,
                    BOOL_OR((checklist->>'asked_hello') IN ('true','auto','manual')) AS said_hi
               FROM call_attempts WHERE tapped_at >= $1 AND status='done' AND phone_key IS NOT NULL GROUP BY phone_key),
           ag AS (
@@ -121,6 +122,16 @@ async function overview({ now = new Date() } = {}) {
     const pc = pl ? planner.pace(pl, nowMin) : null;
     if (pc && pc.behind) behind.push({ person_key: x.person_key, name: x.name, ...pc });
   }
+  // Low list (Arthur, 22 Nov 2026): a caller with fewer than 100 fresh numbers left.
+  const callers = await rows(`SELECT profile_data->>'person_key' AS key, first_name AS name FROM users
+      WHERE role = 'moderator' AND status = 'active' AND profile_data->>'staff_scope' = 'caller' AND COALESCE(profile_data->>'sandbox', 'false') <> 'true'`).catch(() => []);
+  for (const c of callers.filter((x) => x.key)) {
+    const left = await calling.freshLeft(c.key, { now }).catch(() => null);
+    if (left && left.low) needs.push({ kind: 'low_list', person_key: c.key, text: `${c.name || c.key} has ${left.fresh} fresh numbers left (under ${left.threshold}). Upload the next list.`, open: 'k-staff' });
+  }
+  // Unpaid 30+ days: King decides. Flag only, nothing is removed automatically.
+  const owing = await require('./staffPipeline').owes('').catch(() => ({ items: [] }));
+  for (const o of (owing.items || []).filter((x) => x.remove_flag).slice(0, 10)) needs.push({ kind: 'remove', id: o.id, text: `Remove? ${o.name || 'Agent'} ${o.phone} unpaid ${o.unpaid_days} days`, open: 'k-removals' });
   for (const b of behind) needs.push({ kind: 'behind', person_key: b.person_key, text: `${b.name} is behind: ${b.done} calls, ${b.expected} expected by now (${b.short_by} short)`, open: 'k-team' });
   const trackedFrom = await calling.trackingSince().catch(() => null);
   return {
@@ -136,7 +147,8 @@ async function overview({ now = new Date() } = {}) {
     counts: { removal_requests: num(reqCount), momo_unmatched: unmatched.length, behind: behind.length, targets_unset: await targetsUnset(r.today), lessons_waiting: await require('./teamLearnings').waitingCount().catch(() => 0), ...(await kingReview.counts().catch(() => ({}))) },
     staff_today: (perf.people || []).map((x) => {
       const spoke = num(x.connected); const noTxP = num((x.flags || {}).no_transcript);
-      return { person_key: x.person_key, name: x.name, calls: num(x.calls), target_calls: num(x.targets?.calls_per_day), paid: num(x.closes), target_paid: num(x.targets?.closes_per_day), notes_pct: spoke ? Math.round((100 * (spoke - noTxP)) / spoke) : null, live: x.live || null };
+      return { person_key: x.person_key, name: x.name, calls: num(x.calls), target_calls: num(x.targets?.calls_per_day), paid: num(x.closes), target_paid: num(x.targets?.closes_per_day), notes_pct: spoke ? Math.round((100 * (spoke - noTxP)) / spoke) : null, live: x.live || null,
+        away_min: x.work ? Math.round(num(x.work.away_ms) / 60000) : 0, away_on_call_min: x.work ? Math.round(num(x.work.oncall_hidden_ms) / 60000) : 0, exits: x.work ? num(x.work.exits) : 0 };
     })
   };
 }

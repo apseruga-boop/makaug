@@ -12,6 +12,7 @@
  */
 const db = require('../config/database');
 const calling = require('./callingScreen');
+const rules = require('./callingRules');
 const { canonicalUgPhone, phoneKey9 } = require('../utils/ugPhone');
 
 const logger = require('../config/logger');
@@ -77,27 +78,30 @@ async function lateOutcome(personKey, attemptId, body = {}) {
 
 // ---------------------------------------------------------------- pipeline --
 
-const STAGES = ['interested', 'said_hi', 'to_close', 'paid'];
-const STAGE_LABELS = { interested: 'Interested', said_hi: 'Said Hi', to_close: 'To close', paid: 'Paid' };
+const STAGES = ['contacted', 'interested', 'said_hi', 'to_close', 'paid'];
+const STAGE_LABELS = { contacted: 'Contacted · text not sent', interested: 'Interested', said_hi: 'Said Hi', to_close: 'To close', paid: 'Paid' };
 
 /** Furthest stage a number reached (pure, tested). */
 function stageOf(n) {
   if (n.paid) return 'paid';
+  // A final no (not interested, do not call, wrong number) takes the number out of the pipeline.
+  if (n.last && rules.FINAL_NO.has(n.last.outcome) && !n.signed_up) return null;
   if (n.signed_up || TO_CLOSE.some((o) => n.outcomes.includes(o))) return 'to_close';
   if (n.said_hi) return 'said_hi';
-  if (INTERESTED.some((o) => n.outcomes.includes(o))) return 'interested';
+  // Interested counts only once the follow-up text was marked sent (Arthur, 22 Nov 2026).
+  if (INTERESTED.some((o) => n.outcomes.includes(o))) return n.text_sent ? 'interested' : 'contacted';
   return null;
 }
 
-async function pipeline(personKey, { days = 60 } = {}) {
+async function pipeline(personKey, { days = null } = {}) {
   const empty = { stages: STAGES.map((k) => ({ key: k, label: STAGE_LABELS[k], items: [] })), since_days: days };
   if (!personKey) return empty;
   const calls = await rows(
     `SELECT id, phone_key, phone, full_name, outcome, next_step, callback_at, COALESCE(wrapped_at, tapped_at) AS at,
             (checklist->>'asked_hello') IN ('true', 'auto', 'manual') AS hi
        FROM call_attempts
-      WHERE person_key = $1 AND status = 'done' AND phone_key IS NOT NULL AND COALESCE(wrapped_at, tapped_at) > NOW() - ($2 || ' days')::interval
-      ORDER BY COALESCE(wrapped_at, tapped_at)`, [personKey, String(days)]);
+      WHERE person_key = $1 AND status = 'done' AND phone_key IS NOT NULL AND ($2::int IS NULL OR COALESCE(wrapped_at, tapped_at) > NOW() - ($2::int * INTERVAL '1 day'))
+      ORDER BY COALESCE(wrapped_at, tapped_at)`, [personKey, days == null ? null : Number(days)]);
   const by = new Map();
   for (const c of calls) {
     const n = by.get(c.phone_key) || { phone_key: c.phone_key, name: '', phone: '', outcomes: [], said_hi: false, first_at: c.at, last: null };
@@ -112,8 +116,8 @@ async function pipeline(personKey, { days = 60 } = {}) {
     // WhatsApp "Hello" read-only: an inbound message from the number after we first called counts as Said Hi.
     for (const h of await rows(
       `WITH m AS MATERIALIZED (SELECT RIGHT(REGEXP_REPLACE(COALESCE(user_phone, ''), '[^0-9]', '', 'g'), 9) AS k, created_at
-                                 FROM whatsapp_messages WHERE direction = 'inbound' AND created_at > NOW() - ($2 || ' days')::interval)
-       SELECT k, MIN(created_at) AS at FROM m WHERE k = ANY($1::text[]) GROUP BY k`, [keys, String(days + 7)])) {
+                                 FROM whatsapp_messages WHERE direction = 'inbound' AND created_at >= $2::timestamptz)
+       SELECT k, MIN(created_at) AS at FROM m WHERE k = ANY($1::text[]) GROUP BY k`, [keys, new Date(Math.min(...[...by.values()].map((v) => new Date(v.first_at).getTime())) - 7 * DAY_MS).toISOString()])) {
       const n = by.get(h.k); if (n && new Date(h.at) >= new Date(n.first_at)) n.said_hi = true;
     }
     for (const g of await rows(
@@ -124,13 +128,16 @@ async function pipeline(personKey, { days = 60 } = {}) {
       const n = by.get(g.k); if (!n) continue;
       n.signed_up = true; if (g.paid) n.paid = true;
     }
+    for (const t of await rows('SELECT phone_key, MAX(at) AS at FROM call_sms_log WHERE phone_key = ANY($1::text[]) GROUP BY phone_key', [keys])) {
+      const n = by.get(t.phone_key); if (n && new Date(t.at) >= new Date(n.first_at)) n.text_sent = true;
+    }
     for (const c of calls) if (c.outcome === 'paid' || c.outcome === 'renewed') { const n = by.get(c.phone_key); if (n) n.paid = true; }
   }
   const out = empty;
   for (const n of by.values()) {
     const st = stageOf(n); if (!st) continue;
     out.stages[STAGES.indexOf(st)].items.push({
-      phone_key_tail: last3(n.phone_key), name: n.name, phone: last3(n.phone || n.phone_key), said_hi: n.said_hi, signed_up: Boolean(n.signed_up),
+      phone_key_tail: last3(n.phone_key), name: n.name, phone: last3(n.phone || n.phone_key), said_hi: n.said_hi, text_sent: Boolean(n.text_sent), signed_up: Boolean(n.signed_up),
       last_at: n.last.at, last_outcome: n.last.outcome, next_step: n.last.next_step || '', callback_at: n.last.callback_at, attempt_id: n.last.id
     });
   }
@@ -192,7 +199,8 @@ async function owes(personKey) {
       const overdueDays = from ? Math.max(0, Math.round((new Date(`${today}T00:00:00Z`) - new Date(`${from}T00:00:00Z`)) / DAY_MS)) : null;
       const months = from ? Math.max(1, Math.ceil(overdueDays / 30)) : 1;
       const c = chase.get(a.k);
-      return { id: a.id, name: a.full_name || '', phone: last3(a.phone), paid_until: from, never_paid: !from, overdue_days: overdueDays,
+      const rf = rules.removeFlag({ paid_until: from, since: a.since });
+      return { id: a.id, name: a.full_name || '', phone: last3(a.phone), paid_until: from, never_paid: !from, overdue_days: overdueDays, unpaid_days: rf.unpaid_days, remove_flag: rf.remove,
         owed_ugx: months * fee, last_chase: c ? { at: c.at, by: c.person_key, note: c.note || '', mine: c.person_key === personKey } : null };
     })
   };
