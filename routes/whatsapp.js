@@ -4912,9 +4912,7 @@ function employeePendingStoredMedia(sessionData = {}) {
       degradedFromVideo: item?.degradedFromVideo === true || item?.degraded_from_video === true,
       publicEligible: item?.evidenceOnly === true ? false : item?.publicEligible !== false,
       evidenceOnly: item?.evidenceOnly === true,
-      mediaValidation: item?.mediaValidation && typeof item.mediaValidation === 'object' ? item.mediaValidation : null,
-      // When the phone sent it, if WhatsApp told us (employeeOwnerBySendOrder).
-      senderMs: Number(item?.senderMs || item?.sender_ms || 0) > 0 ? Number(item?.senderMs || item?.sender_ms) : 0
+      mediaValidation: item?.mediaValidation && typeof item.mediaValidation === 'object' ? item.mediaValidation : null
     }))
     .filter((item) => item.url && ['image', 'video', 'document'].includes(item.kind))
     .slice(0, 20);
@@ -7818,6 +7816,11 @@ async function findEmployeeDuplicateProperty({ caption = '', facts = {}, session
       videoId,
     ]
   );
+  // An advert this batch already found on makaug by its files
+  // (findListingWithSameMedia) is that listing again when its words come back
+  // later in the batch with a different file: the Shimoni advert came twice.
+  const batchRepeats = (Array.isArray(sessionData.employee_batch_file_repeats) ? sessionData.employee_batch_file_repeats : [])
+    .filter((row) => row && row.id);
   return decideIntakeRepeat({
     caption,
     captionHash,
@@ -7825,7 +7828,31 @@ async function findEmployeeDuplicateProperty({ caption = '', facts = {}, session
     area,
     price: facts.price,
     videoId,
-  }, result.rows);
+  }, [...result.rows, ...batchRepeats]);
+}
+
+/**
+ * A listing in review or live that already holds one of these exact files, at
+ * the same price: the same advert sent again, however its caption reads.
+ */
+async function findListingWithSameMedia(storedMedia = [], price = 0) {
+  const hashes = [...new Set((Array.isArray(storedMedia) ? storedMedia : [])
+    .map((item) => normalizeInput(item?.sha256 || '').toLowerCase())
+    .filter((hash) => /^[0-9a-f]{64}$/.test(hash)))];
+  const amount = Number(price) || 0;
+  if (!hashes.length || !(amount > 0)) return null;
+  const result = await db.query(
+    `SELECT id, status, price, area, district
+       FROM properties
+      WHERE status IN ('pending','approved')
+        AND price = $2
+        AND jsonb_typeof(extra_fields->'media_sha256') = 'array'
+        AND extra_fields->'media_sha256' ?| $1::text[]
+      ORDER BY created_at ASC
+      LIMIT 1`,
+    [hashes, amount]
+  );
+  return result.rows[0] || null;
 }
 
 async function applyEmployeePriceDrop(existing, facts) {
@@ -13210,8 +13237,6 @@ async function handleEmployeeWhatsappIntake({
       }
     }
     const employeeBurstSize = noteEmployeeSenderTime(data, Number(runtime.senderMs || 0) || Date.now());
-    // Only a time WhatsApp gave us can say what was sent before what.
-    data.current_sender_ms_known = Number(runtime.senderMs || 0) > 0;
     if (isEmployeeIntakeComplete(cleanBody)) {
       // Save anything that is already finished before deciding the batch cannot
       // be closed. Without this, a property needing nothing still counted as an
@@ -13293,6 +13318,25 @@ async function handleEmployeeWhatsappIntake({
               : '',
             duplicateLines.length ? `Already on makaug, so not added again:\n${duplicateLines.join('\n')}` : '',
             'To fix it: reply *CANCEL*, start a new *Agent 007* batch, and for each property select its photos in WhatsApp and type or paste its description as the caption, then send. One property at a time.'
+          ].filter(Boolean).join('\n\n')
+        };
+      }
+      // 22 Nov 2026: photos held in a batch of several adverts are not one
+      // property waiting for its caption. Say what they are, and the way out.
+      if (pendingStoredMedia.length && !pendingCaption && !queuedSubmissions.length && data.pending_media_from_burst === true) {
+        const heldCount = new Set(pendingStoredMedia.map((item, index) => normalizeEmployeeSourceMessageId(item?.inbound_message_id || '')
+          || normalizeInput(item?.sha256 || item?.url || '')
+          || `held-${index}`)).size;
+        const inReview = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
+        return {
+          handled: true,
+          nextStep: currentStep,
+          batchComplete: false,
+          message: [
+            `I have not closed this batch. ${heldCount} photo${heldCount === 1 ? '' : 's'}/video${heldCount === 1 ? '' : 's'} came with no description in the middle of several adverts, so I have not guessed which listing ${heldCount === 1 ? 'it belongs' : 'they belong'} to.`,
+            inReview ? `${inReview} ${inReview === 1 ? 'listing that came with its description is' : 'listings that came with their descriptions are'} in staff review.` : '',
+            duplicateLines.length ? `Already on makaug, so not added again:\n${duplicateLines.join('\n')}` : '',
+            'Reply *CANCEL* to close the batch. The listings stay in staff review; add the held photos to the right listing in King. Next time, forward one advert at a time, or put its description on each photo.'
           ].filter(Boolean).join('\n\n')
         };
       }
@@ -13487,9 +13531,8 @@ async function handleEmployeeWhatsappIntake({
       // twice and listed twice in Ronald's summary.
       const sameWords = (value = '') => normalizeInput(stripForwardMarkers(value)).replace(/\s+/g, ' ').toLowerCase();
       const theseWords = sameWords(cleanBody);
-      // A description in words alone: photos sent after it are not the
-      // previous advert's any more (employeeOwnerBySendOrder).
-      if (looksLikePropertyCaption(cleanBody)) noteEmployeeCaptionMark(data, { album: false });
+      // One more advert in this batch (settleEmployeeOrphanMedia).
+      if (looksLikePropertyCaption(cleanBody)) noteEmployeeBatchDescription(data, cleanBody);
       if (theseWords.length >= 24
         && data.whatsapp_agent_self_intake !== true
         && [pendingCaption, ...employeePendingSubmissionQueue(data).map((entry) => entry.caption)].some((kept) => sameWords(kept) === theseWords)) {
@@ -13888,17 +13931,16 @@ async function handleEmployeeWhatsappIntake({
     // A captionless photo in the middle of a forwarded burst: hold it, do not guess.
     // A photo that is part of an album (media_count > 1) still follows its
     // captioned first photo, as WhatsApp sends albums in order.
-    // When the send order names a different owner than the property being
-    // built (a repeat or a description in words came in between), or names
-    // none, it is held too, and placed by that order (22 Nov 2026).
-    const ownerByOrder = !caption
-      ? employeeOwnerBySendOrder(data, { senderMs: data.current_sender_ms_known === true ? mediaSenderMs : 0 })
-      : undefined;
-    const sendOrderDisagrees = ownerByOrder !== undefined && ownerByOrder !== String(data.current_property_id || '');
+    // 22 Nov 2026: a burst is known before its second property is made, when
+    // another description from this phone is already waiting in line
+    // (whatsappSendOrder.describedWaiting). A Kira house's first photo came
+    // between a Kasangati plot and the Kira caption, and went on the plot.
     const heldFromBurst = !caption
       && Boolean(data.current_property_id)
       && Number(runtime.mediaCount || 0) <= 1
-      && (employeeInForwardedBurst(data) || sendOrderDisagrees);
+      && (employeeInForwardedBurst(data)
+        || Number(runtime.describedWaiting || 0) > 0
+        || (data.employee_after_repeat === true && data.whatsapp_agent_self_intake !== true));
     if (heldFromBurst) data.pending_media_from_burst = true;
     if (
       !shouldStartProperty
@@ -13917,15 +13959,10 @@ async function handleEmployeeWhatsappIntake({
           inboundMessageId,
           provider: runtime.provider
         });
-        // Each parked photo keeps the time it was sent, so it can be placed by
-        // what it was sent after (employeeOwnerBySendOrder).
-        const sentMs = data.current_sender_ms_known === true ? mediaSenderMs : 0;
-        rememberEmployeePendingMedia(data, pendingStoredMedia.map((item) => ({ ...item, senderMs: sentMs })), inboundMessageId);
+        rememberEmployeePendingMedia(data, pendingStoredMedia, inboundMessageId);
         if (caption) data.pending_property_caption = caption;
-        if (caption && ownMediaCaption) {
-          data.pending_caption_sender_ms = mediaSenderMs;
-          noteEmployeeCaptionMark(data, { album: true });
-        }
+        if (caption && ownMediaCaption) data.pending_caption_sender_ms = mediaSenderMs;
+        if (caption) noteEmployeeBatchDescription(data, caption);
         await replaceEmployeeSession(phone, currentStep, data);
         if (!caption) await settleEmployeeOrphanMedia({ phone, data, currentStep, inboundMessageId });
       } catch (error) {
@@ -13946,7 +13983,7 @@ async function handleEmployeeWhatsappIntake({
           inboundMessageId,
           provider: runtime.provider
         });
-        if (ownMediaCaption) noteEmployeeCaptionMark(data, { album: true });
+        noteEmployeeBatchDescription(data, caption);
         if (
           pendingStoredMediaBeforeMessage.length
           && pendingCaptionBeforeMessage
@@ -14032,9 +14069,7 @@ async function handleEmployeeWhatsappIntake({
         }
         if (propertyAttemptRecorded) data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
         noteEmployeeBatchDuplicate(data, caption, existingProperty);
-        // Photos sent after a repeat belong to that repeat, not to the
-        // property before it.
-        if (ownMediaCaption) noteEmployeeCaptionMark(data, { album: true });
+        noteEmployeeBatchDescription(data, caption, { repeat: true });
         if (data.whatsapp_agent_self_intake === true && String(existingProperty.status) === 'pending' && candidates.length) {
           const fresh = await storeEmployeeMedia(candidates, { privateMedia: false, phone, inboundMessageId, provider: runtime.provider }).catch(() => []);
           const toppedUp = await agentTopUpExistingProperty({ data, existingProperty, storedMedia: fresh, phone, inboundMessageId });
@@ -14118,12 +14153,54 @@ async function handleEmployeeWhatsappIntake({
       return { handled: true, nextStep: currentStep, message: employeeMediaFailureMessage(error) };
     }
 
+    // 22 Nov 2026: a Shimoni advert forwarded again went up a second time. Its
+    // video was the 16 Nov listing's, byte for byte, but the caption and the
+    // area read a little differently, so the caption check let it through.
+    // The same file at the same price is the same advert.
+    if (shouldStartProperty && !recoveredExistingProperty && data.whatsapp_agent_self_intake !== true) {
+      const sameFiles = await findListingWithSameMedia(storedMedia, facts.price).catch((error) => {
+        logger.warn('Agent 007 same-file check failed:', error.message || String(error));
+        return null;
+      });
+      if (sameFiles) {
+        if (propertyAttemptRecorded) data.properties_duplicate_count = Number(data.properties_duplicate_count || 0) + 1;
+        noteEmployeeBatchDuplicate(data, caption, sameFiles);
+        data.employee_batch_file_repeats = [
+          ...(Array.isArray(data.employee_batch_file_repeats) ? data.employee_batch_file_repeats : []),
+          {
+            id: String(sameFiles.id),
+            status: String(sameFiles.status || ''),
+            price: String(sameFiles.price ?? ''),
+            area: facts.locationPatch?.area || '',
+            district: facts.locationPatch?.district || '',
+            caption_hash: employeeCaptionHash(caption),
+            source_caption: String(caption || '').slice(0, 800),
+            phone_digits: String(data.agent?.whatsapp || data.agent?.phone || data.customer_details?.phone || '').replace(/\D/g, '')
+          }
+        ].slice(-20);
+        noteEmployeeBatchDescription(data, caption, { repeat: true });
+        if (!pendingStoredMediaBeforeMessage.length || continuesPendingProperty) {
+          releaseEmployeePendingCaption(data, { before: pendingCaptionBeforeMessage, caption });
+        }
+        await replaceEmployeeSession(phone, currentStep, data);
+        return {
+          handled: true,
+          nextStep: currentStep,
+          propertyId: sameFiles.id,
+          duplicate: true,
+          message: (data.property_batch_mode || 'multiple') === 'multiple'
+            ? ''
+            : `Duplicate property found — ${String(sameFiles.id).slice(0, 8).toUpperCase()} is already ${sameFiles.status}. Nothing was added twice.`
+        };
+      }
+    }
+
     if (shouldStartProperty && !recoveredExistingProperty) {
       try {
         const propertyId = await createEmployeeReviewProperty({ phone, inboundMessageId, caption, facts, storedMedia, sessionData: data });
         data.current_property_id = propertyId;
         noteEmployeePropertyCreated(data, propertyId, storedMedia, caption);
-        noteEmployeeCaptionMark(data, { owner: propertyId, album: ownMediaCaption });
+        noteEmployeeBatchDescription(data, caption);
         data.property_ids = [...new Set([...(Array.isArray(data.property_ids) ? data.property_ids : []), propertyId])];
         if (data.employee_intake_recovery_skip_existing_matches !== true) {
           data.total_media_count = Number(data.total_media_count || 0) + storedMedia.length;
@@ -16940,63 +17017,30 @@ function employeeMediaFamily(item = {}) {
  * saved with one picture. The parked photos stayed behind, then blocked COMPLETE
  * ("media but no caption").
  *
- * Parked photos with no caption pending are now placed on a property from the
- * same burst: the one whose own media is the same kind (photos go with the
- * photo-captioned house, a clip goes with the video-captioned one). While the
- * match is not unique we wait; when the batch is being closed we place what is
- * left on the closest match and say so, because a listing with all of its
- * photos, checked by a moderator, beats photos thrown away.
+ * Parked photos with no caption pending were then placed on a property from
+ * the same burst, by kind, and on the closest match when the batch closed.
+ * Since 22 Nov 2026 they are placed only when the batch described one advert;
+ * otherwise they are held and named (see settleEmployeeOrphanMedia).
  */
 // Captionless media this long after the agent last wrote starts a new property.
 const EMPLOYEE_STALE_CURRENT_PROPERTY_MS = 20 * 60 * 1000;
-const EMPLOYEE_ORPHAN_MEDIA_WINDOW_MS = 45000;
-// A photo sent this soon after a captioned photo or video is part of that advert.
-const EMPLOYEE_ALBUM_FOLLOW_MS = 30 * 1000;
 
 /**
- * Every description in a batch, by the time the phone sent it: the ones that
- * came on a photo or video (album: true) and the ones in words alone, with the
- * property each one made, when it made one. Kept only when WhatsApp gave us
- * the time.
+ * The adverts described in this batch, each counted once however often its
+ * words come back. A photo with no description is placed by itself only when
+ * the batch described a single advert (settleEmployeeOrphanMedia). A repeat of
+ * a listing already on makaug is counted too, and the photos after it are held
+ * rather than given to the property before it.
  */
-function noteEmployeeCaptionMark(data = {}, { owner = null, album = false } = {}) {
-  if (data.current_sender_ms_known !== true) return;
-  const sent = Number(data.current_sender_ms || 0);
-  if (!(sent > 0)) return;
-  const marks = (Array.isArray(data.employee_caption_marks) ? data.employee_caption_marks : [])
-    .filter((mark) => mark && Number(mark.sent) > 0 && !(Number(mark.sent) === sent && !mark.owner && owner));
-  marks.push({ sent, owner: owner ? String(owner) : null, album: Boolean(album) });
-  data.employee_caption_marks = marks.sort((a, b) => Number(a.sent) - Number(b.sent)).slice(-80);
-}
-
-/**
- * Whose is this parked photo, going by what it was sent after?
- *
- * 22 Nov 2026: forwarded adverts each came as a captioned photo or video and
- * then that advert's other photos. Once the messages are handled in the order
- * they were sent (whatsappSendOrder), a photo with no caption belongs to the
- * captioned photo or video sent last before it, as an album does. It is placed
- * only when that is unambiguous: the description just before it came on a
- * photo or video, made a property in this batch, and was sent less than half a
- * minute before. After a description in words alone, or a repeat of a property
- * already on makaug, nothing is guessed.
- *
- * Returns the property id; null when the send order says not to place it;
- * undefined when there is no send order to go by (the old rules apply).
- */
-function employeeOwnerBySendOrder(data = {}, item = {}) {
-  const itemMs = Number(item.senderMs || item.sender_ms || 0);
-  const marks = (Array.isArray(data.employee_caption_marks) ? data.employee_caption_marks : [])
-    .filter((mark) => mark && Number(mark.sent) > 0);
-  if (!(itemMs > 0) || !marks.length) return undefined;
-  let closest = null;
-  for (const mark of marks) {
-    if (Number(mark.sent) <= itemMs && (!closest || Number(mark.sent) >= Number(closest.sent))) closest = mark;
+function noteEmployeeBatchDescription(data = {}, caption = '', { repeat = false } = {}) {
+  const words = normalizeInput(stripForwardMarkers(caption || '')).replace(/\s+/g, ' ').toLowerCase();
+  if (words) {
+    const key = crypto.createHash('sha256').update(words).digest('hex').slice(0, 16);
+    const seen = Array.isArray(data.employee_batch_descriptions) ? data.employee_batch_descriptions : [];
+    if (!seen.includes(key)) data.employee_batch_descriptions = [...seen, key].slice(-60);
   }
-  const batch = new Set((Array.isArray(data.property_ids) ? data.property_ids : []).map(String));
-  if (!closest || closest.album !== true || !closest.owner || !batch.has(String(closest.owner))) return null;
-  if (itemMs - Number(closest.sent) > EMPLOYEE_ALBUM_FOLLOW_MS) return null;
-  return String(closest.owner);
+  if (repeat) data.employee_after_repeat = true;
+  else delete data.employee_after_repeat;
 }
 
 async function settleEmployeeOrphanMedia({ phone, data = {}, currentStep = 'employee_property_media', inboundMessageId = '', final = false } = {}) {
@@ -17004,34 +17048,19 @@ async function settleEmployeeOrphanMedia({ phone, data = {}, currentStep = 'empl
   if (normalizeInput(data.pending_property_caption || '')) return placed;
   const pending = employeePendingStoredMedia(data);
   if (!pending.length) return placed;
+  // 22 Nov 2026: looked at photo by photo, the order of a forwarded batch did
+  // not say whose a photo was, and neither did its kind: closing the batch
+  // would have put seven Kira house photos on a Nakwero plot, the last
+  // listing with a photo. Photos with no description are placed only when
+  // there is nothing else they could belong to: the batch is being closed, it
+  // described one advert, and that advert made one property. Anything else
+  // stays held and is named when the batch closes (Arthur: never guessed).
+  if (!final) return placed;
+  const ids = [...new Set((Array.isArray(data.property_ids) ? data.property_ids : []).map(String))];
+  const described = Array.isArray(data.employee_batch_descriptions) ? data.employee_batch_descriptions.length : 0;
+  if (ids.length !== 1 || described > 1) return placed;
   const meta = data.property_media_meta && typeof data.property_media_meta === 'object' ? data.property_media_meta : {};
-  const now = Date.now();
-  const all = (Array.isArray(data.property_ids) ? data.property_ids : [])
-    .map(String)
-    .filter((id) => meta[id])
-    .map((id, index) => ({ id, index, ...meta[id] }))
-    .sort((a, b) => (Number(b.at) - Number(a.at)) || (b.index - a.index));
-  const recent = final ? all : all.filter((entry) => now - Number(entry.at) < EMPLOYEE_ORPHAN_MEDIA_WINDOW_MS);
-
-  const groups = new Map();
-  for (const item of pending) {
-    const byOrder = employeeOwnerBySendOrder(data, item);
-    // The send order says this one is not simple: leave it parked, and it is
-    // named when the batch is closed.
-    if (byOrder === null) continue;
-    let target = null;
-    if (byOrder) {
-      target = all.find((entry) => entry.id === byOrder) || { id: byOrder, label: 'Property' };
-    } else {
-      const family = employeeMediaFamily(item);
-      const sameKind = recent.filter((entry) => entry.family === family);
-      if (sameKind.length === 1) target = sameKind[0];
-      else if (final) target = sameKind[0] || recent[0] || null;
-    }
-    if (!target) continue;
-    if (!groups.has(target.id)) groups.set(target.id, { target, items: [] });
-    groups.get(target.id).items.push(item);
-  }
+  const groups = new Map([[ids[0], { target: { id: ids[0], label: meta[ids[0]]?.label || 'Property' }, items: pending }]]);
   const remaining = new Set(pending.map((item) => normalizeInput(item.sha256 || item.url)));
   for (const { target, items } of groups.values()) {
     try {
@@ -25520,6 +25549,8 @@ async function processInboundRuntimeUnlocked({
       mediaCandidates: inboundMediaCandidates,
       sharedLocation,
       senderMs: employeeSenderMs(inboundMetadata),
+      // Descriptions from this phone still waiting in line behind this message.
+      describedWaiting: sendOrder.describedWaiting(whatsappLineKey(phone)),
       contactName
     },
     inboundMessageId,
@@ -26072,6 +26103,11 @@ function queueWhatsappRuntimeForPhone(phone, task) {
   return current;
 }
 
+// The line a phone's messages wait in, in the order it sent them.
+function whatsappLineKey(phone = '') {
+  return normalizeBridgeInboundKey(phone || '') || String(phone || 'unknown').trim();
+}
+
 async function processInboundRuntime(input = {}) {
   if (input.metadata) await spillInboundMetadata(input.metadata);
   const hasMedia = Boolean(
@@ -26087,8 +26123,15 @@ async function processInboundRuntime(input = {}) {
   // forwarded advert's photos overtook its captioned video and went onto the
   // property before it (22 Nov 2026, services/whatsappSendOrder.js).
   return sendOrder.runInSendOrder(
-    normalizeBridgeInboundKey(input.phone || '') || String(input.phone || 'unknown').trim(),
-    { senderMs: employeeSenderMs(input.metadata || {}), media: hasMedia, seq: Number(input.arrivalSeq || 0) },
+    whatsappLineKey(input.phone),
+    {
+      senderMs: employeeSenderMs(input.metadata || {}),
+      media: hasMedia,
+      seq: Number(input.arrivalSeq || 0),
+      // Its words describe a property. A photo with no description handled
+      // while this one waits is part of a batch of several adverts.
+      describes: looksLikePropertyCaption(normalizeInput(input.body || ''))
+    },
     run
   );
 }
@@ -27608,8 +27651,10 @@ module.exports.__test = {
   settleEmployeeOrphanMedia,
   employeeMediaFamily,
   noteEmployeePropertyCreated,
-  noteEmployeeCaptionMark,
-  employeeOwnerBySendOrder,
+  noteEmployeeBatchDescription,
+  findListingWithSameMedia,
+  findEmployeeDuplicateProperty,
+  whatsappLineKey,
   employeePendingStoredMedia,
   rememberEmployeePendingMedia,
   employeeSenderMs,
