@@ -2,20 +2,23 @@
 
 /**
  * 22 Nov 2026, 09:47 in Kampala. An agent's twenty adverts were forwarded to
- * Agent 007 in three seconds, each a captioned photo or video and then that
- * advert's other photos. Three things went wrong:
+ * Agent 007 in three seconds. Several things went wrong; the first fix (the
+ * same morning) placed each photo with no caption on the captioned photo or
+ * video sent just before it. That afternoon every photo was looked at, and the
+ * order did not say whose a photo was:
  *
- *  1. Two photos sent right after the captioned "One acre NAJEERA" video were
- *     handled before it and went onto the Kira Nakwero plot sent before it.
- *     (The order is fixed in services/whatsappSendOrder.js; this file covers
- *     what is done with photos once they arrive in order.)
- *  2. Three photos of a Kira house were parked, because several properties
- *     had just been created, and the next photo, given to the property being
- *     built, cleared them: the house went up with one picture. A video of a
- *     Namugongo plot went the same way.
- *  3. "50 decimals Commercial plot Mbalwa namugongo road UGX 600 million" was
- *     skipped as a repeat of the same agent's "5 bedrooms ... 14 decimals plot"
- *     house in Mbalwa at the same price.
+ *  - The Kira house's caption was on its second photo, so its first photo came
+ *    between the Kasangati plot and the Kira caption.
+ *  - Three more Kira house photos came after the Shimoni video and the
+ *    Nakwero and Najjera captions, a tenth of a second after the rest.
+ *  - Two videos had their descriptions written inside the video (a Mbalwa
+ *    house, a Kisubi plot): separate adverts, not the Namugongo plot's.
+ *  - Closing the batch put what was left on "the closest match": seven Kira
+ *    house photos would have gone on the Nakwero plot.
+ *
+ * Arthur: in a batch of several adverts a photo with no description is held
+ * and named, never guessed. Also covered here: a different plot at the same
+ * price is not a repeat, and the same file at the same price is.
  *
  * Captions are the real ones; the ids and numbers are made up.
  */
@@ -32,31 +35,23 @@ const { decideIntakeRepeat, captionsStateDifferentFacts, captionLandDecimals, ca
 
 const read = (file) => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
 
-const T0 = 1795330042000; // 06:47:22 UTC
-const photo = (n, senderMs) => ({ url: `https://media.example.invalid/p${n}.jpg`, sha256: `sha-p${n}`, kind: 'image', mimeType: 'image/jpeg', name: `p${n}.jpg`, senderMs });
-const clip = (n, senderMs) => ({ url: `https://media.example.invalid/v${n}.mp4`, sha256: `sha-v${n}`, kind: 'video', mimeType: 'video/mp4', name: `v${n}.mp4`, senderMs });
+const photo = (n) => ({ url: `https://media.example.invalid/p${n}.jpg`, sha256: `sha-p${n}`, kind: 'image', mimeType: 'image/jpeg', name: `p${n}.jpg` });
+const clip = (n) => ({ url: `https://media.example.invalid/v${n}.mp4`, sha256: `sha-v${n}`, kind: 'video', mimeType: 'video/mp4', name: `v${n}.mp4` });
 
-/** The batch as it stands once each captioned advert has made its property, in the order sent. */
+/** The batch once each advert that came with its description has made its property. */
 function batch() {
-  const data = { property_ids: [], current_sender_ms_known: true };
-  const made = (id, ms, media, caption) => {
-    data.current_sender_ms = T0 + ms;
+  const data = { property_ids: [] };
+  const made = (id, media, caption) => {
     route.noteEmployeePropertyCreated(data, id, media, caption);
+    route.noteEmployeeBatchDescription(data, caption);
     data.property_ids.push(id);
-    route.noteEmployeeCaptionMark(data, { owner: id, album: true });
   };
-  made('kasangati', 42, [photo(1)], '24 decimals Kasangati Mawule nalusugga 3 km off kasangati matugga tarmac UGX 90 million');
-  made('kira-house', 472, [photo(3)], 'Kira 4 bedrooms house with staff quarters on 13 decimals plot UGX 550 million');
-  made('shimoni', 539, [clip(7)], '12.4 decimals Kira Shimoni with 4 bedrooms shell house UGX 175 million negotiable');
-  made('nakwero', 601, [photo(9)], '12 decimals plot Kira Nakwero UGX 65 million');
-  made('najjera', 602, [clip(10)], 'One acre NAJEERA UGX1 billion');
-  // The Shimoni advert again: a repeat, so no property, but it ends the Najjera advert.
-  data.current_sender_ms = T0 + 973;
-  route.noteEmployeeCaptionMark(data, { album: true });
-  made('kyanja', 1081, [clip(15)], '13 decimals Kyanja very good for apartments UGX 210 million');
-  made('naalya', 1298, [clip(16)], 'Naalya 4 bedrooms house with staff quarters 30 decimals plot UGX 950 million');
-  made('namugongo', 1668, [clip(17)], '25 decimals commercial plot NAMUGONGO UGX 300 million');
-  made('bulindo', 3761, [clip(20)], 'KIRA BULINDO TOWN 12 DOUBLE RENTAL UNITS APARTMENT BLOCK 11M MONTHLY INCOME SELLING UGX 1.1BILLION');
+  made('kasangati', [photo(1)], '24 decimals Kasangati Mawule nalusugga 3 km off kasangati matugga tarmac UGX 90 million');
+  made('kira-house', [photo(3)], 'Kira 4 bedrooms house with staff quarters on 13 decimals plot UGX 550 million');
+  made('nakwero', [photo(9)], '12 decimals plot Kira Nakwero UGX 65 million');
+  made('najjera', [clip(10)], 'One acre NAJEERA UGX1 billion');
+  made('namugongo', [clip(17)], '25 decimals commercial plot NAMUGONGO UGX 300 million');
+  made('bulindo', [clip(20)], 'KIRA BULINDO TOWN 12 DOUBLE RENTAL UNITS APARTMENT BLOCK 11M MONTHLY INCOME SELLING UGX 1.1BILLION');
   return data;
 }
 
@@ -70,103 +65,155 @@ async function withAttachSpy(fn) {
   try { await fn(attempted); } finally { db.query = original; }
 }
 
-test('a parked photo belongs to the captioned photo or video sent last before it', () => {
-  const data = batch();
-  const owner = (ms) => route.employeeOwnerBySendOrder(data, { senderMs: T0 + ms });
-  assert.strictEqual(owner(471 + 6), 'kira-house', 'the three Kira photos sent after its captioned photo');
-  assert.strictEqual(owner(482), 'kira-house');
-  assert.strictEqual(owner(538), 'kira-house');
-  assert.strictEqual(owner(601 + 0.5), 'nakwero');
-  assert.strictEqual(owner(602.4), 'najjera', 'the two photos sent after the Najjera video are Najjera’s, not Nakwero’s');
-  assert.strictEqual(owner(2297), 'namugongo', 'the Namugongo video with no caption');
-  assert.strictEqual(owner(973 + 5), null, 'after a repeat of a property already on makaug: not guessed');
-});
-
-test('after a description in words alone, or half a minute later, nothing is guessed', () => {
-  const data = batch();
-  data.current_sender_ms = T0 + 5000;
-  route.noteEmployeeCaptionMark(data, { album: false });
-  assert.strictEqual(route.employeeOwnerBySendOrder(data, { senderMs: T0 + 5200 }), null);
-  const quiet = batch();
-  assert.strictEqual(route.employeeOwnerBySendOrder(quiet, { senderMs: T0 + 3761 + 31000 }), null);
-  assert.strictEqual(route.employeeOwnerBySendOrder(quiet, { senderMs: 0 }), undefined, 'no send time: the old rules apply');
-  assert.strictEqual(route.employeeOwnerBySendOrder({ property_ids: ['a'] }, { senderMs: T0 }), undefined, 'no marks: the old rules apply');
-  const elsewhere = batch();
-  elsewhere.property_ids = elsewhere.property_ids.filter((id) => id !== 'najjera');
-  assert.strictEqual(route.employeeOwnerBySendOrder(elsewhere, { senderMs: T0 + 603 }), null, 'only a property in this batch');
-});
-
-test('no marks are kept when WhatsApp gave no time', () => {
-  const data = { current_sender_ms: T0, current_sender_ms_known: false };
-  route.noteEmployeeCaptionMark(data, { owner: 'x', album: true });
-  assert.strictEqual(data.employee_caption_marks, undefined);
-});
-
-test('the Najjera photos go to Najjera, not to the more recent photo property', async () => {
+test('in a batch of several adverts, photos with no description are not placed, not even when it closes', async () => {
   await withAttachSpy(async (attempted) => {
     const data = batch();
-    data.pending_property_media = [photo(11, T0 + 602.5), photo(12, T0 + 603)];
+    data.pending_property_media = [photo(2), photo(4), photo(5), photo(6), photo(8), photo(11), photo(12), clip(18), clip(19)];
     await route.settleEmployeeOrphanMedia({ phone: '', data });
-    assert.deepStrictEqual(attempted, ['najjera'], 'placed at once, by what they were sent after');
-  });
-});
-
-test('closing the batch places every parked photo by send order', async () => {
-  await withAttachSpy(async (attempted) => {
-    const data = batch();
-    data.pending_property_media = [photo(4, T0 + 477), photo(5, T0 + 482), photo(6, T0 + 538), clip(18, T0 + 2297)];
+    assert.deepStrictEqual(attempted, [], 'nothing placed while the batch is open');
     await route.settleEmployeeOrphanMedia({ phone: '', data, final: true });
-    assert.deepStrictEqual(attempted.sort(), ['kira-house', 'namugongo']);
+    assert.deepStrictEqual(attempted, [], 'and nothing when it closes: the last photo listing was Nakwero, a plot');
+    assert.strictEqual(route.employeePendingStoredMedia(data).length, 9, 'all nine still held, to be named');
   });
 });
 
-test('a photo the send order cannot place stays parked, even when the batch is closed', async () => {
+test('when the batch described one advert, its photos go on it when the batch closes', async () => {
   await withAttachSpy(async (attempted) => {
-    const data = batch();
-    data.pending_property_media = [photo(14, T0 + 980)];
+    const data = { property_ids: [], pending_property_media: [photo(2), photo(4)] };
+    route.noteEmployeePropertyCreated(data, 'kira-house', [photo(3)], 'Kira 4 bedrooms house with staff quarters on 13 decimals plot UGX 550 million');
+    route.noteEmployeeBatchDescription(data, 'Kira 4 bedrooms house with staff quarters on 13 decimals plot UGX 550 million');
+    // The same words again (a second forward of the same advert) are still one advert.
+    route.noteEmployeeBatchDescription(data, '  Kira 4 bedrooms house with staff quarters on 13 decimals plot UGX 550 million ');
+    data.property_ids.push('kira-house');
+    await route.settleEmployeeOrphanMedia({ phone: '', data });
+    assert.deepStrictEqual(attempted, [], 'not while the batch is open');
     await route.settleEmployeeOrphanMedia({ phone: '', data, final: true });
-    assert.deepStrictEqual(attempted, [], 'it is named when COMPLETE is refused, not put on a guess');
-    assert.strictEqual(route.employeePendingStoredMedia(data).length, 1);
+    assert.deepStrictEqual(attempted, ['kira-house']);
   });
 });
 
-test('parked photos keep their send time in the session', () => {
+test('one property but two adverts described (one a repeat): nothing placed', async () => {
+  await withAttachSpy(async (attempted) => {
+    const data = { property_ids: ['kira-house'], pending_property_media: [photo(8)] };
+    route.noteEmployeePropertyCreated(data, 'kira-house', [photo(3)], 'Kira 4 bedrooms house');
+    route.noteEmployeeBatchDescription(data, 'Kira 4 bedrooms house with staff quarters on 13 decimals plot UGX 550 million');
+    route.noteEmployeeBatchDescription(data, '12.4 decimals Kira Shimoni with 4 bedrooms shell house UGX 175 million negotiable', { repeat: true });
+    await route.settleEmployeeOrphanMedia({ phone: '', data, final: true });
+    assert.deepStrictEqual(attempted, []);
+  });
+});
+
+test('photos after a repeat are held, not given to the property before it; a new description ends that', () => {
   const data = {};
-  route.rememberEmployeePendingMedia(data, [photo(4, T0 + 477)], 'msg-4');
-  route.rememberEmployeePendingMedia(data, [photo(5, T0 + 482)], 'msg-5');
-  assert.deepStrictEqual(route.employeePendingStoredMedia(data).map((item) => item.senderMs), [T0 + 477, T0 + 482]);
+  route.noteEmployeeBatchDescription(data, '12.4 decimals Kira Shimoni with 4 bedrooms shell house UGX 175 million', { repeat: true });
+  assert.strictEqual(data.employee_after_repeat, true);
+  route.noteEmployeeBatchDescription(data, '12 decimals plot Kira Nakwero UGX 65 million');
+  assert.strictEqual(data.employee_after_repeat, undefined);
+  const source = read('routes/whatsapp.js');
+  const held = source.slice(source.indexOf('const heldFromBurst = !caption'), source.indexOf('if (heldFromBurst) data.pending_media_from_burst = true;'));
+  assert.match(held, /employeeInForwardedBurst\(data\)/);
+  assert.match(held, /Number\(runtime\.describedWaiting \|\| 0\) > 0/, 'another description waiting in line');
+  assert.match(held, /data\.employee_after_repeat === true && data\.whatsapp_agent_self_intake !== true/, 'staff batches only');
 });
 
-test('giving a photo to the property being built no longer throws away the photos parked for another', () => {
+test('the send-order guess is gone', () => {
+  const source = read('routes/whatsapp.js');
+  for (const gone of ['employeeOwnerBySendOrder', 'noteEmployeeCaptionMark', 'employee_caption_marks', 'current_sender_ms_known', 'EMPLOYEE_ALBUM_FOLLOW_MS', 'EMPLOYEE_ORPHAN_MEDIA_WINDOW_MS']) {
+    assert.ok(!source.includes(gone), `${gone} should be gone`);
+  }
+  // Every description in a batch is counted where it is handled.
+  assert.match(source, /if \(looksLikePropertyCaption\(cleanBody\)\) noteEmployeeBatchDescription\(data, cleanBody\);/);
+  assert.match(source, /noteEmployeeBatchDuplicate\(data, caption, existingProperty\);\n\s+noteEmployeeBatchDescription\(data, caption, \{ repeat: true \}\);/);
+  assert.match(source, /noteEmployeePropertyCreated\(data, propertyId, storedMedia, caption\);\n\s+noteEmployeeBatchDescription\(data, caption\);/);
+});
+
+test('the runtime tells the intake how many descriptions are waiting behind a message', () => {
+  const source = read('routes/whatsapp.js');
+  assert.match(source, /describes: looksLikePropertyCaption\(normalizeInput\(input\.body \|\| ''\)\)/);
+  assert.match(source, /describedWaiting: sendOrder\.describedWaiting\(whatsappLineKey\(phone\)\)/);
+  assert.strictEqual(route.whatsappLineKey('+256 700 000 111'), route.whatsappLineKey('256700000111'));
+});
+
+test('COMPLETE names held photos for what they are, and the way out', () => {
+  const source = read('routes/whatsapp.js');
+  const block = source.slice(source.indexOf('photos held in a batch of several adverts are not one'), source.indexOf("const blocker = !pendingCaption"));
+  assert.match(block, /data\.pending_media_from_burst === true/);
+  assert.match(block, /came with no description in the middle of several adverts, so I have not guessed/);
+  assert.match(block, /Reply \*CANCEL\* to close the batch\. The listings stay in staff review/);
+});
+
+test('giving a photo to the property being built does not throw away the photos held for another', () => {
   const source = read('routes/whatsapp.js');
   const attach = source.indexOf('propertyId: data.current_property_id,\n        storedMedia,');
   assert.ok(attach > 0);
   const block = source.slice(attach, attach + 1600);
   assert.match(block, /const parked = normalizeInput\(data\.pending_property_caption \|\| ''\) \? \[\] : employeePendingStoredMedia\(data\);/);
-  assert.ok(block.indexOf('clearEmployeePendingMedia(data);') < block.indexOf('if (parked.length) rememberEmployeePendingMedia(data, parked, parkedMessageId);'), 'cleared, then the parked ones put back');
+  assert.ok(block.indexOf('clearEmployeePendingMedia(data);') < block.indexOf('if (parked.length) rememberEmployeePendingMedia(data, parked, parkedMessageId);'), 'cleared, then the held ones put back');
 });
 
-test('a photo the send order gives to another property is parked and placed there, not given to the one being built', () => {
+test('the same file at the same price is the same advert', async () => {
+  const original = db.query;
+  const calls = [];
+  db.query = async (sql, params) => {
+    calls.push({ sql, params });
+    return { rows: [{ id: 'shimoni-16-nov', status: 'approved', price: '175000000' }] };
+  };
+  try {
+    const video = { url: 'https://media.example.invalid/v7.mp4', sha256: 'ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789', kind: 'video' };
+    const found = await route.findListingWithSameMedia([video, { url: 'x', sha256: 'not-a-hash' }], 175000000);
+    assert.strictEqual(found.id, 'shimoni-16-nov');
+    assert.strictEqual(calls.length, 1);
+    assert.match(calls[0].sql, /extra_fields->'media_sha256' \?\| \$1::text\[\]/);
+    assert.match(calls[0].sql, /status IN \('pending','approved'\)/);
+    assert.match(calls[0].sql, /AND price = \$2/);
+    assert.deepStrictEqual(calls[0].params, [['abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789'], 175000000]);
+    calls.length = 0;
+    assert.strictEqual(await route.findListingWithSameMedia([video], 0), null, 'no price, no match');
+    assert.strictEqual(await route.findListingWithSameMedia([{ url: 'x', sha256: '' }], 175000000), null, 'no file hash, no match');
+    assert.strictEqual(calls.length, 0, 'and no query');
+  } finally {
+    db.query = original;
+  }
   const source = read('routes/whatsapp.js');
-  const held = source.slice(source.indexOf('const ownerByOrder = !caption'), source.indexOf('if (heldFromBurst) data.pending_media_from_burst = true;'));
-  assert.match(held, /employeeOwnerBySendOrder\(data, \{ senderMs: data\.current_sender_ms_known === true \? mediaSenderMs : 0 \}\)/);
-  assert.match(held, /\(employeeInForwardedBurst\(data\) \|\| sendOrderDisagrees\)/);
-  // Each description is marked with the time it was sent, and the property it made.
-  assert.match(source, /noteEmployeeCaptionMark\(data, \{ owner: propertyId, album: ownMediaCaption \}\);/);
-  assert.match(source, /if \(looksLikePropertyCaption\(cleanBody\)\) noteEmployeeCaptionMark\(data, \{ album: false \}\);/);
-  assert.match(source, /data\.current_sender_ms_known = Number\(runtime\.senderMs \|\| 0\) > 0;/);
+  const check = source.slice(source.indexOf('The same file at the same price is the same advert.'), source.indexOf('const propertyId = await createEmployeeReviewProperty({ phone, inboundMessageId, caption, facts, storedMedia, sessionData: data });'));
+  assert.match(check, /data\.whatsapp_agent_self_intake !== true/, 'staff batches');
+  assert.match(check, /noteEmployeeBatchDuplicate\(data, caption, sameFiles\);/, 'listed as already on makaug');
+  assert.match(check, /duplicate: true/);
 });
 
-test('the old rules still apply when there is no send time', async () => {
-  await withAttachSpy(async (attempted) => {
-    const data = { property_ids: ['a', 'b'], pending_property_media: [photo(1)] };
-    route.noteEmployeePropertyCreated(data, 'a', [photo(8)], 'House A');
-    route.noteEmployeePropertyCreated(data, 'b', [photo(9)], 'House B');
-    await route.settleEmployeeOrphanMedia({ phone: '', data });
-    assert.deepStrictEqual(attempted, [], 'two photo properties: wait, do not guess');
-    await route.settleEmployeeOrphanMedia({ phone: '', data, final: true });
-    assert.deepStrictEqual(attempted, ['b'], 'COMPLETE uses the most recent photo property, as before');
-  });
+test('the same advert again later in the batch, with a different file, is the listing its files matched', async () => {
+  const original = db.query;
+  db.query = async () => ({ rows: [] });
+  try {
+    const sessionData = {
+      agent: { id: 'agent-1', whatsapp: '+256700000777' },
+      employee_batch_file_repeats: [{
+        id: 'shimoni-16-nov',
+        status: 'approved',
+        price: '175000000',
+        area: 'Shimoni Estate',
+        district: 'Wakiso',
+        caption_hash: 'first-forward',
+        source_caption: '12.4 decimals Kira Shimoni with 4 bedrooms shell house UGX 175 million negotiable',
+        phone_digits: '256700000777'
+      }]
+    };
+    const facts = { listingType: 'sale', price: 175000000, locationPatch: { area: 'Shimoni Estate', district: 'Wakiso' } };
+    const again = await route.findEmployeeDuplicateProperty({ caption: '12.4 decimals plot Kira Shimoni with 4 bedrooms shell house UGX 175 million', facts, sessionData });
+    assert.ok(again, 'a repeat');
+    assert.strictEqual(again.id, 'shimoni-16-nov');
+    const other = await route.findEmployeeDuplicateProperty({
+      caption: '12 decimals plot Kira Nakwero UGX 65 million',
+      facts: { listingType: 'sale', price: 65000000, locationPatch: { area: 'Nakwero', district: 'Wakiso' } },
+      sessionData
+    });
+    assert.strictEqual(other, null, 'another advert is not');
+  } finally {
+    db.query = original;
+  }
+  const source = read('routes/whatsapp.js');
+  assert.match(source, /\[\.\.\.result\.rows, \.\.\.batchRepeats\]/);
+  assert.match(source, /data\.employee_batch_file_repeats = \[/);
 });
 
 test('fifty decimals is not fourteen: a different plot at the same price is not a repeat', () => {

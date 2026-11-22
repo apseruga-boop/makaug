@@ -167,7 +167,9 @@ test('the next property the agent sends does not drop it', () => {
 
 test('wired in where the media of a new property is stored', () => {
   assert.match(source, /const tooLarge = employeeMediaTooLarge\(error\);\s+if \(tooLarge && shouldStartProperty && caption\) \{\s+keepEmployeeCaptionForMedia\(data, \{ caption, inboundMessageId, senderMs: mediaSenderMs \}\);/);
-  assert.strictEqual((source.match(/releaseEmployeePendingCaption\(data, \{ before: pendingCaptionBeforeMessage, caption \}\);/g) || []).length, 3);
+  // Four since 22 Nov 2026: an advert found already on makaug by its files
+  // releases its description too (findListingWithSameMedia).
+  assert.strictEqual((source.match(/releaseEmployeePendingCaption\(data, \{ before: pendingCaptionBeforeMessage, caption \}\);/g) || []).length, 4);
 });
 
 // ── 4. Per acre ─────────────────────────────────────────────────────────────

@@ -4,7 +4,13 @@
  * 11 Oct 2026: Arthur forwarded a Kira Nakwero house (3 photos) and a
  * Nabusugwe video. The captionless photos arrived before the captions, were
  * parked, and the Kira listing was saved with one picture while COMPLETE refused
- * ("media but no caption"). Parked media must land on the matching property.
+ * ("media but no caption"). Parked media were then placed by kind, and on the
+ * closest match when the batch closed.
+ *
+ * 22 Nov 2026: in a forwarded batch neither the order nor the kind said whose a
+ * photo was; closing the batch would have put seven house photos on a plot.
+ * Arthur: never guessed. Photos with no description are placed only when the
+ * batch described one advert; otherwise they are held and named.
  */
 const assert = require('assert');
 const test = require('node:test');
@@ -12,7 +18,7 @@ const test = require('node:test');
 process.env.NODE_ENV = 'test';
 const db = require('../config/database');
 const router = require('../routes/whatsapp');
-const { settleEmployeeOrphanMedia, employeeMediaFamily, noteEmployeePropertyCreated } = router.__test;
+const { settleEmployeeOrphanMedia, employeeMediaFamily, noteEmployeePropertyCreated, noteEmployeeBatchDescription } = router.__test;
 
 const photo = (n) => ({ url: `https://x/p${n}.jpg`, sha256: `sha${n}`, kind: 'image', mimeType: 'image/jpeg', name: `p${n}.jpg` });
 const clip = { url: 'https://x/v.mp4', sha256: 'shav', kind: 'video', mimeType: 'video/mp4', name: 'v.mp4' };
@@ -20,7 +26,9 @@ const clip = { url: 'https://x/v.mp4', sha256: 'shav', kind: 'video', mimeType: 
 function sessionWithTwoProperties() {
   const data = { property_ids: [], pending_property_media: [photo(1), photo(2)] };
   noteEmployeePropertyCreated(data, 'nabusugwe-id', [clip], 'FAST SALE Nabusugwe 3 bedroom');
+  noteEmployeeBatchDescription(data, 'FAST SALE Nabusugwe 3 bedroom');
   noteEmployeePropertyCreated(data, 'kira-id', [photo(3)], 'Kira Nakwero 4 bedrooms');
+  noteEmployeeBatchDescription(data, 'Kira Nakwero 4 bedrooms');
   data.property_ids = ['nabusugwe-id', 'kira-id'];
   return data;
 }
@@ -41,28 +49,32 @@ test('video stills count as video, real photos as photos', () => {
   assert.strictEqual(employeeMediaFamily(photo(1)), 'image');
 });
 
-test('parked photos go to the photo property, not the video one that was created first', async () => {
+test('two adverts in the batch: parked photos are held, not placed by kind, even when the batch closes', async () => {
   await withStubbedDb(async (attempted) => {
-    await settleEmployeeOrphanMedia({ phone: '', data: sessionWithTwoProperties() });
-    assert.deepStrictEqual(attempted, ['kira-id']);
+    const data = sessionWithTwoProperties();
+    await settleEmployeeOrphanMedia({ phone: '', data });
+    assert.deepStrictEqual(attempted, []);
+    await settleEmployeeOrphanMedia({ phone: '', data, final: true });
+    assert.deepStrictEqual(attempted, [], 'held and named at COMPLETE instead');
   });
 });
 
-test('while the match is ambiguous nothing is guessed, and closing the batch places the media on the closest match', async () => {
+test('one advert in the batch: closing it places the parked photos on its property', async () => {
   await withStubbedDb(async (attempted) => {
-    const data = { property_ids: ['a', 'b'], pending_property_media: [photo(1)] };
-    noteEmployeePropertyCreated(data, 'a', [photo(8)], 'House A');
-    noteEmployeePropertyCreated(data, 'b', [photo(9)], 'House B');
+    const data = { property_ids: ['kira-id'], pending_property_media: [photo(1), photo(2)] };
+    noteEmployeePropertyCreated(data, 'kira-id', [photo(3)], 'Kira Nakwero 4 bedrooms');
+    noteEmployeeBatchDescription(data, 'Kira Nakwero 4 bedrooms');
     await settleEmployeeOrphanMedia({ phone: '', data });
-    assert.deepStrictEqual(attempted, [], 'two photo properties: wait, do not guess');
+    assert.deepStrictEqual(attempted, [], 'not while the batch is open');
     await settleEmployeeOrphanMedia({ phone: '', data, final: true });
-    assert.deepStrictEqual(attempted, ['b'], 'COMPLETE uses the most recent photo property');
+    assert.deepStrictEqual(attempted, ['kira-id']);
   });
 });
 
 test('a pending caption means the parked media is its own, so it is left alone', async () => {
   await withStubbedDb(async (attempted) => {
-    const data = sessionWithTwoProperties();
+    const data = { property_ids: ['kira-id'], pending_property_media: [photo(1)] };
+    noteEmployeePropertyCreated(data, 'kira-id', [photo(3)], 'Kira Nakwero 4 bedrooms');
     data.pending_property_caption = 'Selling 3 bedroom house in Entebbe';
     await settleEmployeeOrphanMedia({ phone: '', data, final: true });
     assert.deepStrictEqual(attempted, []);

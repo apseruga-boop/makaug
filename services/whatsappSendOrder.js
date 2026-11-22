@@ -96,10 +96,11 @@ async function pump(key, line, { now, sleep, settle }) {
  * Run `task` for this phone once every message it sent earlier has run.
  * `senderMs`: when WhatsApp delivered it (0 when not known). `media`: it
  * carries a photo, video or document. `seq`: its arrival number, from
- * nextArrivalSeq, when it was taken earlier on the way in. Resolves or
- * rejects with what `task` resolves or rejects with.
+ * nextArrivalSeq, when it was taken earlier on the way in. `describes`: its
+ * words describe a property (see describedWaiting). Resolves or rejects with
+ * what `task` resolves or rejects with.
  */
-function runInSendOrder(key, { senderMs = 0, media = false, seq = 0 } = {}, task, options = {}) {
+function runInSendOrder(key, { senderMs = 0, media = false, seq = 0, describes = false } = {}, task, options = {}) {
   const now = options.now || Date.now;
   const sleep = options.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   const settle = options.settleMs === undefined ? settleMs() : Math.max(0, Number(options.settleMs) || 0);
@@ -120,12 +121,30 @@ function runInSendOrder(key, { senderMs = 0, media = false, seq = 0 } = {}, task
       seq: Number(seq) > 0 ? Number(seq) : nextArrivalSeq(),
       arrivedAt,
       settle: Boolean(media) || burst,
+      describes: Boolean(describes),
       task,
       resolve,
       reject
     });
     pump(lineKey, line, { now, sleep, settle });
   });
+}
+
+/**
+ * How many messages from this phone that describe a property are waiting in
+ * line behind the one being handled now.
+ *
+ * 22 Nov 2026, looked at photo by photo: in a forwarded batch WhatsApp's
+ * delivery order is not the order of the adverts. A Kira house's caption was
+ * on its second photo, so its first photo came straight after the Kasangati
+ * plot; three more of its photos came after two other adverts. A photo with no
+ * description, handled while another description is still waiting, is part of
+ * a batch of several adverts, and whose it is cannot be told from the order.
+ */
+function describedWaiting(key) {
+  const line = lines.get(String(key || 'unknown'));
+  if (!line) return 0;
+  return line.waiting.filter((entry) => entry.describes).length;
 }
 
 function resetSendOrderForTests() {
@@ -139,5 +158,6 @@ module.exports = {
   settleMs,
   nextArrivalSeq,
   runInSendOrder,
+  describedWaiting,
   resetSendOrderForTests
 };

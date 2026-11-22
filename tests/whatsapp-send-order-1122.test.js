@@ -107,6 +107,26 @@ test('different phones do not wait for each other', async () => {
   assert.strictEqual(await slow, 'slow');
 });
 
+test('while one message runs, the line can say how many descriptions are waiting behind it', async () => {
+  sendOrder.resetSendOrderForTests();
+  const opts = { settleMs: 0 };
+  const seen = [];
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  // The Kasangati plot is being handled; behind it a photo with no words, the
+  // Kira caption and another photo.
+  const first = sendOrder.runInSendOrder('256700000777', { senderMs: 42, media: true, describes: true }, async () => { await gate; }, opts);
+  await tick();
+  const photo = sendOrder.runInSendOrder('256700000777', { senderMs: 471, media: true }, async () => seen.push(['photo', sendOrder.describedWaiting('256700000777')]), opts);
+  const kira = sendOrder.runInSendOrder('256700000777', { senderMs: 472, media: true, describes: true }, async () => seen.push(['kira', sendOrder.describedWaiting('256700000777')]), opts);
+  const next = sendOrder.runInSendOrder('256700000777', { senderMs: 477, media: true }, async () => seen.push(['next', sendOrder.describedWaiting('256700000777')]), opts);
+  assert.strictEqual(sendOrder.describedWaiting('256700000777'), 1, 'the Kira caption is waiting');
+  assert.strictEqual(sendOrder.describedWaiting('256700000999'), 0, 'another phone has no line');
+  release();
+  await Promise.all([first, photo, kira, next]);
+  assert.deepStrictEqual(seen, [['photo', 1], ['kira', 0], ['next', 0]], 'the photo before the Kira caption knows a description is still to come');
+});
+
 test('the settle time: 1.2 seconds by default, set by WHATSAPP_SEND_ORDER_SETTLE_MS, and none in tests', () => {
   assert.strictEqual(sendOrder.settleMs({}), 1200);
   assert.strictEqual(sendOrder.settleMs({ WHATSAPP_SEND_ORDER_SETTLE_MS: '800' }), 800);
@@ -122,6 +142,7 @@ test('the runtime runs every message through the send-order line, with the time 
   assert.match(runtime, /sendOrder\.runInSendOrder\(/);
   assert.match(runtime, /senderMs: employeeSenderMs\(input\.metadata \|\| \{\}\)/);
   assert.match(runtime, /seq: Number\(input\.arrivalSeq \|\| 0\)/);
+  assert.match(runtime, /describes: looksLikePropertyCaption\(normalizeInput\(input\.body \|\| ''\)\)/);
   assert.match(runtime, /queueWhatsappRuntimeForPhone\(input\.phone,/, 'and still one at a time per phone');
   // The arrival number is taken before anything in the bridge route is awaited.
   const route = source.slice(source.indexOf("router.post('/web-bridge/inbound'"));
