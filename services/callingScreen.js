@@ -28,6 +28,7 @@ const perf = require('./staffPerformance');
 const { staffSenderChoices, maskPhoneLast3 } = require('./outreachSenderName');
 const sandbox = require('./callingSandbox');
 const rules = require('./callingRules');
+const followThrough = require('./callingFollowThrough');
 const { phoneKey9, canonicalUgPhone, isUgandanPhone } = require('../utils/ugPhone');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
@@ -340,6 +341,11 @@ async function safeRows(sql, params = []) {
 /** House rules on top of the stored outcomes: an interested outcome always needs a follow-up date. */
 function withRules(t) {
   if (t && Array.isArray(t.outcomes)) t.outcomes = t.outcomes.map((o) => (o && rules.INTERESTED_OUTCOMES.includes(o.key) ? { ...o, date: 'required' } : o));
+  // "Looking for a place" on an agents call ends as "Seeker, text sent" (the seeker form logs the lead and the text).
+  if (t && t.key === 'new_agents' && Array.isArray(t.outcomes) && !t.outcomes.some((o) => o && o.key === rules.SEEKER_OUTCOME.key)) {
+    const at = t.outcomes.findIndex((o) => o && o.key === 'do_not_contact');
+    t.outcomes.splice(at < 0 ? t.outcomes.length : at, 0, { ...rules.SEEKER_OUTCOME });
+  }
   return t;
 }
 
@@ -938,7 +944,7 @@ function cleanTranscript(t) {
 /** A call "closes the loop" with a close, a final no, or a next step. */
 function closesLoop(def = {}) { return Boolean(def.close || def.terminal); }
 
-async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackAt = '', checklist = {}, transcript = null, nextStep = '', now: serverNow = new Date(), at = null, op = '' } = {}) {
+async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackAt = '', checklist = {}, transcript = null, nextStep = '', now: serverNow = new Date(), at = null, op = '', contactName = '', phoneConfirmed = false } = {}) {
   const opId = cleanOp(op);
   const applied = await alreadyApplied(attemptId, opId);
   if (applied) return maskedAttempt(applied);
@@ -956,6 +962,15 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   if (text.length < 3) throw httpError(400, 'Write a short note about the call (or tap one of the quick notes).');
   let cb = parseCallback(callbackAt, now);
   if (rules.INTERESTED_OUTCOMES.includes(def.key) && !cb) throw httpError(400, 'Interested: pick the follow-up date and time.');
+  // Interested on a new-agents call (Arthur, 22 Nov 2026): the name they want shown and the number, checked with them.
+  const newAgentInterested = def.key === 'interested' && task.key === 'new_agents';
+  const shownName = newAgentInterested ? followThrough.cleanShownName(contactName) : '';
+  if (newAgentInterested && !shownName) throw httpError(400, 'Interested: type their name as they want it shown.');
+  if (newAgentInterested && phoneConfirmed !== true) throw httpError(400, 'Interested: read the number back to them and tick that it is right.');
+  if (def.key === rules.SEEKER_OUTCOME.key) {
+    const texted = (await rows(`SELECT 1 FROM call_sms_log WHERE attempt_id = $1 AND template = 'first_seeker' LIMIT 1`, [a.id]))[0];
+    if (!texted) throw httpError(400, 'Seeker: fill in what they are looking for and open the text first (Script → Looking for a place).');
+  }
   if (def.date === 'required' && !cb) throw httpError(400, 'Pick the date and time to call back.');
   // Call backs are at least 24 hours away (Arthur, 16 Nov 2026). Ten minutes of slack for slow saves.
   if (cb && cb.getTime() < now.getTime() + CALLBACK_MIN_HOURS * 3600000 - 10 * 60000) throw httpError(400, `Call backs are at least ${CALLBACK_MIN_HOURS} hours away. Pick tomorrow or later.`);
@@ -1012,8 +1027,14 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   ))[0];
   if (!out) throw httpError(409, 'This call is already wrapped up.');
   await mirrorToProspect(out, def).catch(() => null);
+  let profile = null;
+  // Their pending agent profile under that name. A practice login never opens one for a real number.
+  if (shownName && (sandbox.isTestKey(out.phone_key) || !(await sandbox.isSandbox(out.person_key)))) {
+    profile = await followThrough.provisionInterested(out, { name: shownName }).catch((e) => { console.warn('Interested profile not opened:', e.message); return null; });
+  }
   // A practice login never writes the real do-not-contact list (its own test phones are real numbers).
   if (def.key === 'do_not_contact' && (sandbox.isTestKey(out.phone_key) || !(await sandbox.isSandbox(out.person_key)))) await blockNumber(out.phone_key, { by: out.person_key, reason: out.note || 'Asked not to be called', attemptId: out.id });
+  if (profile) return { ...maskedAttempt(out), profile };
   return maskedAttempt(out);
 }
 
@@ -1834,6 +1855,7 @@ async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
     scripts: { variants: scripts.VARIANTS, objections: require('./teamLearnings').withTips(scripts.OBJECTIONS, tips), greetings: scripts.GREETINGS, luganda_status: 'Ronald to check', routes: callRoutes.ROUTES, pickup: callRoutes.PICKUP },
     callback_min_hours: CALLBACK_MIN_HOURS,
     sms_texts: scripts.SMS_TEXTS,
+    first_text_for: scripts.FIRST_TEXT_FOR,
     templates: scripts.TEMPLATES,
     template_rules: scripts.TEMPLATE_RULES,
     sales_kit: scripts.salesKit(),

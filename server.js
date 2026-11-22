@@ -492,6 +492,11 @@ app.get('/vendor/tesseract/lang/eng.traineddata.gz', async (_req, res) => {
     return res.status(503).json({ ok: false, error: 'Text reader data is not available right now.' });
   }
 });
+// Short addresses for the staff desk (King opened /desk and /staff and got a 404).
+app.get(['/desk', '/desk/', '/staff', '/staff/'], (req, res) => {
+  const q = req.originalUrl.indexOf('?');
+  return res.redirect(302, `/staff-dashboard${q >= 0 ? req.originalUrl.slice(q) : ''}`);
+});
 // Agent video sent from the calling screen: count the open, then the film with its ref.
 app.get('/v/:ref', async (req, res) => {
   const to = await require('./services/callingContact').openRef(req.params.ref).catch(() => null);

@@ -58,6 +58,13 @@ router.post('/inbound', express.text({ type: 'text/*', limit: '32kb' }), async (
         } catch (_ignored) { /* best effort */ }
       });
     }
+    // A "Hi" texted back to the company phone after an Interested call (Arthur, 22 Nov 2026):
+    // the same match as on WhatsApp (approve, mark Said Hi, next-day follow-up). Best effort.
+    if (sender && !(result.parsed && result.parsed.amount_ugx)) { // a repeat "Hi" from the same number is the same text: still check (onHello only acts once)
+      setImmediate(() => {
+        require('../services/callingFollowThrough').onHello({ phone: sender, body, via: 'sms' }).catch(() => null);
+      });
+    }
     return res.json({ ok: true, duplicate: Boolean(result.duplicate), matched: Boolean(result.matched) });
   } catch (error) {
     return res.status(error.status || 500).json({ ok: false, error: error.status ? error.message : 'failed' });

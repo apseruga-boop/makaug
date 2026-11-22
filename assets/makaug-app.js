@@ -16076,8 +16076,39 @@ function staffReviewQueuePageUrl(segment, page, search = "") {
     include_total: search ? "0" : "1"
   });
   if (search) params.set("search", search);
+  // Staff desk: found-online rows have their own page ("Found online to review").
+  if (!search && (segment === "main" || segment === "broker") && staffDeskSplitsFoundOnline()) params.set("exclude_found_online", "1");
   return `/api/staff/properties/review-queue?${params.toString()}`;
 }
+
+function staffDeskSplitsFoundOnline() {
+  return Boolean(document.body && document.body.classList.contains("sd-on"));
+}
+
+// Staff desk "Agent properties to review": both lists again without the found-online rows,
+// so the page matches its sidebar badge. Empty lists are painted too.
+async function staffLoadAgentReviewQueue() {
+  const identity = staffAuthIdentityKey(authState?.user || {});
+  try {
+    const [mainRes, brokerRes] = await Promise.all(["main", "broker"].map((segment) => staffApiRequestWithTimeout(
+      staffPanelRetryEndpoint(staffReviewQueuePageUrl(segment, 1)),
+      {},
+      STAFF_DASHBOARD_PANEL_TIMEOUT_MS,
+      "Staff moderation queue"
+    )));
+    if (!staffDashboardRequestMatchesUser(identity)) return false;
+    const rows = Array.isArray(mainRes?.data) ? mainRes.data : [];
+    const brokerRows = Array.isArray(brokerRes?.data) ? brokerRes.data : [];
+    renderStaffBrokerReviewQueue(brokerRows, { query_ok: true, returned_count: brokerRows.length, total: brokerRes?.pagination?.total, fallback_route: true });
+    renderStaffReviewQueue(rows, { query_ok: true, returned_count: rows.length, total: mainRes?.pagination?.total, fallback_route: true });
+    staffReviewQueueState.main.page = 1;
+    staffReviewQueueState.broker.page = 1;
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+window.staffLoadAgentReviewQueue = staffLoadAgentReviewQueue;
 
 async function staffLoadMoreReviewQueue(segment = "main", searchSeq = 0) {
   const state = staffReviewQueueState[segment];
@@ -17163,6 +17194,7 @@ function applyStaffDashboardData(data = {}, user = {}) {
     ...(data.review_queue_meta || {}),
     expected_count: staffMainPendingTotal
   });
+  if (staffDeskSplitsFoundOnline()) staffLoadAgentReviewQueue();
   renderStaffLeads(data.leads || []);
   renderStaffAdvertising(data.advertising_inquiries || []);
   renderStaffWhatsapp(data.whatsapp_conversations || [], data.summary?.whatsapp || {});

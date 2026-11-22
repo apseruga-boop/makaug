@@ -98,7 +98,8 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
   router.post('/calling/attempts/:id/wrapup', wrap(async (req, res) => {
     const out = await calling.wrapUp(req.params.id, {
       ...opts(req), outcome: req.body?.outcome, note: req.body?.note, callbackAt: req.body?.callback_at, checklist: req.body?.checklist,
-      transcript: req.body?.transcript, nextStep: req.body?.next_step
+      transcript: req.body?.transcript, nextStep: req.body?.next_step,
+      contactName: req.body?.contact_name, phoneConfirmed: req.body?.phone_confirmed === true
     });
     await audit(req, 'calling_call_wrapped_up', { attempt_id: out.id, person: out.person_key, task: out.task_key, outcome: out.outcome, flags: out.flags });
     return res.json({ ok: true, data: out });
@@ -140,6 +141,10 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
   const contact = require('../services/callingContact');
   router.get('/calling/attempts/:id/contact', wrap(async (req, res) => res.json({ ok: true, data: await contact.videoState(req.params.id) })));
   router.post('/calling/attempts/:id/sms', wrap(async (req, res) => res.json({ ok: true, data: await contact.logSms(req.params.id, { personKey: req.body?.person_key, lang: req.body?.lang, template: req.body?.template }) })));
+  // Seeker branch: log what they are looking for as a home-seeker lead and get the search-link text.
+  router.post('/calling/attempts/:id/seeker', wrap(async (req, res) => res.status(201).json({ ok: true, data: await contact.seekerLead(req.params.id, {
+    personKey: req.body?.person_key, area: req.body?.area, budget: req.body?.budget, type: req.body?.type, bedrooms: req.body?.bedrooms, lang: req.body?.lang, name: req.body?.name, caller: req.body?.caller
+  }) })));
   router.post('/calling/attempts/:id/video-request', wrap(async (req, res) => {
     const r = await contact.requestVideo(req.params.id, { personKey: req.body?.person_key, videoKey: req.body?.video_key });
     await audit(req, 'calling_video_requested', { attempt_id: req.params.id, request_id: r.id });

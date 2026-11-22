@@ -19,7 +19,9 @@ const INTERESTED_OUTCOMES = Object.freeze(['interested', 'will_list']);
 /** Outcomes that keep a number open for follow-up (until Paid or a final no). */
 const FOLLOW_UP_OUTCOMES = Object.freeze(new Set(['interested', 'will_list', 'promised', 'signed_up', 'call_back', 'needs_help']));
 /** Final answers: the number leaves the pipeline. */
-const FINAL_NO = Object.freeze(new Set(['rejected', 'do_not_contact', 'wrong_number', 'not_renewing']));
+const FINAL_NO = Object.freeze(new Set(['rejected', 'do_not_contact', 'wrong_number', 'not_renewing', 'seeker_texted']));
+/** Looking for a place, not listing (Arthur, 22 Nov 2026): a home-seeker lead and a search-link text. Ends the call for agents. */
+const SEEKER_OUTCOME = Object.freeze({ key: 'seeker_texted', label: 'Seeker, text sent', spoke: true, terminal: true, close: false, date: null });
 /** The only outcomes that can be logged without tapping Call. */
 const NO_DIAL_OK = Object.freeze(new Set(['wrong_number']));
 const LOW_LIST_AT = 100;
@@ -60,4 +62,4 @@ function removeFlag({ paid_until: paidUntil = null, since = null } = {}, now = n
   return { unpaid_days: Math.max(0, d), remove: d >= REMOVE_AFTER_DAYS };
 }
 
-module.exports = { INTERESTED_OUTCOMES, FOLLOW_UP_OUTCOMES, FINAL_NO, NO_DIAL_OK, LOW_LIST_AT, REMOVE_AFTER_DAYS, textSentSql, kampalaNineAm, autoRetryAt, removeFlag };
+module.exports = { SEEKER_OUTCOME, INTERESTED_OUTCOMES, FOLLOW_UP_OUTCOMES, FINAL_NO, NO_DIAL_OK, LOW_LIST_AT, REMOVE_AFTER_DAYS, textSentSql, kampalaNineAm, autoRetryAt, removeFlag };

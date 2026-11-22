@@ -4647,6 +4647,25 @@ router.get('/properties', async (req, res, next) => {
   }
 });
 
+// Sidebar badges on the staff desk: the same predicates as the two review pages, so the
+// numbers match what each page lists. found_online = the found-online page; agent = the rest.
+router.get('/properties/review-counts', async (_req, res, next) => {
+  try {
+    const result = await staffQuery(
+      `SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE ${foundOnlineReviewWhere('p')})::int AS found_online
+         FROM properties p WHERE ${staffReviewQueueWhereSql('all', 'p')}`,
+      [],
+      { timeoutMs: STAFF_REVIEW_QUEUE_QUERY_TIMEOUT_MS, acquireTimeoutMs: STAFF_REVIEW_QUEUE_ACQUIRE_TIMEOUT_MS, label: 'staff_review_counts' }
+    );
+    const row = result.rows[0] || {};
+    const total = Number(row.total || 0); const foundOnline = Number(row.found_online || 0);
+    res.set('Cache-Control', 'no-store');
+    return res.json({ ok: true, data: { total, found_online: foundOnline, agent: Math.max(0, total - foundOnline) } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/properties/review-queue', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
@@ -4676,6 +4695,11 @@ router.get('/properties/review-queue', async (req, res, next) => {
     }
     if (listingType && LISTING_TYPES.includes(listingType)) {
       filters.push(listingTypeMatchSql('p', listingType, values));
+    }
+    // Staff desk (Arthur, 22 Nov 2026): "Agent properties to review" and "Found online to review"
+    // are separate pages, so the agent lists leave the found-online rows out.
+    if (!directLookup && !search && boolLike(req.query?.exclude_found_online) && segment !== 'found_online') {
+      filters.push(`NOT ${foundOnlineReviewWhere('p')}`);
     }
 
     const where = `WHERE ${filters.join(' AND ')}`;

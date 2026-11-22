@@ -25451,6 +25451,31 @@ async function processInboundRuntimeUnlocked({
   }
   if (ownerFilmReplied?.silent) return { message: '', nextStep: ownerFilmReplied.nextStep || sessionStep };
 
+  // Interested on a call, then "Hi" (Arthur, 22 Nov 2026): a number Ronald logged as
+  // Interested (with the name they want shown) is greeted by that name, approved with
+  // 3 days to load their places, and their chat becomes their posting session.
+  const calledHello = (inboundPhotoCandidates.length || (effectiveMediaUrl && !isAudioNote)) ? null
+    : await require('../services/callingFollowThrough').onHello({ phone, body: effectiveBody, via: 'whatsapp', conversationControl }).catch((error) => {
+      logger.warn('Calling hello check failed:', error.message || String(error));
+      return null;
+    });
+  if (calledHello?.message && calledHello.agent) {
+    await replaceEmployeeSession(phone, 'employee_property_media', agentSelfIntakeSessionData(calledHello.agent));
+    deferWhatsappWork('WhatsApp calling hello intent log', () => logIntent({
+      userPhone: phone,
+      waMessageId: inboundMessageId,
+      detectedIntent: 'agent_registration',
+      confidence: 1,
+      language: sessionLang,
+      currentStep: sessionStep,
+      rawText: effectiveBody,
+      transcript: null,
+      entities: { next_step: 'employee_property_media', via: 'calling_hello', agent_id: calledHello.agent.id },
+      modelUsed: 'calling_hello'
+    }));
+    return { message: calledHello.message, nextStep: 'employee_property_media' };
+  }
+
   // A reply to the agent film ("Reply AGENT here if you would like to join"):
   // someone who wants to join, not someone looking for an agent. Arthur and
   // Ronald are told, and the prospect is told Ronald will call.

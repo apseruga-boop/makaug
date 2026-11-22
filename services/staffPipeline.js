@@ -121,11 +121,13 @@ async function pipeline(personKey, { days = null } = {}) {
       const n = by.get(h.k); if (n && new Date(h.at) >= new Date(n.first_at)) n.said_hi = true;
     }
     for (const g of await rows(
-      `SELECT RIGHT(REGEXP_REPLACE(COALESCE(NULLIF(a.phone, ''), a.whatsapp, ''), '[^0-9]', '', 'g'), 9) AS k, a.status,
+      `SELECT RIGHT(REGEXP_REPLACE(COALESCE(NULLIF(a.phone, ''), a.whatsapp, ''), '[^0-9]', '', 'g'), 9) AS k, a.status, a.agent_application_channel AS channel,
               EXISTS (SELECT 1 FROM revenue_entries r WHERE r.agent_id = a.id AND r.direction = 'in' AND r.kind = 'agent_subscription' AND r.voided_at IS NULL) AS paid
          FROM agents a WHERE a.removed_at IS NULL
           AND RIGHT(REGEXP_REPLACE(COALESCE(NULLIF(a.phone, ''), a.whatsapp, ''), '[^0-9]', '', 'g'), 9) = ANY($1::text[])`, [keys])) {
       const n = by.get(g.k); if (!n) continue;
+      // A profile we opened ourselves on Interested is not a sign-up: it waits for their Hi, then for payment.
+      if (g.channel === 'calling_interested' && !g.paid) continue;
       n.signed_up = true; if (g.paid) n.paid = true;
     }
     for (const t of await rows('SELECT phone_key, MAX(at) AS at FROM call_sms_log WHERE phone_key = ANY($1::text[]) GROUP BY phone_key', [keys])) {
@@ -152,7 +154,10 @@ async function toApprove(personKey, { caller = false } = {}) {
   const list = await rows(
     `SELECT a.id, a.full_name, COALESCE(NULLIF(a.phone, ''), a.whatsapp) AS phone, a.created_at, a.company_name AS agency_name,
             RIGHT(REGEXP_REPLACE(COALESCE(NULLIF(a.phone, ''), a.whatsapp, ''), '[^0-9]', '', 'g'), 9) AS k
-       FROM agents a WHERE a.removed_at IS NULL AND a.status = 'pending' ORDER BY a.created_at LIMIT 200`);
+       FROM agents a WHERE a.removed_at IS NULL AND a.status = 'pending'
+        -- Opened on an Interested call: approved by itself when they say Hi, so not waiting on staff.
+        AND COALESCE(a.agent_application_channel, '') <> 'calling_interested'
+      ORDER BY a.created_at LIMIT 200`);
   const keys = list.map((a) => a.k).filter(Boolean);
   const calledBy = new Map();
   if (keys.length) {
@@ -229,14 +234,78 @@ async function chase(personKey, agentId, { note = '' } = {}) {
 
 // ------------------------------------------------------------- missed calls --
 
+/**
+ * WhatsApp calls we missed on the company line (whatsapp_call_events, read only). They reach
+ * the database only while the bridge reports calls; none have since 31 Aug 2026. Shown to every
+ * caller until somebody calls the number back or takes it ("Call back").
+ */
+async function whatsappMissed({ days = 14 } = {}) {
+  const list = await rows(
+    `WITH e AS (
+       SELECT DISTINCT ON (RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9))
+              id, phone, contact_name, COALESCE(first_seen_at, created_at) AS at, RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) AS k
+         FROM whatsapp_call_events
+        WHERE LOWER(COALESCE(status, '')) IN ('missed', 'rejected', 'declined', 'no_answer', 'unanswered')
+          AND COALESCE(first_seen_at, created_at) > NOW() - ($1::int * INTERVAL '1 day')
+        ORDER BY RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9), COALESCE(first_seen_at, created_at) DESC)
+     SELECT e.*,
+            (SELECT MAX(COALESCE(a.wrapped_at, a.tapped_at)) FROM call_attempts a WHERE a.phone_key = e.k AND a.status = 'done' AND COALESCE(a.wrapped_at, a.tapped_at) > e.at) AS called_back_at,
+            (SELECT m.person_key FROM call_missed m WHERE m.phone_key = e.k AND m.note = 'Missed WhatsApp call' AND m.missed_at >= e.at - INTERVAL '1 minute' ORDER BY m.id DESC LIMIT 1) AS taken_by
+       FROM e WHERE length(e.k) = 9 ORDER BY e.at DESC LIMIT 100`, [days]);
+  return list.map((m) => ({ id: `wa:${m.id}`, wa_event_id: m.id, name: m.contact_name || '', phone: last3(m.phone), at: m.at, source: 'whatsapp', note: 'Missed WhatsApp call', called_back_at: m.called_back_at, taken_by: m.taken_by || '' }));
+}
+
+/** "Call back" on a missed WhatsApp call: it becomes my missed call and the number goes to the top of my calls. */
+async function takeWhatsappMissed(personKey, eventId) {
+  if (!personKey) throw httpError(403, 'Your login has no calling name.');
+  if (!/^[0-9a-f-]{36}$/i.test(String(eventId || ''))) throw httpError(400, 'Invalid call.');
+  const e = (await rows(`SELECT id, phone, contact_name, COALESCE(first_seen_at, created_at) AS at FROM whatsapp_call_events WHERE id = $1`, [eventId]))[0];
+  if (!e) throw httpError(404, 'That WhatsApp call was not found.');
+  const phone = canonicalUgPhone(String(e.phone || '')) || '';
+  const k = phoneKey9(phone);
+  if (!k || !/^\+256\d{9}$/.test(phone)) throw httpError(400, 'That WhatsApp call is not from a Ugandan number. Reply on WhatsApp instead.');
+  const had = (await rows(`SELECT id FROM call_missed WHERE phone_key = $1 AND note = 'Missed WhatsApp call' AND missed_at >= $2::timestamptz - INTERVAL '1 minute' LIMIT 1`, [k, e.at]))[0];
+  if (!had) {
+    await db.query(`INSERT INTO call_missed (person_key, phone, phone_key, name, missed_at, note, source) VALUES ($1, $2, $3, $4, $5, 'Missed WhatsApp call', 'manual')`,
+      [personKey, phone, k, String(e.contact_name || '').slice(0, 80), e.at]);
+  }
+  const queued = (await rows(`SELECT id FROM call_number_submissions WHERE person_key = $1 AND phone_key = $2 AND status = 'own'`, [personKey, k]))[0];
+  if (!queued && !(await calling.blockOf(k).catch(() => null))) {
+    await db.query(
+      `INSERT INTO call_number_submissions (person_key, full_name, phone, phone_key, note, status, added_by, mode, how_known)
+       VALUES ($1, $2, $3, $4, 'Missed WhatsApp call: ring back', 'own', $1, 'new_agents', 'missed_call')`, [personKey, String(e.contact_name || '').slice(0, 80), phone, k]);
+  }
+  return { ok: true, phone: last3(phone) };
+}
+
+/** Follow-ups due now: my numbers whose last call set a call-back that has come round, with no call since. */
+async function followUpsDue(personKey, { now = new Date() } = {}) {
+  if (!personKey) return 0;
+  const r = (await rows(
+    `WITH last AS (
+       SELECT DISTINCT ON (phone_key) phone_key, person_key, callback_at, outcome
+         FROM call_attempts WHERE status = 'done' AND phone_key IS NOT NULL AND COALESCE(wrapped_at, tapped_at) > NOW() - INTERVAL '120 days'
+        ORDER BY phone_key, COALESCE(wrapped_at, tapped_at) DESC)
+     SELECT COUNT(*)::int AS n FROM last
+      WHERE person_key = $1 AND callback_at IS NOT NULL AND callback_at <= $2
+        AND NOT (outcome = ANY($3::text[]))
+        AND NOT EXISTS (SELECT 1 FROM call_blocks b WHERE b.phone_key = last.phone_key AND b.removed_at IS NULL)`,
+    [personKey, now, [...rules.FINAL_NO, 'paid', 'renewed']]))[0];
+  return Number(r && r.n) || 0;
+}
+
 async function missed(personKey) {
-  if (!personKey) return [];
+  const wa = await whatsappMissed();
+  if (!personKey) return wa;
   const list = await rows(
     `SELECT m.id, m.phone, m.phone_key, m.name, m.missed_at, m.source, m.note,
             (SELECT MAX(COALESCE(a.wrapped_at, a.tapped_at)) FROM call_attempts a WHERE a.phone_key = m.phone_key AND a.status = 'done' AND COALESCE(a.wrapped_at, a.tapped_at) > m.missed_at) AS called_back_at
        FROM call_missed m WHERE m.person_key = $1 AND m.dismissed_at IS NULL AND m.missed_at > NOW() - INTERVAL '14 days'
       ORDER BY m.missed_at DESC LIMIT 100`, [personKey]);
-  return list.map((m) => ({ id: Number(m.id), name: m.name, phone: last3(m.phone), at: m.missed_at, source: m.source, note: m.note, called_back_at: m.called_back_at }));
+  // A WhatsApp call I took is stored as source 'manual' (the table's check allows manual/phone_app only) with this note.
+  const own = list.map((m) => ({ id: Number(m.id), name: m.name, phone: last3(m.phone), at: m.missed_at, source: m.source, via: m.note === 'Missed WhatsApp call' ? 'whatsapp' : '', note: m.note, called_back_at: m.called_back_at }));
+  // A WhatsApp call I already took shows once, as mine.
+  return own.concat(wa.filter((w) => w.taken_by !== personKey)).sort((x, y) => new Date(y.at) - new Date(x.at));
 }
 
 async function logMissed(personKey, body = {}) {
@@ -265,4 +334,4 @@ async function dismissMissed(personKey, id) {
   return { ok: true };
 }
 
-module.exports = { owed, lateOutcome, stageOf, pipeline, STAGES, STAGE_LABELS, toApprove, owes, chase, missed, logMissed, dismissMissed, feeUgx, last3 };
+module.exports = { owed, lateOutcome, stageOf, pipeline, STAGES, STAGE_LABELS, toApprove, owes, chase, missed, whatsappMissed, takeWhatsappMissed, followUpsDue, logMissed, dismissMissed, feeUgx, last3 };
