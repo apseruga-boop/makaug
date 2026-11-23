@@ -8,20 +8,15 @@
  * lists, counts and handles "Send back with a note" (agent and owner listings only).
  */
 const db = require('../config/database');
+const reviewQueueSplit = require('../utils/reviewQueueSplit');
 
 async function rows(sql, params = []) { return (await db.query(sql, params)).rows || []; }
 const num = (v) => Number(v || 0);
 const mask = (v) => { const d = String(v || '').replace(/\D/g, ''); return d.length >= 3 ? `•••${d.slice(-3)}` : ''; };
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 
-// Same rule as the old queue's "Found online" badge (the admin found-online check).
-const FOUND_ONLINE_SQL = `(
-  COALESCE(p.extra_fields->>'found_online_candidate', '') = 'true'
-  OR COALESCE(p.extra_fields->>'found_online', '') = 'true'
-  OR COALESCE(p.extra_fields->>'social_search_candidate', '') = 'true'
-  OR lower(COALESCE(NULLIF(p.source, ''), p.extra_fields->>'source', '')) = 'found_online_property_source_v1'
-  OR lower(COALESCE(NULLIF(p.listed_via, ''), p.extra_fields->>'listed_via', '')) = 'found_online'
-  OR lower(COALESCE(p.extra_fields->>'source_badge', p.extra_fields->>'source_discovery_label', '')) IN ('found_online', 'found online'))`;
+// The same found-online rule as the staff desk (utils/reviewQueueSplit.js).
+const FOUND_ONLINE_SQL = reviewQueueSplit.foundOnlineSql('p');
 // Sent back and not changed since: waiting on the agent, not on us.
 const SENT_BACK_SQL = `(p.extra_fields->>'sent_back_at' IS NOT NULL AND p.updated_at <= (p.extra_fields->>'sent_back_at')::timestamptz + INTERVAL '2 minutes')`;
 const KINDS = { found: FOUND_ONLINE_SQL, agent: `NOT ${FOUND_ONLINE_SQL}` };

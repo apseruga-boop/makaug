@@ -1,4 +1,5 @@
 -- Read-only synthetic properties; no production table rows are accessed.
+-- 23 Nov 2026: the shared found-online rule (utils/reviewQueueSplit.js) also takes rows 19 (blank source_url, real source_post_url), 7 and 8 (suppressed found-online imports, which used to fall into the agent list), so old/new differ on purpose.
 WITH property_values(n,status,moderation_stage,source,listed_via,extra_fields,created_at) AS (
  VALUES
  (1,'pending','pending','manual','staff','{"found_online":true}'::jsonb,'2026-10-13T01:01:00Z'::timestamptz),
@@ -27,7 +28,7 @@ properties AS (
         'Fixture property'::text AS title,'Fixture area'::text AS area,'Fixture district'::text AS district,
         status,moderation_stage,source,listed_via,extra_fields,created_at,created_at AS updated_at,
         'fixture@example.invalid'::text AS lister_email,'FIXTURE-'||n::text AS inquiry_reference,
-        'Fixture owner'::text AS lister_name
+        'Fixture owner'::text AS lister_name, NULL::uuid AS agent_id
  FROM property_values
 ),
 old_eight AS (SELECT p.id, p.title, p.area, p.district, p.status, p.created_at, p.updated_at,
@@ -105,14 +106,18 @@ new_eight AS (WITH found_online_candidates AS MATERIALIZED (
       OR p.listed_via = 'found_online'
     )
   ) AND (
-    (
-      COALESCE(p.extra_fields->>'found_online', p.extra_fields->>'found_online_candidate', p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$'
-      OR COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url', '') <> ''
-    )
-    AND NOT (
-    LOWER(COALESCE(p.extra_fields->'source_quality_review'->>'suppressed', '')) IN ('true', '1', 'yes')
-    OR LOWER(COALESCE(p.extra_fields->>'source_quality_suppressed', '')) IN ('true', '1', 'yes')
-  )
+    COALESCE(p.extra_fields->>'found_online', '') ~* '^(true|1|yes)$'
+    OR (COALESCE(p.extra_fields->>'found_online', '') !~* '^(false|0|no)$' AND (COALESCE(p.extra_fields->>'found_online_candidate', '') ~* '^(true|1|yes)$' OR COALESCE(p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$'))
+    OR LOWER(COALESCE(NULLIF(p.source, ''), p.extra_fields->>'source', '')) = 'found_online_property_source_v1'
+    OR LOWER(COALESCE(NULLIF(p.listed_via, ''), p.extra_fields->>'listed_via', '')) = 'found_online'
+    OR LOWER(COALESCE(p.extra_fields->>'source_badge', p.extra_fields->>'source_discovery_label', '')) IN ('found_online', 'found online')
+    OR ((NULLIF(BTRIM(COALESCE(p.extra_fields->>'source_url', '')), '') IS NOT NULL OR NULLIF(BTRIM(COALESCE(p.extra_fields->>'source_post_url', '')), '') IS NOT NULL OR NULLIF(BTRIM(COALESCE(p.extra_fields->>'tiktok_url', '')), '') IS NOT NULL OR NULLIF(BTRIM(COALESCE(p.extra_fields->>'youtube_url', '')), '') IS NOT NULL) AND NOT (
+    p.agent_id IS NOT NULL
+    OR LOWER(COALESCE(p.listed_via, '')) ~ '(whatsapp|broker|agent|owner)'
+    OR LOWER(COALESCE(p.source, '')) ~ '(whatsapp|broker|owner)'
+    OR COALESCE(p.extra_fields->>'whatsapp_employee_intake', '') ~* '^(true|1|yes)$'
+    OR COALESCE(p.extra_fields->>'broker_submission', '') ~* '^(true|1|yes)$'
+  ))
   )
        ),
        paged_found_online AS MATERIALIZED (
@@ -203,14 +208,18 @@ new_all AS (WITH found_online_candidates AS MATERIALIZED (
       OR p.listed_via = 'found_online'
     )
   ) AND (
-    (
-      COALESCE(p.extra_fields->>'found_online', p.extra_fields->>'found_online_candidate', p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$'
-      OR COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url', '') <> ''
-    )
-    AND NOT (
-    LOWER(COALESCE(p.extra_fields->'source_quality_review'->>'suppressed', '')) IN ('true', '1', 'yes')
-    OR LOWER(COALESCE(p.extra_fields->>'source_quality_suppressed', '')) IN ('true', '1', 'yes')
-  )
+    COALESCE(p.extra_fields->>'found_online', '') ~* '^(true|1|yes)$'
+    OR (COALESCE(p.extra_fields->>'found_online', '') !~* '^(false|0|no)$' AND (COALESCE(p.extra_fields->>'found_online_candidate', '') ~* '^(true|1|yes)$' OR COALESCE(p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$'))
+    OR LOWER(COALESCE(NULLIF(p.source, ''), p.extra_fields->>'source', '')) = 'found_online_property_source_v1'
+    OR LOWER(COALESCE(NULLIF(p.listed_via, ''), p.extra_fields->>'listed_via', '')) = 'found_online'
+    OR LOWER(COALESCE(p.extra_fields->>'source_badge', p.extra_fields->>'source_discovery_label', '')) IN ('found_online', 'found online')
+    OR ((NULLIF(BTRIM(COALESCE(p.extra_fields->>'source_url', '')), '') IS NOT NULL OR NULLIF(BTRIM(COALESCE(p.extra_fields->>'source_post_url', '')), '') IS NOT NULL OR NULLIF(BTRIM(COALESCE(p.extra_fields->>'tiktok_url', '')), '') IS NOT NULL OR NULLIF(BTRIM(COALESCE(p.extra_fields->>'youtube_url', '')), '') IS NOT NULL) AND NOT (
+    p.agent_id IS NOT NULL
+    OR LOWER(COALESCE(p.listed_via, '')) ~ '(whatsapp|broker|agent|owner)'
+    OR LOWER(COALESCE(p.source, '')) ~ '(whatsapp|broker|owner)'
+    OR COALESCE(p.extra_fields->>'whatsapp_employee_intake', '') ~* '^(true|1|yes)$'
+    OR COALESCE(p.extra_fields->>'broker_submission', '') ~* '^(true|1|yes)$'
+  ))
   )
        ),
        paged_found_online AS MATERIALIZED (
@@ -254,14 +263,18 @@ exact_count AS (SELECT COUNT(*)::int AS total FROM properties p WHERE (
       OR p.listed_via = 'found_online'
     )
   ) AND (
-    (
-      COALESCE(p.extra_fields->>'found_online', p.extra_fields->>'found_online_candidate', p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$'
-      OR COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url', '') <> ''
-    )
-    AND NOT (
-    LOWER(COALESCE(p.extra_fields->'source_quality_review'->>'suppressed', '')) IN ('true', '1', 'yes')
-    OR LOWER(COALESCE(p.extra_fields->>'source_quality_suppressed', '')) IN ('true', '1', 'yes')
-  )
+    COALESCE(p.extra_fields->>'found_online', '') ~* '^(true|1|yes)$'
+    OR (COALESCE(p.extra_fields->>'found_online', '') !~* '^(false|0|no)$' AND (COALESCE(p.extra_fields->>'found_online_candidate', '') ~* '^(true|1|yes)$' OR COALESCE(p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$'))
+    OR LOWER(COALESCE(NULLIF(p.source, ''), p.extra_fields->>'source', '')) = 'found_online_property_source_v1'
+    OR LOWER(COALESCE(NULLIF(p.listed_via, ''), p.extra_fields->>'listed_via', '')) = 'found_online'
+    OR LOWER(COALESCE(p.extra_fields->>'source_badge', p.extra_fields->>'source_discovery_label', '')) IN ('found_online', 'found online')
+    OR ((NULLIF(BTRIM(COALESCE(p.extra_fields->>'source_url', '')), '') IS NOT NULL OR NULLIF(BTRIM(COALESCE(p.extra_fields->>'source_post_url', '')), '') IS NOT NULL OR NULLIF(BTRIM(COALESCE(p.extra_fields->>'tiktok_url', '')), '') IS NOT NULL OR NULLIF(BTRIM(COALESCE(p.extra_fields->>'youtube_url', '')), '') IS NOT NULL) AND NOT (
+    p.agent_id IS NOT NULL
+    OR LOWER(COALESCE(p.listed_via, '')) ~ '(whatsapp|broker|agent|owner)'
+    OR LOWER(COALESCE(p.source, '')) ~ '(whatsapp|broker|owner)'
+    OR COALESCE(p.extra_fields->>'whatsapp_employee_intake', '') ~* '^(true|1|yes)$'
+    OR COALESCE(p.extra_fields->>'broker_submission', '') ~* '^(true|1|yes)$'
+  ))
   )),
 differences AS (
  (SELECT * FROM old_eight EXCEPT ALL SELECT * FROM new_eight)
@@ -274,8 +287,8 @@ SELECT
  (SELECT COUNT(*)::int FROM new_eight) AS limited_rows,
  (SELECT COUNT(*)::int FROM new_all) AS all_reachable_rows,
  (SELECT total FROM exact_count) AS exact_total,
- ARRAY(SELECT right(id::text,12)::int FROM new_eight)=ARRAY[1,2,5,10,12,13,14,15] AS exact_head_order,
- ARRAY(SELECT right(id::text,12)::int FROM new_all)=ARRAY[1,2,5,10,12,13,14,15,20,16,17,18] AS exact_complete_order,
+ ARRAY(SELECT right(id::text,12)::int FROM new_eight)=ARRAY[1,2,19,5,7,8,10,12] AS exact_head_order,
+ ARRAY(SELECT right(id::text,12)::int FROM new_all)=ARRAY[1,2,19,5,7,8,10,12,13,14,15,20,16,17,18] AS exact_complete_order,
  (SELECT COUNT(*) FROM new_all)=(SELECT total FROM exact_count) AS count_and_reachability_match,
- NOT EXISTS(SELECT 1 FROM new_all WHERE right(id::text,12)::int IN(3,4,6,7,8,9,11,19)) AS all_safety_exclusions_preserved;
+ NOT EXISTS(SELECT 1 FROM new_all WHERE right(id::text,12)::int IN(3,4,6,9,11)) AS all_safety_exclusions_preserved;
 
