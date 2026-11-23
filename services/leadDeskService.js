@@ -1248,6 +1248,20 @@ function overnightHeader({ submitted = 0, rejected = 0, other = 0 } = {}) {
 }
 
 /**
+ * A held alert about a listing, with that listing's own reference and a link
+ * that opens it in the review screen (23 Nov 2026). Alerts held before then
+ * said "Review: …/admin (Listings › pending)" and "Ref 7A8DF970", the first
+ * characters of the internal id; they are put right as they go out.
+ */
+function withListingLinks(body = '', row = {}) {
+  if (row.source !== 'property' || !/^[0-9a-f-]{36}$/i.test(String(row.id || ''))) return body;
+  let out = String(body || '').replace(/^Review: .*$/m, `Review: ${siteUrl()}/staff-dashboard/review/${row.id}`);
+  const reference = text(row.inquiry_reference);
+  if (reference) out = out.replace(/^Ref [0-9A-F]{8}$/m, `Ref ${reference}`);
+  return out;
+}
+
+/**
  * The team messages held during quiet hours, in one message once the desk is
  * open: agents' properties that arrived overnight (routes/whatsapp.js),
  * listings rejected overnight (alertTeamListingRejected), and WhatsApp
@@ -1288,7 +1302,7 @@ async function sendDeferredPropertyAlerts(db, { force = false, send = sendToTeam
   const other = rows.filter((row) => !['rejected', 'submitted', undefined, null, ''].includes(row.deferred.kind)).length;
   const lines = [overnightHeader({ submitted: count - rejected - other, rejected, other }), ''];
   rows.forEach((row, index) => {
-    const body = String(row.deferred.body).trim()
+    const body = withListingLinks(String(row.deferred.body).trim(), row)
       .replace(/^🏠 \*New property from /, '*')
       .replace(/ — waiting for review\*/, '*')
       .replace(/^⛔ \*Listing rejected by /, '*Rejected by ');
@@ -1456,6 +1470,7 @@ async function deskCsv(db, { view = 'all' } = {}) {
 
 module.exports = {
   maskNumbersForTeam,
+  withListingLinks,
   judgeDemandLead,
   ARCHIVE_REASONS,
   inQuietHours,

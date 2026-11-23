@@ -121,6 +121,7 @@ function runInSendOrder(key, { senderMs = 0, media = false, seq = 0, describes =
       seq: Number(seq) > 0 ? Number(seq) : nextArrivalSeq(),
       arrivedAt,
       settle: Boolean(media) || burst,
+      media: Boolean(media),
       describes: Boolean(describes),
       task,
       resolve,
@@ -147,6 +148,19 @@ function describedWaiting(key) {
   return line.waiting.filter((entry) => entry.describes).length;
 }
 
+/**
+ * How many photos, videos or documents from this phone are waiting in line
+ * behind the one being handled now (23 Nov 2026). An agent's description
+ * with nine photos right behind it was answered "now send the photos", and
+ * the first photo with "1 photo saved — send more": the other eight were
+ * already on their way.
+ */
+function mediaWaiting(key) {
+  const line = lines.get(String(key || 'unknown'));
+  if (!line) return 0;
+  return line.waiting.filter((entry) => entry.media).length;
+}
+
 function resetSendOrderForTests() {
   lines.clear();
   lastArrival.clear();
@@ -159,5 +173,6 @@ module.exports = {
   nextArrivalSeq,
   runInSendOrder,
   describedWaiting,
+  mediaWaiting,
   resetSendOrderForTests
 };
