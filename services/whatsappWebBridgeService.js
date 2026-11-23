@@ -870,6 +870,91 @@ async function setNumberPaused(phone, paused, { by = '', note = '' } = {}) {
 
 let lastWaitingSweepAt = 0;
 let lastNoLongerLiveSweepAt = 0;
+let lastCombineLiveSweepAt = 0;
+
+/**
+ * The parts of one "your property is live" notice: its title, place and price,
+ * its link, and the agent's profile link.
+ */
+function liveNoticeParts(text = '') {
+  const lines = String(text || '').split('\n').map((line) => line.trim());
+  const link = (lines.find((line) => /^🔗\s*https?:\/\//.test(line)) || '').replace(/^🔗\s*/, '');
+  const at = lines.findIndex((line) => /^🎉/.test(line));
+  const title = at >= 0 ? (lines[at + 1] || '') : '';
+  const where = at >= 0 && !/^🔗/.test(lines[at + 2] || '') ? (lines[at + 2] || '') : '';
+  const profile = lines.find((line) => /^https?:\/\/\S+\/agents?\//.test(line)) || '';
+  return { title, where, link, profile };
+}
+
+/** One message for several live properties, in the order they went live. */
+function combinedLiveNotice(texts = []) {
+  const parts = texts.map(liveNoticeParts).filter((part) => part.link);
+  if (parts.length < 2) return '';
+  const lines = [`🎉 *${parts.length} of your properties are live on makaug.com*`, ''];
+  parts.forEach((part, index) => {
+    lines.push(`${index + 1}. ${part.title}${part.where ? ` — ${part.where}` : ''}`, `🔗 ${part.link}`);
+  });
+  const profile = parts.map((part) => part.profile).filter(Boolean).pop();
+  if (profile) lines.push('', '👤 Your profile page has them all:', profile);
+  lines.push('', 'Share them on your WhatsApp status and in your groups — buyers see your name and number.', 'Got another one? Send it here.');
+  return lines.join('\n');
+}
+
+/**
+ * Several "your property is live" waiting for the same agent go as one
+ * message (23 Nov 2026). An agent who had not written for a week had eight
+ * waiting; the day he wrote, all eight would have gone at once, one after
+ * the other. Once the agent can be written to, the waiting ones are put into
+ * the first, which lists every property and link, and the others are closed
+ * as sent within it.
+ */
+async function combineWaitingLiveNotices({ force = false } = {}) {
+  if (!force && Date.now() - lastCombineLiveSweepAt < 60000) return 0;
+  lastCombineLiveSweepAt = Date.now();
+  try {
+    const groups = await db.query(
+      `SELECT RIGHT(regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g'), 9) AS tail,
+              array_agg(id::text ORDER BY created_at ASC) AS ids,
+              array_agg(COALESCE(payload->>'text', '') ORDER BY created_at ASC) AS texts
+         FROM outbound_message_queue
+        WHERE channel = 'whatsapp'
+          AND status IN ('pending', 'retry')
+          AND COALESCE(metadata->>'message_kind', '') = 'listing_status_approved'
+          AND ${hasWrittenSql('outbound_message_queue')}
+        GROUP BY 1
+       HAVING COUNT(*) >= 2
+        LIMIT 20`
+    );
+    let combined = 0;
+    for (const group of groups.rows || []) {
+      const ids = Array.isArray(group.ids) ? group.ids : [];
+      const text = combinedLiveNotice(Array.isArray(group.texts) ? group.texts : []);
+      if (ids.length < 2 || !text) continue;
+      const [keep, ...rest] = ids;
+      await db.query(
+        `UPDATE outbound_message_queue
+            SET payload = jsonb_set(COALESCE(payload, '{}'::jsonb), '{text}', to_jsonb($2::text)),
+                metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('combined_live_notices', $3::int),
+                updated_at = NOW()
+          WHERE id = $1::uuid AND status IN ('pending', 'retry')`,
+        [keep, text, ids.length]
+      );
+      await db.query(
+        `UPDATE outbound_message_queue
+            SET status = 'failed',
+                last_error = 'Not sent on its own: it went in one message with the agent''s other live properties.',
+                metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('failure_class', 'combined_into_one', 'retry_suppressed', true, 'combined_into', $2::text),
+                updated_at = NOW()
+          WHERE id = ANY($1::uuid[]) AND status IN ('pending', 'retry')`,
+        [rest, keep]
+      );
+      combined += rest.length;
+    }
+    return combined;
+  } catch (_error) {
+    return 0;
+  }
+}
 
 /**
  * A "your property is live" that is still waiting is dropped when the listing
@@ -968,6 +1053,7 @@ async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient 
   await letGoOfWhatNobodyCameFor();
   if (await bridgeSessionCannotSend(normalizedClientId)) return [];
   await letGoOfLiveNoticesNoLongerTrue();
+  await combineWaitingLiveNotices();
   const recipientDigits = String(recipient || '').replace(/\D/g, '');
   const normalizedAllowedSources = (Array.isArray(allowedSources) ? allowedSources : String(allowedSources || '').split(','))
     .map((value) => String(value || '').trim().toLowerCase())
@@ -1131,6 +1217,8 @@ async function getWhatsappWebBridgeStatus() {
 
 module.exports = {
   letGoOfLiveNoticesNoLongerTrue,
+  combineWaitingLiveNotices,
+  combinedLiveNotice,
   wroteWithinDays,
   waitsForThem,
   notSentUntilTheyWrite,

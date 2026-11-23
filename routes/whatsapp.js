@@ -3713,6 +3713,34 @@ const RENTAL_ROOMS_FOR_SALE = {
   }
 };
 
+// What a property earns is not what it costs: "MAKING 2.7M PER MONTH",
+// "earns 2.7M monthly", "monthly income of 2.5m", "collecting 600k per month".
+const INCOME_FIGURE = /\b(?:monthly|total|net|gross|rental)?\s*(?:income|revenue|earnings?|earns?|earning|making|makes|collects?|collecting|returns?|generat(?:es|ing))\s*(?:of|is|at|about|around|:)?\s*\(?\s*(?:ugx|ush|shs?)?\s*#?\d[\d,.]*\s*(?:m|k|bn|mn|million|billion)?\s*(?:ugx|ush|shs?)?\s*(?:per\s+month|monthly|\/\s*month|a\s+month|per\s+year|yearly|annually)?\s*\)?/gi;
+const SALE_WORDS = /\b(?:for\s+sale|on\s+sale|selling|sell|sale\s+price|sale)\b/i;
+// "rent", "for rent", "to let" — "rental" and "current" are not.
+const RENT_WORDS = /\b(?:for\s+rent|to\s+rent|to\s+let|rent)\b/i;
+const MONTHLY_WORDS = /\bper\s+month\b|\bmonthly\b|\ba\s+month\b|\/\s*month\b|\bp\/m\b/i;
+const SALE_TITLE_WORDS = /\b(?:m(?:ailo|olo|ilo)|freehold|leasehold)\s+(?:land\s+)?title\b|\btitle\s+(?:deed|on\s+(?:the\s+)?table)\b/i;
+const LAND_SIZE_WORDS = /\b\d+(?:\.\d+)?\s*(?:decimals?|acres?|hectares?)\b/i;
+
+/**
+ * A caption that sells the property and does not let it (23 Nov 2026).
+ *
+ * "COMMERCIAL BUILDING ON SALE AT A PRICE OF 410M ... 8 DECIMALS ... PRIVATE
+ * MAILO LAND TITLE ... MAKING 2.7M PER MONTH" went to staff as a commercial
+ * property at "UGX 410,000,000 a month"; Moderator 1 set it to a sale by hand
+ * (MK-20261123-10C0EB), as Fisher had before. Sale words, a land size or a
+ * title type, or a price of UGX 50M or more with no rent words, make it a
+ * sale. What it earns each month is set aside first, and a caption that also
+ * says rent or "to let" is left as it was.
+ */
+function captionSellsNotLets(caption = '', price = 0) {
+  const clean = normalizeInput(caption).toLowerCase().replace(INCOME_FIGURE, ' ');
+  if (RENT_WORDS.test(clean)) return false;
+  if (SALE_WORDS.test(clean) || SOLD_AT_PRICE.test(clean) || SALE_TITLE_WORDS.test(clean) || LAND_SIZE_WORDS.test(clean)) return true;
+  return Number(price) >= 50000000 && !MONTHLY_WORDS.test(clean);
+}
+
 function ownerForwardListingTitle({ listingType = '', area = '', bedrooms = null } = {}) {
   const place = normalizeInput(area) || 'Uganda';
   const bedPrefix = Number(bedrooms) > 0 ? `${Number(bedrooms)}-bed ` : '';
@@ -3723,13 +3751,24 @@ function ownerForwardListingTitle({ listingType = '', area = '', bedrooms = null
   return `${bedPrefix}property for sale in ${place}`;
 }
 
-function ownerForwardPricePeriod(listingType = '', caption = '') {
+function ownerForwardPricePeriod(listingType = '', caption = '', price = 0) {
   const clean = normalizeInput(caption).toLowerCase();
   const quotedUnit = pricePeriodForUnitQuote(clean);
   if (quotedUnit === 'acre' && /\b(?:per\s+year|a\s+year|yearly|annually|per\s+annum)\b/i.test(clean)) return 'acre_yr';
   if (quotedUnit === 'acre' || quotedUnit === 'plot') return quotedUnit;
   if (listingType === 'student') return /\bsemester\b/i.test(clean) ? 'semester' : 'month';
-  if (listingType === 'rent' || (listingType === 'commercial' && /\b(?:for rent|to rent|per month|monthly rent)\b/i.test(clean))) return 'month';
+  if (listingType === 'rent') return 'month';
+  if (listingType === 'commercial') {
+    // Monthly only when the price is: rent, "to let", per month — never what
+    // the building earns ("MAKING 2.7M PER MONTH"), and never on a caption
+    // that sells it (23 Nov 2026).
+    const withoutIncome = clean.replace(INCOME_FIGURE, ' ');
+    // "for sale or rent, 2.5bn or 30M a month": the price read is the sale one.
+    const alsoSells = SALE_WORDS.test(withoutIncome) && Number(price) >= 50000000;
+    if (RENT_WORDS.test(withoutIncome) && !alsoSells) return 'month';
+    if (alsoSells || captionSellsNotLets(clean)) return 'once';
+    return MONTHLY_WORDS.test(withoutIncome) ? 'month' : 'once';
+  }
   return 'once';
 }
 
@@ -4166,7 +4205,7 @@ async function handleOwnerReviewForward({
         locationPatch.district,
         locationPatch.area,
         price,
-        ownerForwardPricePeriod(listingType, caption),
+        ownerForwardPricePeriod(listingType, caption, price),
         bedroomDraft.bedrooms || null,
         listerName,
         contact || null,
@@ -5997,6 +6036,20 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
       ? 'rent'
       : 'sale';
   }
+  // A caption that sells, and does not let, is a sale (23 Nov 2026). A
+  // commercial property stays commercial — the category a moderator picks for
+  // it — and is priced once (ownerForwardPricePeriod); a rental read off a sale
+  // caption, or a caption with no type, becomes a sale. A plot with no
+  // building on it is land.
+  // A bare price ("UGX 1.5bn", the answer to "what is the price?") names no
+  // property and is left alone.
+  const namesAProperty = /\b(?:house|home|villa|bungalow|mansion|apartments?|flats?|townhouse|land|plots?|acres?|decimals?|hectares?|building|storey|rentals?|units?|shops?|offices?|warehouses?|hostel|hotel|property|properties|kibanja|bibanja)\b/i.test(cleanCaption);
+  if (!offPlan && (listingType === 'rent' || (!listingType && namesAProperty)) && captionSellsNotLets(cleanCaption, price)) {
+    const plotOnly = !Number(bedroomDraft.bedrooms)
+      && !/\b(?:house|home|villa|bungalow|mansion|apartment|flat|townhouse|shop|office|warehouse|hostel|rentals?|units?|building|storey|storied|quarters?|hotel|arcade|mall|factory|showroom)\b/i.test(cleanCaption)
+      && (/\b\d{2,4}\s*(?:by|x|\*)\s*\d{2,4}\b/i.test(cleanCaption) || LAND_SIZE_WORDS.test(cleanCaption) || /\b(?:land|plots?|kibanja|bibanja)\b/i.test(cleanCaption));
+    listingType = plotOnly ? 'land' : 'sale';
+  }
   // An off-plan project's name ("Vanta House") is not where it is.
   const offPlanName = offPlan ? offPlanProjectNameFromCaption(caption, sessionData) : '';
   const locationCaption = (offPlanName ? cleanCaption.replace(new RegExp(offPlanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' ') : cleanCaption).replace(
@@ -6383,7 +6436,7 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     hints,
     listingType,
     price: effectivePrice,
-    pricePeriod: offPlan ? 'once' : (perUnit.pricePeriod || pricePeriodForUnitQuote(cleanCaption) || ownerForwardPricePeriod(listingType, cleanCaption)),
+    pricePeriod: offPlan ? 'once' : (perUnit.pricePeriod || pricePeriodForUnitQuote(cleanCaption) || ownerForwardPricePeriod(listingType, cleanCaption, price)),
     priceMetadata,
     perUnitPrice: perUnit.perUnit ? perUnit : null,
     bedroomDraft: offPlan && bedroomDraft.bedroom_options_min != null ? { ...bedroomDraft, bedrooms: bedroomDraft.bedroom_options_min } : bedroomDraft,
@@ -7322,7 +7375,7 @@ async function reconcileEmployeeBatchReviewRecords(data = {}) {
           priceMetadata.price_original || facts.price,
           priceMetadata.price_fx_rate_ugx || null,
           priceMetadata.price_fx_as_of || null,
-          ownerForwardPricePeriod(facts.listingType, row.caption),
+          ownerForwardPricePeriod(facts.listingType, row.caption, facts.price),
           facts.bedroomDraft.bedrooms || null,
           JSON.stringify({
             employee_batch_completion_reconciled: true,
@@ -8073,7 +8126,7 @@ async function createEmployeeReviewProperty({
         facts.priceMetadata?.price_original || facts.price,
         facts.priceMetadata?.price_fx_rate_ugx || null,
         facts.priceMetadata?.price_fx_as_of || null,
-        ownerForwardPricePeriod(facts.listingType, caption),
+        ownerForwardPricePeriod(facts.listingType, caption, facts.price),
         facts.bedroomDraft.bedrooms || null,
         listerName,
         listerPhone || null,
@@ -9576,11 +9629,13 @@ function agentPropertyDetailLines(facts = {}, caption = '') {
   }
   const bedrooms = facts.listingType === 'land' ? 0 : (Number(facts.bedroomDraft?.bedrooms) || 0);
   // Land is land, whatever it is "good for" (a country home, say).
-  const kind = facts.listingType === 'land' ? 'land' : (parsePropertyType(english) || (facts.listingType === 'commercial' ? 'commercial property' : 'property'));
+  const kind = facts.listingType === 'land' ? 'land' : (parsePropertyType(english) || (facts.listingType === 'commercial' || /\bcommercial\b/i.test(english) ? 'commercial property' : 'property'));
   const deal = facts.listingType === 'rent' || facts.listingType === 'student'
     ? 'for rent'
     : (facts.listingType === 'commercial'
-      ? (/\b(?:for rent|to let|rent)\b/i.test(english) ? 'for rent' : (/\b(?:sale|selling)\b/i.test(english) ? 'for sale' : ''))
+      ? (/\b(?:for rent|to let|rent)\b/i.test(english)
+        ? (/\b(?:sale|selling)\b/i.test(english) ? 'for sale or rent' : 'for rent')
+        : (/\b(?:sale|selling)\b/i.test(english) ? 'for sale' : ''))
       : (facts.listingType ? 'for sale' : ''));
   lines.push(`🏠 ${bedrooms ? `${bedrooms} bedroom ` : ''}${kind}${deal ? ` · ${deal}` : ''}`);
   const area = normalizeInput(facts.locationPatch?.area || '');
@@ -9592,7 +9647,7 @@ function agentPropertyDetailLines(facts = {}, caption = '') {
     // "22M each" for 2 acres is 22M an acre, and is kept as that; the message
     // said only "UGX 22,000,000" (20 Nov 2026).
     const unit = String(facts.pricePeriod || '').toLowerCase();
-    const period = ownerForwardPricePeriod(facts.listingType, english);
+    const period = ownerForwardPricePeriod(facts.listingType, english, facts.price);
     const per = unit === 'acre' ? ' an acre' : (unit === 'plot' ? ' a plot' : (period === 'month' ? ' a month' : (period === 'semester' ? ' a semester' : '')));
     lines.push(`💰 ${shown}${per}`);
   }
@@ -9684,6 +9739,49 @@ function agentAlsoSavedReply({ facts = {}, storedMedia = [], caption = '' } = {}
   ];
   if (bits.length) lines.push(`📸 ${bits.join(' · ')} saved`);
   return lines.join('\n');
+}
+
+/**
+ * One "Saved" per advert, with every photo counted (23 Nov 2026).
+ *
+ * An agent sent a description and nine photos straight after it. He was told
+ * "now send the photos", then, on the first photo, "1 photo saved — send more";
+ * the other eight were already in line. While more of the agent's photos or
+ * videos wait in line, the "Saved" message waits too, counting what arrives,
+ * and goes once the last of them is in.
+ */
+function holdAgentSavedReply(data = {}, { propertyId = '', caption = '', storedMedia = [], openedAgentSelfIntake = false } = {}) {
+  data.agent_saved_reply_waiting = {
+    property_id: String(propertyId || ''),
+    caption: String(caption || '').slice(0, 2000),
+    photos: storedMedia.filter((item) => item.kind === 'image').length,
+    videos: storedMedia.filter((item) => item.kind === 'video').length,
+    opened: Boolean(openedAgentSelfIntake),
+    at: Date.now()
+  };
+}
+
+function countAgentSavedMedia(data = {}, propertyId = '', storedMedia = [], attached = 0) {
+  const waiting = data.agent_saved_reply_waiting;
+  if (!waiting || String(waiting.property_id) !== String(propertyId || '')) return;
+  const videos = storedMedia.filter((item) => item.kind === 'video').length;
+  const total = Math.max(0, Number(attached) || 0);
+  waiting.videos = Number(waiting.videos || 0) + Math.min(videos, total);
+  waiting.photos = Number(waiting.photos || 0) + Math.max(0, total - Math.min(videos, total));
+}
+
+/** The held "Saved" message, once nothing more is waiting in line (or forced): '' when there is none. */
+function releaseAgentSavedReply(data = {}, { force = false, mediaWaiting = 0 } = {}) {
+  const waiting = data.agent_saved_reply_waiting;
+  if (!waiting || !waiting.property_id) return '';
+  if (!force && Number(mediaWaiting || 0) > 0) return '';
+  delete data.agent_saved_reply_waiting;
+  const storedMedia = [
+    ...Array.from({ length: Number(waiting.photos || 0) }, () => ({ kind: 'image' })),
+    ...Array.from({ length: Number(waiting.videos || 0) }, () => ({ kind: 'video' }))
+  ];
+  const facts = employeePropertyFacts(waiting.caption || '', data);
+  return agentSelfIntakeSavedReply({ data, facts, storedMedia, openedAgentSelfIntake: waiting.opened, caption: waiting.caption || '' }) || '';
 }
 
 /**
@@ -10229,16 +10327,33 @@ function alertTeamAgentPropertySubmitted({ agent = {}, propertyId = '', facts = 
  * alert is held on the listing and the lead desk sends the overnight ones in
  * one message once the desk opens.
  */
+/**
+ * The listing's own reference (MK-YYYYMMDD-XXXXXX), the one the dashboards
+ * show and search by.
+ */
+async function listingInquiryReference(propertyId = '') {
+  if (!/^[0-9a-f-]{36}$/i.test(String(propertyId || ''))) return '';
+  const row = (await db.query('SELECT inquiry_reference FROM properties WHERE id = $1', [propertyId]).catch(() => ({ rows: [] }))).rows[0];
+  return normalizeInput(row?.inquiry_reference || '');
+}
+
 async function sendAgentPropertySubmittedAlert({ agent = {}, propertyId = '', facts = {}, caption = '' } = {}) {
   const desk = require('../services/leadDeskService');
   if (typeof desk.sendToTeam !== 'function') return { skipped: 'no_desk' };
   const agentNumber = String(agent.whatsapp || agent.phone || '').replace(/\D+/g, '');
+  // 23 Nov 2026: Arthur could not find "Ref 7A8DF970" — the first characters
+  // of the internal id, which the dashboards did not search by — and the link
+  // only opened the general pending list. By the time he looked, Moderator 1
+  // had approved it as MK-20261123-10C0EB. The alert now gives the listing's
+  // own reference and a link that opens that listing in the review screen,
+  // whatever its status by then.
+  const reference = await listingInquiryReference(propertyId);
   const body = [
     `🏠 *New property from ${agent.full_name || 'an agent'} — waiting for review*`,
     ...agentPropertyDetailLines(facts, caption),
     agentNumber ? `Agent: +${agentNumber}` : '',
-    `Review: ${HOME_URL}/admin (Listings › pending)`,
-    propertyId ? `Ref ${String(propertyId).slice(0, 8).toUpperCase()}` : ''
+    propertyId ? `Review: ${HOME_URL}/staff-dashboard/review/${propertyId}` : `Review: ${HOME_URL}/admin (Listings › pending)`,
+    reference ? `Ref ${reference}` : (propertyId ? `Ref ${String(propertyId).slice(0, 8).toUpperCase()}` : '')
   ].filter(Boolean).join('\n');
   // Ronald loads and checks agents' properties on the ground, so he gets
   // every one of these too, whether or not he is on the alert list.
@@ -13813,13 +13928,18 @@ async function handleEmployeeWhatsappIntake({
       data.pending_property_caption = textCaption;
       data.last_text_caption_sender_ms = Number(data.current_sender_ms || 0) || Date.now();
       data.pending_caption_sender_ms = data.last_text_caption_sender_ms;
+      // An earlier advert's "Saved" still waiting for its last photos goes first.
+      const heldSaved = data.whatsapp_agent_self_intake === true ? releaseAgentSavedReply(data, { force: true }) : '';
       await replaceEmployeeSession(phone, currentStep, data);
       const waitingForMedia = employeePendingSubmissionQueue(data).filter((entry) => !entry.media.length).length;
+      // Its photos already waiting in line behind it: no "now send the photos"
+      // (23 Nov 2026).
+      const photosOnTheirWay = Number(runtime.mediaWaiting || 0) > 0;
       return {
         handled: true,
         nextStep: currentStep,
         message: data.whatsapp_agent_self_intake === true
-          ? agentPendingNotice(data)
+          ? [heldSaved, photosOnTheirWay ? '' : agentPendingNotice(data)].filter(Boolean).join('\n\n')
           : employeePendingStoredMedia(data).length
           ? employeeIncompletePropertyMessage(textCaption, textOnlyMissing, data)
           : `Caption saved for ${employeeCaptionLabel(textCaption)}. Now send the first property media; it will be stored with that property.${
@@ -14213,13 +14333,21 @@ async function handleEmployeeWhatsappIntake({
           await settleEmployeeOrphanMedia({ phone, data, currentStep, inboundMessageId });
         }
         if (data.whatsapp_agent_self_intake === true) alertTeamAgentPropertySubmitted({ agent: data.agent || {}, propertyId, facts, caption });
+        // More of the agent's photos are already in line: the "Saved" waits for
+        // them, so it counts them all (23 Nov 2026).
+        const earlierHeld = data.whatsapp_agent_self_intake === true ? releaseAgentSavedReply(data, { force: true }) : '';
+        const holdSaved = data.whatsapp_agent_self_intake === true && Number(runtime.mediaWaiting || 0) > 0;
+        if (holdSaved) holdAgentSavedReply(data, { propertyId, caption, storedMedia, openedAgentSelfIntake });
         await replaceEmployeeSession(phone, currentStep, data);
+        if (holdSaved) return { handled: true, nextStep: currentStep, propertyId, message: earlierHeld };
+        const agentSaved = agentSelfIntakeSavedReply({ data, facts, storedMedia, openedAgentSelfIntake, caption, albumCount: Number(runtime.mediaCount || 0) });
         return {
           handled: true,
           nextStep: currentStep,
           propertyId,
-          message: agentSelfIntakeSavedReply({ data, facts, storedMedia, openedAgentSelfIntake, caption, albumCount: Number(runtime.mediaCount || 0) })
-            ?? ((data.property_batch_mode || 'multiple') === 'single'
+          message: agentSaved !== null && agentSaved !== undefined
+            ? [earlierHeld, agentSaved].filter(Boolean).join('\n\n')
+            : ((data.property_batch_mode || 'multiple') === 'single'
               ? `✅ Saved the property to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${storedMedia.length}\nStatus: pending, not live.\n\nSend any additional media without a new full property caption. When this property is finished, type *COMPLETE*.`
               : staffDroppedMediaWarning(data, caption))
         };
@@ -14254,8 +14382,10 @@ async function handleEmployeeWhatsappIntake({
         clearEmployeePendingMedia(data);
         if (parked.length) rememberEmployeePendingMedia(data, parked, parkedMessageId);
         promoteEmployeeQueuedSubmission(data);
-        await replaceEmployeeSession(phone, currentStep, data);
+        countAgentSavedMedia(data, data.current_property_id, storedMedia, attachment.attached);
       }
+      const savedNow = releaseAgentSavedReply(data, { mediaWaiting: runtime.mediaWaiting });
+      if (!attachment.duplicate || savedNow) await replaceEmployeeSession(phone, currentStep, data);
       return {
         handled: true,
         nextStep: currentStep,
@@ -14263,8 +14393,8 @@ async function handleEmployeeWhatsappIntake({
         duplicate: attachment.duplicate,
         recoveryAlreadyAccountedFor: Boolean(recoveredExistingProperty),
         mediaAttachment: attachment,
-        message: (data.property_batch_mode || 'multiple') === 'multiple'
-          ? ''
+        message: savedNow || ((data.property_batch_mode || 'multiple') === 'multiple')
+          ? savedNow
           : attachment.duplicate
             ? 'That media is already attached. Nothing was duplicated.'
           : (data.property_batch_mode || 'multiple') === 'single'
@@ -14295,7 +14425,9 @@ async function handleEmployeeWhatsappIntake({
         }
       }
       logger.error('WhatsApp employee media attachment failed:', error);
-      return { handled: true, nextStep: currentStep, message: 'I could not attach that media to the pending property. Nothing changed and nothing went live.' };
+      const heldSaved = releaseAgentSavedReply(data, { force: Number(runtime.mediaWaiting || 0) === 0 });
+      if (heldSaved) await replaceEmployeeSession(phone, currentStep, data).catch(() => null);
+      return { handled: true, nextStep: currentStep, message: [heldSaved, 'I could not attach that media to the pending property. Nothing changed and nothing went live.'].filter(Boolean).join('\n\n') };
     }
   }
 
@@ -16196,6 +16328,59 @@ async function findAffordableWhatsappAreaStats(filters = {}, { includeBudget = t
   return result.rows;
 }
 
+/**
+ * The message the website's WhatsApp help button types: "Hi makaug, I'm on the
+ * To Rent page and I'm looking for a rental. Please help me with area, budget,
+ * bedrooms ... Page: makaug.com/to-rent/kisaasi-kampala". Which page it came
+ * from, and so what they are looking for.
+ */
+function websiteHelpPrefill(text = '') {
+  const clean = normalizeInput(text);
+  if (!/^hi makaug,\s*i'?m\b/i.test(clean) && !/\bpage:\s*makaug\.com\//i.test(clean)) return null;
+  const page = (clean.match(/\bpage:\s*makaug\.com\/([a-z0-9-]+)/i) || [])[1] || '';
+  const said = clean.toLowerCase();
+  const kind = /student|hostel|campus/.test(page + ' ' + said) ? 'student'
+    : /to-rent|rent|rental/.test(page) || /\b(?:looking for a rental|to rent page)\b/.test(said) ? 'rent'
+      : /land|plot/.test(page) || /\b(?:land or a plot)\b/.test(said) ? 'land'
+        : /commercial|business/.test(page + ' ' + said) ? 'commercial'
+          : /for-sale|sale/.test(page) || /\bfor sale page\b/.test(said) ? 'sale'
+            : '';
+  return { page, kind };
+}
+
+/** What to ask someone who pressed the help button, so the team can find them the right place. */
+function websiteHelpQuestions(kind = '') {
+  return ({
+    rent: 'To find you the right place: what is your budget a month, how many bedrooms do you need, and when do you want to move in?',
+    student: 'To find you the right room: which university or campus, a single or shared room, and your budget a semester?',
+    land: 'To find you the right plot: what size do you need, what is your budget, and which areas suit you?',
+    commercial: 'To find you the right space: a shop, office or warehouse, about what size, your budget, and to rent or to buy?',
+    sale: 'To find you the right home: what is your budget, how many bedrooms, and which areas suit you?'
+  })[kind] || 'Tell me what you are looking for: the area, your budget and how many bedrooms, and I will find the closest matches.';
+}
+
+// Words that name a place in our list but are said for something else.
+const NOT_AN_AREA_WORD = /^(?:church|market|school|hospital|stage|road|hill|town|centre|center|bank|mosque|estate|park|police|station|junction|corner|village|trading|city|central|budget|month|room|rooms|house|single|double|self|contained|rent|place|areas?|looking|please|thanks|hello|hallo)$/i;
+
+/** Every place they named, in order: "kisaasi, kyanja" is two places (23 Nov 2026). */
+function namedSearchAreas(text = '', limit = 3) {
+  const { canonicalizeUgandaLocation } = require('../utils/ugandaLocationRegistry');
+  const found = [];
+  for (const word of normalizeInput(text).split(/[^A-Za-z'’-]+/)) {
+    if (word.length < 4 || NOT_AN_AREA_WORD.test(word)) continue;
+    const place = canonicalizeUgandaLocation(word);
+    if (!place || !['area', 'town', 'city', 'neighborhood'].includes(String(place.level || '')) || place.level === 'neighborhood' && /^[a-z]/.test(word)) continue;
+    if (!found.includes(place.name)) found.push(place.name);
+    if (found.length >= limit) break;
+  }
+  return found;
+}
+
+function listOfPlaces(places = []) {
+  if (places.length <= 1) return places[0] || '';
+  return `${places.slice(0, -1).join(', ')} and ${places[places.length - 1]}`;
+}
+
 async function buildAffordabilityAdviceReply({ phone, text, lang, filters = {} }) {
   let normalizedFilters = {
     ...filters,
@@ -16257,7 +16442,26 @@ async function buildAffordabilityAdviceReply({ phone, text, lang, filters = {} }
     search_type: normalizedFilters.searchType || 'any'
   });
 
-  return formatAffordabilityAdviceMessage(lang, rows, areaStats, normalizedFilters, { exactMatch });
+  const message = formatAffordabilityAdviceMessage(lang, rows, areaStats, normalizedFilters, { exactMatch });
+  // 23 Nov 2026: "a place to rent in the areas of kisaasi, kyanja my budget is
+  // 150k per month" got the cheapest rooms in Kisaasi, from 250k, and nothing
+  // else: no word about Kyanja, and nothing on the lead desk, so nobody went
+  // looking. When nothing fits the budget, the request goes on the desk, with
+  // every place they named, and they are told so.
+  const budget = Number(normalizedFilters.maxBudgetUgx || 0);
+  if (exactMatch || !(budget > 0) || !phone) return message;
+  const places = namedSearchAreas(text);
+  const area = places.length ? places.join(', ') : normalizeInput(normalizedFilters.area || '');
+  createNoMatchLead({
+    userPhone: phone,
+    searchType: normalizedFilters.searchType || 'any',
+    preferredArea: area,
+    notes: `Nothing live inside the budget. They said: ${normalizeInput(text).slice(0, 300)}`,
+    filters: { ...normalizedFilters, pricePeriod: normalizedFilters.budgetPeriod || normalizedFilters.pricePeriod || '' },
+    queryText: text
+  });
+  const where = places.length ? ` in ${listOfPlaces(places)}` : (area ? ` in ${area}` : '');
+  return `${message}\n\nNothing${where} is live at ${formatPrice(budget, normalizedFilters.budgetPeriod || '')} yet, so I have passed your request to our team. They will ask our agents${where} and send you what they find.`;
 }
 
 async function findPropertiesNearLandmark(filters = {}) {
@@ -20140,6 +20344,126 @@ function logPropertySearchRequest({
   });
 }
 
+// A country is where somebody is, not where they want to stay: "my friend
+// is in Kenya" (23 Nov 2026).
+const NOT_A_UGANDA_PLACE = /^(?:kenya|rwanda|tanzania|burundi|south\s+sudan|sudan|congo|drc|ethiopia|somalia|nigeria|ghana|south\s+africa|uk|united\s+kingdom|england|london|usa|america|united\s+states|dubai|uae|qatar|saudi(?:\s+arabia)?|india|china|canada|germany|nairobi|kigali|juba|dar\s+es\s+salaam|mombasa|kinshasa|goma)$/i;
+
+function nightlyAmount(raw = '', unit = '') {
+  const digits = String(raw || '').replace(/[,\s]/g, '');
+  let value = Number(digits);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  const u = String(unit || '').toLowerCase();
+  if (u === 'k') value *= 1000;
+  if (u === 'm') value *= 1000000;
+  return value >= 10000 && value <= 5000000 ? Math.round(value) : null;
+}
+
+/**
+ * Somebody asking for a room by the night wants a short stay (23 Nov 2026).
+ *
+ * A renter's voice note — "how much is the room per night? You send some
+ * pictures for your hotel ... my friend, he's in Kenya, wants to spend like
+ * there over 20 days ... if you can give him the discount" — was read as a
+ * property in Kenya under UGX 20. Land for sale came back, with the cheapest
+ * "about 150000× your budget", and the lead desk got "a property in Kenya, up
+ * to UGX 20". A price a night, a hotel, an Airbnb or a short stay, or a number
+ * of nights or days to stay, is a short stay: the nights are not a budget and
+ * the country the guest is in is not where they will sleep.
+ */
+function shortStayAsk(text = '') {
+  const clean = normalizeInput(text).toLowerCase();
+  if (!clean) return null;
+  const byNight = /\b(?:per|a|each|every|one|1)\s+night\b|\bnightly\b|\bper\s+day\b|\bby\s+the\s+night\b/.test(clean);
+  const stayWord = /\b(?:hotels?|motels?|airbnbs?|air\s*bnb|guest\s*houses?|lodges?|short[\s-]*(?:stays?|term|lets?)|holiday\s+(?:homes?|apartments?|lets?))\b/.test(clean);
+  const weeksMatch = clean.match(/\b(\d{1,2})\s*weeks?\b/);
+  const nightsMatch = clean.match(/\b(\d{1,3})\s*(?:nights?|days?)\b/) || (weeksMatch ? [weeksMatch[0], String(Number(weeksMatch[1]) * 7)] : null);
+  const staying = /\b(?:stay|staying|spend|spending|visit|visiting|holiday|vacation|trip|sleep|book|booking|come|coming)\b/.test(clean)
+    || /\bfor\s+(?:about\s+|over\s+)?\d{1,3}\s*(?:nights?|days?|weeks?)\b/.test(clean);
+  if (!byNight && !stayWord && !(nightsMatch && staying)) return null;
+  // A plot, a sale or a monthly rent that only mentions days is not one.
+  if (!byNight && !stayWord && /\b(?:for sale|selling|land|plots?|acres?|decimals?|per month|a month|monthly)\b/.test(clean)) return null;
+  const guestsMatch = clean.match(/\b(\d{1,2})\s*(?:people|persons?|guests?|adults?|pax)\b/);
+  const nightlyMatch = clean.match(/(\d[\d,]*(?:\.\d+)?)\s*(k|m)?\s*(?:ugx|shs?|ush)?\s*(?:per|a|each)\s+(?:night|day)\b/);
+  return {
+    nights: nightsMatch ? Math.min(365, Number(nightsMatch[1])) : null,
+    guests: guestsMatch ? Number(guestsMatch[1]) : null,
+    nightlyMax: nightlyMatch ? nightlyAmount(nightlyMatch[1], nightlyMatch[2]) : null
+  };
+}
+
+/** Where the stay should be: a place in the message, else the last one they searched, never a country. */
+function shortStayArea(text = '', sessionData = {}) {
+  const usable = (value) => {
+    const place = normalizeInput(value || '');
+    return place && !NOT_A_UGANDA_PLACE.test(place) && !/^(?:any|anywhere|uganda|any area)$/i.test(place) ? place : '';
+  };
+  return usable(parseAreaFromText(text, sessionData))
+    || usable(sessionData.search_location_label)
+    || usable(sessionData.last_no_match?.area)
+    || '';
+}
+
+/**
+ * Short stays near the place asked, cheapest first, with a link to each, and
+ * the questions that get the guest the right one. The request goes on the
+ * lead desk so a person can ask the host about dates and a discount.
+ */
+async function shortStayGuestReply({ phone = '', text = '', ask = {}, sessionData = {} } = {}) {
+  const area = shortStayArea(text, sessionData);
+  const { searchShortTermListings } = require('../services/shortTermService');
+  const base = { limit: 4, sort: 'price_asc' };
+  if (ask.guests) base.guests = ask.guests;
+  if (ask.nightlyMax) base.max_price = ask.nightlyMax;
+  let stays = [];
+  let where = '';
+  try {
+    if (area) {
+      stays = (await searchShortTermListings(db, { ...base, area })).listings || [];
+      where = stays.length ? area : '';
+      if (!stays.length) {
+        const district = require('../utils/ugandaLocationHierarchy').districtForKnownArea(area);
+        if (district) {
+          stays = (await searchShortTermListings(db, { ...base, district })).listings || [];
+          where = stays.length ? district : '';
+        }
+      }
+    }
+    if (!stays.length) stays = (await searchShortTermListings(db, base)).listings || [];
+  } catch (error) {
+    logger.warn('WhatsApp short-stay search failed:', error.message || String(error));
+  }
+  if (phone) {
+    createNoMatchLead({
+      userPhone: phone,
+      searchType: 'short_term',
+      preferredArea: area,
+      notes: [
+        'Short stay asked on WhatsApp.',
+        ask.nights ? `About ${ask.nights} nights.` : '',
+        ask.guests ? `${ask.guests} guests.` : '',
+        ask.nightlyMax ? `Up to UGX ${Number(ask.nightlyMax).toLocaleString('en-US')} a night.` : ''
+      ].filter(Boolean).join(' '),
+      filters: { maxBudgetUgx: ask.nightlyMax || null, pricePeriod: 'night' },
+      queryText: text
+    });
+  }
+  const lines = [
+    `🛏️ *Short stays${where ? ` near ${where}` : ' on makaug'}*`,
+    'makaug lists furnished rooms and apartments by the night. ' + (stays.length
+      ? (where ? 'Some near there, cheapest first:' : `${area ? `None in ${area} yet, so here` : 'Here'} are the cheapest:`)
+      : 'None match that right now, so a person on our team will look for you.')
+  ];
+  stays.slice(0, 4).forEach((stay, index) => {
+    const price = stay.nightly_display ? `${stay.nightly_display} a night` : 'price on request';
+    lines.push('', `${index + 1}. ${stay.title}${stay.area && !String(stay.title || '').includes(stay.area) ? `, ${stay.area}` : ''} — ${price}`);
+    if (stay.url) lines.push(`${HOME_URL}${stay.url}`);
+  });
+  lines.push('', `More places: ${HOME_URL}/short-term`);
+  if (ask.nights && ask.nights >= 7) lines.push('', `For ${ask.nights} nights a host will often give a lower price — our team will ask.`);
+  lines.push('', 'To find the right one: which date do you arrive, how many people are staying, and what is your budget a night?');
+  return lines.join('\n');
+}
+
 /**
  * Record a search makaug could not answer.
  *
@@ -23541,6 +23865,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     return respond(rentingProcessReply(lang, sessionData), step === 'search_area' ? 'search_area' : 'main_menu');
   }
 
+  // A room by the night is a short stay, not a property search (23 Nov 2026).
+  const stayAsk = ['greeting', 'main_menu', 'search_type', 'search_area'].includes(step) && cleanBody.length > 3
+    ? shortStayAsk(cleanBody)
+    : null;
+  if (stayAsk) {
+    return respond(await shortStayGuestReply({ phone, text: cleanBody, ask: stayAsk, sessionData }), 'main_menu');
+  }
+
   if (
     ['greeting', 'main_menu', 'search_type', 'search_area'].includes(step)
     && cleanBody.length > 3
@@ -23640,6 +23972,12 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         usedNearestFallback: false
       });
 
+      // 23 Nov 2026: the website's help button ("Hi makaug, I'm on the To Rent
+      // page ... Please help me with area, budget, bedrooms") got three
+      // listings and nothing else. It now also asks what the team needs to
+      // find them the right place.
+      const prefill = websiteHelpPrefill(cleanBody);
+      const helpLine = prefill ? `\n\n${websiteHelpQuestions(prefill.kind || naturalFilters.searchType)}` : '';
       if (!rows.length) {
         const reply = await formatNoMatchOrFallbackReply({
           lang,
@@ -23650,11 +23988,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           filters: naturalFilters,
           notes: `No approved listings found for natural query: ${cleanBody}`
         });
-        return respond(reply, 'main_menu');
+        return respond(`${reply}${helpLine}`, 'main_menu');
       }
 
       return respond(
-        `${describeNaturalFilters(naturalFilters, lang) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters, lang)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
+        `${describeNaturalFilters(naturalFilters, lang) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters, lang)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}${helpLine}`,
         'main_menu'
       );
     }
@@ -25581,6 +25919,8 @@ async function processInboundRuntimeUnlocked({
       senderMs: employeeSenderMs(inboundMetadata),
       // Descriptions from this phone still waiting in line behind this message.
       describedWaiting: sendOrder.describedWaiting(whatsappLineKey(phone)),
+      // Photos, videos and documents still waiting behind it (23 Nov 2026).
+      mediaWaiting: typeof sendOrder.mediaWaiting === 'function' ? sendOrder.mediaWaiting(whatsappLineKey(phone)) : 0,
       contactName
     },
     inboundMessageId,
@@ -27522,6 +27862,17 @@ module.exports.forwardedAdvertMimeType = forwardedAdvertMimeType;
 module.exports.importForwardedAdvert = importForwardedAdvert;
 
 module.exports.__test = {
+  holdAgentSavedReply,
+  countAgentSavedMedia,
+  releaseAgentSavedReply,
+  websiteHelpPrefill,
+  websiteHelpQuestions,
+  namedSearchAreas,
+  buildAffordabilityAdviceReply,
+  shortStayAsk,
+  shortStayArea,
+  shortStayGuestReply,
+  captionSellsNotLets,
   isRentingProcessQuestion,
   rentingProcessReply,
   recentSearchBrief,
