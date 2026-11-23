@@ -13,9 +13,34 @@ const LISTING_REFERENCE_RE = /^MK-[0-9A-Z-]{4,}$/i;
 const LISTING_REFERENCE_SUFFIX_RE = /^[0-9A-F]{6}$/i;
 const PROPERTY_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // The first 8 hex digits are a UUID's time_low. A prefix uses the primary-key
-// range, not id::text LIKE, which cannot use the uuid index. Six hex digits
-// stay the MK suffix (EFB4A3), so a place name is still not an id.
-const PROPERTY_ID_PREFIX_RE = /^[0-9a-f]{8}$/i;
+// range, not a bare id::text LIKE, which cannot use the uuid index. Six hex
+// digits stay the MK suffix (EFB4A3), so a place name is still not an id.
+// WhatsApp alerts show "Ref 7A8DF970" (an optional "Ref " prefix plus 8+ hex).
+const PROPERTY_ID_PREFIX_RE = /^[0-9a-f]{8,31}$/i;
+
+function stripListingLookupPrefix(term = '') {
+  return String(term || '').trim().replace(/^ref[:\s]+/i, '').trim();
+}
+
+function propertyIdPrefixHex(term = '') {
+  const clean = String(term || '').trim();
+  if (!clean) return '';
+  const hex = clean.replace(/-/g, '');
+  return PROPERTY_ID_PREFIX_RE.test(hex) ? hex.toLowerCase() : '';
+}
+
+function hexToUuidTextPrefix(hex = '') {
+  const h = String(hex || '').toLowerCase();
+  const sizes = [8, 4, 4, 4, 12];
+  const parts = [];
+  let i = 0;
+  for (const size of sizes) {
+    if (i >= h.length) break;
+    parts.push(h.slice(i, i + size));
+    i += size;
+  }
+  return parts.join('-');
+}
 
 function uuidPrefixBounds(prefix = '') {
   const hex = String(prefix || '').trim().toLowerCase();
@@ -31,13 +56,14 @@ function listingReferenceQuery(term = '') {
 }
 
 function listingDirectLookup(term = '') {
-  const clean = String(term || '').trim();
+  const clean = stripListingLookupPrefix(term);
   if (!clean) return null;
   if (PROPERTY_ID_RE.test(clean)) return { kind: 'id', value: clean.toLowerCase() };
   const reference = listingReferenceQuery(clean);
   if (reference) return { kind: 'reference', value: reference };
   if (LISTING_REFERENCE_SUFFIX_RE.test(clean)) return { kind: 'suffix', value: clean.toUpperCase() };
-  if (PROPERTY_ID_PREFIX_RE.test(clean)) return { kind: 'id_prefix', value: clean.toLowerCase() };
+  const prefixHex = propertyIdPrefixHex(clean);
+  if (prefixHex) return { kind: 'id_prefix', value: prefixHex };
   return null;
 }
 
@@ -58,11 +84,23 @@ function listingDirectLookupClause(alias = 'p', lookup = null, values = []) {
     return `${alias}.inquiry_reference LIKE $${values.length}`;
   }
   if (lookup.kind === 'id_prefix') {
-    const bounds = uuidPrefixBounds(lookup.value);
+    const hex = propertyIdPrefixHex(lookup.value) || String(lookup.value || '').replace(/-/g, '').toLowerCase();
+    const bounds = uuidPrefixBounds(hex.slice(0, 8));
     values.push(bounds.start);
-    if (!bounds.end) return `${alias}.id >= $${values.length}::uuid`;
-    values.push(bounds.end);
-    return `${alias}.id >= $${values.length - 1}::uuid AND ${alias}.id < $${values.length}::uuid`;
+    let clause;
+    if (!bounds.end) {
+      clause = `${alias}.id >= $${values.length}::uuid`;
+    } else {
+      values.push(bounds.end);
+      clause = `${alias}.id >= $${values.length - 1}::uuid AND ${alias}.id < $${values.length}::uuid`;
+    }
+    // Longer than the first UUID group: keep the range (index) and tighten
+    // with a dashed id::text prefix, e.g. 7a8df970-5ed7%.
+    if (hex.length > 8) {
+      values.push(`${hexToUuidTextPrefix(hex)}%`);
+      clause = `(${clause} AND ${alias}.id::text ILIKE $${values.length})`;
+    }
+    return clause;
   }
   return 'FALSE';
 }
@@ -97,9 +135,12 @@ module.exports = {
   LISTING_REFERENCE_SUFFIX_RE,
   PROPERTY_ID_PREFIX_RE,
   PROPERTY_ID_RE,
+  hexToUuidTextPrefix,
   listingDirectLookup,
   listingDirectLookupClause,
   listingReferenceQuery,
+  propertyIdPrefixHex,
   propertyListingSearchClause,
+  stripListingLookupPrefix,
   uuidPrefixBounds
 };
