@@ -145,6 +145,7 @@ const {
   parsePitchContact,
   parsePayLinkChoice,
   looksLikePropertyCaption,
+  isQuestionToUs,
   withEnglishPropertyTerms,
   foldAdvertText,
   isEmployeeIntakeCancel,
@@ -9048,9 +9049,9 @@ const agentTalkNotes = new Map();
 const agentUnplacedNotedAt = new Map();
 
 /** The note itself: now, or at 7am when it is night in Kampala. */
-async function sendAgentTalkNote({ phone = '', agent = {}, lines = [], typed = null } = {}) {
+async function sendAgentTalkNote({ phone = '', agent = {}, lines = [], typed = null, customer = false } = {}) {
   const body = personThread.teamNote({
-    name: agent.full_name || '',
+    name: agent.full_name || (customer ? 'A customer' : ''),
     company: agent.company_name || '',
     phone,
     lines,
@@ -9060,9 +9061,9 @@ async function sendAgentTalkNote({ phone = '', agent = {}, lines = [], typed = n
   return require('../services/leadDeskService').holdOrSendToTeam(db, {
     conversationPhone: phone,
     body,
-    type: typed ? 'agent_wrote_back_to_person' : 'agent_message_not_placed',
+    type: customer ? 'customer_wrote_back_to_person' : (typed ? 'agent_wrote_back_to_person' : 'agent_message_not_placed'),
     kind: 'needs_person',
-    extraRecipients: agentFilm.agentJoinAlertRecipients()
+    extraRecipients: customer ? [] : agentFilm.agentJoinAlertRecipients()
   });
 }
 
@@ -9071,22 +9072,23 @@ async function sendAgentTalkNote({ phone = '', agent = {}, lines = [], typed = n
  * on our team last typed to them, when the line is an answer to a person;
  * absent, the line is one the assistant could not place.
  */
-function noteAgentTalkForTeam({ phone = '', agent = {}, said = '', typed = null } = {}) {
+function noteAgentTalkForTeam({ phone = '', agent = {}, said = '', typed = null, customer = false } = {}) {
   const key = String(phone || '').replace(/\D/g, '');
   const line = normalizeInput(said);
   if (key.length < 9 || !line) return;
-  const waiting = agentTalkNotes.get(key) || { lines: [], agent: {}, typed: null, timer: null };
+  const waiting = agentTalkNotes.get(key) || { lines: [], agent: {}, typed: null, timer: null, customer: false };
   if (waiting.timer) clearTimeout(waiting.timer);
   if (waiting.lines.length < 12) waiting.lines.push(line.slice(0, 300));
   if (agent && (agent.full_name || agent.id)) waiting.agent = agent;
   if (typed) waiting.typed = typed;
+  if (customer) waiting.customer = true;
   waiting.timer = setTimeout(() => {
     agentTalkNotes.delete(key);
     if (!waiting.typed) {
       if (agentUnplacedNotedAt.size > 2000) agentUnplacedNotedAt.clear();
       agentUnplacedNotedAt.set(key, Date.now());
     }
-    deferWhatsappWork('agent talk note to the team', () => sendAgentTalkNote({ phone: key, agent: waiting.agent, lines: waiting.lines, typed: waiting.typed }));
+    deferWhatsappWork('agent talk note to the team', () => sendAgentTalkNote({ phone: key, agent: waiting.agent, lines: waiting.lines, typed: waiting.typed, customer: waiting.customer }));
   }, agentTalkNoteDelayMs({ answerToAPerson: Boolean(waiting.typed), lastNotedAt: agentUnplacedNotedAt.get(key) || 0 }));
   if (typeof waiting.timer.unref === 'function') waiting.timer.unref();
   agentTalkNotes.set(key, waiting);
@@ -9117,6 +9119,47 @@ async function agentTalkIsForAPerson({ phone = '', agent = {}, said = '' } = {})
   });
   if (!typed) return false;
   noteAgentTalkForTeam({ phone, agent, said, typed });
+  return true;
+}
+
+/**
+ * A reply that only asks where to begin: the menu, "I can help with that.
+ * Tell me what you need", "I am here with you. Next step:", or the area or
+ * rent-or-buy question.
+ */
+function isOpeningReply(message = '', lang = 'en') {
+  const text = String(message || '').trim();
+  if (!text) return false;
+  if (whatsappReplyKind(text) === 'menu') return true;
+  for (const code of new Set([resolveLangCode(lang), 'en'])) {
+    if (text.startsWith(friendlyUnknownReply(code).split('\n')[0])) return true;
+  }
+  return /I am here with you\. Next step:|Which area\? For example Ntinda, Kira or Kyanja\.|Do you want to \*rent\* or to \*buy\*\?/.test(text);
+}
+
+/**
+ * A customer somebody on our team is talking to (23 Nov 2026).
+ *
+ * At 10:15 in Kampala somebody on our team wrote to a renter: in Kisaasi and
+ * Kyanja 150k a month usually gets a single room. She answered "i want a
+ * single one", and the assistant sent her the menu; she pressed 3 and was
+ * shown agents in Wakiso. For a few days after somebody on the team types
+ * to a customer, what the assistant would only have answered with the menu
+ * or a "which area?" goes to that person instead: the team gets one note
+ * with their words, and the assistant says nothing. A search it can answer
+ * is answered.
+ */
+async function customerTalkIsForAPerson({ phone = '', said = '', reply = '', lang = 'en', contactName = '' } = {}) {
+  if (!normalizeInput(said) || !isOpeningReply(reply, lang) || isTeamNumber(phone)) return false;
+  // Asking for the menu is asking the assistant.
+  if (/^\s*(?:menu|main menu|home|start|restart|help)\s*[.!]*\s*$/i.test(said)) return false;
+  if (await findApprovedAgentByPhone(phone).catch(() => null)) return false;
+  const typed = await personThread.lastTypedByTeam(db, phone).catch((error) => {
+    logger.warn('Could not check whether a person is talking to this customer:', error.message || String(error));
+    return null;
+  });
+  if (!typed) return false;
+  noteAgentTalkForTeam({ phone, agent: { full_name: contactName || '' }, said, typed, customer: true });
   return true;
 }
 
@@ -9170,6 +9213,13 @@ async function agentUnplacedReply({ phone = '', data = {}, cleanBody = '' } = {}
   if (agentUnplacedThankedAt.size > 2000) agentUnplacedThankedAt.clear();
   agentUnplacedThankedAt.set(key, Date.now());
   const first = agentGreetingName(agent, '');
+  // A question is answered as one (23 Nov 2026), not with how to post.
+  if (isQuestionToUs(cleanBody)) {
+    return {
+      message: `👍 Thanks${first ? ` ${first}` : ''}, I have passed your question to our team. They will answer you here shortly.`,
+      leftUnanswered: false
+    };
+  }
   return {
     message: `👍 Thanks${first ? ` ${first}` : ''}, I have passed that to our team.\n\nIf it was a property, ${AGENT_HOW_TO_SEND_A_PROPERTY}`,
     leftUnanswered: false
@@ -13634,6 +13684,20 @@ async function handleEmployeeWhatsappIntake({
           };
         }
       }
+      // An agent's question to us is not a property (23 Nov 2026): "Is it a
+      // mistake or they really want something of 150k", about a renter's
+      // request we had sent him, was kept as a description, and he was asked
+      // for its photos. It goes to the team, as anything else an agent says.
+      if (data.whatsapp_agent_self_intake === true && isQuestionToUs(cleanBody) && !agentAsksTheAssistant(cleanBody)) {
+        const payLinkAnswer = await agentPayLinkAside({ agent: data.agent || {}, cleanBody });
+        if (payLinkAnswer) return { handled: true, nextStep: currentStep, message: payLinkAnswer };
+        if (await agentTalkIsForAPerson({ phone, agent: data.agent || {}, said: cleanBody })) {
+          await markTalkLeftUnanswered(phone);
+          return { handled: true, nextStep: currentStep, message: '', leftUnanswered: true };
+        }
+        const unplaced = await agentUnplacedReply({ phone, data, cleanBody });
+        return { handled: true, nextStep: currentStep, message: unplaced.message, leftUnanswered: unplaced.leftUnanswered };
+      }
       const existingBatchProperties = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
       const pendingStoredMedia = employeePendingStoredMedia(data);
       const pendingCaption = normalizeInput(data.pending_property_caption || '');
@@ -15708,6 +15772,23 @@ function describeNaturalFilters(filters = {}, lang = 'en') {
   return chips.join(' • ');
 }
 
+/**
+ * The line above search results. In English it says what was looked for, as
+ * a person would (23 Nov 2026): "Here is what I have for a single room to
+ * rent up to USh 150,000/month:", not "✅ Filters applied: To Rent • single
+ * room • max USh 150,000/month". Nothing when the results' own header says it.
+ */
+function filtersLeadLine(filters = {}, lang = 'en', { fxNote = '' } = {}) {
+  const chips = describeNaturalFilters(filters, lang);
+  if (!chips) return '';
+  if (resolveLangCode(lang) !== 'en') return `✅ Filters applied: ${chips}${fxNote || '\n'}`;
+  const budget = Number(filters.maxBudgetUgx) > 0 ? ` up to ${formatPrice(filters.maxBudgetUgx, filters.budgetPeriod || '')}` : '';
+  const home = Boolean(normalizeInput(filters.propertyType || '')) || Number(filters.bedsMin) > 0;
+  if (!budget && !home) return fxNote ? `${fxNote.replace(/^\n+/, '')}` : '';
+  const where = searchPlacesOf(filters).length ? ` ${searchPlacePhrase(filters)}` : '';
+  return `Here is what I have${where} for ${searchWhatSingular(filters)}${budget}:${fxNote || '\n'}`;
+}
+
 function naturalFilterLabel(lang = 'en') {
   const code = resolveLangCode(lang);
   return {
@@ -15727,13 +15808,36 @@ function naturalFilterLine(filters = {}, lang = 'en') {
   return chips ? `🎯 ${naturalFilterLabel(lang)}: ${chips}\n` : '';
 }
 
+/** "a house", "a place to rent", "a 2-bedroom home to buy": what they asked for, as one thing. */
+function searchWhatSingular(filters = {}) {
+  const searchType = normalizeListingType(filters.searchType || 'any');
+  const home = normalizeInput(filters.propertyType || '').toLowerCase();
+  const beds = Number(filters.bedsMin) > 0 ? `${Number(filters.bedsMin)}-bedroom ` : '';
+  const article = (word) => (/^[aeiou]/.test(word) ? 'an' : 'a');
+  const thing = home ? `${beds}${home}` : (beds ? `${beds}home` : '');
+  const suffix = { rent: ' to rent', sale: ' to buy' }[searchType] || '';
+  if (thing) return `${article(thing)} ${thing}${home && /\b(?:land|plot)\b/.test(home) ? '' : suffix}`;
+  return {
+    rent: 'a place to rent',
+    sale: 'a home to buy',
+    land: 'land',
+    student: 'a student room',
+    commercial: 'a commercial space'
+  }[searchType] || 'that';
+}
+
 function naturalSearchPrompt(lang, filters = {}, mode = 'area') {
   const code = resolveLangCode(lang);
   const filterLine = naturalFilterLine(filters, code);
+  // Asked as a person would (23 Nov 2026): "I can search that for you.
+  // Filters: house. Send the area or district." became one question, with
+  // renting or buying in it when that is not said either.
+  const askType = asksRentOrBuyFirst({ ...filters, area: 'x' });
+  const areaEn = `${whatsappBrandHeader('Property search')}\nSure, I can look for ${searchWhatSingular(filters)} for you 🔎\nWhich area? For example Ntinda, Kira or Kyanja.${askType ? ' And do you want to rent or to buy?' : ''}`;
 
   const copy = {
     area: {
-      en: `${whatsappBrandHeader('Property search')}\n🔎 I can search that for you.\n${filterLine}Send the area or district.`,
+      en: areaEn,
       lg: `${whatsappBrandHeader('Noonya property')}\n🔎 Nsobola okukinoonya.\n${filterLine}Mpandiikira ekitundu oba district.`,
       sw: `${whatsappBrandHeader('Tafuta mali')}\n🔎 Naweza kukutafutia hiyo.\n${filterLine}Taja eneo au wilaya.`,
       ac: `${whatsappBrandHeader('Yeny property')}\n🔎 Aromo yenyoni pi in.\n${filterLine}Tim ber icwal area onyo district.`,
@@ -16014,7 +16118,22 @@ function formatCheapestAreasLine(lang, areaStats = []) {
   return `\n${heading}:\n${rows.join('\n')}\n`;
 }
 
-function formatAffordabilityAdviceMessage(lang, rows = [], areaStats = [], filters = {}, { exactMatch = true } = {}) {
+/** What they are looking for, said the way a person would: "single rooms to rent", "homes for sale". */
+function searchWhatPhrase(filters = {}) {
+  const searchType = normalizeListingType(filters.searchType || 'any');
+  const home = normalizeInput(filters.propertyType || '').toLowerCase();
+  const beds = Number(filters.bedsMin) > 0 ? `${Number(filters.bedsMin)}-bedroom ` : '';
+  const plural = home ? (/s$/.test(home) ? home : `${home}s`) : '';
+  if (searchType === 'land') return plural && !/^(?:land|lands)$/.test(home) ? plural : 'land';
+  if (searchType === 'student') return plural || 'student rooms';
+  if (searchType === 'commercial') return plural || 'commercial spaces';
+  const noun = `${beds}${plural || (searchType === 'sale' ? 'homes' : 'places')}`;
+  if (searchType === 'rent') return `${noun} to rent`;
+  if (searchType === 'sale') return `${noun} for sale`;
+  return plural ? `${beds}${plural}` : `${beds}${beds ? 'homes' : 'places'}`;
+}
+
+function formatAffordabilityAdviceMessage(lang, rows = [], areaStats = [], filters = {}, { exactMatch = true, teamLine = '' } = {}) {
   const searchType = normalizeListingType(filters.searchType || 'any');
   const budget = Number(filters.maxBudgetUgx || 0) || 0;
   const type = searchType && searchType !== 'any' ? typeLabel(searchType, lang) : typeLabel('any', lang);
@@ -16023,14 +16142,27 @@ function formatAffordabilityAdviceMessage(lang, rows = [], areaStats = [], filte
   if (Number(filters.bedsMin || 0) > 0) filterBits.push(`${Number(filters.bedsMin)}+ bed`);
   if (filters.propertyType) filterBits.push(filters.propertyType);
   const fxNote = whatsappBudgetFxNote(filters);
-  const header = `${whatsappBrandHeader('Affordability search')}\n${affordabilityExactLabel(lang, exactMatch)}\n🎯 ${filterBits.join(' • ')}${fxNote}`;
   const areaLine = formatCheapestAreasLine(lang, areaStats);
+  const where = searchPlacePhrase(filters);
+  if (resolveLangCode(lang) === 'en' && rows.length) {
+    // Said as a person would (23 Nov 2026): what they asked for, where, and
+    // what is there, instead of "I did not find an exact match inside that
+    // budget" over a row of filter chips.
+    const what = searchWhatPhrase(filters);
+    const lead = exactMatch
+      ? `Here are the cheapest ${what} I have${where ? ` ${where}` : ''}${budget > 0 ? `, all within ${formatPrice(budget, filters.budgetPeriod || '')}` : ''}:`
+      : teamLine
+        ? `${teamLine}\n\nMeanwhile, here are the cheapest ${what} I have${where ? ` ${where}` : ''} right now:`
+        : `Nothing${where ? ` ${where}` : ''} is live at ${formatPrice(budget, filters.budgetPeriod || '')} yet. Here are the cheapest ${what} I have${where ? ' there' : ''}:`;
+    return `${whatsappBrandHeader('Affordability search')}\n${lead}${fxNote}${areaLine}\n${formatPropertySearchMessage(lang, rows, searchPlaceLabel(filters) || 'Any area', searchType, { linkArea: searchLinkArea(filters) })}`;
+  }
+  const header = `${whatsappBrandHeader('Affordability search')}\n${affordabilityExactLabel(lang, exactMatch)}\n🎯 ${filterBits.join(' • ')}${fxNote}`;
   if (!rows.length) {
     // "So here are the cheapest options I can see", then "I do not have
     // listings to show": both, in one message (16 Nov 2026).
     return `${whatsappBrandHeader('Affordability search')}\n🎯 ${filterBits.join(' • ')}${fxNote}${areaLine}\nI have nothing live for that yet. Try another area, budget or kind of place and I will look again, or reply *6* and a person from the team will help you look.`;
   }
-  return `${header}${areaLine}\n${formatPropertySearchMessage(lang, rows, filters.area || 'Any area', searchType)}`;
+  return `${header}${areaLine}\n${formatPropertySearchMessage(lang, rows, searchPlaceLabel(filters) || filters.area || 'Any area', searchType, { linkArea: searchLinkArea(filters) })}`;
 }
 
 function canonicalAreaText(value) {
@@ -16231,7 +16363,11 @@ function buildWhatsappAffordableWhere(filters = {}, { includeBudget = true } = {
   }
 
   const area = normalizeInput(filters.area);
-  if (filters.location_blocked) {
+  const placeKeys = searchAreaKeys(filters);
+  if (placeKeys.length) {
+    values.push(placeKeys);
+    where += ` AND COALESCE(p.extra_fields->>'canonical_location_id', '') = ANY($${values.length})`;
+  } else if (filters.location_blocked) {
     where += ' AND FALSE';
   } else if (filters.canonical_location_id) {
     where = addWhatsappCanonicalLocationFilter(where, values, filters, 'p');
@@ -16362,23 +16498,152 @@ function websiteHelpQuestions(kind = '') {
 // Words that name a place in our list but are said for something else.
 const NOT_AN_AREA_WORD = /^(?:church|market|school|hospital|stage|road|hill|town|centre|center|bank|mosque|estate|park|police|station|junction|corner|village|trading|city|central|budget|month|room|rooms|house|single|double|self|contained|rent|place|areas?|looking|please|thanks|hello|hallo)$/i;
 
-/** Every place they named, in order: "kisaasi, kyanja" is two places (23 Nov 2026). */
-function namedSearchAreas(text = '', limit = 3) {
+/** Every place they named, in order, with its key on our map: "kisaasi, kyanja" is two places (23 Nov 2026). */
+function namedSearchPlaces(text = '', limit = 3) {
   const { canonicalizeUgandaLocation } = require('../utils/ugandaLocationRegistry');
   const found = [];
   for (const word of normalizeInput(text).split(/[^A-Za-z'’-]+/)) {
     if (word.length < 4 || NOT_AN_AREA_WORD.test(word)) continue;
     const place = canonicalizeUgandaLocation(word);
     if (!place || !['area', 'town', 'city', 'neighborhood'].includes(String(place.level || '')) || place.level === 'neighborhood' && /^[a-z]/.test(word)) continue;
-    if (!found.includes(place.name)) found.push(place.name);
-    if (found.length >= limit) break;
+    if (!found.some((item) => item.name === place.name)) found.push({ name: place.name, key: String(place.key || ''), town: String(place.town || '') });
+    if (found.length >= limit + 1) break;
   }
-  return found;
+  // "Kisaasi, Nakawa" and "Najjera, Kira" name one place and the town it is in.
+  return found
+    .filter((place) => !found.some((other) => other !== place && other.town && other.town.toLowerCase() === place.name.toLowerCase()))
+    .slice(0, limit)
+    .map(({ name, key }) => ({ name, key }));
+}
+
+function namedSearchAreas(text = '', limit = 3) {
+  return namedSearchPlaces(text, limit).map((place) => place.name);
 }
 
 function listOfPlaces(places = []) {
   if (places.length <= 1) return places[0] || '';
   return `${places.slice(0, -1).join(', ')} and ${places[places.length - 1]}`;
+}
+
+/**
+ * A main road named in a search: "a house along gayaza road" (23 Nov 2026).
+ * The renter was asked for "the area or district", answered "Wakiso
+ * district", and got 1219 properties in Wakiso, rentals at 3M and 4M a month
+ * and a house for sale at 950M, none of them near Gayaza Road. A main road
+ * is the places along it, as on the website's search.
+ */
+function mainRoadInText(text = '') {
+  const { mainRoadCorridorByQuery } = require('../utils/ugandaLocationRegistry');
+  const clean = normalizeInput(text).toLowerCase();
+  const pattern = /([a-z]+(?:[\s/-]+[a-z]+){0,2})\s+(?:road|rd)\b/g;
+  let match;
+  while ((match = pattern.exec(clean))) {
+    const words = match[1].split(/[\s/-]+/).filter(Boolean);
+    for (let start = 0; start < words.length; start += 1) {
+      const road = mainRoadCorridorByQuery(`${words.slice(start).join(' ')} road`);
+      if (road) return road;
+    }
+  }
+  return null;
+}
+
+/** The places a search covers when it is more than one: [{ name, key }], or []. */
+function searchPlacesOf(filters = {}) {
+  const places = Array.isArray(filters?.searchAreas) ? filters.searchAreas.filter((place) => place && place.key) : [];
+  return places.length >= 2 ? places : [];
+}
+
+/** How a reply names where it searched: "Kisaasi and Kyanja", "along Gayaza Road", or the one area. */
+function searchPlaceLabel(filters = {}) {
+  if (searchPlacesOf(filters).length) return normalizeInput(filters.searchAreaLabel || '') || listOfPlaces(filters.searchAreas.map((place) => place.name));
+  return normalizeInput(filters?.area || '');
+}
+
+/** "in Kisaasi and Kyanja", "along Gayaza Road", "in Kireka", or ''. */
+function searchPlacePhrase(filters = {}) {
+  const label = searchPlaceLabel(filters);
+  if (!label) return '';
+  return /^(?:along|near|around|within)\b/i.test(label) ? label : `in ${label}`;
+}
+
+/**
+ * The search with the road, or every place, they named (23 Nov 2026):
+ * "kisaasi, kyanja" and "what about kungu, kiwatule" were searched in the
+ * first place only, Kisaasi and Kiwatule. A road named is searched along its
+ * length. One place is left as it was.
+ */
+function withNamedPlaces(filters = {}, text = '') {
+  if (!filters || typeof filters !== 'object' || filters?.proximity?.center) return filters;
+  const road = mainRoadInText(text);
+  if (road) {
+    const places = road.areas.filter((area) => area.key).map((area) => ({ name: area.name, key: area.key }));
+    if (places.length >= 2) {
+      return {
+        ...filters,
+        area: '',
+        district: null,
+        canonical_location_id: null,
+        location_blocked: false,
+        location_resolution: null,
+        location_status: null,
+        road: { key: road.key, name: road.name },
+        searchAreas: places,
+        searchAreaLabel: `along ${road.name}`,
+        hasSignal: true
+      };
+    }
+  }
+  const places = namedSearchPlaces(text);
+  if (places.length < 2) return filters;
+  return {
+    ...filters,
+    area: filters.area && !filters.location_blocked ? filters.area : places[0].name,
+    location_blocked: false,
+    location_resolution: null,
+    road: null,
+    searchAreas: places,
+    searchAreaLabel: listOfPlaces(places.map((place) => place.name)),
+    hasSignal: true
+  };
+}
+
+/** The keys a search of several places looks in, or [] for one place. */
+function searchAreaKeys(filters = {}) {
+  return Array.from(new Set(searchPlacesOf(filters).map((place) => String(place.key).trim()).filter(Boolean)));
+}
+
+/**
+ * To rent or to buy, asked before a home search that does not say (23 Nov
+ * 2026, the same renter): rentals at 3M a month and a house at 950M in one
+ * list helps nobody. A budget says which it is; land, rooms, student and
+ * commercial searches say it themselves.
+ */
+function asksRentOrBuyFirst(filters = {}) {
+  if (!filters || filters.rentOrBuyAsked || normalizeListingType(filters.searchType || 'any') !== 'any') return false;
+  if (filters?.proximity?.center || filters.useSharedLocation) return false;
+  if (Number(filters.maxBudgetUgx) > 0) return false;
+  const home = normalizeInput(filters.propertyType || '').toLowerCase();
+  if (/\b(?:land|plot|room|hostel|student|shop|office|warehouse|commercial)\b/.test(home)) return false;
+  return Boolean(filters.road) || Boolean(home) || Number(filters.bedsMin) > 0;
+}
+
+/** "Along Gayaza Road I look in Kisaasi, Kyanja, Gayaza and the places in between.\n\n" */
+function roadPlacesLine(filters = {}) {
+  const names = searchPlacesOf(filters).map((place) => place.name);
+  if (!filters.road || !names.length) return '';
+  const namesake = names.find((name) => String(filters.road.name).toLowerCase().startsWith(name.toLowerCase()));
+  const shown = names.slice(0, 2);
+  if (namesake && !shown.includes(namesake)) shown.push(namesake);
+  return `Along ${filters.road.name} I look in ${shown.join(', ')} and the places in between.\n\n`;
+}
+
+function rentOrBuyQuestion(filters = {}) {
+  const home = normalizeInput(filters.propertyType || '').toLowerCase();
+  const beds = Number(filters.bedsMin) > 0 ? `${Number(filters.bedsMin)}-bedroom ` : '';
+  const what = home ? `a ${beds}${home}` : (beds ? `a ${beds}home` : 'a home');
+  const road = filters.road && searchPlacesOf(filters).length ? roadPlacesLine(filters) : '';
+  const where = road ? '' : (searchPlacePhrase(filters) ? ` ${searchPlacePhrase(filters)}` : '');
+  return `${road}Happy to help you find ${what}${where} 🏡 Do you want to *rent* or to *buy*? And what is your budget?`;
 }
 
 async function buildAffordabilityAdviceReply({ phone, text, lang, filters = {} }) {
@@ -16395,6 +16660,9 @@ async function buildAffordabilityAdviceReply({ phone, text, lang, filters = {} }
     normalizedFilters.budgetCurrency = normalizedFilters.budgetCurrency || parsedBudget.budgetCurrency || null;
     normalizedFilters.fxRate = normalizedFilters.fxRate || parsedBudget.fxRate || null;
   }
+  // A rent budget is a month's rent (23 Nov 2026).
+  if (Number(normalizedFilters.maxBudgetUgx) > 0 && !normalizedFilters.budgetPeriod
+    && ['rent', 'student'].includes(normalizeListingType(normalizedFilters.searchType || 'any'))) normalizedFilters.budgetPeriod = 'month';
 
   let rows = await findAffordableWhatsappListings(normalizedFilters, { includeBudget: true });
   let areaStats = await findAffordableWhatsappAreaStats(normalizedFilters, { includeBudget: true });
@@ -16420,9 +16688,15 @@ async function buildAffordabilityAdviceReply({ phone, text, lang, filters = {} }
     areaStats = await findAffordableWhatsappAreaStats(normalizedFilters, { includeBudget: false });
   }
 
+  // With the filters, so the next message remembers them (23 Nov 2026): after
+  // "my budget is 150k per month single room", "what about buwaate cant i get
+  // within my budget", "what about kungu, kiwatule" and "what about kireka"
+  // were each answered without the budget or the room: 700K two-bedrooms and
+  // a five-bedroom bungalow. This search was the one place it was not kept.
   await logPropertySearchRequest({
     userPhone: phone,
     searchType: normalizedFilters.searchType || 'any',
+    filters: normalizedFilters,
     queryText: text,
     location: null,
     resultRows: rows,
@@ -16442,26 +16716,31 @@ async function buildAffordabilityAdviceReply({ phone, text, lang, filters = {} }
     search_type: normalizedFilters.searchType || 'any'
   });
 
-  const message = formatAffordabilityAdviceMessage(lang, rows, areaStats, normalizedFilters, { exactMatch });
   // 23 Nov 2026: "a place to rent in the areas of kisaasi, kyanja my budget is
   // 150k per month" got the cheapest rooms in Kisaasi, from 250k, and nothing
   // else: no word about Kyanja, and nothing on the lead desk, so nobody went
   // looking. When nothing fits the budget, the request goes on the desk, with
-  // every place they named, and they are told so.
+  // every place they named, and they are told so, before the list.
   const budget = Number(normalizedFilters.maxBudgetUgx || 0);
-  if (exactMatch || !(budget > 0) || !phone) return message;
-  const places = namedSearchAreas(text);
-  const area = places.length ? places.join(', ') : normalizeInput(normalizedFilters.area || '');
-  createNoMatchLead({
-    userPhone: phone,
-    searchType: normalizedFilters.searchType || 'any',
-    preferredArea: area,
-    notes: `Nothing live inside the budget. They said: ${normalizeInput(text).slice(0, 300)}`,
-    filters: { ...normalizedFilters, pricePeriod: normalizedFilters.budgetPeriod || normalizedFilters.pricePeriod || '' },
-    queryText: text
-  });
-  const where = places.length ? ` in ${listOfPlaces(places)}` : (area ? ` in ${area}` : '');
-  return `${message}\n\nNothing${where} is live at ${formatPrice(budget, normalizedFilters.budgetPeriod || '')} yet, so I have passed your request to our team. They will ask our agents${where} and send you what they find.`;
+  let teamLine = '';
+  if (!exactMatch && budget > 0 && phone) {
+    const searched = searchPlacesOf(normalizedFilters).map((place) => place.name);
+    const places = normalizedFilters.road ? [] : (searched.length ? searched : namedSearchAreas(text));
+    const area = places.length ? places.join(', ') : (normalizedFilters.road ? normalizedFilters.road.name : normalizeInput(normalizedFilters.area || ''));
+    createNoMatchLead({
+      userPhone: phone,
+      searchType: normalizedFilters.searchType || 'any',
+      preferredArea: area,
+      notes: `Nothing live inside the budget. They said: ${normalizeInput(text).slice(0, 300)}`,
+      filters: { ...normalizedFilters, pricePeriod: normalizedFilters.budgetPeriod || normalizedFilters.pricePeriod || '' },
+      queryText: text
+    });
+    const where = normalizedFilters.road ? ` along ${normalizedFilters.road.name}` : (places.length ? ` in ${listOfPlaces(places)}` : (area ? ` in ${area}` : ''));
+    teamLine = `Nothing${where} is live at ${formatPrice(budget, normalizedFilters.budgetPeriod || '')} yet, so I have passed your request to our team. They will ask our agents${where} and send you what they find.`;
+  }
+  const message = formatAffordabilityAdviceMessage(lang, rows, areaStats, normalizedFilters, { exactMatch, teamLine });
+  if (!teamLine || (resolveLangCode(lang) === 'en' && rows.length)) return message;
+  return `${message}\n\n${teamLine}`;
 }
 
 async function findPropertiesNearLandmark(filters = {}) {
@@ -16581,7 +16860,12 @@ async function findPropertiesByNaturalFilters(filters = {}) {
   }
 
   const area = normalizeInput(filters.area);
-  if (filters.location_blocked) {
+  const placeKeys = searchAreaKeys(filters);
+  if (placeKeys.length) {
+    // Every place they named, or every place along the road (23 Nov 2026).
+    values.push(placeKeys);
+    where += ` AND COALESCE(p.extra_fields->>'canonical_location_id', '') = ANY($${values.length})`;
+  } else if (filters.location_blocked) {
     where += ' AND FALSE';
   } else if (filters.canonical_location_id) {
     where = addWhatsappCanonicalLocationFilter(where, values, filters, 'p');
@@ -20193,6 +20477,10 @@ function searchBriefFromFilters(filters = {}, queryText = '') {
     budget_period: normalizeInput(f.budgetPeriod || f.pricePeriod || '') || null,
     property_type: normalizeInput(f.propertyType || '') || null,
     beds_min: Number(f.bedsMin) > 0 ? Number(f.bedsMin) : null,
+    // Every place, or the road, the search covered (23 Nov 2026).
+    places: searchPlacesOf(f).length ? searchPlacesOf(f).map((place) => ({ name: place.name, key: place.key })) : null,
+    places_label: searchPlacesOf(f).length ? searchPlaceLabel(f) : null,
+    road: f.road && f.road.key ? { key: f.road.key, name: f.road.name } : null,
     at: new Date().toISOString()
   };
 }
@@ -20250,10 +20538,27 @@ function continueFromLastSearch(filters = {}, sessionData = {}, { keepArea = tru
     out.maxBudgetUgx = Number(brief.max_budget_ugx);
     if (!(Number(out.minBudgetUgx) > 0) && Number(brief.min_budget_ugx) > 0) out.minBudgetUgx = Number(brief.min_budget_ugx);
     if (!out.budgetPeriod && brief.budget_period) out.budgetPeriod = brief.budget_period;
+    // A rent budget is a month's rent: "USh 150,000/month", not "USh 150,000".
+    if (!out.budgetPeriod && ['rent', 'student'].includes(normalizeListingType(out.searchType || 'any'))) out.budgetPeriod = 'month';
     carried.push('budget');
   }
-  if (keepArea && !normalizeInput(out.area || '') && !normalizeInput(out.district || '') && !out.useSharedLocation && normalizeInput(brief.area || '')) {
+  if (keepArea && !normalizeInput(out.area || '') && !normalizeInput(out.district || '') && !out.useSharedLocation && !searchPlacesOf(out).length && normalizeInput(brief.area || '')) {
     out.area = normalizeInput(brief.area);
+    out.carriedArea = true;
+    carried.push('area');
+    // Every place they had named goes on with the first (23 Nov 2026).
+    if (Array.isArray(brief.places) && brief.places.length >= 2) {
+      out.searchAreas = brief.places.filter((place) => place && place.key).map((place) => ({ name: place.name, key: place.key }));
+      out.searchAreaLabel = brief.places_label || listOfPlaces(out.searchAreas.map((place) => place.name));
+      out.road = brief.road && brief.road.key ? { ...brief.road } : null;
+      if (out.road) out.area = '';
+    }
+  } else if (keepArea && !normalizeInput(out.area || '') && !searchPlacesOf(out).length && !out.useSharedLocation
+    && brief.road && Array.isArray(brief.places) && brief.places.length >= 2) {
+    // A road search has no one area: the road goes on.
+    out.searchAreas = brief.places.filter((place) => place && place.key).map((place) => ({ name: place.name, key: place.key }));
+    out.searchAreaLabel = brief.places_label || `along ${brief.road.name}`;
+    out.road = { ...brief.road };
     out.carriedArea = true;
     carried.push('area');
   }
@@ -20795,14 +21100,18 @@ async function findBroaderPropertyFallback(filters = {}, deps = {}) {
   const byFilters = deps.findPropertiesByNaturalFilters || findPropertiesByNaturalFilters;
   const byTypeAndArea = deps.findPropertiesForWhatsapp || findPropertiesForWhatsapp;
   const searchType = normalizeListingType(filters.searchType || 'any');
-  const area = normalizeInput(filters.area || filters.preferredArea || '');
+  // A road or several places: the first rungs keep all of them, the ones
+  // that measure from a point start at the first (23 Nov 2026).
+  const places = searchPlacesOf(filters);
+  const area = normalizeInput(filters.area || filters.preferredArea || '') || (places.length ? places[0].name : '');
+  const placesLabel = places.length ? searchPlaceLabel(filters) : '';
   const budget = Number(filters.maxBudgetUgx) > 0 ? Number(filters.maxBudgetUgx) : 0;
   const attempts = [];
-  const add = (relaxed, run) => attempts.push({ relaxed, run });
+  const add = (relaxed, run, label = '') => attempts.push({ relaxed, run, label });
 
   // 1. Everything they asked for except the price.
   if (budget && area) {
-    add({ budget: true }, () => byFilters({ ...filters, searchType, maxBudgetUgx: null }));
+    add({ budget: true }, () => byFilters({ ...filters, searchType, maxBudgetUgx: null }), placesLabel);
   }
   // 2. Their type and their area, without the bedroom count or property type.
   if (area) {
@@ -20812,7 +21121,7 @@ async function findBroaderPropertyFallback(filters = {}, deps = {}) {
       maxBudgetUgx: null,
       bedsMin: null,
       propertyType: null
-    }));
+    }), placesLabel);
   }
   // 2b. Their type, close to the place. "Mulago" had nothing of its own and
   // the reply jumped to "4845 matching properties found in Mulago" — every
@@ -20898,11 +21207,11 @@ async function findBroaderPropertyFallback(filters = {}, deps = {}) {
         // What the rows actually are, so the count above them cannot claim to
         // have found 67 rentals when 26 of them are for sale.
         effectiveSearchType: attempt.relaxed.type ? 'any' : searchType,
-        effectiveArea: attempt.relaxed.area ? '' : area
+        effectiveArea: attempt.relaxed.area ? '' : (attempt.label || area)
       };
     }
   }
-  return { rows: [], relaxed: {}, effectiveSearchType: searchType, effectiveArea: area };
+  return { rows: [], relaxed: {}, effectiveSearchType: searchType, effectiveArea: placesLabel || area };
 }
 
 /** The cheapest row we can quote back, so "closest" is a number not a promise. */
@@ -20923,10 +21232,13 @@ async function formatNoMatchOrFallbackReply({
 }) {
   const normalizedSearchType = normalizeListingType(searchType || filters.searchType || 'any');
   const preferredArea = normalizeInput(area || filters.area || '') || 'any';
+  // The lead desk gets the road's name, or every place, not "along …".
+  const deskArea = filters?.road?.name
+    || (searchPlacesOf(filters).length ? searchPlacesOf(filters).map((place) => place.name).join(', ') : preferredArea);
   await createNoMatchLead({
     userPhone,
     searchType: normalizedSearchType,
-    preferredArea,
+    preferredArea: deskArea,
     notes,
     filters,
     queryText
@@ -20984,19 +21296,23 @@ async function formatNoMatchOrFallbackReply({
   const cheapestClause = cheapest
     ? ` The lowest I have is *${formatListingPrice(cheapest)}*${cheapestMultiple >= 2 ? ` — about ${cheapestMultiple >= 2.75 ? Math.round(cheapestMultiple) : cheapestMultiple.toFixed(1).replace(/\.0$/, '')}× your budget` : ''}.`
     : '';
+  // Said as a person would (23 Nov 2026), and right for a road or several
+  // places: "along Gayaza Road", "in Kungu and Kiwatule".
+  const placeWords = /^(?:along|near|around|within)\b/i.test(locationLabel) ? locationLabel : `in ${locationLabel}`;
+  const what = searchWhatPhrase({ ...filters, searchType: normalizedSearchType });
   const copy = {
     en: [
-      `I do not have an approved *${exactLabel}* listing in *${locationLabel}*${budgetClause} right now.${cheapestClause}`,
-      'I have saved this request so makaug can follow up when a matching listing appears.',
+      `I don't have any ${what} *${placeWords}*${budgetClause} live on makaug.com right now.${cheapestClause}`,
+      `I have passed your request to our team. They will ask our agents${preferredArea === 'any' ? '' : ` ${placeWords}`} and send you what they find.`,
       fallback.relaxed.type
-        ? `Nothing to ${exactLabel.toLowerCase()} there at the moment, so here is what else is live in *${locationLabel}*:`
+        ? `Meanwhile, here is what else is live *${placeWords}*:`
         : fallback.relaxed.near
-          ? `Nothing in *${locationLabel}* itself yet, so here is what is live close by, nearest first:`
+          ? `Meanwhile, here is what is live close by, nearest first:`
         : fallback.relaxed.area
-          ? `Here are the closest *${exactLabel}* listings I have anywhere in ${ACTIVE_COUNTRY_NAME}:`
+          ? `Meanwhile, here are the closest ${what} I have anywhere in ${ACTIVE_COUNTRY_NAME}:`
           : budgetUgx && fallback.relaxed.budget
-            ? `Here are the closest *${exactLabel}* listings in *${locationLabel}*, just above your budget:`
-            : `Here are the closest *${exactLabel}* listings in *${locationLabel}*:`
+            ? `Meanwhile, here are the closest ${what} *${placeWords}*, just above your budget:`
+            : `Meanwhile, here are the closest ${what} *${placeWords}*:`
     ],
     lg: [
       `Sirina exact match ekakasiddwa ya *${exactLabel}* mu *${locationLabel}* kati.`,
@@ -21059,15 +21375,28 @@ function searchResultsLinkType(searchType = 'any', rows = []) {
   return kinds.length === 1 ? kinds[0] : 'any';
 }
 
-function formatPropertySearchMessage(lang, rows, location, searchType) {
+function formatPropertySearchMessage(lang, rows, location, searchType, { linkArea = '' } = {}) {
   void lang;
   recordResultList(rows);
+  // "24 homes to rent along Gayaza Road", not "in along Gayaza Road".
+  const along = /^along\s/i.test(normalizeInput(location || ''));
+  if (along && Array.isArray(rows) && rows.length && !rows[0]?.proximity_header) {
+    rows = rows.map((row) => ({ ...row, proximity_header: normalizeInput(location) }));
+  }
   return buildWhatsappPropertySearchReply(rows, {
     homeUrl: HOME_URL,
-    location,
+    location: along ? '' : location,
     searchType,
-    searchResultsUrl: whatsappSearchResultsUrl(searchResultsLinkType(searchType, rows), location)
+    searchResultsUrl: whatsappSearchResultsUrl(searchResultsLinkType(searchType, rows), linkArea || (along ? '' : location))
   });
+}
+
+/** Where "See all" on the website looks: the road, or the first place named. */
+function searchLinkArea(filters = {}) {
+  if (filters?.road?.name) return filters.road.name;
+  const places = searchPlacesOf(filters);
+  if (places.length) return places[0].name;
+  return normalizeInput(filters?.area || '');
 }
 
 function formatPropertySearchMessageLegacy(lang, rows, location, searchType) {
@@ -22299,6 +22628,16 @@ async function handleReplyPlaybook({ phone, body = '', step = '', conversationCo
   const name = normalizeInput(agent?.full_name || contactName || '');
   const helpName = agentHelpContact().name;
   const silent = { message: '', nextStep: currentStep, silent: true };
+  // A customer somebody on our team is talking to (23 Nov 2026): their "ok"
+  // or "thanks" is an answer to that person. The team is told; the assistant
+  // says nothing over them.
+  if (role === 'other' && ['thanks', 'praise', 'ack'].includes(kind) && !isTeamNumber(phone)) {
+    const typed = await personThread.lastTypedByTeam(db, phone).catch(() => null);
+    if (typed) {
+      noteAgentTalkForTeam({ phone, agent: { full_name: contactName || '' }, said, typed, customer: true });
+      return silent;
+    }
+  }
   const ageDays = (row) => (Date.now() - new Date(row.created_at).getTime()) / 86400000;
   const lastLive = sent.find((row) => /Your property is live/i.test(row.text || '') && replyPlaybook.propertyIdIn(row.text));
 
@@ -23878,13 +24217,55 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     && cleanBody.length > 3
     && isAffordabilityAdviceQuestion(cleanBody)
   ) {
-    const affordabilityFilters = await resolveNaturalSearchFilters({
+    let affordabilityFilters = withNamedPlaces(await resolveNaturalSearchFilters({
       text: cleanBody,
       entities: intentResult?.entities || {},
       fallbackType: sessionData.search_type || 'any',
       language: lang,
       sessionData
-    });
+    }), cleanBody);
+    // An answer to "which area?" or "rent or buy?" (23 Nov 2026): "rent, 3
+    // bedrooms, under 1m" after "a house along Gayaza Road" is for that road.
+    const waitingSearch = step === 'search_area' && sessionData.pending_search_filters && typeof sessionData.pending_search_filters === 'object'
+      ? sessionData.pending_search_filters
+      : null;
+    if (waitingSearch) {
+      const merged = { ...affordabilityFilters };
+      if (!normalizeInput(merged.area || '') && !searchPlacesOf(merged).length) {
+        if (searchPlacesOf(waitingSearch).length) {
+          Object.assign(merged, {
+            area: waitingSearch.area || '',
+            canonical_location_id: waitingSearch.road ? null : (waitingSearch.canonical_location_id || null),
+            searchAreas: waitingSearch.searchAreas,
+            searchAreaLabel: waitingSearch.searchAreaLabel,
+            road: waitingSearch.road || null
+          });
+        } else if (normalizeInput(waitingSearch.area || '') && !waitingSearch.location_blocked) {
+          Object.assign(merged, {
+            area: waitingSearch.area,
+            district: waitingSearch.district || null,
+            canonical_location_id: waitingSearch.canonical_location_id || null
+          });
+        }
+      }
+      if (!merged.propertyType && waitingSearch.propertyType) merged.propertyType = waitingSearch.propertyType;
+      if (!(Number(merged.bedsMin) > 0) && Number(waitingSearch.bedsMin) > 0) merged.bedsMin = Number(waitingSearch.bedsMin);
+      if (normalizeListingType(merged.searchType || 'any') === 'any' && normalizeListingType(waitingSearch.searchType || 'any') !== 'any') {
+        merged.searchType = waitingSearch.searchType;
+      }
+      merged.hasSignal = true;
+      affordabilityFilters = merged;
+    }
+    // "my budget is 150k per month single room" is for the places they named a
+    // minute before (23 Nov 2026), as a new place keeps the budget.
+    if (affordabilityFilters.hasSignal) {
+      const continued = continueFromLastSearch(affordabilityFilters, sessionData);
+      if (continued !== affordabilityFilters) {
+        affordabilityFilters = continued.carriedArea && continued.area && !searchPlacesOf(continued).length
+          ? resolveWhatsappSearchLocation(continued, continued.area)
+          : continued;
+      }
+    }
     const locationBlockReply = whatsappSearchLocationBlockReply(affordabilityFilters, cleanBody);
     if (locationBlockReply) {
       await holdSearchForArea(phone, affordabilityFilters, cleanBody);
@@ -23925,6 +24306,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       }
     }
     naturalFilters = resolveWhatsappSearchLocation(naturalFilters, cleanBody);
+    naturalFilters = withNamedPlaces(naturalFilters, cleanBody);
     // What they asked for a moment ago still stands: a new area keeps the budget, a new budget keeps the area.
     if (naturalFilters.hasSignal) {
       const continued = continueFromLastSearch(naturalFilters, sessionData);
@@ -23950,16 +24332,23 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         naturalSearchPrompt(lang, naturalFilters, 'location'),
         'search_area'
       );
-    } else if (!naturalFilters.area) {
+    } else if (!naturalFilters.area && !searchPlacesOf(naturalFilters).length) {
       await patchSessionData(phone, {
         search_type: naturalFilters.searchType || 'any',
-        pending_search_filters: naturalFilters,
+        pending_search_filters: asksRentOrBuyFirst(naturalFilters) ? { ...naturalFilters, rentOrBuyAsked: true } : naturalFilters,
         natural_query_text: cleanBody
       });
       return respond(
         naturalSearchPrompt(lang, naturalFilters, 'area'),
         'search_area'
       );
+    } else if (asksRentOrBuyFirst(naturalFilters)) {
+      await patchSessionData(phone, {
+        search_type: 'any',
+        pending_search_filters: { ...naturalFilters, rentOrBuyAsked: true },
+        natural_query_text: cleanBody
+      });
+      return respond(rentOrBuyQuestion(naturalFilters), 'search_area');
     } else {
       const rows = await findPropertiesByNaturalFilters(naturalFilters);
       await logPropertySearchRequest({
@@ -23976,14 +24365,15 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       // page ... Please help me with area, budget, bedrooms") got three
       // listings and nothing else. It now also asks what the team needs to
       // find them the right place.
-      const prefill = websiteHelpPrefill(cleanBody);
+      // The button's own words: cleanBody is already the search made from them.
+      const prefill = websiteHelpPrefill(body);
       const helpLine = prefill ? `\n\n${websiteHelpQuestions(prefill.kind || naturalFilters.searchType)}` : '';
       if (!rows.length) {
         const reply = await formatNoMatchOrFallbackReply({
           lang,
           userPhone: phone,
           searchType: naturalFilters.searchType || 'any',
-          area: naturalFilters.area,
+          area: searchPlaceLabel(naturalFilters) || naturalFilters.area,
           queryText: cleanBody,
           filters: naturalFilters,
           notes: `No approved listings found for natural query: ${cleanBody}`
@@ -23992,7 +24382,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       }
 
       return respond(
-        `${describeNaturalFilters(naturalFilters, lang) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters, lang)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}${helpLine}`,
+        `${filtersLeadLine(naturalFilters, lang)}${formatPropertySearchMessage(lang, rows, searchPlaceLabel(naturalFilters) || naturalFilters.area, naturalFilters.searchType || 'any', { linkArea: searchLinkArea(naturalFilters) })}${helpLine}`,
         'main_menu'
       );
     }
@@ -24247,7 +24637,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
       const fxNote = whatsappBudgetFxNote(naturalFilters, { parentheses: true }) || '\n';
       return respond(
-        `${describeNaturalFilters(naturalFilters, lang) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters, lang)}${fxNote}` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
+        `${filtersLeadLine(naturalFilters, lang, { fxNote })}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
         'main_menu'
       );
     }
@@ -24392,7 +24782,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         return respond(reply, 'main_menu');
       }
       return respond(
-        `${describeNaturalFilters(naturalFilters, lang) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters, lang)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
+        `${filtersLeadLine(naturalFilters, lang)}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
         'main_menu'
       );
     }
@@ -24567,7 +24957,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     }
 
     return respond(
-      `${describeNaturalFilters(naturalFilters, lang) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters, lang)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
+      `${filtersLeadLine(naturalFilters, lang)}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
       'main_menu'
     );
   }
@@ -24590,7 +24980,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       return respond(locationPreviewPrompt(lang), 'search_area');
     }
 
-    if (isAnyAreaReply(cleanBody)) {
+    // "Do you want to rent or to buy?" was the question (23 Nov 2026): "both"
+    // or "any" answers it, and is not "any area": they gave the place.
+    const rentOrBuyPending = Boolean(pendingFilters?.rentOrBuyAsked)
+      && Boolean(normalizeInput(pendingFilters.area || '') || searchPlacesOf(pendingFilters).length);
+    const eitherWay = rentOrBuyPending
+      && /^(?:both|either|any|anyone|any one|whichever|all|any of them|it doesn'?t matter|doesn'?t matter|does not matter|i don'?t mind|dont mind|no matter)\b/i.test(cleanBody);
+
+    if (!eitherWay && isAnyAreaReply(cleanBody)) {
       const rows = await findPropertiesForWhatsapp(searchType, '');
       await patchSessionData(phone, { pending_search_filters: null });
       await logPropertySearchRequest({
@@ -24689,7 +25086,22 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       for (const key of ['maxBudgetUgx', 'minBudgetUgx', 'budgetPeriod', 'pricePeriod', 'bedsMin', 'propertyType']) {
         if (told[key] && !naturalFilters[key]) naturalFilters[key] = told[key];
       }
-      if ((!naturalFilters.area || naturalFilters.location_blocked) && cleanBody.length >= 2) {
+      // "To rent" answers the question "rent or buy?" (23 Nov 2026).
+      const toldType = normalizeListingType(told.searchType || 'any');
+      if (toldType !== 'any' && normalizeListingType(naturalFilters.searchType || 'any') === 'any') naturalFilters.searchType = toldType;
+      if (eitherWay) naturalFilters.rentOrBuyAsked = true;
+      // A road or places in the answer are where to look now; an answer with
+      // no place in it ("rent, 800k") leaves the road or the places they gave.
+      const answerPlaces = withNamedPlaces({}, cleanBody);
+      const answerNamesAPlace = Boolean(searchPlacesOf(answerPlaces).length || parseAreaFromText(cleanBody, sessionData));
+      if (searchPlacesOf(answerPlaces).length) {
+        naturalFilters = { ...naturalFilters, ...answerPlaces, hasSignal: true };
+      } else if (answerNamesAPlace && searchPlacesOf(naturalFilters).length) {
+        naturalFilters = { ...naturalFilters, searchAreas: null, searchAreaLabel: null, road: null, area: '' };
+      }
+      const answeredOnlyTheQuestion = !answerNamesAPlace && (eitherWay || toldType !== 'any' || Number(told.maxBudgetUgx) > 0 || Number(told.bedsMin) > 0);
+      if (!searchPlacesOf(naturalFilters).length && !answeredOnlyTheQuestion
+        && (!naturalFilters.area || naturalFilters.location_blocked) && cleanBody.length >= 2) {
         // The answer may be a sentence ("it is in Kampala, on Jinja Road"): the
         // place in it is the area. And the landmark nobody could place is let
         // go, or the search it was to be measured from can never find anything.
@@ -24715,9 +25127,21 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (naturalFilters) naturalFilters = preserveExplicitSearchType(naturalFilters, searchType);
     // The budget or kind of home they gave just before this search still stands.
     if (naturalFilters) naturalFilters = continueFromLastSearch(naturalFilters, sessionData, { keepArea: false });
+    if (naturalFilters && !pendingFilters) naturalFilters = withNamedPlaces(naturalFilters, cleanBody);
 
-    if (naturalFilters && naturalFilters.area) {
-      naturalFilters = resolveWhatsappSearchLocation(naturalFilters, cleanBody);
+    // They answered "rent or buy?" but the place is still to come.
+    if (pendingFilters && naturalFilters && !naturalFilters.area && !searchPlacesOf(naturalFilters).length && !naturalFilters.useSharedLocation
+      && normalizeListingType(naturalFilters.searchType || 'any') !== normalizeListingType(pendingFilters.searchType || 'any')) {
+      await patchSessionData(phone, {
+        search_type: naturalFilters.searchType || 'any',
+        pending_search_filters: naturalFilters,
+        natural_query_text: searchSaidSoFar(sessionData.natural_query_text || '', cleanBody)
+      });
+      return respond(naturalSearchPrompt(lang, naturalFilters, 'area'), 'search_area');
+    }
+
+    if (naturalFilters && (naturalFilters.area || searchPlacesOf(naturalFilters).length)) {
+      if (!searchPlacesOf(naturalFilters).length) naturalFilters = resolveWhatsappSearchLocation(naturalFilters, cleanBody);
       const locationBlockReply = whatsappSearchLocationBlockReply(naturalFilters, cleanBody);
       if (locationBlockReply) {
         await patchSessionData(phone, {
@@ -24725,6 +25149,15 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           natural_query_text: searchSaidSoFar(pendingFilters ? sessionData.natural_query_text : '', cleanBody)
         });
         return respond(locationBlockReply, 'search_area');
+      }
+      // Renting or buying, asked once before a home search that does not say (23 Nov 2026).
+      if (asksRentOrBuyFirst(naturalFilters)) {
+        await patchSessionData(phone, {
+          search_type: 'any',
+          pending_search_filters: { ...naturalFilters, rentOrBuyAsked: true },
+          natural_query_text: searchSaidSoFar(pendingFilters ? sessionData.natural_query_text : '', cleanBody)
+        });
+        return respond(rentOrBuyQuestion(naturalFilters), 'search_area');
       }
       const rows = await findPropertiesByNaturalFilters(naturalFilters);
       await patchSessionData(phone, { pending_search_filters: null, search_type: naturalFilters.searchType || searchType || 'any' });
@@ -24742,7 +25175,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           lang,
           userPhone: phone,
           searchType: naturalFilters.searchType || 'any',
-          area: naturalFilters.area,
+          area: searchPlaceLabel(naturalFilters) || naturalFilters.area,
           queryText: cleanBody,
           filters: naturalFilters,
           // Everything they said for this search, not only the last word of it
@@ -24752,7 +25185,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         return respond(reply, 'main_menu');
       }
       return respond(
-        `${describeNaturalFilters(naturalFilters, lang) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters, lang)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || searchType || 'any')}`,
+        `${filtersLeadLine(naturalFilters, lang)}${formatPropertySearchMessage(lang, rows, searchPlaceLabel(naturalFilters) || naturalFilters.area, naturalFilters.searchType || searchType || 'any', { linkArea: searchLinkArea(naturalFilters) })}`,
         'main_menu'
       );
     }
@@ -26369,6 +26802,10 @@ async function processInboundRuntimeUnlocked({
       };
     }
     await updateSession(phone, { current_step: sessionStep, current_intent: 'unknown' });
+    if (!transcriptRecord?.text
+      && await customerTalkIsForAPerson({ phone, said: effectiveBody, reply: friendlyUnknownReply(activeLang), lang: activeLang, contactName })) {
+      return { message: '', nextStep: sessionStep };
+    }
     return {
       message: [transcriptEcho, friendlyUnknownReply(activeLang)].filter(Boolean).join('\n\n'),
       nextStep: sessionStep
@@ -26408,6 +26845,14 @@ async function processInboundRuntimeUnlocked({
     };
   }
   let { message, nextStep } = processed;
+
+  // Somebody on our team is talking to this customer: an answer the assistant
+  // would only have met with the menu is theirs (23 Nov 2026).
+  if (message && !transcriptRecord?.text && !effectiveMediaUrl && !inboundPhotoCandidates.length && !sharedLocation
+    && await customerTalkIsForAPerson({ phone, said: effectiveBody, reply: message, lang: activeLang, contactName })) {
+    await updateSession(phone, { current_step: sessionStep, current_intent: intentResult.intent || null });
+    return { message: '', nextStep: sessionStep };
+  }
 
   if (transcriptRecord?.text) {
     const transcriptEcho = formatVoiceTranscriptEcho(activeLang, transcriptRecord.text);
@@ -28179,5 +28624,20 @@ module.exports.__test = {
   handleFilmLinkRequest,
   firstContactAllowed,
   agentFilmPromptFor,
-  filmLinkPeople
+  filmLinkPeople,
+  // 23 Nov 2026 lessons
+  withNamedPlaces,
+  namedSearchPlaces,
+  mainRoadInText,
+  searchPlacesOf,
+  searchPlaceLabel,
+  asksRentOrBuyFirst,
+  rentOrBuyQuestion,
+  naturalSearchPrompt,
+  findPropertiesByNaturalFilters,
+  isOpeningReply,
+  customerTalkIsForAPerson,
+  filtersLeadLine,
+  searchWhatSingular,
+  formatNoMatchOrFallbackReply
 };

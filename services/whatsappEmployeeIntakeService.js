@@ -241,6 +241,23 @@ function withEnglishPropertyTerms(value = '') {
   return text.replace(/\s+/g, ' ').replace(/\s+([,.])/g, '$1').trim();
 }
 
+// A question to us is not a property (23 Nov 2026). An agent we had sent a
+// renter's request for a single room at 150k asked "Is it a mistake or they
+// really want something of 150k", and was told "Got the details for 'Is it a
+// mistake ...'. Now send the photos". The price in it read as a caption.
+const QUESTION_OPENING = /^\s*(?:is|are|was|were|do|does|did|can|could|will|would|should|shall|has|have|how|what|why|when|where|who|whom|which|u mean|you mean|do you mean|so|but|ok but|please confirm|confirm)\b/i;
+const PROPERTY_THING = /\b(?:house|home|mansion|bungalow|villa|townhouse|apartments?|flats?|condo|rentals?|units?|land|plots?|acres?|decimals?|shops?|offices?|warehouses?|hostels?|bedrooms?|storey|duplex|building|title)\b|\b\d+\s*(?:bed|br)\b/i;
+const ABOUT_A_LEAD = /\b(?:client|customer|lead|they|them|their|someone|somebody|the person|this person|mistake|budget|really)\b/i;
+
+/** A question to us, about a request we sent or anything else, rather than a property to post. */
+function isQuestionToUs(value = '') {
+  const clean = cleanText(value);
+  if (!clean || clean.length > 220) return false;
+  if (!/\?\s*$/.test(clean) && !QUESTION_OPENING.test(clean)) return false;
+  if (!PROPERTY_THING.test(clean)) return true;
+  return ABOUT_A_LEAD.test(clean) && !/\b(?:for sale|for rent|to let|selling)\b/i.test(clean);
+}
+
 function looksLikePropertyCaption(value = '') {
   const clean = cleanText(withEnglishPropertyTerms(value));
   if (!clean) return false;
@@ -677,6 +694,7 @@ module.exports = {
   parsePayLinkChoice,
   parsePitchContact,
   looksLikePropertyCaption,
+  isQuestionToUs,
   withEnglishPropertyTerms,
   foldAdvertText,
   isEmployeeIntakeCancel,

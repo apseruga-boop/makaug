@@ -151,7 +151,7 @@ function parseStayChoice(body) {
 }
 
 function parseStayWeeklyReply(body) {
-  const value = String(body || '').trim().toLowerCase();
+  const value = String(body || '').trim().toLowerCase().replace(/[.!👍🙏]+$/u, '').trim();
   const pair = value.match(/^(\d{1,2})\s+(1|2|3)$/);
   if (pair) {
     const action = ['open', 'fully_booked', 'paused'][Number(pair[2]) - 1];
@@ -166,8 +166,12 @@ function parseStayWeeklyReply(body) {
     fully_booked: 'fully_booked',
     paused: 'paused'
   };
-  if (!words[value]) return null;
-  return { listingIndex: 0, action: words[value] };
+  if (words[value]) return /^\d$/.test(value) ? { listingIndex: 0, action: words[value] } : { listingIndex: 0, action: words[value], word: true };
+  // How hosts say it: "It's open", "All open", "Both are open", "Pause it".
+  const said = value.match(/^(?:(?:yes|yeah|yah),?\s+)?(?:it'?s|it is|they'?re|they are|all|both|all of them|both of them)?\s*(?:are\s+|is\s+)?(open|available|fully booked|full|booked out|paused|pause(?: it| them)?)(?:\s+(?:all|both|this week|for this week))?$/);
+  if (!said) return null;
+  const action = /^(?:open|available)$/.test(said[1]) ? 'open' : /^pause/.test(said[1]) ? 'paused' : 'fully_booked';
+  return { listingIndex: 0, action, word: true };
 }
 
 function stayActionLinks(reference, now = Date.now()) {
@@ -304,7 +308,7 @@ function staffWaLink(phone, text) {
   return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
 }
 
-async function deliverStayNotice({ phone, email, text, reference, event, role }, deps = {}) {
+async function deliverStayNotice({ phone, email, text, emailText = '', reference, event, role }, deps = {}) {
   const bridgeEnabled = deps.bridgeEnabled != null ? deps.bridgeEnabled : isWhatsappWebBridgeEnabled();
   const queue = deps.queueWhatsappWebBridgeMessage || queueWhatsappWebBridgeMessage;
   const mail = deps.sendSupportEmail || sendSupportEmail;
@@ -329,7 +333,8 @@ async function deliverStayNotice({ phone, email, text, reference, event, role },
     const sent = await mail({
       to: String(email).trim(),
       subject: `makaug stay ${reference}`,
-      text
+      // An email cannot be answered with "1": the check-in's copy has a link for each answer.
+      text: emailText || text
     });
     out.email_sent = Boolean(sent && (sent.sent || sent.ok));
   }
@@ -716,47 +721,191 @@ async function armStayTimers(db, id, now = new Date()) {
   );
 }
 
+// The Monday check-in, and the host's answer to it (23 Nov 2026).
+//
+// At 09:00 a host was sent "Monday check-in / property for rent in Kisaasi /
+// Blocked dates: none on the calendar. / Reply 1 Open, 2 Fully booked,
+// 3 Paused." and three links of 150 characters each. He answered "Open" and
+// was asked "Which stay?" with the same line four times: his answer was
+// looked up against every check-in he had ever been sent, one row a week.
+//
+// Now a host gets one check-in a week for all of their stays, each named the
+// way guests see it, with its reference. An answer is read against the stays
+// in their latest check-in, and only for a few days after it; a bare "1"
+// only while that check-in is the last thing we sent them, so a "1" meant for
+// something else is never taken as one. "Open" with several stays answers the
+// question the check-in asked them: are they all open this week.
+const WEEKLY_ANSWER_DAYS = 4;
+const WEEKLY_CHECKIN_ASKS = 'open for bookings this week';
+const WEEKLY_STATUS = Object.freeze({ open: 'available', fully_booked: 'fully_booked', paused: 'paused' });
+const WEEKLY_SAID = Object.freeze({ available: 'open for bookings', fully_booked: 'fully booked', paused: 'paused' });
+
+/** A stay as guests see it, with its reference: "Studio in Kisaasi (ST-000051)". */
+function stayName(row = {}) {
+  const { cleanStayTitle } = require('./shortStayDisplay');
+  const title = String(cleanStayTitle(row) || '').trim() || 'Your stay';
+  const reference = String(row.reference || '').trim();
+  return reference ? `*${title}* (${reference})` : `*${title}*`;
+}
+
+function stayPageUrl(row = {}) {
+  const slug = String(row.slug || '').trim();
+  return slug ? `${publicBase()}/short-term/${slug}` : '';
+}
+
+function kampalaGreeting(at = new Date()) {
+  let hour = 9;
+  try {
+    hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Kampala', hour: '2-digit', hour12: false }).format(at));
+  } catch (_error) {
+    hour = (at.getUTCHours() + 3) % 24;
+  }
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function shortDay(iso = '') {
+  const date = new Date(`${String(iso).slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return String(iso);
+  return `${date.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][date.getUTCMonth()]}`;
+}
+
+/** "booked 24–26 Nov" from the stay's blocked ranges, or that nothing is. */
+function blockedPhrase(blocked = []) {
+  const ranges = (Array.isArray(blocked) ? blocked : []).map((item) => {
+    const from = shortDay(item.starts_on);
+    const to = shortDay(item.ends_on);
+    if (from === to) return from;
+    const [fromDay, fromMonth] = from.split(' ');
+    const [toDay, toMonth] = to.split(' ');
+    return fromMonth === toMonth ? `${fromDay}–${toDay} ${toMonth}` : `${from} – ${to}`;
+  });
+  return ranges.length ? `booked ${ranges.join(', ')}` : 'nothing blocked on its calendar';
+}
+
+/** The check-in a host gets on Monday, for all of their stays at once. */
+function weeklyCheckInMessage(stays = [], { at = new Date() } = {}) {
+  const greeting = `${kampalaGreeting(at)} 👋`;
+  if (stays.length === 1) {
+    const stay = stays[0];
+    const blocked = blockedPhrase(stay.blocked);
+    return [
+      `${greeting} A quick weekly check on your stay on makaug.com:`,
+      `${stayName(stay)}, ${blocked}.`,
+      '',
+      `Is it ${WEEKLY_CHECKIN_ASKS}? Reply *1* if it is, *2* if it is fully booked, or *3* to pause it.`
+    ].join('\n');
+  }
+  const example = stays[1] || stays[0];
+  return [
+    `${greeting} A quick weekly check on your ${stays.length} stays on makaug.com:`,
+    ...stays.map((stay, index) => `${index + 1}. ${stayName(stay)}, ${blockedPhrase(stay.blocked)}`),
+    '',
+    `Are they all ${WEEKLY_CHECKIN_ASKS}? Reply *1* if they are, *2* if they are all fully booked, or *3* to pause them all.`,
+    `For one stay, send its number and then 1, 2 or 3: *${stays.indexOf(example) + 1} 3* pauses ${stayName(example)}.`
+  ].join('\n');
+}
+
+/** The same check-in by email, where there is no reply to read: a link for each answer. */
+function weeklyCheckInEmail(stays = [], { at = new Date() } = {}) {
+  const lines = [weeklyCheckInMessage(stays, { at }).replace(/\*/g, ''), '', 'Or answer with a link:'];
+  stays.forEach((stay, index) => {
+    const links = stayListingLinks(stay.id, at.getTime());
+    if (stays.length > 1) lines.push('', `${index + 1}. ${stayName(stay).replace(/\*/g, '')}`);
+    lines.push(`Open: ${links.open}`, `Fully booked: ${links.fully_booked}`, `Paused: ${links.paused}`);
+  });
+  return lines.join('\n');
+}
+
+/** Whether the last thing we sent this number is the Monday check-in. */
+async function checkInIsLastSent(db, phone) {
+  const digits = phoneDigits(phone);
+  if (!digits) return false;
+  const row = (await db.query(
+    `/* st-booking:weekly-last-sent */
+     SELECT COALESCE(payload->>'reply', payload->>'text', '') AS text
+       FROM whatsapp_messages
+      WHERE user_phone = ANY($1::text[])
+        AND direction = 'outbound'
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [[digits, `+${digits}`]]
+  ).catch(() => ({ rows: [] }))).rows[0];
+  const text = String(row?.text || '');
+  // The check-in, or our answer to it ("Reply 1 when it is open again").
+  return text.includes(WEEKLY_CHECKIN_ASKS) || /\bmarked (?:open for bookings|fully booked|paused) this week\b/.test(text);
+}
+
 async function applyStayWeeklyReply(db, phone, weekly, { dryRun = false } = {}) {
   const digits = phoneDigits(phone);
   if (!digits || !weekly?.action) return { handled: false };
   const tail = digits.slice(-9);
+  // One row per stay, from the check-ins of the last few days only.
   const listings = await db.query(
     `/* st-booking:weekly-reply */
-     SELECT l.id, l.title
+     SELECT l.id, l.title, l.area, l.district, l.reference, l.slug, l.bedrooms, l.property_type, l.place_type,
+            l.source, l.extra_fields, l.description, MAX(c.sent_at) AS asked_at
        FROM st_listing l
        JOIN st_availability_checkins c ON c.listing_id = l.id
       WHERE (
           right(regexp_replace(COALESCE(l.host_phone, ''), '\\D', '', 'g'), 9) = $1
           OR right(regexp_replace(COALESCE(l.host_whatsapp, ''), '\\D', '', 'g'), 9) = $1
         )
-      ORDER BY c.sent_at DESC, l.created_at DESC
+        AND c.sent_at > NOW() - ($2::int * INTERVAL '1 day')
+      GROUP BY l.id
+      ORDER BY MAX(c.sent_at) DESC, l.created_at DESC
       LIMIT 12`,
-    [tail]
+    [tail, WEEKLY_ANSWER_DAYS]
   );
   if (!listings.rows.length) return { handled: false };
-  let index = Number(weekly.listingIndex) || 0;
-  if (!index) {
-    if (listings.rows.length > 1) {
-      const lines = [
-        'Which stay? Reply with the listing number then 1 Open, 2 Fully booked, or 3 Paused. For example 2 1.'
-      ];
-      listings.rows.forEach((listing, item) => lines.push(`${item + 1}. ${listing.title}`));
-      return { handled: true, message: lines.join('\n') };
-    }
-    index = 1;
+  // A bare number is an answer to the check-in only if nothing has been sent since.
+  if (!weekly.word && !weekly.listingIndex && !(await checkInIsLastSent(db, phone))) return { handled: false };
+  // The stays in their latest check-in, in the order it listed them.
+  const newest = Math.max(...listings.rows.map((row) => new Date(row.asked_at).getTime() || 0));
+  const stays = listings.rows
+    .filter((row) => !newest || (new Date(row.asked_at).getTime() || 0) > newest - 12 * 60 * 60 * 1000)
+    .sort((a, b) => String(a.reference || '').localeCompare(String(b.reference || '')));
+  const index = Number(weekly.listingIndex) || 0;
+  if (index && !stays[index - 1]) {
+    return {
+      handled: true,
+      message: [
+        `There is no stay ${index} in this week's check-in. Your stays:`,
+        ...stays.map((stay, item) => `${item + 1}. ${stayName(stay)}`),
+        '',
+        'Send its number and then 1 open, 2 fully booked or 3 paused, for example *1 1*.'
+      ].join('\n')
+    };
   }
-  const listing = listings.rows[index - 1];
-  if (!listing) return { handled: true, message: 'That listing number is not in this week\'s check-in.' };
-  const status = weekly.action === 'open' ? 'available' : weekly.action;
+  const chosen = index ? [stays[index - 1]] : stays;
+  const status = WEEKLY_STATUS[weekly.action] || weekly.action;
   if (!dryRun) {
-    await db.query(
-      `/* st-booking:listing-status */
-       UPDATE st_listing SET availability_status = $2, last_confirmed_at = NOW(), updated_at = NOW() WHERE id = $1::uuid`,
-      [listing.id, status]
-    );
+    for (const listing of chosen) {
+      await db.query(
+        `/* st-booking:listing-status */
+         UPDATE st_listing SET availability_status = $2, last_confirmed_at = NOW(), updated_at = NOW() WHERE id = $1::uuid`,
+        [listing.id, status]
+      );
+    }
   }
-  const names = { available: 'Open', fully_booked: 'Fully booked', paused: 'Paused' };
-  return { handled: true, dry_run: Boolean(dryRun), message: `${listing.title}: ${names[status] || 'Saved.'}` };
+  const said = WEEKLY_SAID[status] || 'saved';
+  let message;
+  if (chosen.length === 1) {
+    const page = status === 'available' ? stayPageUrl(chosen[0]) : '';
+    message = [
+      `Thanks 👍 ${stayName(chosen[0])} is marked ${said} this week.`,
+      page ? `Guests can book it here: ${page}` : '',
+      status === 'available' ? '' : 'Reply *1* when it is open again.'
+    ].filter(Boolean).join('\n');
+  } else {
+    message = [
+      `Thanks 👍 All ${chosen.length} of your stays are marked ${said} this week:`,
+      ...chosen.map((stay) => `• ${stayName(stay)}`),
+      status === 'available' ? '' : '\nReply *1* when they are open again.'
+    ].filter(Boolean).join('\n');
+  }
+  return { handled: true, dry_run: Boolean(dryRun), message };
 }
 
 async function handleHostStayReply(db, { phone, body, dryRun = false } = {}, deps = {}) {
@@ -1611,7 +1760,8 @@ async function sweepStayReplyLoop(db, now = new Date(), deps = {}) {
     const key = booking.weekKey(at);
     const listings = await db.query(
       `/* st-booking:weekly-listings */
-       SELECT l.id, l.title, l.area, l.district, l.host_phone, l.host_whatsapp, l.host_email
+       SELECT l.id, l.title, l.area, l.district, l.reference, l.slug, l.bedrooms, l.property_type, l.place_type,
+              l.source, l.extra_fields, l.description, l.host_phone, l.host_whatsapp, l.host_email
          FROM st_listing l
         WHERE l.status = 'approved'
           AND l.moderation_stage = 'approved'
@@ -1624,43 +1774,49 @@ async function sweepStayReplyLoop(db, now = new Date(), deps = {}) {
         LIMIT 40`,
       [key]
     );
+    // One check-in per host, naming each of their stays (23 Nov 2026).
+    const hosts = new Map();
     for (const listing of listings.rows) {
-      const blocked = await db.query(
-        `/* st-booking:weekly-blocked */
-         SELECT to_char(starts_on, 'YYYY-MM-DD') AS starts_on, to_char(ends_on, 'YYYY-MM-DD') AS ends_on
-           FROM st_availability
-          WHERE listing_id = $1::uuid AND is_available = FALSE
-          ORDER BY starts_on
-          LIMIT 8`,
-        [listing.id]
-      );
-      const links = stayListingLinks(listing.id, at.getTime());
-      const lines = [
-        'Monday check-in',
-        listing.title,
-        blocked.rows.length
-          ? `Blocked dates: ${blocked.rows.map((item) => `${item.starts_on} to ${item.ends_on}`).join('; ')}`
-          : 'Blocked dates: none on the calendar.',
-        'Reply 1 Open, 2 Fully booked, 3 Paused.',
-        `Open: ${links.open}`,
-        `Fully booked: ${links.fully_booked}`,
-        `Paused: ${links.paused}`
-      ];
+      const host = phoneDigits(listing.host_whatsapp || listing.host_phone).slice(-9)
+        || String(listing.host_email || '').trim().toLowerCase()
+        || String(listing.id);
+      if (!hosts.has(host)) hosts.set(host, []);
+      hosts.get(host).push(listing);
+    }
+    for (const group of hosts.values()) {
+      const stays = [];
+      for (const listing of group.sort((a, b) => String(a.reference || '').localeCompare(String(b.reference || '')))) {
+        const blocked = await db.query(
+          `/* st-booking:weekly-blocked */
+           SELECT to_char(starts_on, 'YYYY-MM-DD') AS starts_on, to_char(ends_on, 'YYYY-MM-DD') AS ends_on
+             FROM st_availability
+            WHERE listing_id = $1::uuid AND is_available = FALSE
+              AND ends_on >= CURRENT_DATE
+            ORDER BY starts_on
+            LIMIT 8`,
+          [listing.id]
+        );
+        stays.push({ ...listing, blocked: blocked.rows });
+      }
+      const first = stays[0];
       await sendStaySweepNotice(db, {
-        phone: listing.host_whatsapp || listing.host_phone,
-        email: listing.host_email,
-        text: lines.join('\n'),
-        reference: String(listing.id),
+        phone: first.host_whatsapp || first.host_phone,
+        email: first.host_email,
+        text: weeklyCheckInMessage(stays, { at }),
+        emailText: weeklyCheckInEmail(stays, { at }),
+        reference: stays.length === 1 ? String(first.reference || first.id) : stays.map((stay) => stay.reference || stay.id).join(', '),
         event: 'weekly',
         role: 'host'
       }, deps);
-      await db.query(
-        `/* st-booking:weekly-mark */
-         INSERT INTO st_availability_checkins (listing_id, week_key) VALUES ($1::uuid, $2)
-         ON CONFLICT (listing_id, week_key) DO NOTHING`,
-        [listing.id, key]
-      );
-      summary.weekly += 1;
+      for (const listing of stays) {
+        await db.query(
+          `/* st-booking:weekly-mark */
+           INSERT INTO st_availability_checkins (listing_id, week_key) VALUES ($1::uuid, $2)
+           ON CONFLICT (listing_id, week_key) DO NOTHING`,
+          [listing.id, key]
+        );
+        summary.weekly += 1;
+      }
     }
   }
   return summary;
@@ -1731,6 +1887,10 @@ module.exports = {
   guestSuggestedDatesMessage,
   parseStayChoice,
   parseStayWeeklyReply,
+  applyStayWeeklyReply,
+  weeklyCheckInMessage,
+  weeklyCheckInEmail,
+  WEEKLY_CHECKIN_ASKS,
   guestRequestView,
   guestToken,
   handleHostStayReply,
