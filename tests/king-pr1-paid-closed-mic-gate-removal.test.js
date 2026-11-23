@@ -24,7 +24,7 @@ test('closed means paid: signed up is interest, paid and renewed are closes', ()
   assert.equal(s.closes, 1);
 });
 
-test('Call now lock: only a fresh passed mic check with the link up unlocks a call', () => {
+test('mic check report: only a fresh passed check with the link up counts as passed', () => {
   const now = new Date('2026-11-21T08:00:00Z');
   assert.equal(c.notesCheckOk(null, now), false);
   assert.equal(c.notesCheckOk({}, now), false);
@@ -75,10 +75,10 @@ test('migration 243 backs up before it changes anything, and has a rollback', ()
   assert.match(rb, /call_attempts_close_243_backup/);
 });
 
-test('calling screen: gate replaces Call now, tap sends the check, drops pause calls', () => {
+test('calling screen: live notes never lock Call now (23 Nov 2026), the check is still sent and logged', () => {
   const js = read('assets/calling-screen.js');
-  assert.match(js, /if \(S\.phase === 'shown' && !checkPassed\(\)\) \{\n\s+body = gateHtml\(\);/);
-  assert.match(js, /if \(!checkPassed\(\)\) \{ e\.preventDefault\(\); toast\('Do the mic check first\.'/);
+  assert.doesNotMatch(js, /toast\('Do the mic check first\.'/);
+  assert.doesNotMatch(js, /!checkPassed\(\)\) \{\n\s+body = gateHtml\(\);/);
   assert.match(js, /\/tap', \{ session_id: S\.id, check: checkPayload\(\) \}/);
   assert.match(js, /devicechange/);
   assert.match(js, /ev\('link_drop'/);
@@ -100,7 +100,7 @@ test('Connect your phone: four lights, picture guides for every setup, opened fr
   for (const k of ['bt', 'link', 'sms', 'momo', 'fix']) assert.match(js, new RegExp(`\\n    ${k}: \\{ title: `), `guide ${k}`);
   const steps = (js.match(/svgWrap\(/g) || []).length;
   assert.ok(steps >= 20, 'every step has a drawn picture');
-  assert.match(js, /data-mkc-connect="fix">📱 Show me with pictures/);
+  assert.match(js, /data-mkc-connect="fix">📱 Show me how/);
   assert.match(js, /data-mkc-connect="bt">📱 Connect your phone/);
   for (const l of ['Phone link / Bluetooth', 'Mic & live notes', 'SMS gateway app', 'MoMo forwarder']) assert.ok(js.includes(l), l);
   assert.match(read('routes/calling.js'), /router\.get\('\/calling\/connect-status'/);

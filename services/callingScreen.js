@@ -64,9 +64,9 @@ const FLAG_LABELS = Object.freeze({
 const PAID_OUTCOMES = Object.freeze(new Set(['paid', 'renewed']));
 function closedPaid(a = {}) { return Boolean(a.is_close) && PAID_OUTCOMES.has(String(a.outcome || '')); }
 
-// Call now is locked until the screen has passed its mic + live-notes check
-// (and the phone link / audio device is still there). Old cached screens that
-// don't send the check are refused, so they must reload.
+// Did the screen pass its mic + live-notes check (and is the phone link up)?
+// Reporting only since 23 Nov 2026 (Arthur): live notes are optional and never
+// lock a call. With no transcript the caller types a short note instead.
 const NOTES_CHECK_MAX_AGE_MS = 12 * 3600 * 1000;
 function notesCheckOk(check, now = new Date()) {
   if (!check || typeof check !== 'object') return false;
@@ -304,8 +304,8 @@ function maskedAttempt(a = {}) {
     phone: maskPhoneLast3(a.phone),
     source_kind: a.source_kind,
     direction: a.direction || 'outbound',
-    source_label: a.source_label,
-    reason: a.reason,
+    source_label: currentWording(a.source_label),
+    reason: currentWording(a.reason),
     status: a.status,
     shown_at: a.shown_at,
     tapped_at: a.tapped_at,
@@ -776,14 +776,27 @@ function sourceKindLabel(a = {}) {
   return SOURCE_KIND_LABELS[a.source_kind] || 'Number';
 }
 
+// Films were removed from calls on 22 Nov 2026 (#855). Next steps saved before
+// that still say "send the film", so they are shown in today's words.
+const LEGACY_NEXT_STEPS = Object.freeze([
+  [/Wait for their Hello,? then send the film and link/gi, 'Wait for their Hi, then they’re approved and can load properties'],
+  [/Send the film and link on WhatsApp,? then call back/gi, 'Text them the makaug.com link, then call back'],
+  [/send the film and link/gi, 'text them the makaug.com link']
+]);
+function currentWording(text) {
+  if (!text || typeof text !== 'string') return text;
+  return LEGACY_NEXT_STEPS.reduce((t, [re, to]) => t.replace(re, to), text);
+}
+
 function present(attempt, task, history = [], { callerName = '', withPhone = true, hello = null, bestTime = null } = {}) {
+  history = (history || []).map((h) => (h && typeof h === 'object' ? { ...h, next_text: currentWording(h.next_text), note: currentWording(h.note), summary: currentWording(h.summary) } : h));
   const lastCall = history.find((h) => !h.skipped && h.task !== 'outreach') || null;
   const calls = history.filter((h) => !h.skipped && h.task !== 'outreach');
   return {
     context: {
       source_kind_label: sourceKindLabel(attempt),
-      source_label: attempt.source_label || '',
-      reason: attempt.reason || '',
+      source_label: currentWording(attempt.source_label || ''),
+      reason: currentWording(attempt.reason || ''),
       calls_before: calls.length,
       skips_before: history.filter((h) => h.skipped).length,
       last: history[0] || null,
@@ -887,11 +900,7 @@ async function tap(attemptId, { sessionId, now = new Date(), at = null, op = '',
   const opId = cleanOp(op);
   const done = await alreadyApplied(attemptId, opId);
   if (done) return maskedAttempt(done);
-  if (!notesCheckOk(check, now)) {
-    const err = httpError(428, 'Do the mic and live-notes check first (and reconnect the phone if it dropped). If this keeps showing, reload the page.');
-    err.code = 'notes_check_required';
-    throw err;
-  }
+  // Live notes and the phone link never block a call (Arthur, 23 Nov 2026); `check` is informational.
   const a = await attemptInSession(attemptId, sessionId);
   if (!['shown', 'calling'].includes(a.status)) throw httpError(409, 'This call is already finished.');
   const when = clientTime(at, a, now);
@@ -941,6 +950,14 @@ function cleanTranscript(t) {
     confirmed: t.confirmed === true, edited: t.edited === true, engine: 'chrome-web-speech', audio_kept: false, words: text ? text.split(/\s+/).length : 0
   };
 }
+/** A typed note that is only the outcome name, or under two words, says nothing. */
+function noteTooThin(text, def = {}) {
+  const t = String(text || '').trim();
+  const words = t.split(/\s+/).filter((w) => /[A-Za-z\u00C0-\u024F]{2,}/.test(w));
+  const letters = t.replace(/[^A-Za-z\u00C0-\u024F]/g, '').length;
+  const bare = (v) => String(v || '').toLowerCase().replace(/[^a-z]/g, '');
+  return words.length < 2 || letters < 6 || bare(t) === bare(def.label) || bare(t) === bare(def.key);
+}
 /** A call "closes the loop" with a close, a final no, or a next step. */
 function closesLoop(def = {}) { return Boolean(def.close || def.terminal); }
 
@@ -960,6 +977,10 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   let text = String(note || '').trim().slice(0, 1000);
   if (text.length < 3 && !def.spoke) text = def.label || def.key.replace(/_/g, ' ');
   if (text.length < 3) throw httpError(400, 'Write a short note about the call (or tap one of the quick notes).');
+  // No live-notes transcript: the typed note is the only record, so it needs a few real words (Arthur, 23 Nov 2026).
+  if (def.spoke && !cleanTranscript(transcript) && noteTooThin(text, def)) {
+    throw httpError(400, 'Live notes are off, so type a few words about what they said.');
+  }
   let cb = parseCallback(callbackAt, now);
   if (rules.INTERESTED_OUTCOMES.includes(def.key) && !cb) throw httpError(400, 'Interested: pick the follow-up date and time.');
   // Interested on a new-agents call (Arthur, 22 Nov 2026): the name they want shown and the number, checked with them.
@@ -985,7 +1006,7 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   }
   if (!next && def.key === 'no_answer') next = 'Try again next working day';
   if (!next && cb) next = 'Call back';
-  if (!next && !closesLoop(def)) throw httpError(400, 'Pick the next step (call back, chase payment, send the film…).');
+  if (!next && !closesLoop(def)) throw httpError(400, 'Pick the next step (call back, chase payment, text the link…).');
   const tx = cleanTranscript(transcript);
   const ticks = {};
   for (const step of Array.isArray(task.checklist) ? task.checklist : []) ticks[step.key] = Boolean(checklist && checklist[step.key]);
@@ -1871,6 +1892,8 @@ async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
 
 module.exports = {
   countsAsCall,
+  noteTooThin,
+  currentWording,
   isNoAnswer,
   NO_ANSWER_RETRY_MS,
   onCallSegments,

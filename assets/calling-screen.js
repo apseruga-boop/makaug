@@ -233,6 +233,7 @@
     '.mkc-btn.ghost{background:transparent;border:1px solid #d1d5db}.mkc-btn.sm{padding:6px 10px;font-size:12px;border-radius:9px}',
     '.mkc-btn[disabled]{opacity:.45;cursor:not-allowed}',
     '.mkc-gate{border:2px solid #15603f;background:#f6fbf8;border-radius:16px;padding:16px;text-align:left;margin-top:8px}.mkc-gate p{margin:6px 0}.mkc-gate-t{font-size:20px;font-weight:900;color:#16241d}.mkc-gate-row{display:flex;gap:10px;align-items:center;padding:8px 10px;background:#fff;border:1px solid #e4ece8;border-radius:10px;margin:6px 0}.mkc-gate-row .mkc-muted{margin-left:auto;font-size:12px}.mkc-gate-heard{font-size:15px;font-style:italic;color:#15603f;margin:6px 0}.mkc-gate .mkc-call{margin-top:10px;width:100%}',
+    '.mkc-gate-sm{padding:8px 12px;font-size:14px;border-width:1px;margin:8px 0}.mkc-gate-ok{border-color:#86efac;background:#f0fdf4}.mkc-gate-off{border-color:#f59e0b;background:#fffbeb;margin:8px 0}.mkc-gate-off .mkc-gate-t{font-size:17px;color:#92400e}.mkc-warn{border:1px solid #f59e0b;background:#fffbeb;color:#78350f;border-radius:12px;padding:8px 12px;margin:8px 0;font-size:14px}.mkc-note-must textarea{border:2px solid #f59e0b;background:#fffbeb;font-size:16px}.mkc-note-must label{color:#92400e;font-weight:900}',
     '.mkc-reconnect{border-color:#b3134f;background:#fff1f4}.mkc-reconnect .mkc-gate-t{color:#b3134f;font-size:22px}.mkc-reconnect ol{margin:8px 0 8px 20px;font-size:15px;line-height:1.55}',
     '.mkc-select,.mkc-input,.mkc-ta{border:1px solid #d1d5db;border-radius:10px;padding:9px 11px;font:inherit;font-size:14px;background:#fff;color:#111827}',
     '.mkc-ta{width:100%;min-height:64px;box-sizing:border-box}',
@@ -920,10 +921,10 @@
       + (a.reason ? '<span class="mkc-reason' + (a.source_kind === 'callback' ? ' mkc-cb' : '') + '">' + esc(a.reason) + '</span>' : '')
       + '<div class="mkc-phone">' + esc(boot.sandbox && a.phone_masked && !/^7000001\d{2}$/.test(String(a.phone || '').replace(/\D/g, '').slice(-9)) ? a.phone_masked : prettyPhone(a.phone)) + '</div>';
     var body = '';
-    if (S.phase === 'shown' && !checkPassed()) {
-      body = gateHtml();
-    } else if (S.phase === 'shown') {
-      body = '<a class="mkc-btn go mkc-call" href="' + esc(d.tel) + '" data-mkc-tap title="' + (isPhone() ? 'Opens the phone app' : 'Rings out from the company phone through Phone Link (Bluetooth)') + '"><i class="fas fa-phone"></i>&nbsp;' + (isPhone() ? esc(T('call_next')) : 'Call now') + '</a>'
+    if (S.phase === 'shown') {
+      // Live notes never lock calling (Arthur, 23 Nov 2026): the status strip is
+      // a hint only. Call now is always there.
+      body = gateHtml() + '<a class="mkc-btn go mkc-call" href="' + esc(d.tel) + '" data-mkc-tap title="' + (isPhone() ? 'Opens the phone app' : 'Rings out from the company phone through Phone Link (Bluetooth)') + '"><i class="fas fa-phone"></i>&nbsp;' + (isPhone() ? esc(T('call_next')) : 'Call now') + '</a>'
         + '<div class="mkc-row" style="margin-top:8px;justify-content:center"><button type="button" class="mkc-btn ghost sm" data-mkc-skip>' + esc(T('skip')) + '</button><button type="button" class="mkc-btn ghost sm" data-mkc-tree>History tree</button></div>'
         + (boot.sandbox ? practiceCallHelp(a) : '');
     } else if (S.phase === 'calling') {
@@ -942,12 +943,11 @@
     var tapEl = q('[data-mkc-tap]', el);
     if (tapEl) tapEl.onclick = function (e) {
       if (!S.work) { e.preventDefault(); toast('Turn work mode on to call.', 'bad'); setWork(true, 'to call'); return; }
-      if (!checkPassed()) { e.preventDefault(); toast('Do the mic check first.', 'bad'); renderNum(); return; }
       // The tel: link opens the dialler by itself; we only log the time.
       S.callStart = Date.now(); S.phase = 'calling'; S.lastDone = null;
-      if (txSupported() && !TX) startTx(true); // live notes start with the call (your mic only)
+      if (txSupported() && !TX && CHK.notes !== 'failed') startTx(true); // live notes start with the call when they work (your mic only)
       renderNum(); renderScript();
-      op('/attempts/' + a.id + '/tap', { session_id: S.id, check: checkPayload() }).catch(function (e) { if (e.status === 428) { CHK.notes = 'none'; } toast(e.message, 'bad'); });
+      op('/attempts/' + a.id + '/tap', { session_id: S.id, check: checkPayload() }).catch(function (e) { toast(e.message, 'bad'); });
     };
     var endIt = endCallNow;
     var endEl = q('[data-mkc-end]', el); if (endEl) endEl.onclick = endIt;
@@ -1041,9 +1041,11 @@
         var code = e && e.error;
         if (code === 'no-speech' || code === 'aborted') return; // silence: it restarts on its own
         if (TX) TX.stopped = true;
-        S.tx = 'error'; S.txErr = code === 'not-allowed' || code === 'service-not-allowed' ? 'Microphone blocked: click the 🎤 in the address bar and allow it.' : code === 'network' ? 'Live notes need the internet (Chrome/Edge send speech to their service).' : 'Live notes stopped (' + code + ').';
+        S.tx = 'error'; S.txErr = code === 'not-allowed' || code === 'service-not-allowed' ? 'Microphone blocked: click the 🎤 in the address bar and allow it.' : code === 'network' ? 'Chrome’s speech service did not answer, so live notes stopped.' : 'Live notes stopped (' + code + ').';
         ev('notes_error', code || '');
-        if (code === 'audio-capture') linkDown('audio lost during a call'); else CHK.notes = 'none';
+        if (code === 'audio-capture') linkDown('audio lost during a call');
+        else if (code === 'network' || code === 'not-allowed' || code === 'service-not-allowed') { CHK.notes = 'failed'; CHK.why = S.txErr; } // type the note for this call; the next call doesn't retry
+        else CHK.notes = 'none';
         if (S.phase === 'calling') renderNum();
       };
       r.onend = function () { if (TX && !TX.stopped) { try { r.start(); } catch (x) { /* ignore */ } } };
@@ -1059,10 +1061,10 @@
     S.tx = 'done'; ev('notes_stop', TX.secs + 's');
   }
   // ---- Mic + live-notes check and phone-link watch (Arthur, 21 Nov 2026).
-  // Call now stays locked until the mic is allowed and live notes have heard a
-  // test phrase. If the phone link / Bluetooth audio device disappears, or live
-  // notes lose the mic, calls pause behind a reconnect card until the check
-  // passes again. Every pass, fail and drop is logged for King.
+  // Optional since 23 Nov 2026: live notes and the phone link NEVER lock Call
+  // now. The check only tells the caller whether live notes work; when they
+  // don't, he types a short note after each call instead. A dropped phone link
+  // is a warning. Every pass, fail and drop is still logged for King.
   var BT_RE = /bluetooth|hands-?free|headset|phone link|airpods|buds|galaxy|iphone|pixel|tecno|infinix|itel|redmi|xiaomi|nokia|samsung|oppo|vivo|\bbt\b/i;
   var CHK = { notes: 'none', at: null, watch: [], bt: '', link: 'up', running: false, heard: '', why: '' };
   var LINKT = null;
@@ -1082,7 +1084,7 @@
   function runCheck() {
     if (CHK.running) return;
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR || !txSupported()) { checkFail('Live notes only work in Chrome or Edge on the laptop. Open makaug.com there to call.', 'unsupported'); return; }
+    if (!SR || !txSupported()) { checkFail('Live notes only work in Chrome or Edge on a laptop.', 'unsupported'); return; }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { checkFail('This browser cannot use the microphone.', 'no_media'); return; }
     CHK.running = true; CHK.heard = ''; CHK.why = ''; renderNum();
     navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
@@ -1112,7 +1114,7 @@
           r.onerror = function (e) {
             var code = e && e.error;
             if (code === 'no-speech' || code === 'aborted') return;
-            finish(false, code === 'not-allowed' || code === 'service-not-allowed' ? 'The microphone is blocked. Click the 🎤 or 🔒 at the left of the address bar, choose Allow for the microphone, then check again.' : code === 'audio-capture' ? 'No microphone found. Reconnect the headset or the phone link, then check again.' : code === 'network' ? 'Live notes need the internet. Check the Wi-Fi, then check again.' : 'Live notes did not start (' + code + '). Check again.', code);
+            finish(false, code === 'not-allowed' || code === 'service-not-allowed' ? 'The microphone is blocked. Click the 🎤 or 🔒 at the left of the address bar, choose Allow for the microphone, then check again.' : code === 'audio-capture' ? 'No microphone found. Reconnect the headset or the phone link, then check again.' : code === 'network' ? 'Chrome’s speech service did not answer on this laptop.' : 'Live notes did not start (' + code + '). Check again.', code);
           };
           r.start();
         } catch (x) { finish(false, 'Live notes could not start in this browser.', 'start_failed'); return; }
@@ -1146,29 +1148,21 @@
     if (navigator.mediaDevices && navigator.mediaDevices.removeEventListener) navigator.mediaDevices.removeEventListener('devicechange', checkLink);
     clearInterval(LINKT); LINKT = null;
   }
+  function notesOff() { return CHK.notes === 'failed' || !txSupported(); }
   function gateHtml() {
-    if (CHK.link === 'down') {
-      return '<div class="mkc-gate mkc-reconnect" data-mkc-reconnect><div class="mkc-gate-t">🔌 The phone link dropped. Calls are paused.</div>'
-        + '<p>Nobody can hear the call, so live notes can’t work. Reconnect, then check again:</p><ol>'
-        + '<li><b>On the company phone:</b> unlock it and make sure <b>Bluetooth is ON</b>.</li>'
-        + '<li><b>On the laptop:</b> open <b>Phone Link</b> (Start ⊞ → type “Phone Link”). If it says Disconnected, click <b>Reconnect</b>.</li>'
-        + '<li>Still not connected? <b>Settings → Bluetooth &amp; devices</b> → click the phone → <b>Connect</b>. Not listed? <b>Add device → Bluetooth</b> → pick the phone, then open Phone Link again.</li>'
-        + '<li>Using a headset? Turn it off and on, then pick it in <b>Settings → System → Sound → Input</b>.</li></ol>'
-        + '<button type="button" class="mkc-btn go mkc-call" data-mkc-mcheck>✅ I’ve reconnected – check again</button>'
-        + '<button type="button" class="mkc-btn ghost" style="margin-top:8px;width:100%" data-mkc-connect="fix">📱 Show me with pictures</button></div>';
+    var link = CHK.link === 'down'
+      ? '<div class="mkc-gate mkc-warn" data-mkc-linkwarn><b>🔌 The phone link or headset dropped.</b> You can still call. If the call doesn’t ring through the laptop, reconnect the phone in Phone Link or Bluetooth. <button type="button" class="mkc-btn ghost sm" data-mkc-connect="fix">📱 Show me how</button></div>'
+      : '';
+    if (CHK.running) return link + '<div class="mkc-gate mkc-gate-sm" data-mkc-gate>🎙 <b>Testing live notes…</b> say “testing one two three”. <div class="mkc-gate-heard" data-mkc-chkheard>Listening…</div></div>';
+    if (CHK.notes === 'ok' && checkPassed()) return link + '<div class="mkc-gate mkc-gate-sm mkc-gate-ok" data-mkc-gate>✅ <b>Live notes are on.</b> They start when you tap Call now.</div>';
+    if (notesOff()) {
+      return link + '<div class="mkc-gate mkc-gate-off" data-mkc-gate data-mkc-notesoff>'
+        + '<div class="mkc-gate-t">📝 Live notes are off on this laptop, so type a short note after each call instead.</div>'
+        + '<p class="mkc-muted" style="margin:4px 0 6px">Calling works as normal. ' + esc(CHK.why || 'Live notes only work in Chrome or Edge on a laptop.') + '</p>'
+        + (txSupported() ? '<button type="button" class="mkc-btn ghost sm" data-mkc-mcheck>🔁 Try live notes again</button>' : '')
+        + '</div>';
     }
-    var row = function (ok, label, note) { return '<div class="mkc-gate-row"><span>' + (ok === true ? '✅' : ok === false ? '❌' : '⬜') + '</span><b>' + label + '</b>' + (note ? '<span class="mkc-muted">' + note + '</span>' : '') + '</div>'; };
-    var failed = CHK.notes === 'failed';
-    var body = '<div class="mkc-gate" data-mkc-gate><div class="mkc-gate-t">🎙 Mic check before you call</div>'
-      + '<p>Calls stay locked until live notes can hear you. Put the phone on speaker near the laptop (or use the headset).</p>'
-      + row(failed && /blocked|microphone|No microphone/i.test(CHK.why) ? false : (CHK.running || CHK.notes === 'ok') ? true : null, 'Microphone allowed')
-      + row(failed ? false : CHK.notes === 'ok' ? true : null, 'Live notes hear you', CHK.running ? 'Say: “testing one two three”' : '')
-      + (CHK.running ? '<div class="mkc-gate-heard" data-mkc-chkheard>Listening…</div>' : '')
-      + (failed ? '<div class="mkc-err" data-mkc-chkwhy>' + esc(CHK.why) + '</div>' : '')
-      + '<button type="button" class="mkc-btn go mkc-call" data-mkc-mcheck' + (CHK.running ? ' disabled' : '') + '>' + (CHK.running ? 'Listening…' : failed ? '🔁 Check again' : '🎙 Start the mic check') + '</button>'
-      + '<button type="button" class="mkc-btn ghost sm" style="margin-top:8px" data-mkc-connect="bt">📱 Connect your phone (pictures)</button>'
-      + '<p class="mkc-muted" style="font-size:12px;margin-top:6px">Only text is kept, never audio. 🔒 Call now unlocks when both are ✅.</p></div>';
-    return body;
+    return link + '<div class="mkc-gate mkc-gate-sm" data-mkc-gate>🎙 Live notes are optional. <button type="button" class="mkc-btn ghost sm" data-mkc-mcheck>Test live notes</button> <span class="mkc-muted" style="font-size:12px">Only text is kept, never audio.</span></div>';
   }
   function bindGate(el) {
     qa('[data-mkc-mcheck]', el).forEach(function (b) { b.onclick = function () { runCheck(); }; });
@@ -1431,7 +1425,11 @@
       f += '<div class="f wide" data-mkc-interested><label>Their name, as they want it shown <small>(we greet them with it when they say Hi)</small></label><input class="mkc-input" data-mkc-shownname autocomplete="off" placeholder="e.g. Sarah Namubiru" value="' + esc(w.shownName) + '">'
         + '<label class="mkc-confirm" style="display:flex;gap:8px;align-items:center;margin-top:6px;font-weight:700"><input type="checkbox" data-mkc-phoneok' + (w.phoneOk ? ' checked' : '') + '> I read the number back to them: <b>' + esc(tailNum) + '</b> is right</label></div>';
     }
-    if (o.key !== 'no_answer') f += '<div class="f"><label>Note</label><input class="mkc-input" data-mkc-note placeholder="What did they say?" value="' + esc(w.note) + '"></div>';
+    if (o.key !== 'no_answer') {
+      var mustType = noteMustBeTyped(o);
+      f += '<div class="f wide' + (mustType ? ' mkc-note-must' : '') + '" data-mkc-notebox><label>' + (mustType ? '📝 What did they say? <small>(a few words: live notes are off)</small>' : 'Note') + '</label>'
+        + '<textarea class="mkc-input" rows="' + (mustType ? 3 : 2) + '" data-mkc-note placeholder="e.g. Has 3 rentals in Ntinda, will say Hi tonight">' + esc(w.note) + '</textarea></div>';
+    }
     if (defaultNext(task, o) || w.next) {
       var nx = NEXT_CHIPS[task.key] || NEXT_CHIPS.new_agents;
       f += '<div class="f"><label>Next step</label><input class="mkc-input" data-mkc-next list="mkc-nextlist" value="' + esc(w.next || '') + '"><datalist id="mkc-nextlist">' + nx.map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist></div>';
@@ -1471,17 +1469,22 @@
     qa('[data-mkc-quick]', el).forEach(function (b) { b.onclick = function () { saveWrapInputs(el); w.quick = b.getAttribute('data-mkc-quick'); w.callback = quickDate(w.quick); renderWrap(task, a); }; });
     var hb = q('[data-mkc-hello]', el); if (hb) hb.onclick = function () { saveWrapInputs(el); w.checklist.asked_hello = !w.checklist.asked_hello; w.checklist.wa_hi = w.checklist.asked_hello; renderWrap(task, a); };
     var sb = q('[data-mkc-save]', el); if (sb) sb.onclick = function () { saveWrap(task, a); };
-    var nt = q('[data-mkc-note]', el); if (nt) nt.oninput = function () { w.autoNote = false; };
+    var nt = q('[data-mkc-note]', el); if (nt) nt.oninput = function () { w.autoNote = false; w.typed = true; };
   }
+  // No transcript means the typed note is the only record of the call (Arthur, 23 Nov 2026).
+  function hasTranscript() { return Boolean(TX && TX.text && TX.text.replace(/\s+/g, '').length >= 3); }
+  function noteMustBeTyped(o) { return Boolean(o && o.spoke && !hasTranscript()); }
+  function noteIsShort(note) { var t = String(note || '').trim(); return t.split(/\s+/).filter(function (x) { return /[A-Za-z\u00C0-\u024F]{2,}/.test(x); }).length < 2 || t.replace(/[^A-Za-z\u00C0-\u024F]/g, '').length < 6; }
   function saveWrap(task, a) {
     var el = q('[data-mkc-wrapbox]') || document;
     var w = S.wrap;
     saveWrapInputs(el);
     var o = task.outcomes.filter(function (x) { return x.key === w.outcome; })[0];
-    if (o && o.spoke && (w.note || '').trim().length < 3) w.note = o.label + (routePath() ? ' (' + routePath() + ')' : ''); // never ask again for what we know
+    if (o && o.spoke && !noteMustBeTyped(o) && (w.note || '').trim().length < 3) w.note = o.label + (routePath() ? ' (' + routePath() + ')' : ''); // never ask again for what we know
     if (o && !(w.next || '').trim()) w.next = defaultNext(task, o);
     var minCb = Date.now() + 24 * 3600000 - 5 * 60000;
     var err = !o ? 'Tap what happened.' : (o.date === 'required' && !w.callback ? 'Pick when to call back.' : (w.callback && new Date(w.callback).getTime() < minCb ? 'Call backs are at least 24 hours away. Pick tomorrow or later.' : ''));
+    if (!err && noteMustBeTyped(o) && (!w.typed || noteIsShort(w.note))) err = 'Live notes are off, so type a few words about what they said (e.g. “has 3 rentals, will say Hi tonight”).';
     if (!err && needsName(task, o)) {
       if (String(w.shownName || '').replace(/[^A-Za-z\u00C0-\u024F]/g, '').length < 2) err = 'Type their name, as they want it shown.';
       else if (!w.phoneOk) err = 'Read the number back to them and tick that it is right.';
@@ -1691,7 +1694,7 @@
           if (href) { var l = document.createElement('a'); l.href = href; l.style.display = 'none'; document.body.appendChild(l); l.click(); l.remove(); }
           toast('Lead logged. Your texting app opened with the search link: press Send there.');
           var r = S.route; r.path.push({ from: r.node, to: 'seeker_link', label: 'Text me the search link ✓' }); r.node = 'seeker_link'; r.end = routeFor().nodes.seeker_link.end;
-          S.wrap.outcome = 'seeker_texted'; S.wrap.note = r.end.note + ' (' + d.want + ')'; S.wrap.autoNote = false;
+          S.wrap.outcome = 'seeker_texted'; S.wrap.note = r.end.note + ' (' + d.want + ')'; S.wrap.autoNote = false; S.wrap.typed = true;
           renderScript(); renderNum();
         }, function (e) { b.disabled = false; b.textContent = '📝 Log the lead & open the text'; if (err) err.innerHTML = '<div class="mkc-err">' + esc(e.message) + '</div>'; });
     };

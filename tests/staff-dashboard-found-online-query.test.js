@@ -21,7 +21,7 @@ async function capturePanelQueries() {
   const calls = [];
   const foundRows = [{ id: 'fixture-oldest' }, { id: 'fixture-next' }];
   const context = vm.createContext({
-    process: { env: {} }, actorId: () => 'fixture-staff', publicStaffUser: () => ({}),
+    process: { env: {} }, reviewQueueSplit: require('../utils/reviewQueueSplit'), actorId: () => 'fixture-staff', publicStaffUser: () => ({}),
     staffDuplicateGroupSummary: async () => ({ possible_duplicates: 0 }),
     rowIsBrokerReview: () => false, staffModerationPanelRows: () => [], staffReviewQueueMeta: () => ({}),
     safeRows: async (sql, params, options) => {

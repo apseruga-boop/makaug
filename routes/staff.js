@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const express = require('express');
 
 const db = require('../config/database');
+const reviewQueueSplit = require('../utils/reviewQueueSplit');
 const logger = require('../config/logger');
 const { changeStaffPropertyImage, addStaffPropertyImages, removeStaffPropertyVideo, moveOrSwapStaffPropertyVideo } = require('../services/staffPropertyMediaService');
 const { requireStaffAccess } = require('../middleware/auth');
@@ -1010,17 +1011,11 @@ function launchTestListingWhere(alias = 'p') {
 const STAFF_REVIEW_QUEUE_ORDER = 'p.created_at ASC NULLS LAST, p.id ASC'; // oldest first
 const STAFF_REVIEW_QUEUE_SEGMENTS = ['all', 'main', 'broker', 'found_online'];
 
-// SQL twin of rowIsFoundOnlineReview(), minus stored-suppressed rows, so the
-// found-online panel's count and its "Load more" pages are the same set.
+// One rule for every review list (utils/reviewQueueSplit.js, Arthur 23 Nov 2026):
+// the staff desk, its badges and King's queues all split found-online vs agent
+// listings the same way. Our own hosted WhatsApp video is not "found online".
 function foundOnlineReviewWhere(alias = 'p') {
-  const prefix = alias ? `${alias}.` : '';
-  return `(
-    (
-      COALESCE(${prefix}extra_fields->>'found_online', ${prefix}extra_fields->>'found_online_candidate', ${prefix}extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$'
-      OR COALESCE(${prefix}extra_fields->>'source_url', ${prefix}extra_fields->>'source_post_url', ${prefix}extra_fields->>'tiktok_url', ${prefix}extra_fields->>'youtube_url', ${prefix}extra_fields->>'video_url', '') <> ''
-    )
-    AND NOT ${sourceQualitySuppressedFlagSql(alias)}
-  )`;
+  return reviewQueueSplit.foundOnlineSql(alias);
 }
 
 function staffReviewQueueSegmentWhere(segment = 'all', alias = 'p') {
@@ -1100,11 +1095,7 @@ function rowIsBrokerReview(row = {}) {
 }
 
 function rowIsFoundOnlineReview(row = {}) {
-  const extra = safeJsonObject(row.extra_fields, {});
-  return boolLike(extra.found_online)
-    || boolLike(extra.found_online_candidate)
-    || boolLike(extra.social_search_candidate)
-    || Boolean(staffListingSourceUrl(row));
+  return reviewQueueSplit.rowIsFoundOnline(row);
 }
 
 function staffVisiblePropertyWhere(alias = 'p') {
