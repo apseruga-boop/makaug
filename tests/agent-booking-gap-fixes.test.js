@@ -405,7 +405,8 @@ test('16. weekly replies take numbers, and stays say Open, Fully booked or Pause
   assert.match(property, /Still available/);
   assert.match(property, /Reply 1 Still available, 2 Under offer, 3 Let agreed, 4 Sold/);
   const staySource = read('services/shortTermBookingService.js');
-  assert.match(staySource, /Reply 1 Open, 2 Fully booked, 3 Paused/);
+  // 23 Nov 2026: asked in words, one check-in per host (chat-lessons-1123.test.js).
+  assert.match(staySource, /Reply \*1\* if it is, \*2\* if it is fully booked, or \*3\* to pause it\./);
   assert.match(staySource, /Fully booked: \$\{links\.fully_booked\}/);
   assert.equal(stay.choiceFromReply('1.'), null);
 });
