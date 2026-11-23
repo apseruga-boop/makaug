@@ -21,6 +21,9 @@
 process.env.NODE_ENV = 'test';
 process.env.AGENT_BOOKING_TOKEN_SECRET = process.env.AGENT_BOOKING_TOKEN_SECRET || 'chat-lessons-1123-secret';
 process.env.STAY_REQUEST_TOKEN_SECRET = process.env.STAY_REQUEST_TOKEN_SECRET || 'chat-lessons-1123-stay-secret';
+// The team's notes wait for the morning between 22:00 and 07:00 Kampala; these
+// tests are about whether a note is made, at any hour they run.
+process.env.LEAD_DESK_QUIET_HOURS = 'off';
 
 const test = require('node:test');
 const assert = require('node:assert');

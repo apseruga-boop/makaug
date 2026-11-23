@@ -10688,6 +10688,8 @@ const employeeClosedBatchWarned = new Map();
 // ---------------------------------------------------------------------------
 const FORWARDED_ADVERT_PROMPT_EVERY_MS = 15 * 60 * 1000;
 const FORWARDED_ADVERT_DECLINE_FOR_MS = 24 * 60 * 60 * 1000;
+// How long a burst of forwarded photos, or the question about them, stays open.
+const FORWARDED_ADVERT_BURST_MS = 60 * 60 * 1000;
 const FORWARDED_ADVERT_YES = /^(?:1|list(?: it| them)?|yes|yeah|yep|ok(?:ay)?|ye|yee|wangi|ndio|sawa|list my propert(?:y|ies))[\s.!]*$/i;
 const FORWARDED_ADVERT_NO = /^(?:2|no|nope|nedda|hapana|search|buy|rent|looking)[\s.!]*$/i;
 const FORWARDED_ADVERT_FREE_STEPS = new Set(['', 'greeting', 'main_menu', 'search_type', 'search_area', 'choose_language', 'agent_area']);
@@ -10810,8 +10812,17 @@ async function handleUnknownForwardedAdvert({ phone = '', session = {}, cleanBod
   // hostel near Makerere 300k" and "Land for sale in Wakiso around 50m" were
   // both told "That looks like a property you are selling" (16 Nov 2026).
   const burstAt = Date.parse(state?.since || '');
-  const photosInBurst = Boolean(mediaUrl) || Number(runtime.mediaCount || 0) > 0
-    || (Number(state?.media || 0) > 0 && Number.isFinite(burstAt) && now - burstAt < 60 * 60 * 1000);
+  // 23 Nov 2026: a guest's voice note asking whether the rooms have air
+  // conditioning came eleven hours after her first voice note, and was taken
+  // quietly as one more "photo of the adverts". Nobody answered her, and the
+  // team was not told. A voice note is never an advert's photo, and photos
+  // are taken quietly only while a burst of them, or the question about them,
+  // is recent.
+  const photo = !isVoiceMediaType(runtime.mediaType) && (Boolean(mediaUrl) || Number(runtime.mediaCount || 0) > 0);
+  const lastAdvertActivity = Math.max(Number.isFinite(burstAt) ? burstAt : 0, Date.parse(state?.prompted_at || '') || 0);
+  const burstOpen = Boolean(state) && now - lastAdvertActivity < FORWARDED_ADVERT_BURST_MS;
+  const photosInBurst = photo
+    || (Number(state?.media || 0) > 0 && Number.isFinite(burstAt) && now - burstAt < FORWARDED_ADVERT_BURST_MS);
   const isCaption = Boolean(facts && facts.listingType && Number(facts.price) > 0 && !looksLikeSearchBrief(text)
     && (photosInBurst || looksLikeAdvertText(text)));
 
@@ -10886,7 +10897,7 @@ async function handleUnknownForwardedAdvert({ phone = '', session = {}, cleanBod
       // Albums often arrive before their caption: look back for them.
       since: state?.since || new Date(now - 10 * 60 * 1000).toISOString(),
       captions: Number(state?.captions || 0) + 1,
-      media: Number(state?.media || 0) + (mediaUrl ? 1 : 0),
+      media: Number(state?.media || 0) + (photo && mediaUrl ? 1 : 0),
       prompted_at: state?.prompted_at || null,
       awaiting_name: false
     };
@@ -10895,12 +10906,12 @@ async function handleUnknownForwardedAdvert({ phone = '', session = {}, cleanBod
     await patchSessionData(phone, { forwarded_adverts: next });
     return { handled: true, nextStep: currentStep, message: due ? forwardedAdvertPrompt(lang, forwardedAdvertSummary(facts)) : '' };
   }
-  if (mediaUrl && state && !state.declined_at) {
+  if (photo && mediaUrl && state && !state.declined_at && burstOpen) {
     // Photos of the adverts, while the question is open: taken quietly.
     await patchSessionData(phone, { forwarded_adverts: { ...state, media: Number(state.media || 0) + 1 } });
     return { handled: true, nextStep: currentStep, message: '' };
   }
-  if (mediaUrl && !state) {
+  if (photo && mediaUrl && (!state || !burstOpen)) {
     // The first photo of a burst gets the ordinary reply, once; the rest of
     // the album is taken quietly until a caption says what it is.
     await patchSessionData(phone, { forwarded_adverts: { since: new Date(now - 60 * 1000).toISOString(), captions: 0, media: 1, prompted_at: null, awaiting_name: false } });
@@ -10952,8 +10963,15 @@ function isQuestionNotProperty(text = '') {
   return (/\?\s*$/.test(clean) || QUESTION_OPENING.test(clean)) && !PROPERTY_THING.test(clean);
 }
 
+/** A voice note, as the bridges name its media. */
+function isVoiceMediaType(mediaType = '') {
+  const type = String(mediaType || '').toLowerCase();
+  return type.startsWith('audio') || /\b(?:voice|ptt)\b/.test(type) || type.includes('opus') || type.includes('ogg');
+}
+
 function looksLikeForwardedProperty({ cleanBody = '', mediaUrl = '', runtime = {} } = {}) {
-  if (mediaUrl || Number(runtime.mediaCount || 0) > 0) return true;
+  // A voice note is somebody talking: what they say decides, as typed words do.
+  if ((mediaUrl || Number(runtime.mediaCount || 0) > 0) && !isVoiceMediaType(runtime.mediaType)) return true;
   if (normalizeInput(cleanBody).length < 25) return false;
   if (looksLikeSearchBrief(cleanBody)) return false;
   if (isQuestionNotProperty(cleanBody)) return false;
@@ -26936,7 +26954,8 @@ async function processInboundRuntimeUnlocked({
       };
     }
     await updateSession(phone, { current_step: sessionStep, current_intent: 'unknown' });
-    if (!transcriptRecord?.text
+    // A voice note to somebody on the team is theirs as well (23 Nov 2026).
+    if ((!transcriptRecord?.text || isAudioNote)
       && await customerTalkIsForAPerson({ phone, said: effectiveBody, reply: friendlyUnknownReply(activeLang), lang: activeLang, contactName })) {
       return { message: '', nextStep: sessionStep };
     }
@@ -26981,8 +27000,9 @@ async function processInboundRuntimeUnlocked({
   let { message, nextStep } = processed;
 
   // Somebody on our team is talking to this customer: an answer the assistant
-  // would only have met with the menu is theirs (23 Nov 2026).
-  if (message && !transcriptRecord?.text && !effectiveMediaUrl && !inboundPhotoCandidates.length && !sharedLocation
+  // would only have met with the menu is theirs (23 Nov 2026). A voice note is
+  // that too: the team is sent what was said in it.
+  if (message && (!transcriptRecord?.text || isAudioNote) && (!effectiveMediaUrl || isAudioNote) && !inboundPhotoCandidates.length && !sharedLocation
     && await customerTalkIsForAPerson({ phone, said: effectiveBody, reply: message, lang: activeLang, contactName })) {
     await updateSession(phone, { current_step: sessionStep, current_intent: intentResult.intent || null });
     return { message: '', nextStep: sessionStep };
@@ -28505,6 +28525,7 @@ module.exports.__test = {
   releaseInboundMessageClaim,
   logWhatsappMessage,
   looksLikeForwardedProperty,
+  isVoiceMediaType,
   looksLikeSearchBrief,
   formatAgentSearchMessage,
   whatsappAgentKeywordScore,
