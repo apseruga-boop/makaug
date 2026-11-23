@@ -561,12 +561,36 @@ function needFromLeads(leads = []) {
   return { type: first.want || 'any', area: first.area || '', people };
 }
 
+// Whether what the makaug number sends this person now would only wait in the
+// queue: they have not written to us lately (the 7-day rule).
+function waitsForThemByDefault(phone) {
+  return require('./whatsappWebBridgeService').waitsForThem(phone);
+}
+
+/**
+ * 23 Nov 2026: a renter was told her request had been passed to an agent who
+ * would contact her on WhatsApp, but he had not written to the makaug number
+ * for a week, so the request only waited in the queue and he never saw it.
+ * An agent the number cannot write to yet is not sent anything from the desk,
+ * and nobody is told it was; the desk says why and what to do.
+ */
+async function unreachableAgentError(agent = {}, waitsForThem = waitsForThemByDefault) {
+  if (!agent.whatsapp || !(await waitsForThem(agent.whatsapp))) return null;
+  const name = agentGreetingName(agent, '');
+  const days = require('./whatsappWebBridgeService').wroteWithinDays();
+  const hello = require('./filmLinkService').helloLink();
+  return {
+    error: `${name || 'This agent'} has not written to the makaug WhatsApp in the last ${days} days, so nothing we send can reach them yet. Nothing was sent and nobody was told. Pick another agent, or ask ${name || 'them'} to tap this link and press send, then send this again: ${hello}`,
+    status: 409
+  };
+}
+
 /**
  * Send (or preview) one WhatsApp to an agent for a set of desk leads.
  */
 async function referLeads(db, {
   ids, agentId, text: overrideText = '', previewTo = '', dryRun = false, actor = 'admin',
-  notifyClients = true, clientText = ''
+  notifyClients = true, clientText = '', waitsForThem = waitsForThemByDefault
 }) {
   const loadedAgent = await loadReferralAgent(db, agentId);
   if (!loadedAgent) return { error: 'Pick an approved makaug agent with a WhatsApp number', status: 400 };
@@ -593,6 +617,10 @@ async function referLeads(db, {
   }
   const body = text(overrideText).slice(0, 3500) || generated;
   const to = previewTo || agent.whatsapp;
+  if (!previewTo) {
+    const unreachable = await unreachableAgentError(agent, waitsForThem);
+    if (unreachable) return unreachable;
+  }
   const delivery = await deliverWhatsapp({ to, body, kind: previewTo ? 'desk_referral_preview' : 'desk_referral', leadId: null, nonce: Date.now() });
   const delivered = ['queued', 'sent', 'simulated'].includes(delivery.status);
   await logNotification(db, {
@@ -683,7 +711,7 @@ function buildNudgeMessage({ referral, lead }) {
   ].join('\n');
 }
 
-async function nudgeReferral(db, referralId, { previewTo = '', dryRun = false, actor = 'admin' } = {}) {
+async function nudgeReferral(db, referralId, { previewTo = '', dryRun = false, actor = 'admin', waitsForThem = waitsForThemByDefault } = {}) {
   if (!UUID_RE.test(String(referralId || ''))) return { error: 'Referral not found', status: 404 };
   const found = await db.query(
     `SELECT r.*, a.full_name, COALESCE(NULLIF(a.whatsapp, ''), a.phone) AS whatsapp
@@ -697,6 +725,10 @@ async function nudgeReferral(db, referralId, { previewTo = '', dryRun = false, a
   const lead = (await loadLeadsByIds(db, [referral.demand_lead_id]))[0] || {};
   const body = buildNudgeMessage({ referral, lead });
   if (dryRun) return { data: { text: body } };
+  if (!previewTo) {
+    const unreachable = await unreachableAgentError({ id: referral.agent_id, full_name: referral.full_name, whatsapp: referral.whatsapp }, waitsForThem);
+    if (unreachable) return unreachable;
+  }
   const delivery = await deliverWhatsapp({ to: previewTo || referral.whatsapp, body, kind: 'desk_nudge', leadId: null, nonce: Date.now() });
   const delivered = ['queued', 'sent', 'simulated'].includes(delivery.status);
   if (delivered && !previewTo) await db.query('UPDATE demand_lead_referrals SET nudged_at = NOW() WHERE id = $1', [referralId]);

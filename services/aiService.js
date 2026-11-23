@@ -877,9 +877,21 @@ const MULTILINGUAL_SEARCH_REPLACEMENTS = [
 ];
 
 // "e Ntinda", "omu Mbarara", "mu Kampala", "i Gulu" → "in Ntinda" (only before a capitalised or known word).
+// "i Mbarara" is a locative, as "e Ntinda" is. "which places can i get at
+// that amount" is English (23 Nov 2026): its "i" was read as "in", and a renter
+// was asked twice where "Get At" is. So "i" counts only before a place we know.
+function isKnownPlaceWord(word = '') {
+  try {
+    return require('../utils/ugandaLocationRegistry').resolveCanonicalUgandaLocation(word).status === 'matched';
+  } catch (_error) {
+    return false;
+  }
+}
+
 function normalizeLocativePrefixes(text = '') {
   return String(text || '')
-    .replace(/(^|\s)(?:e|omu|mu|i|ku|kuri)\s+(?=[A-Za-z][a-z]{2,})/g, '$1in ')
+    .replace(/(^|\s)(?:e|omu|mu|ku|kuri)\s+(?=[A-Za-z][a-z]{2,})/g, '$1in ')
+    .replace(/(^|\s)i\s+(?=([A-Za-z][a-z]{2,}))/g, (all, lead, word) => (isKnownPlaceWord(word) ? `${lead}in ` : all))
     .replace(/\b(?:okumpi\s+n[e']|karibu\s+na)\s+/gi, 'near ');
 }
 

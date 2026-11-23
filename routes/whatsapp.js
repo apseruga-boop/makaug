@@ -1145,7 +1145,8 @@ function detectGreetingLanguage(text) {
   if (compact.length > 80) return { code: '', confidence: 0 };
 
   const greetingRules = [
-    { code: 'en', re: /^(hi|hello|hey|hiya|yo|good morning|good afternoon|good evening|morning|afternoon|evening)$/ },
+    // "Hy", "Hii", "Helo", "Hlo", "Hallo": how hello is typed here (23 Nov 2026).
+    { code: 'en', re: /^(hi+|hie|hy|hello+|helo|hellow|hlo+|hlw|hallo|halo|hey+|hiya|yo|good morning|good afternoon|good evening|morning|afternoon|evening)$/ },
     { code: 'sw', re: /^(habari|mambo|niaje|jambo|sasa|salama)$/ },
     { code: 'lg', re: /^(oli otya|wasuze otya|osiibye otya|gyebale|mulembe)$/ },
     { code: 'sm', re: /^(mirembe|wasuze otya|osiibye otya)$/ },
@@ -6773,8 +6774,33 @@ function employeeUnassignedMedia(data = {}) {
 }
 
 function employeeMediaMessageCaption({ cleanBody = '', placeholderBody = false, pendingCaption = '' } = {}) {
-  if (!placeholderBody && normalizeInput(cleanBody)) return normalizeInput(cleanBody);
-  return normalizeInput(pendingCaption) || '';
+  const own = placeholderBody ? '' : normalizeInput(cleanBody);
+  const pending = normalizeInput(pendingCaption);
+  // 23 Nov 2026: a description was sent, "For sale 250m in kyengera town
+  // wakiso district", and then its photos, forwarded. The first photo still
+  // carried "Hello Mkaug", the words its owner had sent with it. Taken as that
+  // photo's own description, they replaced the full one: nothing was saved,
+  // and the property was asked for its type, its price and "which district
+  // Hello is in". Words that do not describe a property never replace a
+  // description that is waiting for its photos.
+  if (own && pending && !looksLikePropertyCaption(own)) return pending;
+  return own || pending || '';
+}
+
+// One "Not saved yet" for a property is enough (23 Nov 2026): each photo of
+// one house brought the same notice back, eleven messages in three minutes,
+// numbered "Again (6)" by the end. Its next photos are kept without a word
+// for a while; COMPLETE still says what is missing.
+const EMPLOYEE_INCOMPLETE_NOTICE_QUIET_MS = 5 * 60 * 1000;
+
+function employeeIncompleteNoticeOnce(data = {}, caption = '', missing = [], { now = Date.now() } = {}) {
+  const key = employeeCaptionHash(`${normalizeInput(caption)}|${(missing || []).join('|')}`);
+  const last = data.employee_incomplete_notice && typeof data.employee_incomplete_notice === 'object'
+    ? data.employee_incomplete_notice
+    : {};
+  if (last.key === key && now - Number(last.at || 0) < EMPLOYEE_INCOMPLETE_NOTICE_QUIET_MS) return '';
+  data.employee_incomplete_notice = { key, at: now };
+  return employeeIncompletePropertyMessage(caption, missing, data);
 }
 
 function employeeCaptionLabel(caption = '') {
@@ -13354,6 +13380,8 @@ async function handleEmployeeWhatsappIntake({
     }
     data.property_batch_mode = batchMode;
     data.property_batch_mode_selected_at = new Date().toISOString();
+    // A new batch hears about its own missing details from the start.
+    delete data.employee_incomplete_notice;
     await replaceEmployeeSession(phone, 'employee_property_media', data);
     return {
       handled: true,
@@ -14031,11 +14059,16 @@ async function handleEmployeeWhatsappIntake({
       placeholderBody,
       pendingCaption: pendingCaptionBeforeMessage
     });
-    const ownMediaCaption = !placeholderBody && Boolean(normalizeInput(cleanBody));
+    // A photo with words of its own opens an album. Its words are its caption
+    // only when they describe the property (employeeMediaMessageCaption).
+    const mediaHasWords = !placeholderBody && Boolean(normalizeInput(cleanBody));
+    const ownMediaCaption = mediaHasWords && caption === normalizeInput(cleanBody);
     const mediaSenderMs = Number(data.current_sender_ms || 0) || Date.now();
     const holdReason = employeeHoldReason({
       data,
-      ownCaption: ownMediaCaption,
+      // With several descriptions waiting, "Hello" on a photo says no more
+      // about whose it is than no words at all.
+      ownCaption: mediaHasWords && (ownMediaCaption || employeeWaitingCaptionCount(data) <= 1),
       senderMs: mediaSenderMs,
       burstSize: employeeBurstSize,
       senderTimeKnown: Number(runtime.senderMs || 0) > 0
@@ -14064,7 +14097,7 @@ async function handleEmployeeWhatsappIntake({
           : ''
       };
     }
-    if (ownMediaCaption) data.last_album_sender_ms = mediaSenderMs;
+    if (mediaHasWords) data.last_album_sender_ms = mediaSenderMs;
     else if (Number(data.last_album_sender_ms || 0) >= Number(data.last_text_caption_sender_ms || 0)) data.last_album_sender_ms = mediaSenderMs;
     const facts = employeePropertyFacts(caption, data);
     const missing = employeePropertyMissing(facts);
@@ -14079,16 +14112,18 @@ async function handleEmployeeWhatsappIntake({
     // property still waiting for a detail: they are that description's photos.
     const keptIndex = (!ownMediaCaption && !shouldStartProperty) ? employeeNewerKeptCaptionIndex(data, mediaSenderMs) : -1;
     if (keptIndex >= 0) {
+      let keptNotice = '';
       try {
         const keptMedia = await storeEmployeeMedia(candidates, { privateMedia: false, phone, inboundMessageId, provider: runtime.provider });
         addEmployeeQueuedMedia(data, keptIndex, keptMedia);
         data.last_inbound_ms = Date.now();
+        keptNotice = employeeIncompleteNoticeOnce(data, caption, missing);
         await replaceEmployeeSession(phone, currentStep, data);
       } catch (error) {
         logger.error('WhatsApp employee kept-property media storage failed:', error);
         return { handled: true, nextStep: currentStep, message: employeeMediaFailureMessage(error) };
       }
-      return { handled: true, nextStep: currentStep, message: employeeIncompletePropertyMessage(caption, missing, data) };
+      return { handled: true, nextStep: currentStep, message: keptNotice };
     }
 
     // 23 Oct 2026: Brian's Kiwatule building was saved at 12:57. At 15:26 he sent
@@ -14136,6 +14171,7 @@ async function handleEmployeeWhatsappIntake({
         && !employeeCaptionLikelySameProperty(pendingCaptionBeforeMessage, caption, data)
       )
     ) {
+      let pendingNotice = '';
       try {
         const pendingStoredMedia = await storeEmployeeMedia(candidates, {
           privateMedia: false,
@@ -14147,6 +14183,7 @@ async function handleEmployeeWhatsappIntake({
         if (caption) data.pending_property_caption = caption;
         if (caption && ownMediaCaption) data.pending_caption_sender_ms = mediaSenderMs;
         if (caption) noteEmployeeBatchDescription(data, caption);
+        pendingNotice = employeeIncompleteNoticeOnce(data, caption, missing);
         await replaceEmployeeSession(phone, currentStep, data);
         if (!caption) await settleEmployeeOrphanMedia({ phone, data, currentStep, inboundMessageId });
       } catch (error) {
@@ -14156,7 +14193,7 @@ async function handleEmployeeWhatsappIntake({
       return {
         handled: true,
         nextStep: currentStep,
-        message: employeeIncompletePropertyMessage(caption, missing, data)
+        message: pendingNotice
       };
     }
     if (!shouldStartProperty && startsIncompleteNewProperty) {
@@ -15525,8 +15562,37 @@ function sanitizeSearchAreaCandidate(area, originalText = '') {
   return cleanArea;
 }
 
+/**
+ * "how about 150", said after a 150k budget (23 Nov 2026), was searched as USh
+ * 150 a month, and the renter was told the cheapest room was "about 933× your
+ * budget". Nobody here means USh 150: a bare figure under a thousand is
+ * thousands for rent and millions for a purchase, or whichever of the two is
+ * nearer the budget they gave before.
+ */
+function budgetInFullShillings(filters = {}, previousBudget = 0) {
+  if (!filters || typeof filters !== 'object') return filters;
+  const budget = Number(filters.maxBudgetUgx) || 0;
+  if (IS_SOUTH_AFRICA || !(budget > 0 && budget < 1000) || filters.convertedFromForeign || filters.convertedFromUsd) return filters;
+  const type = normalizeListingType(filters.searchType || 'any');
+  let scale = 0;
+  if (Number(previousBudget) >= 1000) {
+    const distance = (factor) => Math.abs(Math.log((budget * factor) / Number(previousBudget)));
+    scale = distance(1_000) <= distance(1_000_000) ? 1_000 : 1_000_000;
+  } else if (['rent', 'student'].includes(type)) {
+    scale = 1_000;
+  } else if (['sale', 'land'].includes(type)) {
+    scale = 1_000_000;
+  }
+  if (!scale) return filters;
+  const out = { ...filters, maxBudgetUgx: budget * scale };
+  const min = Number(filters.minBudgetUgx) || 0;
+  if (min > 0 && min < 1000) out.minBudgetUgx = min * scale;
+  if (!out.budgetPeriod && scale === 1_000 && ['rent', 'student', 'any'].includes(type)) out.budgetPeriod = 'month';
+  return out;
+}
+
 function sanitizeNaturalSearchFilters(filters = {}, originalText = '') {
-  const next = { ...(filters || {}) };
+  const next = budgetInFullShillings({ ...(filters || {}) });
   next.area = sanitizeSearchAreaCandidate(next.area || next.district || '', originalText);
   if (!next.area && next.district) next.district = null;
   next.hasSignal = Boolean(
@@ -15782,7 +15848,8 @@ function filtersLeadLine(filters = {}, lang = 'en', { fxNote = '' } = {}) {
   const chips = describeNaturalFilters(filters, lang);
   if (!chips) return '';
   if (resolveLangCode(lang) !== 'en') return `✅ Filters applied: ${chips}${fxNote || '\n'}`;
-  const budget = Number(filters.maxBudgetUgx) > 0 ? ` up to ${formatPrice(filters.maxBudgetUgx, filters.budgetPeriod || '')}` : '';
+  const period = filters.budgetPeriod || (['rent', 'student'].includes(normalizeListingType(filters.searchType || 'any')) ? 'month' : '');
+  const budget = Number(filters.maxBudgetUgx) > 0 ? ` up to ${formatPrice(filters.maxBudgetUgx, period)}` : '';
   const home = Boolean(normalizeInput(filters.propertyType || '')) || Number(filters.bedsMin) > 0;
   if (!budget && !home) return fxNote ? `${fxNote.replace(/^\n+/, '')}` : '';
   const where = searchPlacesOf(filters).length ? ` ${searchPlacePhrase(filters)}` : '';
@@ -15982,10 +16049,56 @@ const AFFORDABILITY_KEYWORDS = [
   'ዝቅተኛ', 'ርካሽ', 'በጀት', 'cheap'
 ];
 
+/**
+ * "which places can i get at that amount" (23 Nov 2026): where they can find
+ * what they are after at the budget they already gave. Answered with the
+ * cheapest areas for it within that budget, not one more search of the last
+ * place they named.
+ */
+function asksWhereAtThatBudget(value = '') {
+  const clean = normalizeInput(value).toLowerCase();
+  if (!clean || clean.length > 160) return false;
+  return /\b(?:which|what|where|any)\b/.test(clean)
+    && /\b(?:places?|areas?|where|locations?|sides?)\b/.test(clean)
+    && /\b(?:that|this|the same|my|the)\s+(?:amount|budget|price|money|figure|range)\b/.test(clean);
+}
+
+/**
+ * A message that talks rather than names a place: a question ("when will that
+ * be?"), or a sentence about something else ("coz it is urgent"). Used only
+ * when no place was found in it.
+ */
+function looksLikeTalkNotAPlace(value = '') {
+  const clean = normalizeInput(value).toLowerCase();
+  if (!clean) return false;
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (/\?\s*$/.test(clean) && words.length >= 2) return true;
+  if (words.length >= 3 && /^(?:when|why|how|who|what|is|are|was|will|would|can|could|should|do|does|did|have|has)\b/.test(clean)) return true;
+  if (words.length >= 3 && /\b(?:urgent|urgently|asap|immediately)\b/.test(clean)) return true;
+  return words.length >= 6 && /\b(?:i|me|my|you|your|it|that|this|coz|because|will|be|is|are)\b/.test(clean);
+}
+
+/**
+ * "when will that be coz it is urgent" (23 Nov 2026), sent while the bot
+ * waited to hear where a place was, was taken for the place, and the same
+ * question went out again. A question or a sentence with no place in it ends
+ * the wait: the team is told, and nobody is asked again. When somebody on the
+ * team is already talking to them, that person answers and the bot says
+ * nothing ('').
+ */
+async function talkWhileWaitingForAPlace({ phone = '', said = '', contactName = '' } = {}) {
+  await patchSessionData(phone, { pending_search_filters: null });
+  if (isTeamNumber(phone)) return '';
+  const typed = await personThread.lastTypedByTeam(db, phone).catch(() => null);
+  noteAgentTalkForTeam({ phone, agent: { full_name: contactName || '' }, said, typed, customer: true });
+  return typed ? '' : 'Thanks. I have passed this to our team, and a person will reply to you here.';
+}
+
 function isAffordabilityAdviceQuestion(value) {
   const clean = normalizeInput(value).toLowerCase();
   if (!clean || clean.length < 3) return false;
   if (/\b(?:sell|selling|list|listing|post|upload|advertise)\b/i.test(clean)) return false;
+  if (asksWhereAtThatBudget(clean)) return true;
   const budget = parseBudgetFromQuestion(clean);
   if (/\b(?:cheapest|cheap|affordable|budget[-\s]?friendly|lowest\s+price|low[-\s]?cost|least\s+expensive|inexpensive|economical|best\s+price)\b/i.test(clean)) return true;
   if (/\b(?:can\s+i\s+get|could\s+i\s+get|do\s+you\s+have|have\s+you\s+got|find\s+me|show\s+me)\b/i.test(clean) && budget.maxBudgetUgx > 0) return true;
@@ -18630,6 +18743,11 @@ function pickShownListing(text = '', rows = []) {
 
   // "2 bedroom house in Kira under 500k" is a search, even with Kira in the list.
   if (/\b(?:under|below|less than|not more than|budget|max(?:imum)?|looking for|search|find me)\b/.test(clean)) return null;
+  // So is "I need a house to rent" (23 Nov 2026): three hours after a
+  // renter opened a 3M house in Seguku, it was answered with that house again.
+  // Wanting "a" house is a new search; wanting "the" house, or "a viewing" of
+  // it, is about one already sent.
+  if (/\b(?:need|want|searching for|search for)\s+(?:a|an|another|other|some|any)\s+(?:[a-z0-9-]+\s+){0,3}?(?:house|home|room|apartment|flat|place|rental|plot|land|shop|office|hostel|bungalow|villa|mansion|unit|duplex|condo|studio|bedroom|bedsitter|accommodation)s?\b/.test(clean)) return null;
   const typesSaid = PICK_TYPE_WORDS.filter((word) => hasWord(words, word));
   const prices = pickPriceFigures(clean.replace(/\b\d+\s*(?:bed(?:room)?s?|br)\b/g, ' '));
   const bedsSaid = Number((clean.match(/\b(\d+)\s*(?:bed(?:room)?s?|br)\b/) || [])[1] || 0);
@@ -20485,11 +20603,13 @@ function searchBriefFromFilters(filters = {}, queryText = '') {
   };
 }
 
-// A search goes on from the one before it for two hours (20 Nov 2026): a
-// renter who had asked for a single room at 150K named Kiwatule and was shown
-// houses at 850K to 2M, then said "for 150k" and was asked for the area he had
-// just named. What they said stays until they say otherwise.
-const LAST_SEARCH_CARRIES_MS = 2 * 60 * 60 * 1000;
+// A search goes on from the one before it (20 Nov 2026): a renter who had
+// asked for a single room at 150K named Kiwatule and was shown houses at 850K
+// to 2M, then said "for 150k" and was asked for the area he had just named.
+// What they said stays until they say otherwise. Two hours was not enough
+// (23 Nov 2026): a renter after a single room at 150k came back four hours
+// later with "how about 130k in kireka", and the single room was gone.
+const LAST_SEARCH_CARRIES_MS = 6 * 60 * 60 * 1000;
 
 /** The last search's brief while it still counts, or null. */
 function recentSearchBrief(sessionData = {}, now = Date.now()) {
@@ -20518,6 +20638,13 @@ function continueFromLastSearch(filters = {}, sessionData = {}, { keepArea = tru
   if (newType === 'any' && lastType !== 'any') {
     out.searchType = lastType;
     carried.push('type');
+  }
+  // "how about 150" after a budget of 150k is 150k.
+  const inShillings = budgetInFullShillings(out, Number(brief.max_budget_ugx) || 0);
+  if (inShillings !== out) {
+    Object.assign(out, inShillings);
+    if (!out.budgetPeriod && brief.budget_period) out.budgetPeriod = brief.budget_period;
+    carried.push('budget_units');
   }
   const newHome = normalizeInput(filters.propertyType || '').toLowerCase();
   const newBeds = Number(filters.bedsMin) > 0 ? Number(filters.bedsMin) : 0;
@@ -24257,9 +24384,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       affordabilityFilters = merged;
     }
     // "my budget is 150k per month single room" is for the places they named a
-    // minute before (23 Nov 2026), as a new place keeps the budget.
-    if (affordabilityFilters.hasSignal) {
-      const continued = continueFromLastSearch(affordabilityFilters, sessionData);
+    // minute before (23 Nov 2026), as a new place keeps the budget. "Which
+    // places can I get at that amount" keeps the budget and asks for places.
+    const asksWhere = asksWhereAtThatBudget(cleanBody) && !normalizeInput(affordabilityFilters.area || '') && !searchPlacesOf(affordabilityFilters).length;
+    if (affordabilityFilters.hasSignal || asksWhere) {
+      const continued = continueFromLastSearch(affordabilityFilters, sessionData, { keepArea: !asksWhere });
       if (continued !== affordabilityFilters) {
         affordabilityFilters = continued.carriedArea && continued.area && !searchPlacesOf(continued).length
           ? resolveWhatsappSearchLocation(continued, continued.area)
@@ -25083,6 +25212,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       // the bot waited for where the office is: the budget in it was dropped,
       // and the request an agent was sent two days later had none.
       const told = extractNaturalSearchFilters(cleanBody, {}, naturalFilters.searchType || searchType || 'any', {}) || {};
+      Object.assign(told, budgetInFullShillings(told));
       for (const key of ['maxBudgetUgx', 'minBudgetUgx', 'budgetPeriod', 'pricePeriod', 'bedsMin', 'propertyType']) {
         if (told[key] && !naturalFilters[key]) naturalFilters[key] = told[key];
       }
@@ -25100,6 +25230,10 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         naturalFilters = { ...naturalFilters, searchAreas: null, searchAreaLabel: null, road: null, area: '' };
       }
       const answeredOnlyTheQuestion = !answerNamesAPlace && (eitherWay || toldType !== 'any' || Number(told.maxBudgetUgx) > 0 || Number(told.bedsMin) > 0);
+      if (!answerNamesAPlace && !answeredOnlyTheQuestion && !searchPlacesOf(naturalFilters).length
+        && (!naturalFilters.area || naturalFilters.location_blocked) && looksLikeTalkNotAPlace(cleanBody)) {
+        return respond(await talkWhileWaitingForAPlace({ phone, said: cleanBody, contactName: runtime.contactName }), 'main_menu');
+      }
       if (!searchPlacesOf(naturalFilters).length && !answeredOnlyTheQuestion
         && (!naturalFilters.area || naturalFilters.location_blocked) && cleanBody.length >= 2) {
         // The answer may be a sentence ("it is in Kampala, on Jinja Road"): the
@@ -28498,6 +28632,11 @@ module.exports.__test = {
   resolveDetectedLanguage,
   shouldAdoptDetectedLanguage,
   employeeMediaMessageCaption,
+  employeeIncompleteNoticeOnce,
+  budgetInFullShillings,
+  asksWhereAtThatBudget,
+  looksLikeTalkNotAPlace,
+  isGreetingText,
   normalizeCaptionPriceNotation,
   buildEmployeeBatchSummary,
   scheduleEmployeeBatchSummary,

@@ -63,7 +63,7 @@ test('it is answered with how renting works, and the search they were on carries
   // Nobody searching yet: an example instead.
   assert.match(route.rentingProcessReply('en', {}), /Tell me the area and your budget and I will find options, for example: \*single room in Kireka under 150k\*\.$/);
   // A brief from yesterday is not "the search they were on".
-  assert.doesNotMatch(route.rentingProcessReply('en', renting(minutesAgo(180))), /keep looking/);
+  assert.doesNotMatch(route.rentingProcessReply('en', renting(minutesAgo(24 * 60))), /keep looking/);
 });
 
 test('wired in before the search, and not for a question that names a place', () => {
@@ -102,9 +102,9 @@ test('a different search is left alone', () => {
   assert.strictEqual(bigger.searchType, 'rent');
   assert.strictEqual(bigger.maxBudgetUgx, undefined);
   assert.strictEqual(bigger.propertyType, undefined);
-  // Two hours on, it is a new conversation.
+  // Six hours on, it is a new conversation (two was too short, 23 Nov 2026).
   const late = { area: 'Kiwatule', hasSignal: true };
-  assert.strictEqual(route.continueFromLastSearch(late, renting(minutesAgo(121))), late);
+  assert.strictEqual(route.continueFromLastSearch(late, renting(minutesAgo(361))), late);
   assert.strictEqual(route.continueFromLastSearch(late, {}), late);
 });
 
