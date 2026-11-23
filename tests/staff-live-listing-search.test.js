@@ -70,6 +70,33 @@ test('an MK ref, its suffix, or a property id is a direct lookup; a place name i
   );
   assert.deepEqual(idValues, ['73fd88d9-2713-473d-b7e0-e1eb067b73dd']);
 
+  assert.deepEqual(listingDirectLookup('7A8DF970'), { kind: 'id_prefix', value: '7a8df970' });
+  assert.deepEqual(listingDirectLookup('Ref 7A8DF970'), { kind: 'id_prefix', value: '7a8df970' });
+  assert.deepEqual(listingDirectLookup('ref: 7a8df970'), { kind: 'id_prefix', value: '7a8df970' });
+  assert.deepEqual(listingDirectLookup('  Ref   7a8df970-5ed7 '), { kind: 'id_prefix', value: '7a8df9705ed7' });
+  assert.deepEqual(
+    listingDirectLookup('Ref 73fd88d9-2713-473d-b7e0-e1eb067b73dd'),
+    { kind: 'id', value: '73fd88d9-2713-473d-b7e0-e1eb067b73dd' }
+  );
+  assert.deepEqual(listingDirectLookup('Ref EFB4A3'), { kind: 'suffix', value: 'EFB4A3' });
+  assert.equal(listingDirectLookup('Ref Ntinda'), null);
+
+  const prefixValues = [];
+  assert.equal(
+    listingDirectLookupClause('p', listingDirectLookup('Ref 7A8DF970'), prefixValues),
+    'p.id >= $1::uuid AND p.id < $2::uuid'
+  );
+  assert.deepEqual(prefixValues, ['7a8df970-0000-0000-0000-000000000000', '7a8df971-0000-0000-0000-000000000000']);
+
+  const longPrefixValues = [];
+  const longClause = listingDirectLookupClause('p', listingDirectLookup('7a8df970-5ed7'), longPrefixValues);
+  assert.equal(longClause, '(p.id >= $1::uuid AND p.id < $2::uuid AND p.id::text ILIKE $3)');
+  assert.deepEqual(longPrefixValues, [
+    '7a8df970-0000-0000-0000-000000000000',
+    '7a8df971-0000-0000-0000-000000000000',
+    '7a8df970-5ed7%'
+  ]);
+
   const broad = [];
   const ilike = propertyListingSearchClause('p', 'Ntinda house', broad);
   assert.match(ilike, /ILIKE/);
@@ -134,6 +161,8 @@ test('the dashboard search opens the same editor and badges a live listing', () 
   assert.equal(sandbox.staffListingDirectLookup('EFB4A3'), 'suffix');
   assert.equal(sandbox.staffListingDirectLookup('MK-20261016-EFB4A3'), 'reference');
   assert.equal(sandbox.staffListingDirectLookup('73fd88d9-2713-473d-b7e0-e1eb067b73dd'), 'id');
+  assert.equal(sandbox.staffListingDirectLookup('7A8DF970'), 'id_prefix');
+  assert.equal(sandbox.staffListingDirectLookup('Ref 7A8DF970'), 'id_prefix');
   assert.equal(sandbox.staffListingDirectLookup('Ntinda'), '');
   assert.equal(sandbox.staffListingIsLive('approved'), true);
   assert.equal(sandbox.staffListingIsLive('pending'), false);
@@ -259,6 +288,14 @@ test('a live listing is found by ref, suffix and id, and save keeps its status',
     const byId = await auth(request(app).get(`/api/staff/properties/review-queue?search=${id}`));
     assert.deepEqual(byId.body.data.map((row) => row.id), [id]);
     assert.equal(byId.body.meta.lookup, 'id');
+    const prefix = id.slice(0, 8);
+    const byPrefix = await auth(request(app).get(`/api/staff/properties/review-queue?search=${prefix}`));
+    assert.deepEqual(byPrefix.body.data.map((row) => row.id), [id]);
+    assert.equal(byPrefix.body.meta.lookup, 'id_prefix');
+    assert.equal(byPrefix.body.meta.status_scope, 'any');
+    const byRefPrefix = await auth(request(app).get(`/api/staff/properties/review-queue?search=${encodeURIComponent('Ref ' + prefix.toUpperCase())}`));
+    assert.deepEqual(byRefPrefix.body.data.map((row) => row.id), [id]);
+    assert.equal(byRefPrefix.body.meta.lookup, 'id_prefix');
     const byTitle = await auth(request(app).get('/api/staff/properties/review-queue?search=Kitende%20waiting'));
     assert.equal(byTitle.body.meta.status_scope, 'pending_and_live');
     assert.deepEqual(byTitle.body.data.map((row) => row.id), [pendingId]);
@@ -284,6 +321,19 @@ test('a live listing is found by ref, suffix and id, and save keeps its status',
     await db.query('DELETE FROM properties WHERE id = ANY($1::uuid[])', [[id, pendingId]]).catch(() => {});
     await db.query('DELETE FROM users WHERE id = $1', [user.id]).catch(() => {});
   }
+});
+
+test('King live and All listings search use the same short Ref lookup', () => {
+  const admin = fs.readFileSync(path.join(__dirname, '../routes/admin.js'), 'utf8');
+  const clause = admin.slice(admin.indexOf('function adminLiveSearchClause'), admin.indexOf('async function adminLiveCounts'));
+  assert.match(clause, /listingDirectLookup\(term\)/);
+  assert.match(clause, /listingDirectLookupClause\(alias, direct, values\)/);
+  assert.match(APP, /admin-listings-q/);
+  assert.match(APP, /const isIdPrefix = \/\^\[0-9a-f\]\{8,31\}\$\/i\.test\(lookupHex\)/);
+  assert.match(APP, /hydrateAdminListingsForExactIdInBackground\(q, adminAuthHeaders\(\)\)/);
+  assert.match(APP, /\/api\/admin\/properties\/actioned\?limit=5&include_images=0&search=/);
+  assert.match(APP, /\/api\/admin\/properties\/review-queue\?limit=5&include_images=0&include_total=0&search=/);
+  assert.doesNotMatch(APP, /routes\/whatsapp\.js/);
 });
 
 test.after(async () => {

@@ -21,7 +21,7 @@ const {
   pendingAgentOverrideRequest
 } = require('../utils/listingApprovalAgentGuard');
 const { parsePagination, toPagination } = require('../utils/pagination');
-const { listingReferenceQuery, propertyListingSearchClause } = require('../utils/listingReferenceSearch');
+const { listingDirectLookup, listingDirectLookupClause, propertyListingSearchClause } = require('../utils/listingReferenceSearch');
 const { priceEvidenceNote, resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staffPriceChoice');
 const { appendModerationNote, moderationActorLabel } = require('../utils/moderationNotes');
 const { listingPriceQuality } = require('../utils/listingPriceQuality');
@@ -4380,19 +4380,12 @@ const ADMIN_LIVE_EXTRA_KEYS = [
   'social_search_candidate', 'source_platform', 'source_url', 'price_on_application',
   'is_test', 'qa_test_delete', 'soft_launch_test', 'launch_proof', 'non_public_test'
 ];
-const UUID_SEARCH_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 function adminLiveSearchClause(q, values, alias = 'p') {
   const term = cleanText(q).slice(0, 120);
   if (!term) return '';
-  if (UUID_SEARCH_RE.test(term)) {
-    values.push(term.toLowerCase());
-    return `AND ${alias}.id = $${values.length}::uuid`;
-  }
-  const reference = listingReferenceQuery(term);
-  if (reference) {
-    values.push(reference);
-    return `AND ${alias}.inquiry_reference = $${values.length}`;
+  const direct = listingDirectLookup(term);
+  if (direct) {
+    return `AND ${listingDirectLookupClause(alias, direct, values)}`;
   }
   values.push(`%${term.replace(/[\\%_]/g, (char) => `\\${char}`)}%`);
   return `AND (${alias}.title ILIKE $${values.length} OR ${alias}.inquiry_reference ILIKE $${values.length} OR ${alias}.area ILIKE $${values.length})`;

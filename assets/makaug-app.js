@@ -15650,13 +15650,15 @@ function staffListingCanRepublish(preview = {}) {
   return status === "hidden" && staffListingIsLive(extra.unpublished_from_status);
 }
 
-// Same shapes the review-queue lookup accepts: full MK ref, its 6-hex suffix, or a property id.
+// Same shapes the review-queue lookup accepts: full MK ref, its 6-hex suffix,
+// a property id, or the short "Ref 7A8DF970" prefix from a WhatsApp alert.
 function staffListingDirectLookup(term = "") {
-  const clean = String(term || "").trim();
+  const clean = String(term || "").trim().replace(/^ref[:\s]+/i, "").trim();
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean)) return "id";
   if (/^MK-[0-9A-Z-]{4,}$/i.test(clean)) return "reference";
-  if (/^[0-9a-f]{8}$/i.test(clean)) return "id_prefix";
   if (/^[0-9A-F]{6}$/i.test(clean)) return "suffix";
+  const hex = clean.replace(/-/g, "");
+  if (/^[0-9a-f]{8,31}$/i.test(hex)) return "id_prefix";
   return "";
 }
 
@@ -27332,6 +27334,13 @@ function renderAdminAllListingsRows(listings) {
     view = view.filter((p) => normalizeModerationStatus(p.status) === statusFilter);
   }
   if (q) {
+    const lookupTerm = q.replace(/^ref[:\s]+/i, "").trim();
+    const lookupHex = lookupTerm.replace(/-/g, "");
+    const isIdPrefix = /^[0-9a-f]{8,31}$/i.test(lookupHex);
+    const isDirectLookup = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(lookupTerm)
+      || /^mk-[0-9a-z-]{4,}$/i.test(lookupTerm)
+      || /^[0-9a-f]{6}$/i.test(lookupTerm)
+      || isIdPrefix;
     view = view.filter((p) => {
       const hay = [
         p.title,
@@ -27339,11 +27348,18 @@ function renderAdminAllListingsRows(listings) {
         p.district,
         p.city,
         p.subtype,
-        p.id
+        p.id,
+        p.backend_id,
+        p.inquiry_reference
       ].filter(Boolean).join(" ").toLowerCase();
-      return hay.includes(q);
+      if (hay.includes(q) || (lookupTerm && hay.includes(lookupTerm))) return true;
+      if (isIdPrefix) {
+        const idHex = String(p.backend_id || p.id || "").toLowerCase().replace(/-/g, "");
+        if (idHex.startsWith(lookupHex.toLowerCase())) return true;
+      }
+      return false;
     });
-    if (!view.length && (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(q) || /^mk-[0-9a-z-]{4,}$/i.test(q))) {
+    if (!view.length && isDirectLookup) {
       hydrateAdminListingsForExactIdInBackground(q, adminAuthHeaders());
     }
   }
@@ -27388,23 +27404,33 @@ let adminExactIdHydrationInFlight = null;
 let adminExactIdHydrationKey = "";
 
 function hydrateAdminListingsForExactIdInBackground(propertyId, headers) {
-  const key = String(propertyId || "").trim().toLowerCase();
+  const rawKey = String(propertyId || "").trim();
+  const key = rawKey.toLowerCase();
   if (!key || adminExactIdHydrationInFlight || adminExactIdHydrationKey === key || !canUseLiveAdminApi()) return;
   adminExactIdHydrationKey = key;
-  // Live rows (and MK refs) come from the admin live search (C19); other ids
-  // from the property API as before.
-  adminExactIdHydrationInFlight = apiRequest(`/api/admin/properties/live?limit=5&include_test_like=1&q=${encodeURIComponent(key)}`, { headers })
-    .then((live) => {
-      const row = Array.isArray(live?.data) ? live.data[0] : null;
+  const q = encodeURIComponent(rawKey);
+  const firstRow = (response) => (Array.isArray(response?.data) ? response.data[0] : null);
+  // Live first (C19), then actioned (approved/rejected/hidden) and the
+  // pending review queue, so a short WhatsApp Ref finds any status.
+  adminExactIdHydrationInFlight = apiRequest(`/api/admin/properties/live?limit=5&include_test_like=1&q=${q}`, { headers })
+    .then((live) => firstRow(live) ? { data: firstRow(live) } : apiRequest(`/api/admin/properties/actioned?limit=5&include_images=0&search=${q}`, { headers }))
+    .then((response) => {
+      const row = response?.data && !Array.isArray(response.data) ? response.data : firstRow(response);
       if (row) return { data: row };
-      if (/^mk-/i.test(key)) return { data: null };
-      return apiRequest(`/api/properties/${encodeURIComponent(key)}`, { headers });
+      return apiRequest(`/api/admin/properties/review-queue?limit=5&include_images=0&include_total=0&search=${q}`, { headers });
+    })
+    .then((response) => {
+      const row = response?.data && !Array.isArray(response.data) ? response.data : firstRow(response);
+      if (row) return { data: row };
+      const lookup = rawKey.replace(/^ref[:\s]+/i, "").trim();
+      if (/^mk-/i.test(lookup) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lookup)) return { data: null };
+      return apiRequest(`/api/properties/${encodeURIComponent(lookup)}`, { headers });
     })
     .then((response) => {
       const listing = response?.data ? normalizeRemoteAdminListing(response.data) : null;
       if (!listing?.id) {
         const wrap = document.getElementById("admin-all-listings-table");
-        if (wrap) wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No live listing matches ${adminEscape(key)}.</div>`;
+        if (wrap) wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No listing matches ${adminEscape(key)}.</div>`;
         return;
       }
       adminRemoteListings = adminUniqueSeedItems([listing, ...adminRemoteListings]);
