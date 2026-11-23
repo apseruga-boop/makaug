@@ -1,0 +1,51 @@
+{
+  "date": "2026-11-24",
+  "short": "Tue 24 Nov 2026",
+  "long": "Tuesday 24 November 2026",
+  "label": "MORNING BRIEF",
+  "emoji": "☀️",
+  "slot": "morning",
+  "stories": [
+    {
+      "chip": "LOANS",
+      "emoji": "🏦",
+      "title": "Loan rates rise on 1 December",
+      "story": "<b>Stanbic</b> lifts its prime rate from 19.5% to <b>21.75%</b>. <b>DFCU</b> and <b>DTB</b> go from 20% to <b>22%</b>. Both changes start on <b>1 December</b>.",
+      "you": "Buyers will qualify for less. <span class=\"hl\">Show cheaper homes</span> to loan buyers.",
+      "source": "Source: Sanyu FM · 19 Nov 2026"
+    },
+    {
+      "chip": "PRICES",
+      "emoji": "📈",
+      "title": "Costly plots push builders to flats",
+      "story": "Seven 50x100ft plots around Kampala were listed at <b>Shs42m to Shs95m</b>, a median of <b>Shs85m</b>. Builders are moving to <b>flats</b>.",
+      "you": "<span class=\"hl\">Pitch apartments</span> to buyers priced out of plots.",
+      "source": "Source: Business Times · 23 Nov 2026"
+    },
+    {
+      "chip": "ROADS",
+      "emoji": "🛣️",
+      "title": "Give land free for 99.4km road",
+      "story": "Ministers asked Mitooma, Sheema and Rukungiri residents to <b>give land freely</b> for the <b>99.4km</b> Kabwohe–Rukungiri road. Buildings in the <b>road reserve</b> won’t be paid for.",
+      "you": "Selling on the route? <span class=\"hl\">Check the road reserve</span> before you list.",
+      "source": "Source: New Vision · 23 Nov 2026"
+    },
+    {
+      "chip": "KINGDOM LAND",
+      "emoji": "👑",
+      "title": "Buganda wants its debt paid",
+      "story": "Buganda Kingdom asked government to <b>clear what it still owes</b> for properties confiscated decades ago, and to pay <b>rent</b> on time for facilities on <b>kingdom land</b>.",
+      "you": "Selling on kingdom land? <span class=\"hl\">Check the lease terms</span> first.",
+      "source": "Source: Pulse Uganda · 22 Nov 2026"
+    },
+    {
+      "chip": "FAMILY LAND",
+      "emoji": "🏡",
+      "title": "Museveni: keep family land whole",
+      "story": "Museveni told his family not to split the <b>Rwakitura estate</b> into plots after his death. They should keep it <b>whole</b> and <b>share the income</b>, he said.",
+      "you": "Selling family land? <span class=\"hl\">Get every heir’s consent</span> in writing.",
+      "source": "Source: Pulse Uganda · 22 Nov 2026"
+    }
+  ],
+  "caption": "☀️ *makaug Morning Brief* · Tue 24 Nov\n5 property stories that affect your business, in 30 seconds 👆\n\n1️⃣ *Loan rates rise on 1 December* → show cheaper homes\nhttps://sanyufm.com/borrowers-face-higher-loan-costs-as-banks-raise-lending-rates-from-december/\n\n2️⃣ *Costly plots push builders to flats* → pitch apartments\nhttps://businesstimesug.com/why-ugandas-property-developers-are-rethinking-the-homes-they-build/\n\n3️⃣ *Give land free for 99.4km road* → check the road reserve\nhttps://www.newvision.co.ug/category/news/leaders-ask-residents-to-surrender-land-for-9-NV_244619_112026\n\n4️⃣ *Buganda wants its debt paid* → check the lease\nhttps://www.pulse.ug/story/buganda-kingdom-pushes-government-to-expedite-payment-of-outstanding-properties-compensation-debt-2026112207320007228\n\n5️⃣ *Museveni: keep family land whole* → get all heirs' consent\nhttps://www.pulse.ug/story/museveni-warns-family-members-on-splitting-up-rwakitura-estate-2026112118251286700\n\nReply STOP if you don't want the brief.\nPhillip, makaug.com"
+}
