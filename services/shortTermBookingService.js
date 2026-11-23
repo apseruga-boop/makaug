@@ -833,8 +833,11 @@ async function checkInIsLastSent(db, phone) {
     [[digits, `+${digits}`]]
   ).catch(() => ({ rows: [] }))).rows[0];
   const text = String(row?.text || '');
-  // The check-in, or our answer to it ("Reply 1 when it is open again").
-  return text.includes(WEEKLY_CHECKIN_ASKS) || /\bmarked (?:open for bookings|fully booked|paused) this week\b/.test(text);
+  // The check-in, or our answer to it ("Reply 1 when it is open again"), or a
+  // check-in in the words used until 23 Nov 2026, sent or held before then.
+  return text.includes(WEEKLY_CHECKIN_ASKS)
+    || /\bmarked (?:open for bookings|fully booked|paused) this week\b/.test(text)
+    || /^Monday check-in\n[\s\S]*\bReply 1 Open, 2 Fully booked, 3 Paused\./.test(text);
 }
 
 async function applyStayWeeklyReply(db, phone, weekly, { dryRun = false } = {}) {

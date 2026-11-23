@@ -127,6 +127,10 @@ test('a bare "1" is an answer to the check-in only while the check-in is the las
   assert.strictEqual((await stays.handleHostStayReply(answered, { phone: '+256700000232', body: '1' })).handled, true);
   const afterOurThanks = hostDb({ rows: [STAY('63')], lastSent: 'Thanks 👍 *Studio in Kisaasi* (ST-000051) is marked paused this week.' });
   assert.strictEqual((await stays.handleHostStayReply(afterOurThanks, { phone: '+256700000232', body: '1' })).handled, true);
+  // A check-in in the old words, sent this morning or held until the host writes.
+  const oldWords = hostDb({ rows: [STAY('63')], lastSent: 'Monday check-in\nproperty for rent in Kisaasi\nBlocked dates: none on the calendar.\nReply 1 Open, 2 Fully booked, 3 Paused.\nOpen: https://makaug.com/v/x' });
+  assert.strictEqual((await stays.handleHostStayReply(oldWords, { phone: '+256700000232', body: '1' })).handled, true, 'the old check-in is answered too');
+  assert.strictEqual(oldWords.updates.length, 1);
   const somethingElse = hostDb({ rows: [STAY('63')], lastSent: 'Hi, we have a request for you: someone is looking for a single room.' });
   const reply = await stays.handleHostStayReply(somethingElse, { phone: '+256700000232', body: '1' });
   assert.strictEqual(reply.handled, false, 'the "1" is left for whatever asked it');
