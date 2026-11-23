@@ -21,7 +21,7 @@ const DETAILED_LOCATIONS = [
   { name: 'Ntinda', district: 'Kampala', lat: 0.357, lng: 32.612 },
   { name: 'Naguru', district: 'Kampala', lat: 0.338, lng: 32.611 },
   { name: 'Bukoto', district: 'Kampala', lat: 0.346, lng: 32.591, aliases: ['Bukoto', 'Bukotto'] },
-  { name: 'Kisaasi', district: 'Kampala', lat: 0.364, lng: 32.589, aliases: ['Kisaasi', 'Kisasi'] },
+  { name: 'Kisaasi', district: 'Kampala', lat: 0.364, lng: 32.589, aliases: ['Kisaasi', 'Kisasi', 'Kissasi'] },
   { name: 'Kyanja', district: 'Kampala', lat: 0.384, lng: 32.596, aliases: ['Kyanja', 'Komamboga Kyanja'] },
   { name: 'Komamboga', district: 'Kampala', lat: 0.394, lng: 32.598 },
   { name: 'Kiwatule', district: 'Kampala', lat: 0.372, lng: 32.625 },

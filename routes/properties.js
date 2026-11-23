@@ -151,7 +151,7 @@ const { listingPriceQuality, IMPOSSIBLE_PRICE_UGX } = require('../utils/listingP
 const { resolveStaffPriceChoice, staffPriceExtraPatch } = require('../utils/staffPriceChoice');
 const { listingReferenceQuery } = require('../utils/listingReferenceSearch');
 const { pricePlausibility } = require('../utils/pricePlausibility');
-const { listingPhotoOrVideoCheck, summariseListingMedia, publicHasPhotoOrVideoSql, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
+const { listingPhotoOrVideoCheck, summariseListingMedia, publicHasPhotoOrVideoSql, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE, FOUND_ONLINE_REAL_PHOTO_CHECK_KEY, ownPropertyPhotoCount } = require('../utils/realListingPhoto');
 const { publicListingAreaRedirectPath } = require('../services/publicSeoService');
 const { listingDataIntegrityReport } = require('../utils/listingDataIntegrity');
 const { CANONICAL_PROPERTY_CURRENCY, propertyPriceMetadata, configuredRateToCanonicalCurrency, normalizePricePeriodForWrite } = require('../utils/propertyPriceCurrency');
@@ -5652,6 +5652,29 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           override_available: false,
           photo_check: photos
         });
+      }
+      // Found online (Arthur, 23 Nov 2026): the poster's video, its cover or a
+      // YouTube/TikTok/X thumbnail is not a photo of the property. Blocked until a
+      // real photo is added or a moderator overrides this check by name. The
+      // found-online exemption does not skip it.
+      if (isFoundOnlineListing(current) && !warningOverrides[FOUND_ONLINE_REAL_PHOTO_CHECK_KEY]) {
+        const imageRows = await db.query(
+          'SELECT url, slot_key, room_label FROM property_images WHERE property_id = $1',
+          [current.id || req.params.id]
+        );
+        if (ownPropertyPhotoCount(imageRows.rows) === 0) {
+          return res.status(422).json({
+            ok: false,
+            error: 'This found-online listing has no real photo of the property. Add one, or override "Found online: at least 1 real photo" after checking the video.',
+            code: 'found_online_no_real_photo',
+            approval_blocker: FOUND_ONLINE_REAL_PHOTO_CHECK_KEY,
+            details: ['Video covers, YouTube/TikTok thumbnails and X video images do not count as real photos.'],
+            missing_fields: ['warning_overrides'],
+            override_available: true,
+            override_key: FOUND_ONLINE_REAL_PHOTO_CHECK_KEY,
+            photo_check: { ...photos, own_property_photos: 0 }
+          });
+        }
       }
     }
     if (nextStatus === 'approved' && !sourcedApprovalPolicy.usesExemption) {

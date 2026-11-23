@@ -6,6 +6,7 @@ const { isPriceOnApplication } = require('../utils/listingPriceQuality');
 const { stripMarkdownEmphasis } = require('./publicListingCopy');
 const { isPointInUganda } = require('./locationSearchService');
 const { areaCentreForUnpinnedListing } = require('./listingCoordinateRepairService');
+const { ownPropertyPhotoCount } = require('../utils/realListingPhoto');
 const { normalizeUgPhoneForWhatsApp, sendWhatsAppText } = require('./whatsappNotificationService');
 
 /**
@@ -70,6 +71,7 @@ const REVIEW_CHECKS = [
   { key: 'previous_lister_checked', label: 'Previous lister history checked', overrideable: true },
   { key: 'makaug_duplicate_checked', label: 'Not duplicated on makaug', overrideable: true },
   { key: 'image_count_checked', label: 'Required property photos present' },
+  { key: 'found_online_real_photo', label: 'Found online: at least 1 real photo of the property', overrideable: true },
   { key: 'image_quality_checked', label: 'Photo manifest and URLs look usable' },
   { key: 'location_verified', label: 'Location details and map pin present' },
   { key: 'pricing_checked', label: 'Price present for listing type' },
@@ -515,6 +517,8 @@ function buildAutomatedListingReview({
   const hasPrice = String(listing.listing_type || '').toLowerCase() === 'student'
     ? (listing.price != null || priceUponApplication)
     : (Number(listing.price || 0) > 0 || priceUponApplication);
+  const foundOnline = isFoundOnlineListing(listing);
+  const ownPhotoCount = ownPropertyPhotoCount(images);
   const minRequiredImages = String(listing.listing_type || '').toLowerCase() === 'land' ? 3 : 5;
   const idDocumentUrl = listing.id_document_url || extra?.verify?.id_document_url || '';
   const idDocumentName = listing.id_document_name || extra?.verify?.id_document_name || '';
@@ -587,6 +591,18 @@ function buildAutomatedListingReview({
       usableImageUrls.length >= minRequiredImages ? 'pass' : 'fail',
       usableImageUrls.length >= minRequiredImages ? `At least ${minRequiredImages} viewable property photos are attached.` : `Fewer than ${minRequiredImages} viewable property photos are attached.`,
       { image_count: images.length, usable_image_count: usableImageUrls.length, minimum_required: minRequiredImages }
+    ),
+    // Found online: video covers and thumbnails are not photos of the property.
+    // A blocker a moderator can override after looking (approval_warnings).
+    checkResult(
+      'found_online_real_photo',
+      !foundOnline || ownPhotoCount > 0 ? 'pass' : 'fail',
+      !foundOnline
+        ? 'Not a found-online listing.'
+        : (ownPhotoCount > 0
+          ? `${ownPhotoCount} real photo${ownPhotoCount === 1 ? '' : 's'} of the property attached.`
+          : 'No real photo of the property: only the source video, its cover or thumbnails (YouTube, TikTok, X). Add a real photo, or override after checking the video shows the property.'),
+      { found_online: foundOnline, own_photo_count: ownPhotoCount, image_count: images.length }
     ),
     checkResult(
       'image_quality_checked',

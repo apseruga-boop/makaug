@@ -278,7 +278,32 @@ async function listingRealPhotoCheck(queryable, propertyId) {
   return map.get(String(propertyId || '').toLowerCase()) || summariseListingPhotos([]);
 }
 
+
+// Found-online listings (Arthur, 23 Nov 2026): rents were approved on 19-20 Nov
+// with nothing but the poster's video. A "real photo" here is one of the
+// property itself on our media host, not a picture taken from the source post:
+// YouTube thumbnails, TikTok covers and X (twimg) video thumbs don't count,
+// even when we keep our own copy (source-previews/, staff-video-cover/, the
+// harvest cover frame and video stills).
+const FOUND_ONLINE_REAL_PHOTO_CHECK_KEY = 'found_online_real_photo';
+const SOURCE_IMAGE_URL_RE = /\/(?:source-previews|staff-video-cover)\/|ytimg|youtube|youtu\.be|tiktok|twimg|byteimg/i;
+const SOURCE_IMAGE_SLOT_RE = /^(?:harvest_cover_frame|video_key_frame_|video_still_|video_recovery_still_|source_evidence)/i;
+
+function isOwnPropertyPhoto(image) {
+  if (realPhotoRejection(image) !== null) return false;
+  if (SOURCE_IMAGE_URL_RE.test(imageUrlOf(image))) return false;
+  if (image && typeof image === 'object' && SOURCE_IMAGE_SLOT_RE.test(String(image.slot_key || ''))) return false;
+  return true;
+}
+
+function ownPropertyPhotoCount(images = []) {
+  return (Array.isArray(images) ? images : []).filter(isOwnPropertyPhoto).length;
+}
+
 module.exports = {
+  FOUND_ONLINE_REAL_PHOTO_CHECK_KEY,
+  isOwnPropertyPhoto,
+  ownPropertyPhotoCount,
   NO_PHOTO_OR_VIDEO_MESSAGE,
   VIDEO_STILL_SLOT_RE,
   isVideoStillImage,

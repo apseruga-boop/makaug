@@ -125,6 +125,28 @@ const UGANDA_AREA_CENTROIDS = Object.freeze([
   { district: 'Wakiso', name: 'Nkumba', lat: 0.0948, lng: 32.507 }, // way/798396777 Nkumba University; OSM files this under Entebbe City, 10 Nov 2026
   { district: 'Wakiso', name: 'Nyanama', lat: 0.2709, lng: 32.5537 }, // node/2321506573
   { district: 'Wakiso', name: 'Sentema', lat: 0.3683, lng: 32.4056 }, // node/2229127520
+  // Third batch, 23 Nov 2026: areas of approved WhatsApp-intake and found-online
+  // listings that went live with no pin because the area had no point. Same rules
+  // (OSM place node, same district). Left out as ambiguous or not a place: Kungu,
+  // Nakawuka and Kisoga (two different villages of that name in the district),
+  // Bukerere and Namungo (rounded GNS points far from the known place), Shimoni
+  // Estate, Ssisa, Matuga, Wabusana, Mpangalo, Kiboga East (no OSM place),
+  // Buddo, Zirobwe, Maina, Wantoni, Kinoni, Tororo Eastern (only a school, road or shop).
+  // Kawoko, Kyapa, Kito and Misindye are left out too: the only live listings there
+  // name a different place in the title (Nansana Kawoko, Wakiso Bulondo Kyapa, Kira
+  // Kito, Jinja Misindye), so their stored district is wrong, not the pin.
+  { district: 'Kampala', name: 'Kavule', lat: 0.2912, lng: 32.573 }, // relation/10548161 village, 23 Nov 2026
+  { district: 'Kassanda', name: 'Myanzi', lat: 0.4422, lng: 31.8997 }, // node/2229120411 village, 23 Nov 2026
+  { district: 'Kazo', name: 'Bishozi', lat: -0.0254, lng: 30.6159 }, // node/10073034395 village, 23 Nov 2026
+  { district: 'Kikuube', name: 'Buhimba', lat: 1.3472, lng: 31.308 }, // node/2229101332 village, 23 Nov 2026
+  { district: 'Mityana', name: 'Kikandwa', lat: 0.6372, lng: 32.0961 }, // node/2229115917 village, 23 Nov 2026
+  { district: 'Mityana', name: 'Kiteredde', lat: 0.6127, lng: 31.9909 }, // node/10068398150 village, 23 Nov 2026
+  { district: 'Mityana', name: 'Miseebe', lat: 0.4421, lng: 32.0004 }, // node/10068399937 village, 23 Nov 2026
+  { district: 'Nakaseke', name: 'Butalangu', lat: 0.8256, lng: 32.2447 }, // node/10537344167 village, 23 Nov 2026
+  { district: 'Wakiso', name: 'Kagoma', lat: 0.4018, lng: 32.5434 }, // node/2436924627 village, 23 Nov 2026
+  { district: 'Wakiso', name: 'Lukwanga', lat: 0.3614, lng: 32.4281 }, // node/9651806068 village, 23 Nov 2026
+  { district: 'Wakiso', name: 'Maganjo', lat: 0.3952, lng: 32.5429 }, // node/9651770241 village, 23 Nov 2026
+  { district: 'Wakiso', name: 'Mende', lat: 0.474, lng: 32.454 }, // node/9651772022 village, 23 Nov 2026
 ].map((item) => Object.freeze(item)));
 
 module.exports = { UGANDA_AREA_CENTROIDS };
