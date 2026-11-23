@@ -9160,6 +9160,8 @@ function isOpeningReply(message = '', lang = 'en') {
   for (const code of new Set([resolveLangCode(lang), 'en'])) {
     if (text.startsWith(friendlyUnknownReply(code).split('\n')[0])) return true;
   }
+  // A question about what a place has goes to the person talking to them.
+  if (text.startsWith(FEATURE_REPLY_OPENING)) return true;
   return /I am here with you\. Next step:|Which area\? For example Ntinda, Kira or Kyanja\.|Do you want to \*rent\* or to \*buy\*\?/.test(text);
 }
 
@@ -16134,6 +16136,57 @@ function isAffordabilityAdviceQuestion(value) {
     const escaped = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return new RegExp(`(^|[^a-z0-9])${escaped}($|[^a-z0-9])`, 'i').test(clean);
   });
+}
+
+/**
+ * "Another thing I forgot to ask you, your rooms have AC. You tell me if they
+ * have AC." (23 Nov 2026, a guest asking about short stays sent to her). makaug
+ * does not know, and does not answer for, what a place has: whoever listed it
+ * does. The rule: tell them to reach out to the listers and find out, and take
+ * no responsibility for it. A search that mentions a feature
+ * ("rooms with AC in Kira under 300k") is still a search.
+ */
+const LISTING_FEATURES = Object.freeze([
+  ['the AC', /\b(?:a\/c|ac|air[\s-]?con(?:dition(?:ing|ers?|ed)?)?s?|aircon)\b/i],
+  ['the Wi-Fi', /\b(?:wi-?fi|internet)\b/i],
+  ['the parking', /\bparking\b/i],
+  ['the hot water', /\bhot water\b/i],
+  ['the water supply', /\b(?:running water|water supply|water tank)\b/i],
+  ['the power supply', /\b(?:electricity|yaka|umeme|generator|solar power|backup power)\b/i],
+  ['the security', /\b(?:security|guards?|askari|cctv)\b/i],
+  ['the furniture', /\b(?:furnished|furniture|furnishings?)\b/i],
+  ['the kitchen', /\bkitchen\b/i],
+  ['a pool', /\b(?:swimming pool|pool)\b/i],
+  ['a gym', /\bgym\b/i],
+  ['the TV', /\b(?:tv|dstv|television|netflix)\b/i],
+  ['whether pets are allowed', /\bpets?\b/i],
+  ['the laundry', /\b(?:laundry|washing machine)\b/i]
+]);
+const FEATURE_QUESTION = /\?\s*$|^(?:do|does|is|are|has|have|can|any|what about|how about)\b|\b(?:tell me if|let me know if|do they have|does it have|do the rooms have|is there|are there|has it got|have they got)\b/i;
+const FEATURE_IN_A_SEARCH = /\b(?:do you have|have you got|looking for|searching for|i need|i want|we need|we want|need an?|want an?|show me|find me)\b[^?.!]{0,40}\b(?:house|home|room|apartment|flat|place|rental|plot|land|bungalow|villa|studio|hostel|stay|accommodation)s?\b/i;
+
+/** What a feature question is about ("the AC"), or '' when it is not one. */
+function askedAboutAFeature(value = '') {
+  const clean = normalizeInput(value).toLowerCase();
+  if (!clean || clean.length > 240) return '';
+  const feature = LISTING_FEATURES.find(([, re]) => re.test(clean));
+  if (!feature || !FEATURE_QUESTION.test(clean) || FEATURE_IN_A_SEARCH.test(clean)) return '';
+  const filters = extractNaturalSearchFilters(clean, {}, 'any', {}) || {};
+  if (Number(filters.maxBudgetUgx) > 0 || Number(filters.bedsMin) > 0) return '';
+  return feature[0];
+}
+
+const FEATURE_REPLY_OPENING = "I can't confirm things like";
+
+function featureQuestionReply(lang = 'en', feature = '') {
+  void lang;
+  return [
+    `${FEATURE_REPLY_OPENING} ${feature || 'that'} for any place on makaug. Each place is listed by its owner or agent, so please ask them directly: use the contact on the listing, or tap "See original post" for places found online.`,
+    '',
+    "makaug only helps you find places. We don't own, rent out or manage them, and we're not responsible for their features, availability or any agreement you make. Please view the place before you pay anything.",
+    '',
+    `Our terms: ${HOME_URL}/terms`
+  ].join('\n');
 }
 
 /**
@@ -24340,6 +24393,12 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     return respond(t(lang, 'askAgentArea'), 'agent_area');
   }
 
+  // "Do your rooms have AC?" is for whoever listed the place (23 Nov 2026).
+  const featureAsked = ['greeting', 'main_menu', 'search_type', 'search_area'].includes(step) ? askedAboutAFeature(cleanBody) : '';
+  if (featureAsked) {
+    return respond(featureQuestionReply(lang, featureAsked), step === 'search_area' ? 'search_area' : 'main_menu');
+  }
+
   // "What is needed to get a house?" is a question about renting, not a search for "house".
   if (
     ['greeting', 'main_menu', 'search_type', 'search_area'].includes(step)
@@ -28526,6 +28585,8 @@ module.exports.__test = {
   logWhatsappMessage,
   looksLikeForwardedProperty,
   isVoiceMediaType,
+  askedAboutAFeature,
+  featureQuestionReply,
   looksLikeSearchBrief,
   formatAgentSearchMessage,
   whatsappAgentKeywordScore,
