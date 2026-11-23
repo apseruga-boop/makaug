@@ -121,7 +121,13 @@ test('borrowed centroids: every area centroid sits in its district and fills a c
     mukono: [0.353, 32.753, 50],
     buikwe: [0.449, 33.177, 50],
     luwero: [0.8492, 32.4731, 50],
-    mpigi: [0.057, 32.096, 50]
+    mpigi: [0.057, 32.096, 50],
+    // 23 Nov 2026: rural intake areas (approximate district centres, km radius).
+    mityana: [0.417, 32.042, 60],
+    kassanda: [0.55, 31.8, 60],
+    nakaseke: [0.9, 32.2, 60],
+    kazo: [-0.05, 30.75, 60],
+    kikuube: [1.2, 31.0, 60]
   };
   for (const item of UGANDA_AREA_CENTROIDS) {
     const centre = centres[String(item.district).toLowerCase()];

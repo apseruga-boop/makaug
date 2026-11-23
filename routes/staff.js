@@ -5,6 +5,7 @@ const db = require('../config/database');
 const logger = require('../config/logger');
 const { changeStaffPropertyImage, addStaffPropertyImages, removeStaffPropertyVideo, moveOrSwapStaffPropertyVideo } = require('../services/staffPropertyMediaService');
 const { requireStaffAccess } = require('../middleware/auth');
+const { autoPinForApproval } = require('../services/listingCoordinateRepairService');
 const { cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS, LISTING_TYPES, listingTypeMatchSql } = require('../utils/constants');
@@ -30,7 +31,7 @@ const {
 } = require('../utils/listingApprovalAgentGuard');
 const { listingDirectLookup, listingDirectLookupClause, propertyListingSearchClause } = require('../utils/listingReferenceSearch');
 const { computedListingTotal, normalizeLandSizeUnit, normalizePriceUnit } = require('../utils/listingLandPrice');
-const { loadListingMediaSummaries, listingPhotoOrVideoCheck, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE } = require('../utils/realListingPhoto');
+const { loadListingMediaSummaries, listingPhotoOrVideoCheck, NO_REAL_PHOTO_CODE, NO_PHOTO_OR_VIDEO_MESSAGE, FOUND_ONLINE_REAL_PHOTO_CHECK_KEY, ownPropertyPhotoCount } = require('../utils/realListingPhoto');
 const { categoryAmbiguousClearedExtra, listingDataIntegrityReport, moderationReasonWithoutCategoryAmbiguous } = require('../utils/listingDataIntegrity');
 const {
   districtForKnownArea,
@@ -40,7 +41,7 @@ const {
 } = require('../utils/ugandaLocationHierarchy');
 const { canonicalizeUgandaLocation, normalizeDistrict } = require('../utils/locationRegistry');
 const { addLeadActivity, CLOSED_LEAD_STATUSES, LEAD_STATUSES, normalizeLeadStatus } = require('../services/leadService');
-const { buildAutomatedListingReview, normalizeReviewChecklist } = require('../services/listingModerationService');
+const { buildAutomatedListingReview, normalizeReviewChecklist, isFoundOnlineListing } = require('../services/listingModerationService');
 const { getCachedExternalDuplicateScan } = require('../services/externalDuplicateScanService');
 const { getProviderClient, getProviderMeta, getTaskModel } = require('../services/llmProvider');
 const {
@@ -4051,13 +4052,47 @@ function clearPublicListingCaches(reason = 'staff_listing_changed') {
 }
 
 // Approve-decisions for listings without a real hosted photo become holds.
+// Found online (Arthur, 23 Nov 2026): bulk approve needs a real photo of the
+// property, not just the poster's video or its cover. Bulk has no override, so
+// these are held for a moderator to open, check and override one by one.
+const FOUND_ONLINE_NO_REAL_PHOTO_MESSAGE = 'Found online with no real photo of the property (only the video, its cover or thumbnails). Open it to add a photo or override.';
+
+async function ownPropertyPhotoCounts(queryable, propertyIds = []) {
+  const ids = [...new Set(propertyIds.map((id) => String(id || '').toLowerCase()).filter(Boolean))];
+  const counts = new Map(ids.map((id) => [id, 0]));
+  if (!ids.length) return counts;
+  const result = await queryable.query(
+    'SELECT property_id::text AS property_id, url, slot_key, room_label FROM property_images WHERE property_id = ANY($1::uuid[])',
+    [ids]
+  );
+  const byId = new Map();
+  for (const row of result.rows || []) {
+    if (!byId.has(row.property_id)) byId.set(row.property_id, []);
+    byId.get(row.property_id).push(row);
+  }
+  for (const id of ids) counts.set(id, ownPropertyPhotoCount(byId.get(id) || []));
+  return counts;
+}
+
 async function applyStaffBulkRealPhotoGate(decisions = [], queryable = db) {
   const approveIds = decisions.filter((item) => item.decision === 'approve').map((item) => item.id);
   if (!approveIds.length) return decisions;
-  const photos = await loadListingMediaSummaries(queryable, approveIds);
+  const [photos, ownPhotos] = await Promise.all([
+    loadListingMediaSummaries(queryable, approveIds),
+    ownPropertyPhotoCounts(queryable, approveIds)
+  ]);
   return decisions.map((item) => {
     if (item.decision !== 'approve') return item;
     const summary = photos.get(String(item.id).toLowerCase());
+    if (summary && summary.ok && !ownPhotos.get(String(item.id).toLowerCase())) {
+      return {
+        ...item,
+        decision: 'hold',
+        reason: FOUND_ONLINE_REAL_PHOTO_CHECK_KEY,
+        details: [FOUND_ONLINE_NO_REAL_PHOTO_MESSAGE],
+        photo_check: { ...summary, own_property_photos: 0 }
+      };
+    }
     if (summary && summary.ok) return item;
     return {
       ...item,
@@ -4073,6 +4108,7 @@ async function approveStaffBulkFoundOnlineListing(client, req, row = {}) {
   // Checked again inside the transaction; the caller skips a null result.
   const photos = await listingPhotoOrVideoCheck(client, row.id);
   if (!photos.ok) return null;
+  if (!(await ownPropertyPhotoCounts(client, [row.id])).get(String(row.id).toLowerCase())) return null;
   const linkedAgent = await loadLinkedAgentStatus(client, row.agent_id);
   if (evaluatePendingAgentApproval({ agent: linkedAgent }).blocked) return null;
   const reason = 'Staff QA - found-online source verified';
@@ -4141,7 +4177,7 @@ async function approveStaffBulkFoundOnlineListing(client, req, row = {}) {
            || jsonb_build_object('moderation_reason', $5::text, 'review_warning_overrides', $6::jsonb)
            || $7::jsonb
      WHERE id = $1
-     RETURNING id, title, status`,
+     RETURNING id, title, status, area, district, latitude, longitude, extra_fields`,
     [
       row.id,
       reviewerUserId,
@@ -4174,7 +4210,30 @@ async function approveStaffBulkFoundOnlineListing(client, req, row = {}) {
       })
     ]
   );
-  return result.rows[0] || { id: row.id, title: row.title, status: 'approved' };
+  // Same as the single Approve (routes/properties.js): an approved listing with no
+  // pin gets its own area centre, marked approximate. Bulk approve used to skip it.
+  const approved = result.rows[0];
+  if (approved) {
+    const autoPin = autoPinForApproval({
+      area: approved.area,
+      district: approved.district,
+      latitude: approved.latitude,
+      longitude: approved.longitude,
+      extra_fields: approved.extra_fields || {},
+      by: actorId(req) || 'staff_bulk_approval'
+    });
+    if (autoPin) {
+      await client.query(
+        `UPDATE properties
+            SET latitude = $2, longitude = $3,
+                extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $4::jsonb
+          WHERE id = $1 AND latitude IS NULL AND longitude IS NULL`,
+        [approved.id, autoPin.latitude, autoPin.longitude, JSON.stringify(autoPin.extra_fields_patch)]
+      );
+    }
+    return { id: approved.id, title: approved.title, status: approved.status };
+  }
+  return { id: row.id, title: row.title, status: 'approved' };
 }
 
 async function rejectStaffBulkFoundOnlineListing(client, req, row = {}, decision = {}) {
@@ -5376,6 +5435,19 @@ router.patch('/properties/:id/review', async (req, res, next) => {
           code: NO_REAL_PHOTO_CODE,
           override_available: false,
           photo_check: photos
+        });
+      }
+      const overrides = { ...(req.body?.warning_overrides || {}), ...(reviewPatch?.warning_overrides || {}) };
+      const listingRow = (await db.query('SELECT id, source, listed_via, extra_fields FROM properties WHERE id = $1', [req.params.id])).rows[0];
+      if (listingRow && isFoundOnlineListing(listingRow) && !overrides[FOUND_ONLINE_REAL_PHOTO_CHECK_KEY]
+        && !(await ownPropertyPhotoCounts(db, [req.params.id])).get(String(req.params.id).toLowerCase())) {
+        return refuseStaffReviewSave(req, res, reviewPatch, 422, {
+          error: FOUND_ONLINE_NO_REAL_PHOTO_MESSAGE,
+          code: 'found_online_no_real_photo',
+          approval_blocker: FOUND_ONLINE_REAL_PHOTO_CHECK_KEY,
+          override_available: true,
+          override_key: FOUND_ONLINE_REAL_PHOTO_CHECK_KEY,
+          photo_check: { ...photos, own_property_photos: 0 }
         });
       }
     }
