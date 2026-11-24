@@ -82,7 +82,25 @@
     return m ? '+256 ' + m[1] + ' ' + m[2] + ' ' + m[3] : d;
   }
   function sameText(a, b) { var k = function (t) { return String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }; return k(a) === k(b); }
-  function firstName(n) { return String(n || '').replace(/\(.*?\)/g, '').replace(/^TEST\s*[–-]\s*/, '').trim().split(/\s+/)[0] || ''; }
+  // Never somebody's name: where we found the number, or a stand-in (Arthur, 24 Nov 2026).
+  // The word lists come from the server (services/callingNames.js), which checks again.
+  function nameProblem(n) {
+    var W = boot && boot.name_words; if (!W) return '';
+    var raw = String(n == null ? '' : n).trim();
+    var shown = raw.length > 40 ? raw.slice(0, 40) + '…' : raw;
+    if ((raw.match(/\p{L}/gu) || []).length < 2) return raw ? '"' + shown + '" is not a name.' : 'There is no name for them yet.';
+    if (/^n\s*\/\s*a$/i.test(raw)) return '"' + shown + '" is not a name.';
+    if (/(?:https?:|www\.|@|\.(?:com|ug|net|org|co|io|me|info|biz|tv)\b)/i.test(raw)) return '"' + shown + '" is where we found them, not their name.';
+    if ((raw.match(/\d/g) || []).length >= 5) return '"' + shown + '" is a number, not a name.';
+    var list = raw.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter(function (w) { return w && !/^\d+$/.test(w); });
+    if (!list.length) return ''; // letters, all in another script
+    var has = function (arr, w) { return (arr || []).indexOf(w) >= 0; };
+    if (!list.every(function (w) { return has(W.platform, w) || has(W.placeholder, w) || has(W.generic, w); })) return '';
+    if (list.some(function (w) { return has(W.platform, w); })) return '"' + shown + '" is where we found them, not their name.';
+    if (list.some(function (w) { return has(W.placeholder, w); })) return '"' + shown + '" is not a name.';
+    return '"' + shown + '" says what they do, not who they are.';
+  }
+  function firstName(n) { if (nameProblem(n)) return ''; return String(n || '').replace(/\(.*?\)/g, '').replace(/^TEST\s*[–-]\s*/, '').trim().split(/\s+/)[0] || ''; }
   function isPhone() { return window.matchMedia && window.matchMedia('(pointer: coarse)').matches; }
   function toast(msg, kind) {
     var t = document.createElement('div');
@@ -261,6 +279,7 @@
     '.mkc-blk.k-existing{border-left-color:#7c3aed}.mkc-blk.k-new{border-left-color:#0ea5e9}.mkc-blk.k-housekeeping{border-left-color:#f59e0b}.mkc-blk.k-lunch{border-left-color:#cbd5e1;flex:0 0 90px;min-width:90px}.mkc-blk.now{box-shadow:0 0 0 2px #10b981;background:#f0fdf4}.mkc-blk.past{opacity:.7}',
     '.mkc-say{background:#ecfdf5;border:2px solid #10b981;border-radius:14px;padding:12px 14px;margin:6px 0 10px}.mkc-say span{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#047857}.mkc-say p{margin:4px 0 0;font-size:19px;line-height:1.45;color:#0f172a}',
     '.mkc-routehead{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#334155;margin:4px 0 6px}',
+    '.mkc-namewarn{background:#fffbeb;border:2px solid #f59e0b;border-radius:12px;padding:8px 12px;margin:6px 0;color:#78350f;font-size:14px;line-height:1.4}.mkc-namehint{font-size:13px;margin-top:4px;color:#047857;font-weight:700}.mkc-namehint.bad{color:#b45309}.mkc-hk.hot{border-color:#f59e0b;background:#fffbeb}',
     '.mkc-replies{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}.mkc-reply{border:2px solid #cbd5e1;background:#fff;color:#0f172a;border-radius:12px;padding:12px 12px;font:inherit;font-weight:800;font-size:15px;text-align:left;cursor:pointer;min-height:52px}.mkc-reply:hover{border-color:#0ea5e9;background:#f0f9ff}',
     '.mkc-reply.fin{border-color:#a7f3d0}.mkc-reply.go{background:#047857;border-color:#047857;color:#fff}.mkc-reply.grey{background:#f1f5f9}.mkc-reply.big{font-size:18px;text-align:center;grid-column:1/-1}',
     '.mkc-crumbs{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:12px;margin-bottom:4px}.mkc-crumbs span{background:#e0f2fe;color:#075985;border-radius:99px;padding:2px 8px;font-weight:700}.mkc-crumbs i{color:#64748b;font-style:normal}',
@@ -727,12 +746,17 @@
   function loadHk() {
     api('/housekeeping?person_key=' + encodeURIComponent(S.person)).then(function (d) { if (!S) return; S.hk = d; if (S.phase === 'housekeeping') renderNum(); }, function (e) { if (S) { S.hk = { items: [], error: e.message }; renderNum(); } });
   }
-  var HK_ICON = { id: '🪪', listing: '🏠', promise: '💸' };
+  var HK_ICON = { id: '🪪', listing: '🏠', promise: '💸', name: '📝' };
   function hkHtml() {
     var H = S.hk; var b = S.split && S.split.current;
     var head = '<h4>🧹 Housekeeping' + (b && b.kind === 'housekeeping' ? ' · ' + esc(b.start) + '–' + esc(b.end) + ' · ' + b.done + '/' + b.target + ' done' : '') + '</h4>';
     if (!H) return head + '<p class="mkc-muted">Loading the follow-ups…</p>';
     var list = (H.items || []).map(function (i) {
+      // Name to fix: typed here, checked, and saved (24 Nov 2026).
+      if (i.kind === 'name') {
+        return '<div class="mkc-hk' + (i.said_hi ? ' hot' : '') + '" data-mkc-hkitem="' + esc(i.key) + '" data-mkc-hkname><div class="ic">📝</div><div class="tx"><b>' + esc(i.title) + '</b><div>' + esc(i.detail) + ' <span class="mkc-muted">' + esc(i.phone || '') + '</span></div>'
+          + '<div class="mkc-hknote" style="display:flex"><input class="mkc-input" data-mkc-hknamein autocomplete="off" placeholder="Their real name, or their business name"><button type="button" class="mkc-btn sm go" data-mkc-hknamesave>Save name</button></div><div class="mkc-namehint" data-mkc-hknamehint></div></div></div>';
+      }
       return '<div class="mkc-hk" data-mkc-hkitem="' + esc(i.key) + '"><div class="ic">' + (HK_ICON[i.kind] || '•') + '</div><div class="tx"><b>' + esc(i.title) + '</b><div>' + esc(i.detail) + ' <span class="mkc-muted">' + esc(i.phone || '') + '</span></div>' + (i.last_note ? '<div class="mkc-muted">Note: ' + esc(i.last_note) + '</div>' : '') + '<div class="mkc-hknote" style="display:none"><input class="mkc-input" data-mkc-hknotein placeholder="Short note, e.g. asked on WhatsApp"><button type="button" class="mkc-btn sm dark" data-mkc-hknotesave>Save note</button></div></div>'
         + '<div class="bt"><button type="button" class="mkc-btn sm go" data-mkc-hkdone>✓ Done</button><button type="button" class="mkc-btn sm ghost" data-mkc-hknote>Note</button></div></div>';
     }).join('');
@@ -740,7 +764,23 @@
       + '<div class="mkc-row" style="margin-top:10px"><button type="button" class="mkc-btn go" data-mkc-hkback>📞 Back to calls</button></div>';
   }
   function bindHk(el) {
+    qa('[data-mkc-hkname]', el).forEach(function (row) {
+      var key = row.getAttribute('data-mkc-hkitem');
+      var input = q('[data-mkc-hknamein]', row); var hint = q('[data-mkc-hknamehint]', row); var btn = q('[data-mkc-hknamesave]', row);
+      input.oninput = function () { hint.innerHTML = nameHint(input.value); };
+      btn.onclick = function () {
+        var name = input.value.trim(); var p = name ? nameProblem(name) : 'Type their name.';
+        if (p) { hint.innerHTML = '<span class="bad">' + esc(p + ' ' + (boot.name_ask || '')) + '</span>'; return; }
+        btn.disabled = true;
+        api('/housekeeping/name', { method: 'POST', body: { person_key: S.person, key: key, name: name } }).then(function (out) {
+          toast(out && out.approved ? 'Saved ✓ ' + name + ' is approved and their welcome is on its way' : 'Saved ✓');
+          S.hk.items = S.hk.items.filter(function (i) { return i.key !== key; });
+          renderNum(); loadSplit(); loadCounts();
+        }, function (e) { btn.disabled = false; hint.innerHTML = '<span class="bad">' + esc(e.message) + '</span>'; });
+      };
+    });
     qa('[data-mkc-hkitem]', el).forEach(function (row) {
+      if (row.hasAttribute('data-mkc-hkname')) return;
       var key = row.getAttribute('data-mkc-hkitem');
       var send = function (status, note) {
         api('/housekeeping/done', { method: 'POST', body: { person_key: S.person, key: key, status: status, note: note || '' } }).then(function () {
@@ -917,6 +957,7 @@
       + (S.fellBack ? '<div class="mkc-fellback" data-mkc-fellback>📭 <b>' + esc(S.fellBack.from) + '</b> ran out, so these are <b>' + esc(S.fellBack.to) + '</b> numbers.</div>' : '')
       + '<h4>' + esc(MODE_LABEL[task.key] || task.name) + (d.resumed ? ' · picked up where you left off' : '') + '</h4>'
       + '<div class="name">' + esc(a.name || 'Name not known') + '</div>'
+      + (nameProblem(a.name) || a.name_problem ? '<div class="mkc-namewarn" data-mkc-namewarn>📝 <b>No name for this number yet.</b> ' + esc(nameProblem(a.name) || a.name_problem) + ' Ask who you are speaking with: you can\'t save the call without their name.</div>' : '')
       + '<div class="src">' + esc(a.reason && String(a.source_label || '').indexOf(a.reason) >= 0 ? String(a.source_label).replace(' · ' + a.reason, '') : (a.source_label || '')) + '</div>'
       + (a.reason ? '<span class="mkc-reason' + (a.source_kind === 'callback' ? ' mkc-cb' : '') + '">' + esc(a.reason) + '</span>' : '')
       + '<div class="mkc-phone">' + esc(boot.sandbox && a.phone_masked && !/^7000001\d{2}$/.test(String(a.phone || '').replace(/\D/g, '').slice(-9)) ? a.phone_masked : prettyPhone(a.phone)) + '</div>';
@@ -1419,11 +1460,13 @@
         + CB_CHIPS.concat(bestChip()).map(function (x) { return '<button type="button" class="mkc-chip' + (w.quick === x[0] ? ' on' : '') + '" data-mkc-quick="' + x[0] + '">' + x[1] + '</button>'; }).join('')
         + '<input type="datetime-local" class="mkc-input" data-mkc-when min="' + esc(localInput(new Date(Date.now() + 24 * 3600000))) + '" value="' + esc(w.callback) + '"></div></div>';
     }
-    if (needsName(task, o)) {
-      if (w.shownName == null) w.shownName = a.name || '';
+    if (needsName(task, o) || nameRequired(task, o)) {
+      // Never pre-filled with "tiktok.com" or "Unnamed" (24 Nov 2026).
+      if (w.shownName == null) w.shownName = nameProblem(a.name) ? '' : (a.name || '');
       var tailNum = a.phone_masked || ('•••' + String(a.phone || '').replace(/\D/g, '').slice(-3));
-      f += '<div class="f wide" data-mkc-interested><label>Their name, as they want it shown <small>(we greet them with it when they say Hi)</small></label><input class="mkc-input" data-mkc-shownname autocomplete="off" placeholder="e.g. Sarah Namubiru" value="' + esc(w.shownName) + '">'
-        + '<label class="mkc-confirm" style="display:flex;gap:8px;align-items:center;margin-top:6px;font-weight:700"><input type="checkbox" data-mkc-phoneok' + (w.phoneOk ? ' checked' : '') + '> I read the number back to them: <b>' + esc(tailNum) + '</b> is right</label></div>';
+      f += '<div class="f wide" data-mkc-interested><label>' + (needsName(task, o) ? 'Their name, as they want it shown <small>(we greet them with it when they say Hi)</small>' : 'Their name <small>(we don\'t have it: ' + esc(nameProblem(a.name)) + ')</small>') + '</label><input class="mkc-input" data-mkc-shownname autocomplete="off" placeholder="Ask them: what name should we put on your makaug page?" value="' + esc(w.shownName) + '">'
+        + '<div class="mkc-namehint" data-mkc-namehint>' + nameHint(w.shownName) + '</div>'
+        + (needsName(task, o) ? '<label class="mkc-confirm" style="display:flex;gap:8px;align-items:center;margin-top:6px;font-weight:700"><input type="checkbox" data-mkc-phoneok' + (w.phoneOk ? ' checked' : '') + '> I read the number back to them: <b>' + esc(tailNum) + '</b> is right</label>' : '') + '</div>';
     }
     if (o.key !== 'no_answer') {
       var mustType = noteMustBeTyped(o);
@@ -1441,6 +1484,16 @@
   }
   // Interested on a new-agents call: the name they want shown and the number, checked with them (Arthur, 22 Nov 2026).
   function needsName(task, o) { return Boolean(o && o.key === 'interested' && task && task.key === 'new_agents'); }
+  // A call that goes on, to a number the list has no real name for: their name, before it can be saved.
+  function nameRequired(task, o) {
+    var a = S && S.cur && S.cur.attempt;
+    return Boolean(o && !needsName(task, o) && a && nameProblem(a.name) && (boot.name_needed_outcomes || []).indexOf(o.key) >= 0);
+  }
+  function nameHint(v) {
+    var t = String(v || '').trim(); if (!t) return '';
+    var p = nameProblem(t);
+    return p ? '<span class="bad">' + esc(p) + '</span>' : 'We\'ll greet them: <b>Hi ' + esc(firstName(t) || t) + '! 👋</b>';
+  }
   function localInput(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
   function quickDate(k) {
     var min = Date.now() + 24 * 3600000; var d;
@@ -1470,6 +1523,8 @@
     var hb = q('[data-mkc-hello]', el); if (hb) hb.onclick = function () { saveWrapInputs(el); w.checklist.asked_hello = !w.checklist.asked_hello; w.checklist.wa_hi = w.checklist.asked_hello; renderWrap(task, a); };
     var sb = q('[data-mkc-save]', el); if (sb) sb.onclick = function () { saveWrap(task, a); };
     var nt = q('[data-mkc-note]', el); if (nt) nt.oninput = function () { w.autoNote = false; w.typed = true; };
+    var snmIn = q('[data-mkc-shownname]', el); var snmHint = q('[data-mkc-namehint]', el);
+    if (snmIn && snmHint) snmIn.oninput = function () { w.shownName = snmIn.value; snmHint.innerHTML = nameHint(snmIn.value); };
   }
   // No transcript means the typed note is the only record of the call (Arthur, 23 Nov 2026).
   function hasTranscript() { return Boolean(TX && TX.text && TX.text.replace(/\s+/g, '').length >= 3); }
@@ -1485,9 +1540,12 @@
     var minCb = Date.now() + 24 * 3600000 - 5 * 60000;
     var err = !o ? 'Tap what happened.' : (o.date === 'required' && !w.callback ? 'Pick when to call back.' : (w.callback && new Date(w.callback).getTime() < minCb ? 'Call backs are at least 24 hours away. Pick tomorrow or later.' : ''));
     if (!err && noteMustBeTyped(o) && (!w.typed || noteIsShort(w.note))) err = 'Live notes are off, so type a few words about what they said (e.g. “has 3 rentals, will say Hi tonight”).';
-    if (!err && needsName(task, o)) {
-      if (String(w.shownName || '').replace(/[^A-Za-z\u00C0-\u024F]/g, '').length < 2) err = 'Type their name, as they want it shown.';
-      else if (!w.phoneOk) err = 'Read the number back to them and tick that it is right.';
+    if (!err && (needsName(task, o) || nameRequired(task, o))) {
+      var givenName = String(w.shownName || '').trim();
+      var givenProblem = nameProblem(givenName);
+      if (String(givenName).replace(/[^A-Za-z\u00C0-\u024F]/g, '').length < 2) err = 'Type their name' + (needsName(task, o) ? ', as they want it shown.' : '. ') + (needsName(task, o) ? '' : (boot.name_ask || ''));
+      else if (givenProblem) err = givenProblem + ' ' + (boot.name_ask || '');
+      else if (needsName(task, o) && !w.phoneOk) err = 'Read the number back to them and tick that it is right.';
     }
     if (!err && o.close) {
       var miss = task.checklist.filter(function (c) { return c.required && !w.checklist[c.key]; }).map(function (c) { return c.label; })
@@ -1500,9 +1558,9 @@
     var cbIso = w.callback && o.date ? new Date(w.callback).toISOString() : null;
     S.loadT0 = Date.now();
     op('/attempts/' + a.id + '/wrapup', { session_id: S.id, outcome: w.outcome, note: w.note, checklist: w.checklist, callback_at: cbIso, next_step: w.next || '', transcript: txPayload(),
-      contact_name: needsName(task, o) ? String(w.shownName || '').trim() : undefined, phone_confirmed: needsName(task, o) ? Boolean(w.phoneOk) : undefined })
+      contact_name: (needsName(task, o) || nameRequired(task, o)) ? String(w.shownName || '').trim() : undefined, phone_confirmed: needsName(task, o) ? Boolean(w.phoneOk) : undefined })
       .then(function (done) {
-        S.lastDone = { id: a.id, name: needsName(task, o) ? String(w.shownName || '').trim() : a.name, profile: done && done.profile ? done.profile : null, lang: S.lang, area: S.seeker ? S.seeker.area : '', link: S.seeker ? S.seeker.link : '', smsLogged: Boolean(S.seeker && w.outcome === 'seeker_texted'),
+        S.lastDone = { id: a.id, name: (needsName(task, o) || nameRequired(task, o)) ? String(w.shownName || '').trim() : a.name, profile: done && done.profile ? done.profile : null, lang: S.lang, area: S.seeker ? S.seeker.area : '', link: S.seeker ? S.seeker.link : '', smsLogged: Boolean(S.seeker && w.outcome === 'seeker_texted'),
           kind: (S.route && S.route.path || []).some(function (x) { return x.from === 'pitch_owner' || x.to === 'pitch_owner'; }) || String(S.callerKind || '') === 'owner' ? 'owner' : 'agent', phone: a.phone, outcome: w.outcome, callback_at: cbIso, task: S.task, label: o.label, note: w.note || '', next: w.next || '',
           talk_s: S.callStart ? Math.max(0, Math.round(((S.callEnd || Date.now()) - S.callStart) / 1000)) : null, hi: Boolean(w.checklist && w.checklist.asked_hello) };
         S.saved = (S.saved || 0) + 1;

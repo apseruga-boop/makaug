@@ -26758,6 +26758,24 @@ async function processInboundRuntimeUnlocked({
       logger.warn('Calling hello check failed:', error.message || String(error));
       return null;
     });
+  // Their name on file isn't theirs ("tiktok.com"): a kind hello, and they wait
+  // for the caller to get it (Arthur, 24 Nov 2026). A second hello the same
+  // day is not answered again.
+  if (calledHello?.held) {
+    deferWhatsappWork('WhatsApp calling hello held intent log', () => logIntent({
+      userPhone: phone,
+      waMessageId: inboundMessageId,
+      detectedIntent: 'agent_registration',
+      confidence: 1,
+      language: sessionLang,
+      currentStep: sessionStep,
+      rawText: effectiveBody,
+      transcript: null,
+      entities: { via: 'calling_hello_held_for_name' },
+      modelUsed: 'calling_hello'
+    }));
+    return { message: calledHello.message || '', nextStep: sessionStep };
+  }
   if (calledHello?.message && calledHello.agent) {
     await replaceEmployeeSession(phone, 'employee_property_media', agentSelfIntakeSessionData(calledHello.agent));
     sendCalledAgentWelcomePack(calledHello.agent);

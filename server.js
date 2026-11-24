@@ -2952,6 +2952,8 @@ async function start() {
     startGreetingNameCache(db);
     startBillingScheduler(db);
     require('./services/payLinkService').startPayLinkScheduler(db);
+    // Every morning, the callers' "Names to fix" as a message from King on their dashboard (24 Nov 2026).
+    require('./services/callingNames').startNameDigest();
     // Agents who cancelled: their ID and personal details are deleted 30 days
     // after removal (name and number kept), unless they are restored first.
     require('./services/agentGoodbyeService').startFormerAgentDetailScheduler(db, {
