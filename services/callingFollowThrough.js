@@ -128,9 +128,10 @@ function welcomeText(name, caller) {
 /**
  * Someone wrote to us. When it is a hello from a number logged Interested on a call
  * (a pending calling profile), approve them, mark Said Hi and set the next-day follow-up.
+ * whatsappName: the name on the WhatsApp profile the hello came from.
  * Returns { agent, name, message } or null.
  */
-async function onHello({ phone = '', body = '', via = 'whatsapp', conversationControl = null, now = new Date() } = {}) {
+async function onHello({ phone = '', body = '', via = 'whatsapp', conversationControl = null, whatsappName = '', now = new Date() } = {}) {
   const key = tail9(phone);
   if (key.length !== 9 || !looksLikeHello(body)) return null;
   const control = conversationControl || {};
@@ -140,9 +141,17 @@ async function onHello({ phone = '', body = '', via = 'whatsapp', conversationCo
         AND (RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = $1 OR RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = $1)
       ORDER BY created_at DESC LIMIT 1`, [key, CHANNEL]))[0];
   if (!agent) return null;
-  // Saved under a name that isn't theirs ("tiktok.com", "Unnamed"): they are not
-  // greeted with it, nor approved, until the caller has their real name (Arthur, 24 Nov 2026).
-  if (names.nameProblem(agent.full_name)) return holdForName({ agent, key, via, now });
+  // Saved under a name that isn't theirs ("tiktok.com", "Unnamed"): never
+  // greeted with it (Arthur, 24 Nov 2026). The name on their WhatsApp, when it
+  // is a real one (or the one they wrote to us under before), and they are
+  // approved there and then: "we don't want to prolong the process". Only when
+  // WhatsApp has no real name for them either do they wait for the caller.
+  if (names.nameProblem(agent.full_name)) {
+    const fromWhatsapp = names.nameFromWhatsApp(whatsappName) || names.nameFromWhatsApp(await names.storedWhatsappName(key));
+    if (!fromWhatsapp) return holdForName({ agent, key, via, now });
+    const renamed = await renameProfile({ agent, key, name: fromWhatsapp, by: 'whatsapp_name' });
+    return approveCalledAgent({ agent: renamed, key, via, now });
+  }
   return approveCalledAgent({ agent, key, via, now });
 }
 
@@ -234,6 +243,28 @@ function httpError(status, message) { return Object.assign(new Error(message), {
  * and when they have already said Hi they are approved now.
  * Returns { agent_id, name, approved }.
  */
+/**
+ * A profile opened under a name that isn't theirs takes their real one,
+ * everywhere the number shows: the profile, the call list and the calls.
+ * by: who gave it ('whatsapp_name' when it came from their WhatsApp).
+ */
+async function renameProfile({ agent, key = '', name = '', by = '' } = {}) {
+  const updated = (await rows(
+    `UPDATE agents SET full_name = $2, company_name = CASE WHEN COALESCE(company_name, '') IN ('', full_name) THEN $2 ELSE company_name END,
+            greeting_name = $2, updated_at = NOW()
+      WHERE id = $1 RETURNING *`, [agent.id, name]))[0] || { ...agent, full_name: name, greeting_name: name };
+  require('./agentNameService').setCachedGreetingName(agent.id, name);
+  if (key.length === 9) {
+    await db.query('UPDATE agent_prospects SET full_name = $2, updated_at = NOW() WHERE phone_key = $1', [key, name]).catch(() => null);
+    await db.query('UPDATE call_attempts SET full_name = $2 WHERE phone_key = $1', [key, name]).catch(() => null);
+  }
+  await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ($1, 'calling_name_fixed', $2::jsonb)`,
+    [String(by || 'calling').slice(0, 120), JSON.stringify({ agent_id: agent.id, phone_tail: key.slice(-3), from_whatsapp: by === 'whatsapp_name' })]).catch(() => null);
+  // The note on the caller's dashboard that their Hi was waiting goes with it.
+  await db.query('UPDATE team_messages SET withdrawn_at = NOW() WHERE title = $1 AND withdrawn_at IS NULL', [names.saidHiTitle(agent)]).catch(() => null);
+  return updated;
+}
+
 async function fixProfileName({ agentId = '', name = '', by = '', now = new Date() } = {}) {
   const shown = cleanShownName(name);
   const problem = names.nameProblem(name) || names.nameProblem(shown);
@@ -241,19 +272,7 @@ async function fixProfileName({ agentId = '', name = '', by = '', now = new Date
   const agent = (await rows('SELECT * FROM agents WHERE id = $1 AND removed_at IS NULL', [String(agentId)]))[0];
   if (!agent) throw httpError(404, 'That profile is not there any more.');
   const key = tail9(agent.whatsapp || agent.phone);
-  const updated = (await rows(
-    `UPDATE agents SET full_name = $2, company_name = CASE WHEN COALESCE(company_name, '') IN ('', full_name) THEN $2 ELSE company_name END,
-            greeting_name = $2, updated_at = NOW()
-      WHERE id = $1 RETURNING *`, [agent.id, shown]))[0] || agent;
-  require('./agentNameService').setCachedGreetingName(agent.id, shown);
-  if (key.length === 9) {
-    await db.query('UPDATE agent_prospects SET full_name = $2, updated_at = NOW() WHERE phone_key = $1', [key, shown]).catch(() => null);
-    await db.query('UPDATE call_attempts SET full_name = $2 WHERE phone_key = $1', [key, shown]).catch(() => null);
-  }
-  await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ($1, 'calling_name_fixed', $2::jsonb)`,
-    [String(by || 'calling').slice(0, 120), JSON.stringify({ agent_id: agent.id, phone_tail: key.slice(-3) })]).catch(() => null);
-  // The note on the caller's dashboard that their Hi was waiting goes with it.
-  await db.query('UPDATE team_messages SET withdrawn_at = NOW() WHERE title = $1 AND withdrawn_at IS NULL', [names.saidHiTitle(agent)]).catch(() => null);
+  const updated = await renameProfile({ agent, key, name: shown, by });
   const prospect = key.length === 9 ? (await rows('SELECT metadata FROM agent_prospects WHERE phone_key = $1 LIMIT 1', [key]).catch(() => []))[0] : null;
   const meta = (prospect && prospect.metadata) || {};
   let approved = null;
@@ -263,4 +282,4 @@ async function fixProfileName({ agentId = '', name = '', by = '', now = new Date
   return { agent_id: agent.id, name: shown, approved: Boolean(approved) };
 }
 
-module.exports = { CHANNEL, FREE_DAYS, looksLikeHello, cleanShownName, provisionInterested, onHello, welcomeText, heldHelloText, holdForName, approveCalledAgent, fixProfileName };
+module.exports = { CHANNEL, FREE_DAYS, looksLikeHello, cleanShownName, provisionInterested, onHello, welcomeText, heldHelloText, holdForName, approveCalledAgent, renameProfile, fixProfileName };
