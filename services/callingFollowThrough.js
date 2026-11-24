@@ -22,8 +22,6 @@ const logger = require('../config/logger');
 
 const CHANNEL = 'calling_interested';
 const FREE_DAYS = 3;
-const MONTHLY_UGX = 50000;
-const MOMO_CODE = '27248497';
 
 const tail9 = (v) => String(v || '').replace(/\D/g, '').slice(-9);
 const clean = (v, n = 80) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -107,13 +105,13 @@ async function provisionInterested(attempt, { name, phone, caller = '' } = {}) {
   return { agent_id: agent.id, created, status: agent.status, name: shown };
 }
 
+// The welcome pack follows a few seconds later (24 Nov 2026): their page, the
+// agent terms, how to post, and the free days, so this says hello and no more.
 function welcomeText(name, caller) {
   return [
     `Hi ${name}! 👋 Welcome to makaug.com. ${caller} told us you would say Hi.`,
     '',
-    'Your agent account is ready. Send the photos, price and area of your first property here and we will put it up for you.',
-    '',
-    `You have ${FREE_DAYS} days to load your places and see how it works. After that it is UGX ${MONTHLY_UGX.toLocaleString('en-US')} a month by MoMo merchant code ${MOMO_CODE}.`
+    `Your agent account is ready, with ${FREE_DAYS} free days to load your places. Your welcome is on its way: your page, the agent terms and a one-minute video on how to post.`
   ].join('\n');
 }
 
@@ -160,7 +158,7 @@ async function onHello({ phone = '', body = '', via = 'whatsapp', conversationCo
       WHERE phone_key = $1`, [key, approved.id, now.toISOString(), via]).catch(() => null);
   await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('calling', 'calling_said_hi_approved', $1::jsonb)`,
     [JSON.stringify({ agent_id: approved.id, via, attempt_id: call ? call.id : null, free_until: until, phone_tail: key.slice(-3) })]).catch(() => null);
-  const name = clean(approved.greeting_name || approved.full_name, 60) || 'there';
+  const name = clean(require('./agentNameService').agentGreetingName(approved, ''), 60) || 'there';
   logger.info('Calling: said Hi, agent approved', { agent_id: approved.id, via });
   return { agent: approved, name, free_until: until, message: welcomeText(name, caller) };
 }

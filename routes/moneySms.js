@@ -61,8 +61,13 @@ router.post('/inbound', express.text({ type: 'text/*', limit: '32kb' }), async (
     // A "Hi" texted back to the company phone after an Interested call (Arthur, 22 Nov 2026):
     // the same match as on WhatsApp (approve, mark Said Hi, next-day follow-up). Best effort.
     if (sender && !(result.parsed && result.parsed.amount_ugx)) { // a repeat "Hi" from the same number is the same text: still check (onHello only acts once)
-      setImmediate(() => {
-        require('../services/callingFollowThrough').onHello({ phone: sender, body, via: 'sms' }).catch(() => null);
+      setImmediate(async () => {
+        const hello = await require('../services/callingFollowThrough').onHello({ phone: sender, body, via: 'sms' }).catch(() => null);
+        // Their welcome pack, as King's Approve sends it (24 Nov 2026). On
+        // WhatsApp it waits for them to write there, as every first message does.
+        if (hello?.agent?.id) {
+          require('./admin').runAgentApprovalFollowUps({ agentId: hello.agent.id, wasApproved: true, actor: 'calling_hello_sms' }).catch(() => null);
+        }
       });
     }
     return res.json({ ok: true, duplicate: Boolean(result.duplicate), matched: Boolean(result.matched) });

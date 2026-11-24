@@ -10203,11 +10203,17 @@ router.post('/agents/:id/remove', async (req, res, next) => {
     // know, and paying brings everything back (Arthur, 24 Nov 2026). It waits
     // for them to write first when the 7-day rule says so.
     if (reason.code === 'not_paying') {
-      result.rejoin_note = 'sending';
       setImmediate(() => {
         billingOps.sendRejoinMessage(db, { agentId: agent.id, actor })
           .catch((error) => console.warn('[agent-rejoin] removal note not sent:', error.message));
       });
+      // 24 Nov 2026: two agents removed that afternoon had not written in a
+      // week, so their notes waited for them, and King told Arthur and Ronald
+      // they had been sent. Say which.
+      const waits = await require('../services/whatsappWebBridgeService')
+        .waitsForThem(String(agent.whatsapp || agent.phone || ''))
+        .catch(() => false);
+      result.rejoin_note = waits ? 'waiting_for_them' : 'sending';
     }
     if (reason.goodbye) {
       // In the background: the film is made first so the message can say it
@@ -10236,7 +10242,7 @@ router.post('/agents/:id/remove', async (req, res, next) => {
       listingsHidden: listings.length,
       loginClosed,
       goodbye: result.goodbye || null,
-      rejoinNote: Boolean(result.rejoin_note),
+      rejoinNote: result.rejoin_note || false,
       personalDeleteAfter,
       baseUrl: agentWeeklyReports.siteUrl()
     }).catch((error) => console.warn('[agent-goodbye] removal notice not sent:', error.message));

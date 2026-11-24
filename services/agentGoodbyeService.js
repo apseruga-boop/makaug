@@ -543,6 +543,8 @@ function buildRemovalAlert({ agent = {}, reason = null, reasonText = '', by = ''
       ? '• Goodbye message and film on their way to them on WhatsApp'
       : '• No WhatsApp number on file, so no goodbye was sent');
     if (personalDeleteAfter) lines.push(`• Their ID and personal details are deleted on ${kampalaDay(personalDeleteAfter)} unless they are restored before then`);
+  } else if (rejoinNote === 'waiting_for_them') {
+    lines.push("• A kind note with their payment link is ready. They haven't written to makaug in the last 7 days, so it goes the moment they do; when they pay, everything comes back by itself");
   } else if (rejoinNote) {
     lines.push('• They were sent a kind note with their payment link; when they pay, everything comes back by itself');
   } else {
