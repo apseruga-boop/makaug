@@ -10985,16 +10985,25 @@ router.put('/revenue/settings/:key', async (req, res, next) => {
   }
 });
 
+// What a removed agent has just sent, for their kind note: a plot, a property, or nothing.
+function rejoinSentThing(value) {
+  const thing = cleanText(value || '').toLowerCase();
+  return ['plot', 'property'].includes(thing) ? thing : '';
+}
+
 // Preview any billing message before sending it.
 router.get('/revenue/agents/:id/billing-message/:kind', async (req, res, next) => {
   try {
-    const agent = (await db.query('SELECT id, full_name, greeting_name, paid_until, monthly_fee_ugx FROM agents WHERE id = $1::uuid', [req.params.id])).rows[0];
+    const agent = (await db.query('SELECT id, full_name, greeting_name, paid_until, monthly_fee_ugx, removed_at, removed_reason, removal_snapshot FROM agents WHERE id = $1::uuid', [req.params.id])).rows[0];
     if (!agent) return res.status(404).json({ ok: false, error: 'Agent not found' });
     const settings = await billingOps.getSettings(db, { fresh: true });
-    const payLink = ['pre_due', 'due_today', 'reminder', 'final_reminder', 'taken_down'].includes(req.params.kind)
+    const payLink = ['pre_due', 'due_today', 'reminder', 'final_reminder', 'taken_down', 'rejoin'].includes(req.params.kind)
       ? (await payLinks.createPayLink(db, { purpose: 'agent_subscription', agent_id: agent.id }, 'billing').catch(() => ({}))).url || ''
       : '';
-    return res.json({ ok: true, data: { text: billingOps.buildAgentBillingMessage(req.params.kind, { agent, settings, payLink }), pay_to_set: Boolean(billingOps.payToLine(settings)) } });
+    const extra = req.params.kind === 'rejoin'
+      ? { sentThing: rejoinSentThing(req.query?.sent_thing), left: agentGoodbye.removalCode(agent) === 'cancelled' }
+      : {};
+    return res.json({ ok: true, data: { text: billingOps.buildAgentBillingMessage(req.params.kind, { agent, settings, payLink, extra }), pay_to_set: Boolean(billingOps.payToLine(settings)) } });
   } catch (error) {
     return next(error);
   }
@@ -11002,6 +11011,23 @@ router.get('/revenue/agents/:id/billing-message/:kind', async (req, res, next) =
 
 router.post('/revenue/agents/:id/billing-message', async (req, res, next) => {
   try {
+    // A removed agent's kind note goes the way it goes at removal and when
+    // they write (24 Nov 2026): an older one still waiting is replaced, the
+    // day it went is kept so they are not sent it again when they reply, and
+    // it can thank them for what they have just sent.
+    if (cleanText(req.body?.kind) === 'rejoin') {
+      const note = await billingOps.sendRejoinMessage(db, { agentId: req.params.id, sentThing: rejoinSentThing(req.body?.sent_thing), actor: adminActorId(req) });
+      if (note?.skipped) {
+        return res.status(409).json({
+          ok: false,
+          error: note.skipped === 'not_removed'
+            ? 'This agent has not been removed, so there is nothing to rejoin'
+            : 'This agent was not removed for not paying or for leaving, so is not invited back'
+        });
+      }
+      await writeAudit('agent_billing_message_sent', { agent_id: req.params.id, kind: 'rejoin', status: note.status }, adminActorId(req));
+      return res.json({ ok: true, data: note });
+    }
     const result = await billingOps.sendAgentBillingMessage(db, { agentId: req.params.id, kind: cleanText(req.body?.kind), actor: adminActorId(req) });
     await writeAudit('agent_billing_message_sent', { agent_id: req.params.id, kind: result.kind, status: result.status }, adminActorId(req));
     return res.json({ ok: true, data: result });
