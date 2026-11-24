@@ -1963,19 +1963,13 @@ async function conversationalAssistantFallback({ phone, body, lang, step, intent
   return friendlyUnknownReply(lang);
 }
 
-// How long somebody's own "Talk to a person" keeps the assistant out of their chat.
-const PERSON_REQUEST_LASTS_MS = 24 * 60 * 60 * 1000;
+// 24 Nov 2026: an agent who picked "Talk to a person" on 18 Nov, and was
+// called, was told "a team member will reply here shortly" to every message
+// she sent for six days, her "Ok thanks" to a listing going live included.
+// The chat stays with the team until someone replies from King or they type
+// MENU (Arthur); what it is told while it waits is below.
 // How often a chat the team has is told its message is in the inbox.
 const HANDOFF_ACK_EVERY_MS = 12 * 60 * 60 * 1000;
-
-/** Their own "Talk to a person", a day old: the assistant answers again. */
-function personRequestHasLapsed(control = {}, now = Date.now()) {
-  if (String(control?.status || '').toLowerCase() !== 'needs_human') return false;
-  if (['off', 'copilot'].includes(String(control?.ai_mode || '').toLowerCase())) return false;
-  if (control?.metadata?.needs_person_reason !== 'asked_for_person') return false;
-  const at = Date.parse(control?.metadata?.needs_person_at || '') || 0;
-  return at > 0 && now - at > PERSON_REQUEST_LASTS_MS;
-}
 
 /** In a chat the team has: nothing to say to a thank-you, an ok or a sorry, nor a second "in the inbox" within 12 hours. */
 function handoffAckIsQuiet({ conversationControl = {}, said = '', now = Date.now() } = {}) {
@@ -27230,19 +27224,6 @@ async function processInboundRuntimeUnlocked({
     shouldPauseAutomation = false;
   }
 
-  // 24 Nov 2026: an agent who picked "Talk to a person" on 18 Nov, and was
-  // called, was still waiting for one six days later: every message she sent
-  // was answered "a team member will reply here shortly", her "Ok thanks" to
-  // a listing going live included. Asking for a person lasts a day; the team
-  // answering in King, or MENU, ends it sooner.
-  if (shouldPauseAutomation && personRequestHasLapsed(conversationControl)) {
-    await safeConversationControl(phone, {
-      status: 'open',
-      metadata: { needs_person_reason: null, needs_person_released_at: new Date().toISOString(), needs_person_released_by: 'a_day_passed' }
-    }, 'whatsapp_talk_to_person_lapsed');
-    shouldPauseAutomation = false;
-  }
-
   if (shouldPauseAutomation) {
     await updateSession(phone, { current_step: sessionStep, current_intent: intentResult.intent || null });
     await upsertWhatsappUserProfile(phone, {
@@ -29159,7 +29140,6 @@ module.exports.__test = {
   agentPropertyDetailLines,
   employeeWaitingCaptionCount,
   isCourtesyOnly,
-  personRequestHasLapsed,
   handoffAckIsQuiet,
   sendCalledAgentWelcomePack,
   settleHeldMediaBySenderTime,
