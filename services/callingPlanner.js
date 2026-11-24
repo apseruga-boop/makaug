@@ -139,18 +139,37 @@ async function housekeeping(personKey, { limit = 12 } = {}) {
          FROM call_attempts WHERE status = 'done' AND ${sandbox.REAL_PEOPLE('person_key')} ORDER BY phone_key, wrapped_at DESC) x
       WHERE x.outcome = 'promised' AND x.callback_at < NOW() - INTERVAL '1 day' AND x.phone_key NOT LIKE '${sandbox.TEST_PREFIX}%'
       ORDER BY x.callback_at ASC LIMIT $1`, [lim]).catch(() => []);
+  // Profiles opened on a call under a name that isn't theirs (24 Nov 2026): first on the list.
+  const names = await require('./callingNames').profilesToFix().catch(() => []);
   const items = [
+    ...names.map((r) => ({
+      key: `name:${r.id}`,
+      kind: 'name',
+      title: `Name to fix: "${String(r.full_name || '').slice(0, 60)}"`,
+      detail: `${r.said_hi_at ? 'Said Hi and is waiting for you. ' : ''}${r.problem} Ask them what name to put on their makaug page, then type it here.`,
+      phone: maskPhoneLast3(r.whatsapp || r.phone),
+      said_hi: Boolean(r.said_hi_at)
+    })),
     ...promises.map((r) => ({ key: `promise:${r.phone_key}`, kind: 'promise', title: `${r.full_name || 'Agent'} promised to pay, still not paid`, detail: `Promised for ${new Date(r.callback_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: TZ })}. Check MoMo, then follow up.`, phone: maskPhoneLast3(r.phone) })),
     ...ids.map((r) => ({ key: `id:${r.id}`, kind: 'id', title: `${r.full_name || 'Agent'}: no ID document`, detail: 'Ask for a clear photo of their national ID on WhatsApp so they can be verified.', phone: maskPhoneLast3(r.phone) })),
     ...listings.map((r) => ({ key: `listing:${r.id}`, kind: 'listing', title: `${r.title || 'Listing'}${r.area ? ` (${r.area})` : ''}: ${[r.photos < 2 ? `${r.photos} photo${r.photos === 1 ? '' : 's'}` : '', r.price == null ? 'no price' : '', r.dlen < 40 ? 'short description' : ''].filter(Boolean).join(', ')}`, detail: `Ask ${r.full_name || 'the agent'} for what is missing.`, phone: maskPhoneLast3(r.phone) }))
   ];
-  return { items: keep(items).slice(0, lim * 2), practice: false };
+  return { items: keep(items).slice(0, lim * 2 + names.length), practice: false };
+}
+
+/** Housekeeping → Name to fix: the real name, saved. A practice login never changes a real profile. */
+async function fixName(personKey, { key = '', name = '', by = '' } = {}) {
+  const pk = cleanKey(personKey);
+  const m = String(key || '').match(/^name:([0-9a-f-]{36})$/i);
+  if (!pk || !m) throw httpError(400, 'Pick a name to fix.');
+  if (await sandbox.isSandbox(pk)) throw httpError(409, 'Practice logins cannot change a real profile.');
+  return require('./callingFollowThrough').fixProfileName({ agentId: m[1], name, by: by || pk });
 }
 
 async function markHousekeeping(personKey, { key, note = '', status = 'done' } = {}) {
   const pk = cleanKey(personKey);
   const k = String(key || '').trim().slice(0, 120);
-  if (!pk || !/^(id|listing|promise|practice):[\w-]+$/.test(k)) throw httpError(400, 'Pick a housekeeping item.');
+  if (!pk || !/^(id|listing|promise|practice|name):[\w-]+$/.test(k)) throw httpError(400, 'Pick a housekeeping item.');
   const st = status === 'note' ? 'note' : 'done';
   const text = String(note || '').trim().slice(0, 500);
   if (st === 'note' && text.length < 2) throw httpError(400, 'Write a short note.');
@@ -176,4 +195,4 @@ function pace(plan, nowMin) {
   return { expected, done, short_by: shortBy, behind, pct: expected ? Math.round((100 * done) / expected) : null };
 }
 
-module.exports = { pace, KINDS, DEFAULT_SPLIT, getSplit, saveSplit, cleanSplit, dayPlan, housekeeping, markHousekeeping, practiceItems, toMin, kampalaMinutes };
+module.exports = { pace, KINDS, DEFAULT_SPLIT, getSplit, saveSplit, cleanSplit, dayPlan, housekeeping, markHousekeeping, fixName, practiceItems, toMin, kampalaMinutes };

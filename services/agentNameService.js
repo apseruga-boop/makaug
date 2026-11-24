@@ -42,14 +42,26 @@ function greetingFromCompanyName(name = '') {
   return short || full.replace(COMPANY_SUFFIX, '').trim() || full;
 }
 
+// 24 Nov 2026: profiles opened on a call were saved under where the number was
+// found ("tiktok.com", "WhatsApp enquirer") or a stand-in ("Unnamed"). Nobody
+// is greeted by one of those, whatever message it is: they get the fallback.
+function greetsWell(name = '') {
+  try {
+    return !require('./callingNames').nameProblem(name);
+  } catch (_error) {
+    return true;
+  }
+}
+
 function agentGreetingName(agent = {}, fallback = '') {
   // The cache is updated the moment an admin changes the name, so it wins over
   // a copy of the agent row held in a session or a lookup cache.
   const cached = agent?.id ? cache.get(String(agent.id)) : '';
-  if (cached) return greetingFromCompanyName(cached);
   const own = String(agent?.greeting_name || '').trim();
-  if (own) return greetingFromCompanyName(own);
-  return firstWord(agent?.full_name || agent?.name || agent?.agent_name || '') || fallback;
+  const name = cached ? greetingFromCompanyName(cached) : (own ? greetingFromCompanyName(own) : '');
+  if (name && greetsWell(name)) return name;
+  const first = firstWord(agent?.full_name || agent?.name || agent?.agent_name || '');
+  return first && greetsWell(first) ? first : fallback;
 }
 
 async function refreshGreetingNames(db) {

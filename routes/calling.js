@@ -196,6 +196,19 @@ function registerCallingRoutes(router, { writeAudit, actorLabel } = {}) {
   }));
   router.get('/calling/housekeeping', wrap(async (req, res) => res.json({ ok: true, data: await planner.housekeeping(req.query?.person_key) })));
   router.post('/calling/housekeeping/done', wrap(async (req, res) => res.json({ ok: true, data: await planner.markHousekeeping(req.body?.person_key, { key: req.body?.key, note: req.body?.note, status: req.body?.status }) })));
+  // Housekeeping → Name to fix (Arthur, 24 Nov 2026). A Hi that waited for it
+  // is approved, and their welcome pack goes, as King's Approve sends it.
+  router.post('/calling/housekeeping/name', wrap(async (req, res) => {
+    const out = await planner.fixName(req.body?.person_key, { key: req.body?.key, name: req.body?.name, by: actorOf(req) });
+    await audit(req, 'calling_name_fixed', { agent_id: out.agent_id, approved: out.approved });
+    if (out.approved) {
+      setImmediate(() => {
+        require('./admin').runAgentApprovalFollowUps({ agentId: out.agent_id, wasApproved: true, actor: 'calling_name_fixed' })
+          .catch((error) => console.warn('[calling] welcome after a fixed name not sent:', error.message));
+      });
+    }
+    return res.json({ ok: true, data: out });
+  }));
   router.get('/calling/my-money', wrap(async (req, res) => res.json({ ok: true, data: await day.myMoney(req.query?.person_key) })));
   // Money on the number on screen: send the pay link / MoMo code, mark "they paid".
   router.get('/calling/attempts/:id/payment', wrap(async (req, res) => {

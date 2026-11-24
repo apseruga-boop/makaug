@@ -29,6 +29,7 @@ const { staffSenderChoices, maskPhoneLast3 } = require('./outreachSenderName');
 const sandbox = require('./callingSandbox');
 const rules = require('./callingRules');
 const followThrough = require('./callingFollowThrough');
+const callingNames = require('./callingNames');
 const { phoneKey9, canonicalUgPhone, isUgandanPhone } = require('../utils/ugPhone');
 const { foundOnlinePropertySql } = require('../utils/foundOnlineSql');
 
@@ -301,6 +302,8 @@ function maskedAttempt(a = {}) {
     task_key: a.task_key,
     person_key: a.person_key,
     name: maskName(a.full_name),
+    // "tiktok.com", "Unnamed": the screen asks for their name (24 Nov 2026).
+    name_problem: callingNames.nameProblem(a.full_name) || null,
     phone: maskPhoneLast3(a.phone),
     source_kind: a.source_kind,
     direction: a.direction || 'outbound',
@@ -987,7 +990,22 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   const newAgentInterested = def.key === 'interested' && task.key === 'new_agents';
   const shownName = newAgentInterested ? followThrough.cleanShownName(contactName) : '';
   if (newAgentInterested && !shownName) throw httpError(400, 'Interested: type their name as they want it shown.');
+  // Their real name, never where we found them (Arthur, 24 Nov 2026): ten
+  // profiles opened that day as "tiktok.com", "Unnamed", "WhatsApp enquirer".
+  const shownProblem = newAgentInterested ? (callingNames.nameProblem(contactName) || callingNames.nameProblem(shownName)) : '';
+  if (shownProblem) throw httpError(400, `${shownProblem} ${callingNames.ASK}`);
   if (newAgentInterested && phoneConfirmed !== true) throw httpError(400, 'Interested: read the number back to them and tick that it is right.');
+  // A call that goes on, to a number the list has no real name for, is not
+  // saved without the name they gave.
+  const listNameProblem = callingNames.nameProblem(a.full_name);
+  const nameNeeded = !newAgentInterested && Boolean(listNameProblem) && rules.FOLLOW_UP_OUTCOMES.has(def.key);
+  const givenName = nameNeeded ? followThrough.cleanShownName(contactName) : '';
+  if (nameNeeded) {
+    const givenProblem = callingNames.nameProblem(contactName) || callingNames.nameProblem(givenName);
+    if (!givenName || givenProblem) {
+      throw httpError(400, givenName ? `${givenProblem} ${callingNames.ASK}` : `We don't have their name yet: ${listNameProblem} Type the name they gave you. ${callingNames.ASK}`);
+    }
+  }
   if (def.key === rules.SEEKER_OUTCOME.key) {
     const texted = (await rows(`SELECT 1 FROM call_sms_log WHERE attempt_id = $1 AND template = 'first_seeker' LIMIT 1`, [a.id]))[0];
     if (!texted) throw httpError(400, 'Seeker: fill in what they are looking for and open the text first (Script → Looking for a place).');
@@ -1048,6 +1066,13 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   ))[0];
   if (!out) throw httpError(409, 'This call is already wrapped up.');
   await mirrorToProspect(out, def).catch(() => null);
+  // The name they gave replaces the list's, so the next call and text use it.
+  // A practice login never changes a real number's name.
+  if (givenName && (sandbox.isTestKey(out.phone_key) || !(await sandbox.isSandbox(out.person_key)))) {
+    await db.query('UPDATE call_attempts SET full_name = $2 WHERE phone_key = $1', [out.phone_key, givenName]).catch(() => null);
+    await db.query('UPDATE agent_prospects SET full_name = $2, updated_at = NOW() WHERE phone_key = $1', [out.phone_key, givenName]).catch(() => null);
+    out.full_name = givenName;
+  }
   let profile = null;
   // Their pending agent profile under that name. A practice login never opens one for a real number.
   if (shownName && (sandbox.isTestKey(out.phone_key) || !(await sandbox.isSandbox(out.person_key)))) {
@@ -1884,6 +1909,10 @@ async function bootstrap({ userId = '', scope = '', isKing = false } = {}) {
     whatsapp_number: scripts.WHATSAPP_NUMBER,
     whatsapp_display: scripts.WHATSAPP_DISPLAY,
     close_checks: scripts.CLOSE_CHECKS,
+    // The words that are never somebody's name, the outcomes that need one, and what to ask.
+    name_words: callingNames.WORDS,
+    name_needed_outcomes: [...rules.FOLLOW_UP_OUTCOMES],
+    name_ask: callingNames.ASK,
     coach: scripts.COACH,
     scope: isKing ? 'king' : (scope || 'staff'),
     flag_labels: FLAG_LABELS

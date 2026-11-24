@@ -18,6 +18,7 @@
 const crypto = require('crypto');
 const db = require('../config/database');
 const rules = require('./callingRules');
+const names = require('./callingNames');
 const logger = require('../config/logger');
 
 const CHANNEL = 'calling_interested';
@@ -85,6 +86,12 @@ async function provisionInterested(attempt, { name, phone, caller = '' } = {}) {
       [shown, `CALL-${crypto.randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`, e164, CHANNEL,
         `[CALLING_INTERESTED] Opened when ${by} logged Interested on a call. Approved by itself when they say Hi from this number (3 free days to load places). ID still to check.`, by]))[0];
     created = true;
+  } else if (agent.status === 'pending' && names.nameProblem(agent.full_name) && !names.nameProblem(shown)) {
+    // Opened earlier under a name that isn't theirs ("tiktok.com"): the real one replaces it (24 Nov 2026).
+    agent = (await rows(
+      `UPDATE agents SET full_name = $2, company_name = CASE WHEN COALESCE(company_name, '') IN ('', full_name) THEN $2 ELSE company_name END,
+              greeting_name = $2, registered_by_name = COALESCE(registered_by_name, $3), updated_at = NOW()
+        WHERE id = $1 RETURNING *`, [agent.id, shown, by]))[0] || agent;
   } else if (agent.status === 'pending' && !clean(agent.greeting_name)) {
     agent = (await rows(`UPDATE agents SET greeting_name = $2, registered_by_name = COALESCE(registered_by_name, $3), updated_at = NOW() WHERE id = $1 RETURNING *`, [agent.id, shown, by]))[0] || agent;
   }
@@ -107,9 +114,12 @@ async function provisionInterested(attempt, { name, phone, caller = '' } = {}) {
 
 // The welcome pack follows a few seconds later (24 Nov 2026): their page, the
 // agent terms, how to post, and the free days, so this says hello and no more.
+// "the makaug team" starts a sentence with a capital.
+const sentenceStart = (text) => { const t = String(text || ''); return t.charAt(0).toUpperCase() + t.slice(1); };
+
 function welcomeText(name, caller) {
   return [
-    `Hi ${name}! 👋 Welcome to makaug.com. ${caller} told us you would say Hi.`,
+    `Hi ${name}! 👋 Welcome to makaug.com. ${sentenceStart(caller)} told us you would say Hi.`,
     '',
     `Your agent account is ready, with ${FREE_DAYS} free days to load your places. Your welcome is on its way: your page, the agent terms and a one-minute video on how to post.`
   ].join('\n');
@@ -130,6 +140,59 @@ async function onHello({ phone = '', body = '', via = 'whatsapp', conversationCo
         AND (RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = $1 OR RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = $1)
       ORDER BY created_at DESC LIMIT 1`, [key, CHANNEL]))[0];
   if (!agent) return null;
+  // Saved under a name that isn't theirs ("tiktok.com", "Unnamed"): they are not
+  // greeted with it, nor approved, until the caller has their real name (Arthur, 24 Nov 2026).
+  if (names.nameProblem(agent.full_name)) return holdForName({ agent, key, via, now });
+  return approveCalledAgent({ agent, key, via, now });
+}
+
+/** A kind hello for someone whose name we do not have yet. */
+function heldHelloText(caller) {
+  const who = sentenceStart(caller);
+  return [
+    `Hi! 👋 Welcome to makaug.com. ${who} told us you would say Hi.`,
+    '',
+    `${who} will be in touch shortly to finish setting up your agent account.`
+  ].join('\n');
+}
+
+/**
+ * Their Hi, kept until the caller has their name: noted on the call and the
+ * prospect, the caller told on their dashboard (once in 12 hours), and a kind
+ * hello back. Returns { held: true, agent: null, message }.
+ */
+async function holdForName({ agent, key, via = 'whatsapp', now = new Date() } = {}) {
+  const call = (await rows(
+    `SELECT id, person_key FROM call_attempts
+      WHERE phone_key = $1 AND status = 'done' AND outcome = ANY($2::text[]) ORDER BY COALESCE(wrapped_at, shown_at) DESC LIMIT 1`,
+    [key, rules.INTERESTED_OUTCOMES]))[0] || null;
+  const caller = await callerName(call && call.person_key);
+  const prospect = (await rows('SELECT metadata FROM agent_prospects WHERE phone_key = $1 LIMIT 1', [key]).catch(() => []))[0] || null;
+  const heldAt = Date.parse((prospect && prospect.metadata && prospect.metadata.held_for_name_at) || '') || 0;
+  const again = heldAt > 0 && now.getTime() - heldAt < 12 * 3600 * 1000;
+  await db.query(
+    `UPDATE agent_prospects SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('said_hi_at', $2::text, 'said_hi_via', $3::text, 'held_for_name_at', $2::text), updated_at = NOW()
+      WHERE phone_key = $1`, [key, now.toISOString(), via]).catch(() => null);
+  if (call) {
+    await db.query(
+      `UPDATE call_attempts SET checklist = COALESCE(checklist, '{}'::jsonb) || jsonb_build_object('asked_hello', 'auto', 'said_hi_at', $2::text, 'said_hi_via', $3::text, 'held_for_name', true)
+        WHERE id = $1`, [call.id, now.toISOString(), via]).catch(() => null);
+  }
+  await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ('calling', 'calling_said_hi_held_for_name', $1::jsonb)`,
+    [JSON.stringify({ agent_id: agent.id, via, attempt_id: call ? call.id : null, phone_tail: key.slice(-3) })]).catch(() => null);
+  if (!again) {
+    await names.tellCallerSaidHi({ agent, personKey: call && call.person_key, via, at: now })
+      .catch((error) => logger.warn('Caller not told about a Hi waiting for a name', { error: error.message }));
+  }
+  logger.info('Calling: said Hi, held for a real name', { agent_id: agent.id, via });
+  return { held: true, agent: null, caller, message: again ? '' : heldHelloText(caller) };
+}
+
+/**
+ * Approve a profile opened on a call, with the free days to load their places:
+ * on their Hi, or when the caller saves the real name of one whose Hi waited.
+ */
+async function approveCalledAgent({ agent, key, via = 'whatsapp', now = new Date() } = {}) {
   const call = (await rows(
     `SELECT id, person_key, callback_at, checklist FROM call_attempts
       WHERE phone_key = $1 AND status = 'done' AND outcome = ANY($2::text[]) ORDER BY COALESCE(wrapped_at, shown_at) DESC LIMIT 1`,
@@ -160,7 +223,44 @@ async function onHello({ phone = '', body = '', via = 'whatsapp', conversationCo
     [JSON.stringify({ agent_id: approved.id, via, attempt_id: call ? call.id : null, free_until: until, phone_tail: key.slice(-3) })]).catch(() => null);
   const name = clean(require('./agentNameService').agentGreetingName(approved, ''), 60) || 'there';
   logger.info('Calling: said Hi, agent approved', { agent_id: approved.id, via });
-  return { agent: approved, name, free_until: until, message: welcomeText(name, caller) };
+  return { agent: approved, name, caller, free_until: until, message: welcomeText(name, caller) };
 }
 
-module.exports = { CHANNEL, FREE_DAYS, looksLikeHello, cleanShownName, provisionInterested, onHello, welcomeText };
+function httpError(status, message) { return Object.assign(new Error(message), { status }); }
+
+/**
+ * The caller saved the real name of a profile opened under one that isn't
+ * theirs (Housekeeping → Name to fix). Everywhere the number shows takes it,
+ * and when they have already said Hi they are approved now.
+ * Returns { agent_id, name, approved }.
+ */
+async function fixProfileName({ agentId = '', name = '', by = '', now = new Date() } = {}) {
+  const shown = cleanShownName(name);
+  const problem = names.nameProblem(name) || names.nameProblem(shown);
+  if (!shown || problem) throw httpError(400, `${problem || 'Type their name.'} ${names.ASK}`);
+  const agent = (await rows('SELECT * FROM agents WHERE id = $1 AND removed_at IS NULL', [String(agentId)]))[0];
+  if (!agent) throw httpError(404, 'That profile is not there any more.');
+  const key = tail9(agent.whatsapp || agent.phone);
+  const updated = (await rows(
+    `UPDATE agents SET full_name = $2, company_name = CASE WHEN COALESCE(company_name, '') IN ('', full_name) THEN $2 ELSE company_name END,
+            greeting_name = $2, updated_at = NOW()
+      WHERE id = $1 RETURNING *`, [agent.id, shown]))[0] || agent;
+  require('./agentNameService').setCachedGreetingName(agent.id, shown);
+  if (key.length === 9) {
+    await db.query('UPDATE agent_prospects SET full_name = $2, updated_at = NOW() WHERE phone_key = $1', [key, shown]).catch(() => null);
+    await db.query('UPDATE call_attempts SET full_name = $2 WHERE phone_key = $1', [key, shown]).catch(() => null);
+  }
+  await db.query(`INSERT INTO audit_logs (actor_id, action, details) VALUES ($1, 'calling_name_fixed', $2::jsonb)`,
+    [String(by || 'calling').slice(0, 120), JSON.stringify({ agent_id: agent.id, phone_tail: key.slice(-3) })]).catch(() => null);
+  // The note on the caller's dashboard that their Hi was waiting goes with it.
+  await db.query('UPDATE team_messages SET withdrawn_at = NOW() WHERE title = $1 AND withdrawn_at IS NULL', [names.saidHiTitle(agent)]).catch(() => null);
+  const prospect = key.length === 9 ? (await rows('SELECT metadata FROM agent_prospects WHERE phone_key = $1 LIMIT 1', [key]).catch(() => []))[0] : null;
+  const meta = (prospect && prospect.metadata) || {};
+  let approved = null;
+  if (updated.status === 'pending' && updated.agent_application_channel === CHANNEL && meta.held_for_name_at) {
+    approved = await approveCalledAgent({ agent: updated, key, via: meta.said_hi_via || 'whatsapp', now });
+  }
+  return { agent_id: agent.id, name: shown, approved: Boolean(approved) };
+}
+
+module.exports = { CHANNEL, FREE_DAYS, looksLikeHello, cleanShownName, provisionInterested, onHello, welcomeText, heldHelloText, holdForName, approveCalledAgent, fixProfileName };
