@@ -12196,10 +12196,20 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Reply text is required' });
     }
 
+    // A reply that waits for its time (24 Nov 2026: an agent asked at 23:04,
+    // and the answer goes at 07:00, after quiet hours). A time that has passed,
+    // or is not a time, means now. Only the WhatsApp bridge can hold one.
+    const sendAtDate = req.body.send_at ? new Date(String(req.body.send_at)) : null;
+    const sendAt = sendAtDate && !Number.isNaN(sendAtDate.getTime()) && sendAtDate.getTime() > Date.now() && isWhatsappWebBridgeEnabled()
+      ? sendAtDate.toISOString()
+      : null;
+
     const manualUrl = buildManualWhatsAppUrl(phone, text);
-    const effectiveDeliveryMode = ['provider', 'web_bridge', 'test', 'auto'].includes(requestedDeliveryMode)
-      ? requestedDeliveryMode
-      : getWhatsappDeliveryMode();
+    const effectiveDeliveryMode = sendAt
+      ? 'web_bridge'
+      : ['provider', 'web_bridge', 'test', 'auto'].includes(requestedDeliveryMode)
+        ? requestedDeliveryMode
+        : getWhatsappDeliveryMode();
 
     let delivery = {
       sent: false,
@@ -12228,7 +12238,8 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
           requested_status: requestedStatus || 'awaiting_customer',
           reply_kind: source === 'ai' ? 'admin_ai_reply' : 'admin_human_reply',
           replied_by: actor || null
-        }
+        },
+        sendAt
       });
       queuedForBridge = true;
       bridgeQueueId = queued?.id || null;
@@ -12236,7 +12247,8 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
         sent: false,
         queued: true,
         provider: 'whatsapp_web_bridge',
-        id: bridgeQueueId
+        id: bridgeQueueId,
+        ...(sendAt ? { scheduled_for: sendAt } : {})
       };
     } else {
       delivery = await sendWhatsAppText({ to: phone, body: text });
@@ -12318,6 +12330,7 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
       queued_for_bridge: queuedForBridge,
       bridge_queue_id: bridgeQueueId,
       waiting_for_first_message: waitingForThem,
+      scheduled_for: sendAt,
       manual_required: delivery.sent !== true,
       manual_url: manualUrl || null
     }, actor);
@@ -12331,6 +12344,7 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
         bridge_queue_id: bridgeQueueId,
         waiting_for_first_message: waitingForThem,
         ...(waitingForThem ? { wrote_within_days: bridgeRules.wroteWithinDays(), hello_link: require('../services/filmLinkService').helloLink() } : {}),
+        scheduled_for: sendAt,
         manual_required: delivery.sent !== true,
         manual_url: manualUrl || null
       }

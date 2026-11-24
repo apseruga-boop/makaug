@@ -18774,6 +18774,58 @@ const formerAgentNotedAt = new Map();
 const FORMER_AGENT_NOTE_EVERY_MS = 12 * 60 * 60 * 1000;
 const REJOIN_NOTE_EVERY_MS = 24 * 60 * 60 * 1000;
 
+// Words after the note (24 Nov 2026, 23:02: "I was suggesting to reduce ko for
+// me … then next year u Bill that amount per month. How do u see"). The note
+// had gone, so the chat went quiet, and the team had only heard "They sent
+// photos". A question or a request is answered by a person: they hear once in
+// 12 hours that it was passed on, and the team gets everything they wrote,
+// once they stop typing.
+const FORMER_AGENT_ACK_EVERY_MS = 12 * 60 * 60 * 1000;
+const FORMER_AGENT_QUIET_MS = 90 * 1000;
+const formerAgentAckedAt = new Map();
+const formerAgentWords = new Map(); // agent id -> { agent, phone, reason, words, timer }
+
+/** Something a person should answer: not a greeting, a thank-you or an "ok". */
+function formerAgentAsks(said = '') {
+  const text = normalizeInput(said);
+  if (!text || isCourtesyOnly(text) || AGENT_GREETING.test(text)) return false;
+  return /\?/.test(text) || text.split(/\s+/).filter(Boolean).length >= 3;
+}
+
+function formerAgentHeldReply(agent = {}, now = new Date()) {
+  const first = agentGreetingName(agent, '');
+  const hour = (now.getUTCHours() + 3) % 24;
+  const when = hour >= 22 || hour < 7 ? 'in the morning' : 'soon';
+  return `Thank you${first ? `, ${first}` : ''} 🙏 I've passed your message to our team, and someone will get back to you here ${when}.`;
+}
+
+function sendFormerAgentWords(key) {
+  const entry = formerAgentWords.get(key);
+  if (!entry) return null;
+  formerAgentWords.delete(key);
+  if (entry.timer) clearTimeout(entry.timer);
+  const { agent, phone, reason, words } = entry;
+  const digits = String(phone || '').replace(/\D+/g, '');
+  return require('../services/leadDeskService').sendToTeam(db, [
+    `💬 *${agent.full_name} is waiting for a reply* · number ending ${digits.slice(-3)}`,
+    `Removed: ${reason ? reason.label : (agent.removed_reason || 'reason not given')}. They have the kind note with their payment link.`,
+    '',
+    ...words.slice(-8).map((said) => `"${said}"`),
+    '',
+    'Please answer them from King\'s WhatsApp inbox.'
+  ].join('\n'), 'former_agent_asked').catch(() => null);
+}
+
+function passFormerAgentWordsOn({ agent, phone, said, reason }) {
+  const key = String(agent.id);
+  const entry = formerAgentWords.get(key) || { agent, phone, reason, words: [], timer: null };
+  entry.words.push(normalizeInput(said).slice(0, 300));
+  if (entry.timer) clearTimeout(entry.timer);
+  entry.timer = setTimeout(() => { sendFormerAgentWords(key); }, FORMER_AGENT_QUIET_MS);
+  entry.timer.unref?.();
+  formerAgentWords.set(key, entry);
+}
+
 async function findRemovedAgentByPhone(phone) {
   const key = agentPhoneKey(phone);
   if (!key || key.length < 9) return null;
@@ -18800,8 +18852,12 @@ async function removedAgentReply({ phone, body = '', hasMedia = false } = {}) {
   const property = hasMedia || looksLikeForwardedProperty({ cleanBody: said, mediaUrl: '', runtime: {} });
   const rejoinable = goodbye.canRejoin(agent);
   const reason = goodbye.removalReason(goodbye.removalCode(agent));
+  const sentAt = Date.parse(agent.removal_snapshot?.rejoin_sent_at || '') || 0;
+  const noteIsFresh = Date.now() - sentAt < REJOIN_NOTE_EVERY_MS;
+  // A question after the note goes to the team with everything they write next.
+  const asksAfterNote = rejoinable && noteIsFresh && Boolean(said) && !property && formerAgentAsks(said);
   const lastNoted = formerAgentNotedAt.get(agent.id) || 0;
-  if (Date.now() - lastNoted > FORMER_AGENT_NOTE_EVERY_MS) {
+  if (!asksAfterNote && Date.now() - lastNoted > FORMER_AGENT_NOTE_EVERY_MS) {
     formerAgentNotedAt.set(agent.id, Date.now());
     const digits = String(phone || '').replace(/\D+/g, '');
     require('../services/leadDeskService').sendToTeam(db, [
@@ -18814,8 +18870,17 @@ async function removedAgentReply({ phone, body = '', hasMedia = false } = {}) {
     ].filter(Boolean).join('\n'), 'former_agent_wrote').catch(() => null);
   }
   if (!rejoinable) return null;
-  const sentAt = Date.parse(agent.removal_snapshot?.rejoin_sent_at || '') || 0;
-  if (Date.now() - sentAt < REJOIN_NOTE_EVERY_MS) return { message: '', silent: true };
+  if (noteIsFresh) {
+    if (asksAfterNote) {
+      passFormerAgentWordsOn({ agent, phone, said, reason });
+      const acked = formerAgentAckedAt.get(String(agent.id)) || 0;
+      if (Date.now() - acked > FORMER_AGENT_ACK_EVERY_MS) {
+        formerAgentAckedAt.set(String(agent.id), Date.now());
+        return { message: formerAgentHeldReply(agent) };
+      }
+    }
+    return { message: '', silent: true };
+  }
   const facts = said ? employeePropertyFacts(said, {}) : {};
   const thing = !property ? '' : (facts.listingType === 'land' ? 'plot' : 'property');
   await require('../services/billingOpsService').sendRejoinMessage(db, { agentId: agent.id, sentThing: thing, actor: 'whatsapp' });
@@ -29132,6 +29197,11 @@ module.exports.__test = {
   pendingAgentBatchLine,
   findPendingAgentByPhone,
   pendingAgentHelloReply,
+  formerAgentAsks,
+  formerAgentHeldReply,
+  sendFormerAgentWords,
+  formerAgentWords,
+  formerAgentAckedAt,
   isStrayKeys,
   talkingWithThemJustNow,
   isQuestionNotProperty,
