@@ -12,7 +12,9 @@
  *    message the assistant could not place.
  * 4. An agent who picked "Talk to a person" six days before, and was called,
  *    said "Ok thanks" to her listing going live and was told a team member
- *    would reply shortly, as every message of hers had been since.
+ *    would reply shortly, as every message of hers had been since. The chat
+ *    stays with the team until someone replies from King, or MENU (Arthur);
+ *    a thank-you gets no answer, and "in the inbox" is said once in 12 hours.
  * 5. Two agents removed for not paying had not written in a week, so their
  *    kind notes waited for them, and King said the notes had been sent.
  */
@@ -91,23 +93,6 @@ test('the hello after a call says hello, and the welcome pack follows a few seco
   assert.match(read('routes/moneySms.js'), /if \(hello\?\.agent\?\.id\) \{\n\s+require\('\.\/admin'\)\.runAgentApprovalFollowUps\(\{ agentId: hello\.agent\.id, wasApproved: true, actor: 'calling_hello_sms' \}\)/);
 });
 
-test('their own "talk to a person" lasts a day; the team taking over, or the assistant handing on, does not lapse', () => {
-  const now = Date.parse('2026-11-24T06:31:39Z');
-  const asked = (hoursAgo, extra = {}) => ({
-    status: 'needs_human',
-    ai_mode: 'autopilot',
-    metadata: { needs_person_reason: 'asked_for_person', needs_person_at: new Date(now - hoursAgo * 3600e3).toISOString() },
-    ...extra
-  });
-  assert.strictEqual(route.personRequestHasLapsed(asked(6 * 24), now), true, 'six days on');
-  assert.strictEqual(route.personRequestHasLapsed(asked(25), now), true);
-  assert.strictEqual(route.personRequestHasLapsed(asked(23), now), false, 'the same day');
-  assert.strictEqual(route.personRequestHasLapsed(asked(30, { ai_mode: 'off' }), now), false, 'the team switched the assistant off');
-  assert.strictEqual(route.personRequestHasLapsed(asked(30, { status: 'escalated' }), now), false);
-  assert.strictEqual(route.personRequestHasLapsed({ ...asked(30), metadata: { needs_person_reason: 'not_understood_twice', needs_person_at: new Date(now - 30 * 3600e3).toISOString() } }, now), false, 'handed on by the assistant');
-  assert.strictEqual(route.personRequestHasLapsed({ status: 'needs_human', metadata: { needs_person_reason: 'asked_for_person' } }, now), false, 'no time kept');
-});
-
 test('in a chat the team has: no answer to a thank-you, and "in the inbox" once in 12 hours', () => {
   const now = Date.parse('2026-11-24T06:31:39Z');
   const control = (hoursAgo) => ({ status: 'needs_human', metadata: hoursAgo === null ? {} : { handoff_ack_at: new Date(now - hoursAgo * 3600e3).toISOString() } });
@@ -118,9 +103,9 @@ test('in a chat the team has: no answer to a thank-you, and "in the inbox" once 
 
   const runtime = read('routes/whatsapp.js');
   const start = runtime.indexOf('async function processInboundRuntimeUnlocked');
-  const lapse = runtime.indexOf('if (shouldPauseAutomation && personRequestHasLapsed(conversationControl)) {', start);
+  assert.ok(!/personRequestHasLapsed|a_day_passed/.test(runtime), 'the chat stays with the team until someone replies from King, or MENU (Arthur)');
   const pause = runtime.indexOf('  if (shouldPauseAutomation) {\n', start);
-  assert.ok(lapse > start && pause > lapse, 'a lapsed request is let go before the pause is applied');
+  assert.ok(pause > start);
   const paused = runtime.slice(pause, runtime.indexOf('humanHandoffAck(activeLang)', pause));
   assert.match(paused, /if \(handoffAckIsQuiet\(\{ conversationControl, said: transcriptRecord\?\.text \? '' : effectiveBody \}\)\) \{\n\s+return \{ message: '', nextStep: sessionStep \};/);
   assert.match(paused, /await safeConversationControl\(phone, \{ metadata: \{ handoff_ack_at: new Date\(\)\.toISOString\(\) \} \}, 'whatsapp_handoff_ack'\);/);
