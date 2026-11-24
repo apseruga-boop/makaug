@@ -6235,6 +6235,19 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
         const key = normalizeInput(resolved.match?.district || '').toLowerCase();
         if (key && byDistrict.has(key)) pinned.add(key);
       }
+      // A main road the caption names, when nothing else did (24 Nov 2026:
+      // "Kagoma Along bombo road" was asked which district Kagoma is in, of
+      // four; Bombo Road runs through one of them, Wakiso).
+      if (!pinned.size) {
+        const byRoad = new Set();
+        for (const road of mainRoadsInText(locationCaption)) {
+          for (const place of road.areas || []) {
+            const key = normalizeInput(place?.district || '').toLowerCase();
+            if (key && byDistrict.has(key)) byRoad.add(key);
+          }
+        }
+        if (byRoad.size === 1) pinned.add([...byRoad][0]);
+      }
       // Exactly one. Two landmarks disagreeing is not something to guess at.
       if (pinned.size === 1) {
         const chosen = byDistrict.get([...pinned][0]);
@@ -10415,6 +10428,9 @@ function retireStaleAgentSubmissions(data = {}, now = Date.now()) {
   if (count) data.retired_agent_submissions = retired.slice(-20);
   return count;
 }
+
+// agentPendingNotice's "now send the photos" for a description on its own.
+const AGENT_DETAILS_THEN_PHOTOS = /^📝 Got the details for [^\n]+\n\nNow send the \*photos or a short video\* of it/;
 
 function agentPendingNotice(data = {}) {
   if (data.whatsapp_agent_self_intake !== true) return '';
@@ -16967,6 +16983,26 @@ function mainRoadInText(text = '') {
     }
   }
   return null;
+}
+
+/** Every main road a text names: "along Bombo road", "off Gayaza Rd". */
+function mainRoadsInText(text = '') {
+  const { mainRoadCorridorByQuery } = require('../utils/ugandaLocationRegistry');
+  const clean = normalizeInput(text).toLowerCase();
+  const pattern = /([a-z]+(?:[\s/-]+[a-z]+){0,2})\s+(?:road|rd)\b/g;
+  const roads = new Map();
+  let match;
+  while ((match = pattern.exec(clean))) {
+    const words = match[1].split(/[\s/-]+/).filter(Boolean);
+    for (let start = 0; start < words.length; start += 1) {
+      const road = mainRoadCorridorByQuery(`${words.slice(start).join(' ')} road`);
+      if (road) {
+        roads.set(road.key, road);
+        break;
+      }
+    }
+  }
+  return [...roads.values()];
 }
 
 /** The places a search covers when it is more than one: [{ name, key }], or []. */
@@ -26754,7 +26790,8 @@ async function processInboundRuntimeUnlocked({
   // Interested (with the name they want shown) is greeted by that name, approved with
   // 3 days to load their places, and their chat becomes their posting session.
   const calledHello = (inboundPhotoCandidates.length || (effectiveMediaUrl && !isAudioNote)) ? null
-    : await require('../services/callingFollowThrough').onHello({ phone, body: effectiveBody, via: 'whatsapp', conversationControl }).catch((error) => {
+    // The name on their WhatsApp profile, for a profile saved under one that isn't theirs (24 Nov 2026).
+    : await require('../services/callingFollowThrough').onHello({ phone, body: effectiveBody, via: 'whatsapp', conversationControl, whatsappName: normalizeInput(inboundMetadata.push_name || '') || contactName }).catch((error) => {
       logger.warn('Calling hello check failed:', error.message || String(error));
       return null;
     });
@@ -26967,7 +27004,15 @@ async function processInboundRuntimeUnlocked({
         `SELECT 1 FROM whatsapp_sessions WHERE phone = $1 AND session_data->>'whatsapp_agent_self_intake' = 'true'`,
         [phone]
       ).then((r) => r.rows.length > 0).catch(() => false));
-    if (agentTypedReply) {
+    // A description typed before its photos (24 Nov 2026: three photos and a
+    // video came 14 seconds after the words, and the reply asked for photos 16
+    // seconds after they had arrived). Its "now send the photos" waits for the
+    // burst to go quiet: the photos answer it, or the summary asks for them.
+    const detailsBeforePhotos = agentTypedReply && AGENT_DETAILS_THEN_PHOTOS.test(String(employeeIntake.message || ''));
+    if (detailsBeforePhotos) {
+      scheduleEmployeeBatchSummary(phone);
+      employeeIntake.message = '';
+    } else if (agentTypedReply) {
       cancelEmployeeBatchSummary(phone);
     } else if (batchSummaryApplies) {
       scheduleEmployeeBatchSummary(phone);
@@ -29211,6 +29256,8 @@ module.exports.__test = {
   withNamedPlaces,
   namedSearchPlaces,
   mainRoadInText,
+  mainRoadsInText,
+  AGENT_DETAILS_THEN_PHOTOS,
   searchPlacesOf,
   searchPlaceLabel,
   asksRentOrBuyFirst,

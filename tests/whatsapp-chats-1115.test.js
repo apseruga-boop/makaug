@@ -279,18 +279,26 @@ test('a village name the census has in several districts is asked about, not gue
   }
 
   // What the agent is asked: about the village, not the advert's first word.
-  const asked = route.employeePropertyFacts(RENTALS, {});
+  // (Without the road: since 24 Nov "Along bombo road" settles it, below.)
+  const RENTALS_NO_ROAD = RENTALS.replace('\nAlong bombo road', '');
+  const asked = route.employeePropertyFacts(RENTALS_NO_ROAD, {});
   assert.strictEqual(asked.locationPatch.area, 'Kagoma');
   assert.deepStrictEqual(route.employeePropertyMissing(asked), ['which district Kagoma is in — Wakiso, Jinja, Kikuube or Mubende']);
   assert.match(route.agentMissingPhrases(route.employeePropertyMissing(asked))[0], /which district \*Kagoma\* is in — \*Wakiso, Jinja, Kikuube or Mubende\*\? Just the district name is enough, and say so if it is another one\./);
 
   // And the answer is taken, however it is put.
   for (const answer of ['Wakiso', 'Wakiso district', 'It is in Wakiso', 'Kagoma, Wakiso']) {
-    const facts = route.employeePropertyFacts(`${RENTALS}\n${answer}`, {});
+    const facts = route.employeePropertyFacts(`${RENTALS_NO_ROAD}\n${answer}`, {});
     assert.strictEqual(facts.locationPatch.area, 'Kagoma', answer);
     assert.strictEqual(facts.locationPatch.district, 'Wakiso', answer);
     assert.deepStrictEqual(route.employeePropertyMissing(facts), [], answer);
   }
+
+  // The road it is on answers it (24 Nov 2026): Bombo Road runs through
+  // Wakiso, and through none of the other three.
+  const onTheRoad = route.employeePropertyFacts(RENTALS, {});
+  assert.strictEqual(`${onTheRoad.locationPatch.area}, ${onTheRoad.locationPatch.district}`, 'Kagoma, Wakiso');
+  assert.deepStrictEqual(route.employeePropertyMissing(onTheRoad), []);
 
   // A district the list does not offer is taken as well: the list is not complete.
   const elsewhere = route.employeePropertyFacts('Plot for sale in Kiteredde at 30m\nLuwero district', {});

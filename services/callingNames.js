@@ -17,6 +17,12 @@
  *   "Name to fix", and in a message from King on their dashboard every
  *   morning. Their Hi waits for the name (callingFollowThrough.onHello).
  *
+ * - Their WhatsApp name comes first (Arthur, 24 Nov 2026: "we don't want to
+ *   prolong the process"): a Hi from one of them, under a WhatsApp name that
+ *   is a real name, is approved with it there and then; the ones who wrote to
+ *   us before take the name they wrote under. The caller is only asked when
+ *   WhatsApp has no real name for them either (nameFromWhatsApp).
+ *
  * Everything here stays inside makaug.com: no WhatsApp, SMS or email.
  */
 const db = require('../config/database');
@@ -32,6 +38,12 @@ const GENERIC = Object.freeze(['property', 'properties', 'real', 'estate', 'esta
 const WORDS = Object.freeze({ platform: PLATFORM, placeholder: PLACEHOLDER, generic: GENERIC });
 
 const ASK = 'Ask them: "What name should we put on your makaug page: yours, or your business\'s?"';
+
+// What people call themselves, never a name on their own ("Boss Man", "Uncle").
+const NICKNAMES = new Set(['man', 'lady', 'guy', 'boy', 'girl', 'king', 'queen', 'baby', 'babe', 'mummy', 'mum', 'mom', 'mama', 'dad', 'daddy', 'papa', 'sister', 'brother', 'sis', 'aunt', 'aunty', 'auntie', 'uncle', 'jajja', 'gentleman', 'official']);
+// A motto or a sentence on a WhatsApp profile, not a name ("God is able",
+// "Your trusted property partner").
+const NOT_IN_A_NAME = new Set(['is', 'are', 'am', 'be', 'was', 'were', 'will', 'shall', 'can', 'cannot', 'do', 'does', 'did', 'not', 'never', 'always', 'all', 'every', 'everything', 'nothing', 'life', 'time', 'good', 'great', 'mood', 'vibes', 'only', 'your', 'my', 'our', 'me', 'you', 'we', 'us', 'it', 'this', 'that', 'best', 'trusted', 'deals', 'deal', 'sales', 'sale', 'team', 'partner', 'partners', 'solutions', 'world', 'quality', 'affordable', 'luxury', 'top', 'call', 'text', 'dm', 'inbox', 'available', 'here', 'now', 'today', 'god', 'gods', 'jesus', 'lord', 'allah', 'amen', 'favoured', 'favored', 'highly', 'forever']);
 
 const words = (name) => String(name || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
   .split(/[^a-z0-9]+/).filter(Boolean);
@@ -51,6 +63,54 @@ function nameProblem(name = '') {
   if (list.some((w) => PLATFORM.includes(w))) return `"${shown}" is where we found them, not their name.`;
   if (list.some((w) => PLACEHOLDER.includes(w))) return `"${shown}" is not a name.`;
   return `"${shown}" says what they do, not who they are.`;
+}
+
+/**
+ * The name on somebody's WhatsApp profile, when it is a name: "Testa Faith
+ * Love 💕🌹" is "Testa Faith Love", "MUMMY TESTINA" is "Mummy Testina",
+ * "moses.kato" is "Moses Kato". '' for a motto, a handle run together, a
+ * stand-in or what they do ("God is able", "testamosmukasa", "Boss Man").
+ */
+function nameFromWhatsApp(raw = '') {
+  // Emoji joiners and variation selectors are marks with nothing to mark.
+  let text = String(raw == null ? '' : raw).normalize('NFKC').replace(/[\uFE00-\uFE0F\u200B-\u200D\u2060]/g, '').replace(/^[^\p{L}]+/u, '');
+  // What follows the name: "Sarah | Kampala Homes", "Sarah - Realtor", "Sarah (Kira)".
+  text = text.split(/\s[-–—]\s|[|,(\[{/\\:•·~*#@]/)[0];
+  // A handle's dots and underscores sit between names.
+  text = text.replace(/[._]+/g, ' ').replace(/[^\p{L}\p{M}\s'’-]/gu, ' ').replace(/\s+/g, ' ').trim()
+    .replace(/^['’-]+|['’-]+$/g, '').trim();
+  if (!text) return '';
+  const list = text.split(' ');
+  if (list.length > 4) return '';
+  const plain = list.map((w) => w.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/['’]s$/, ''));
+  if (plain.some((w) => NOT_IN_A_NAME.has(w))) return '';
+  // A handle typed as one word: "testamosmukasa".
+  if (list.length === 1 && list[0].length > 12 && list[0] === list[0].toLowerCase()) return '';
+  const known = (w) => NICKNAMES.has(w) || PLATFORM.includes(w) || PLACEHOLDER.includes(w) || GENERIC.includes(w);
+  if (plain.every(known)) return '';
+  // A name never starts with what they do: "Real Estate Agent Kira".
+  if (GENERIC.includes(plain[0]) || PLATFORM.includes(plain[0])) return '';
+  // "MOSES KATO", "moses kato": as a person writes it ("JB" stays).
+  const oneCase = text === text.toUpperCase() || text === text.toLowerCase();
+  const cased = oneCase
+    ? list.map((w) => (w.length <= 2 && text !== text.toLowerCase() ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())).join(' ')
+    : text;
+  if (nameProblem(cased)) return '';
+  return cased.slice(0, 40).trim();
+}
+
+/** The name on the WhatsApp profile they last wrote to us from, or ''. */
+async function storedWhatsappName(phoneKey = '', { dbc = db } = {}) {
+  const key = String(phoneKey || '').replace(/\D/g, '').slice(-9);
+  if (key.length !== 9) return '';
+  const row = (await dbc.query(
+    `SELECT payload->'metadata'->>'push_name' AS push_name FROM whatsapp_messages
+      WHERE user_phone = ANY($1::text[]) AND direction = 'inbound'
+        AND COALESCE(payload->'metadata'->>'push_name', '') <> ''
+      ORDER BY created_at DESC LIMIT 1`,
+    [[`+256${key}`, `256${key}`, `0${key}`]]
+  ).catch(() => ({ rows: [] }))).rows[0];
+  return row ? String(row.push_name || '') : '';
 }
 
 /** Profiles opened on a call, still waiting, under a name that cannot be used. */
@@ -77,6 +137,31 @@ async function profilesToFix({ dbc = db } = {}) {
     .filter((row) => row.problem);
 }
 
+/**
+ * Profiles to fix whose WhatsApp name we already have, because they wrote to
+ * us before: they take it, and come off the callers' lists. One whose Hi was
+ * waiting is approved, with the welcome pack. Returns what was filled in.
+ */
+async function fillFromWhatsapp({ dbc = db } = {}) {
+  const filled = [];
+  for (const item of await profilesToFix({ dbc })) {
+    const name = nameFromWhatsApp(await storedWhatsappName(item.whatsapp || item.phone, { dbc }));
+    if (!name) continue;
+    const out = await require('./callingFollowThrough').fixProfileName({ agentId: item.id, name, by: 'whatsapp_name' })
+      .catch((error) => {
+        logger.warn('A WhatsApp name could not be filled in', { error: error.message });
+        return null;
+      });
+    if (!out) continue;
+    filled.push({ agent_id: item.id, name, approved: out.approved });
+    if (out.approved) {
+      require('../routes/admin').runAgentApprovalFollowUps({ agentId: item.id, wasApproved: true, actor: 'calling_name_from_whatsapp' })
+        .catch((error) => logger.warn('Welcome after a WhatsApp name not sent', { error: error.message }));
+    }
+  }
+  return filled;
+}
+
 const shortDay = (value) => (value ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'Africa/Kampala' }).format(new Date(value)) : '');
 
 /** The morning message from King: the names to fix before they say Hi (pure). */
@@ -101,7 +186,7 @@ function digestBody(items = []) {
 const DIGEST_TITLE = 'Names to fix before they say Hi';
 
 /** Each caller's list, as a message from King on their dashboard, once a day. Returns what was sent. */
-async function sendDailyDigest({ dbc = db, now = new Date(), hub = require('./teamHub') } = {}) {
+async function sendDailyDigest({ dbc = db, now = new Date(), hub = require('./teamHub'), refresh = false } = {}) {
   const items = await profilesToFix({ dbc });
   const people = await hub.staffPeople();
   const userFor = new Map(people.filter((p) => p.person_key).map((p) => [p.person_key, p.user_id]));
@@ -112,10 +197,11 @@ async function sendDailyDigest({ dbc = db, now = new Date(), hub = require('./te
     if (!byUser.has(userId)) byUser.set(userId, []);
     byUser.get(userId).push(it);
   }
-  // Yesterday's lists are replaced by today's, so only the current one shows.
+  // Yesterday's lists are replaced by today's, so only the current one shows;
+  // today's too when names were filled in since it went (refresh).
   await dbc.query(
     `UPDATE team_messages SET withdrawn_at = NOW()
-      WHERE title = $1 AND withdrawn_at IS NULL AND (created_at AT TIME ZONE 'Africa/Kampala')::date < $2::date`,
+      WHERE title = $1 AND withdrawn_at IS NULL AND (created_at AT TIME ZONE 'Africa/Kampala')::date ${refresh ? '<=' : '<'} $2::date`,
     [DIGEST_TITLE, today]
   ).catch(() => null);
   const sent = [];
@@ -170,7 +256,10 @@ function startNameDigest({ dbc = db } = {}) {
     if (local.getUTCHours() * 60 + local.getUTCMinutes() < 7 * 60 + 30) return;
     lastDigestDay = day;
     try {
-      const out = await sendDailyDigest({ dbc, now });
+      // Names we already have from WhatsApp first: only the rest go to the callers.
+      const filled = await fillFromWhatsapp({ dbc });
+      if (filled.length) logger.info('Names filled in from WhatsApp', { filled: filled.length });
+      const out = await sendDailyDigest({ dbc, now, refresh: filled.length > 0 });
       if (out.sent.length) logger.info('Names to fix sent to the team', { sent: out.sent.length, profiles: out.profiles });
     } catch (error) {
       lastDigestDay = '';
@@ -183,4 +272,4 @@ function startNameDigest({ dbc = db } = {}) {
   setTimeout(() => { tick().catch(() => {}); }, staggeredBootDelay('name_digest')).unref?.();
 }
 
-module.exports = { WORDS, ASK, DIGEST_TITLE, nameProblem, profilesToFix, digestBody, sendDailyDigest, saidHiTitle, tellCallerSaidHi, startNameDigest };
+module.exports = { WORDS, ASK, DIGEST_TITLE, nameProblem, nameFromWhatsApp, storedWhatsappName, fillFromWhatsapp, profilesToFix, digestBody, sendDailyDigest, saidHiTitle, tellCallerSaidHi, startNameDigest };
