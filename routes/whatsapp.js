@@ -6759,6 +6759,10 @@ function employeeHoldReason({ data = {}, ownCaption = false, senderMs = 0, burst
     if (previous && Number(senderMs) - previous <= EMPLOYEE_FORWARD_RUN_GAP_MS) return 'forward_run';
   }
   if (Number(burstSize) < EMPLOYEE_SENDER_BURST_MIN) return '';
+  // A one-property batch (24 Nov 2026): a description, then eight photos
+  // forwarded in four seconds, are one property's. Held as a burst, they would
+  // have kept the batch from closing ("came on their own").
+  if ((data.property_batch_mode || 'multiple') === 'single') return '';
   const lastAlbum = Number(data.last_album_sender_ms || 0);
   const lastText = Number(data.last_text_caption_sender_ms || 0);
   const inAlbum = lastAlbum > 0 && lastAlbum >= lastText && senderMs - lastAlbum <= EMPLOYEE_ALBUM_GAP_MS;
@@ -6981,6 +6985,83 @@ function promoteEmployeeQueuedSubmission(data = {}) {
   data.pending_property_media_message_id = next.inboundMessageId || null;
   data.pending_property_media_stored_at = next.storedAt || new Date().toISOString();
   return next;
+}
+
+/** A description's words, for telling a copy of it from another property. */
+function employeeSameWords(value = '') {
+  return normalizeInput(stripForwardMarkers(value)).replace(/\s+/g, ' ').toLowerCase();
+}
+
+/**
+ * 24 Nov 2026, Ronald for an agent: two descriptions forwarded together, then
+ * their four photos, so the photos were held, rightly. Told to send them one
+ * property at a time, he did — each description, then its photos — twice
+ * over, and both times the batch would not close. A description sent again
+ * was taken as a copy and kept the time it was first sent, so the photos
+ * straight after it still came "on their own", and the same photos, held
+ * again, made 8, then 12.
+ *
+ * A description still waiting for its photos and sent again now waits from
+ * the time it was sent again, so the photos straight after it are its own.
+ * Where it was first sent is remembered: anything still held there stays a
+ * question (settleHeldMediaBySenderTime). True when one was brought forward.
+ */
+function bringEmployeeCaptionForward(data = {}, caption = '', senderMs = 0) {
+  const words = employeeSameWords(caption);
+  const at = Number(senderMs) || 0;
+  if (!words || !(at > 0)) return false;
+  const moved = [];
+  if (normalizeInput(data.pending_property_caption || '')
+    && employeeSameWords(data.pending_property_caption) === words
+    && !employeePendingStoredMedia(data).length) {
+    const was = Number(data.pending_caption_sender_ms || 0);
+    if (was > 0 && was < at) {
+      moved.push(was);
+      data.pending_caption_sender_ms = at;
+    }
+  }
+  const queue = employeePendingSubmissionQueue(data);
+  let queueMoved = false;
+  for (const entry of queue) {
+    if (entry.caption && !entry.media.length && employeeSameWords(entry.caption) === words && entry.senderMs > 0 && entry.senderMs < at) {
+      moved.push(entry.senderMs);
+      entry.senderMs = at;
+      queueMoved = true;
+    }
+  }
+  if (queueMoved) {
+    data.pending_property_queue = queue.map((entry) => ({
+      caption: entry.caption,
+      inboundMessageId: entry.inboundMessageId,
+      storedAt: entry.storedAt,
+      senderMs: entry.senderMs,
+      media: entry.media
+    }));
+  }
+  if (!moved.length) return false;
+  data.last_text_caption_sender_ms = at;
+  data.employee_resent_caption_ms = [
+    ...(Array.isArray(data.employee_resent_caption_ms) ? data.employee_resent_caption_ms : []),
+    ...moved
+  ].map(Number).filter((ms) => ms > 0).slice(-40);
+  return true;
+}
+
+/**
+ * Photos held with no description, each file once: the same photo sent again
+ * keeps the time it was sent again (24 Nov 2026: four photos, sent again with
+ * their descriptions, were counted as eight, then twelve).
+ */
+function holdEmployeeUnassignedMedia(data = {}, held = [], { senderMs = 0, inboundMessageId = '' } = {}) {
+  const fresh = (Array.isArray(held) ? held : []).map((item) => ({
+    ...item,
+    sender_ms: senderMs,
+    inbound_message_id: normalizeInput(inboundMessageId)
+  }));
+  const sentAgain = new Set(fresh.map((item) => normalizeInput(item.sha256 || '')).filter(Boolean));
+  const kept = employeeUnassignedMedia(data).filter((item) => !sentAgain.has(normalizeInput(item.sha256 || '')));
+  data.employee_unassigned_media = [...kept, ...fresh].slice(-120);
+  return data.employee_unassigned_media;
 }
 
 /**
@@ -9846,6 +9927,77 @@ function countAgentSavedMedia(data = {}, propertyId = '', storedMedia = [], atta
   const total = Math.max(0, Number(attached) || 0);
   waiting.videos = Number(waiting.videos || 0) + Math.min(videos, total);
   waiting.photos = Number(waiting.photos || 0) + Math.max(0, total - Math.min(videos, total));
+}
+
+/** A staff batch of one property (Agent 007, "One property"). */
+function employeeOnePropertyStaffBatch(data = {}) {
+  return data.whatsapp_agent_self_intake !== true && (data.property_batch_mode || 'multiple') === 'single';
+}
+
+/**
+ * 24 Nov 2026, Ronald for an agent, one property: its description and first
+ * photo showed it was already on makaug ("Duplicate property found … Nothing
+ * was added twice"). Its next five photos were each taken as the start of a
+ * property of their own: "Not saved yet … still needs the type, price…",
+ * "Photos are arriving on their own", and COMPLETE would not close the batch.
+ * In a one-property batch the photos after a duplicate are the duplicate's,
+ * and they are not added either, without a word.
+ */
+const EMPLOYEE_DUPLICATE_PHOTOS_MS = 20 * 60 * 1000;
+
+function noteEmployeeDuplicateFound(data = {}, existing = {}) {
+  if (data.whatsapp_agent_self_intake === true || !existing?.id) return;
+  data.employee_after_duplicate = { id: String(existing.id), status: String(existing.status || ''), at: Date.now() };
+}
+
+function employeePhotoIsTheDuplicates(data = {}, caption = '') {
+  const after = data.employee_after_duplicate;
+  if (!after || !after.id || !employeeOnePropertyStaffBatch(data)) return false;
+  if (normalizeInput(data.pending_property_caption || '')) return false;
+  if (normalizeInput(caption) && looksLikePropertyCaption(caption)) return false;
+  return Date.now() - Number(after.at || 0) <= EMPLOYEE_DUPLICATE_PHOTOS_MS;
+}
+
+function employeeOnePropertyDuplicateMessage(existing = {}) {
+  return `Duplicate property found — ${String(existing.id).slice(0, 8).toUpperCase()} is already ${existing.status}. Nothing was added twice, and the rest of its photos won't be added either. Type *COMPLETE* to close this batch.`;
+}
+
+function employeeStaffSavedMessage(propertyId = '', mediaCount = 0) {
+  return `✅ Saved the property to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${Number(mediaCount) || 0}\nStatus: pending, not live.\n\nSend any additional media without a new full property caption. When this property is finished, type *COMPLETE*.`;
+}
+
+/**
+ * 24 Nov 2026, Ronald, one property and its seven photos: "Saved … Media
+ * stored: 1", then "1 media item(s) attached" four times ("Here it is again",
+ * "Once more", "Again (3)"), the last three after he had typed COMPLETE. The
+ * photos already in line are counted, and the property gets one reply when
+ * they are all in: the "Saved" with every photo counted, or one "more
+ * attached" for photos sent later.
+ */
+function employeeOnePropertyMediaReply(data = {}, { propertyId = '', attached = 0, mediaWaiting = 0 } = {}) {
+  const id = String(propertyId || '');
+  const held = data.employee_media_reply && String(data.employee_media_reply.property_id || '') === id
+    ? data.employee_media_reply
+    : { property_id: id, saved: false, media: 0 };
+  held.media = Number(held.media || 0) + Math.max(0, Number(attached) || 0);
+  if (Number(mediaWaiting || 0) > 0) {
+    data.employee_media_reply = held;
+    return '';
+  }
+  delete data.employee_media_reply;
+  if (held.saved) return employeeStaffSavedMessage(id, held.media);
+  if (held.media > 0) {
+    return `✅ ${held.media} more media item${held.media === 1 ? '' : 's'} attached to the pending property. Send more media for this property, or type *COMPLETE* when it is finished.`;
+  }
+  return 'That media is already attached. Nothing was duplicated.';
+}
+
+/** The one-property reply still held when the photo it waited for could not be taken: '' when none. */
+function releaseEmployeeOnePropertyReply(data = {}) {
+  const held = data.employee_media_reply;
+  if (!held || !held.property_id) return '';
+  return employeeOnePropertyMediaReply(data, { propertyId: held.property_id, attached: 0, mediaWaiting: 0 })
+    .replace(/^That media is already attached\. Nothing was duplicated\.$/, '');
 }
 
 /** The held "Saved" message, once nothing more is waiting in line (or forced): '' when there is none. */
@@ -13530,7 +13682,9 @@ async function handleEmployeeWhatsappIntake({
               ? `Descriptions still waiting for their photos:\n${waitingCaptions.slice(0, 15).map((text, index) => `${index + 1}. ${employeeCaptionLabel(text)}`).join('\n')}`
               : '',
             duplicateLines.length ? `Already on makaug, so not added again:\n${duplicateLines.join('\n')}` : '',
-            'To fix it: reply *CANCEL*, start a new *Agent 007* batch, and for each property select its photos in WhatsApp and type or paste its description as the caption, then send. One property at a time.'
+            // Sent again one at a time, each description then its photos, they
+            // are paired now (bringEmployeeCaptionForward, 24 Nov 2026).
+            'To fix it: forward each property again, one at a time — its description, then its photos straight after it — and type *COMPLETE*. If that does not work, reply *CANCEL* and send each property in a new *Agent 007* batch with its description as the caption on its photos.'
           ].filter(Boolean).join('\n\n')
         };
       }
@@ -13755,14 +13909,19 @@ async function handleEmployeeWhatsappIntake({
       let mergedWithPendingCaption = false;
       // The same description again is a copy, not a second property: on 19 Nov
       // 2026 "Green taken, blue is 140m…" and the Kitende estate were each kept
-      // twice and listed twice in Ronald's summary.
+      // twice and listed twice in Ronald's summary. One still waiting for its
+      // photos now waits from the time it was sent again, so the photos
+      // straight after it are its own (bringEmployeeCaptionForward, 24 Nov 2026).
       const sameWords = (value = '') => normalizeInput(stripForwardMarkers(value)).replace(/\s+/g, ' ').toLowerCase();
+      const resent = sameWords(cleanBody).length >= 24 && data.whatsapp_agent_self_intake !== true
+        && bringEmployeeCaptionForward(data, cleanBody, data.current_sender_ms);
       const theseWords = sameWords(cleanBody);
       // One more advert in this batch (settleEmployeeOrphanMedia).
       if (looksLikePropertyCaption(cleanBody)) noteEmployeeBatchDescription(data, cleanBody);
       if (theseWords.length >= 24
         && data.whatsapp_agent_self_intake !== true
         && [pendingCaption, ...employeePendingSubmissionQueue(data).map((entry) => entry.caption)].some((kept) => sameWords(kept) === theseWords)) {
+        if (resent) await replaceEmployeeSession(phone, currentStep, data);
         return { handled: true, nextStep: currentStep, message: '' };
       }
       // A short reply such as "Kira, Wakiso" or "UGX 300m" is a correction to the
@@ -13895,6 +14054,7 @@ async function handleEmployeeWhatsappIntake({
           delete data.pending_property_caption;
           clearEmployeePendingMedia(data);
           const promotedSubmission = promoteEmployeeQueuedSubmission(data);
+          if (!promotedSubmission) noteEmployeeDuplicateFound(data, existingProperty);
           await replaceEmployeeSession(phone, currentStep, data);
           const promotedPrompt = promotedSubmission
             ? `The next separately stored property still needs: ${employeePropertyMissing(employeePropertyFacts(promotedSubmission.caption, data)).join(', ') || 'a corrected caption'}. Send its corrected caption; its media is already safe.`
@@ -13908,7 +14068,7 @@ async function handleEmployeeWhatsappIntake({
               ? `👍 That property is already with us${String(existingProperty.status) === 'pending' ? ' and with our team for review' : ''}${existingProperty.match_type === 'price_update' ? ' I updated its price.' : ''} — no need to send it again.${promotedPrompt ? `\n\n${agentPendingNotice(data)}` : ''}`
               : (data.property_batch_mode || 'multiple') === 'multiple'
               ? promotedPrompt
-              : `Duplicate property found — ${String(existingProperty.id).slice(0, 8).toUpperCase()} is already ${existingProperty.status}. Nothing was added twice.`
+              : employeeOnePropertyDuplicateMessage(existingProperty)
           };
         }
 
@@ -14038,6 +14198,7 @@ async function handleEmployeeWhatsappIntake({
         data.current_property_id = null;
       }
       data.pending_property_caption = textCaption;
+      delete data.employee_after_duplicate;
       data.last_text_caption_sender_ms = Number(data.current_sender_ms || 0) || Date.now();
       data.pending_caption_sender_ms = data.last_text_caption_sender_ms;
       // An earlier advert's "Saved" still waiting for its last photos goes first.
@@ -14054,6 +14215,9 @@ async function handleEmployeeWhatsappIntake({
           ? [heldSaved, photosOnTheirWay ? '' : agentPendingNotice(data)].filter(Boolean).join('\n\n')
           : employeePendingStoredMedia(data).length
           ? employeeIncompletePropertyMessage(textCaption, textOnlyMissing, data)
+          // Its photos already in line behind it: they answer for it (24 Nov 2026).
+          : photosOnTheirWay
+          ? ''
           : `Caption saved for ${employeeCaptionLabel(textCaption)}. Now send the first property media; it will be stored with that property.${
             waitingForMedia
               ? `\n\n${waitingForMedia} earlier caption${waitingForMedia === 1 ? ' is' : 's are'} also waiting for photos — I have kept ${waitingForMedia === 1 ? 'it' : 'them'}.`
@@ -14084,6 +14248,12 @@ async function handleEmployeeWhatsappIntake({
     const mediaHasWords = !placeholderBody && Boolean(normalizeInput(cleanBody));
     const ownMediaCaption = mediaHasWords && caption === normalizeInput(cleanBody);
     const mediaSenderMs = Number(data.current_sender_ms || 0) || Date.now();
+    // The rest of a duplicate's photos, in a one-property batch (24 Nov 2026).
+    if (employeePhotoIsTheDuplicates(data, caption)) {
+      data.employee_duplicate_media_skipped = Number(data.employee_duplicate_media_skipped || 0) + candidates.length;
+      await replaceEmployeeSession(phone, currentStep, data);
+      return { handled: true, nextStep: currentStep, propertyId: data.employee_after_duplicate.id, duplicate: true, message: '' };
+    }
     const holdReason = employeeHoldReason({
       data,
       // With several descriptions waiting, "Hello" on a photo says no more
@@ -14101,9 +14271,7 @@ async function handleEmployeeWhatsappIntake({
         logger.error('Agent 007 could not store a held photo', { error: error.message });
         return { handled: true, nextStep: currentStep, message: employeeMediaFailureMessage(error) };
       }
-      const pool = employeeUnassignedMedia(data);
-      held.forEach((item) => pool.push({ ...item, sender_ms: mediaSenderMs, inbound_message_id: normalizeInput(inboundMessageId) }));
-      data.employee_unassigned_media = pool.slice(-120);
+      holdEmployeeUnassignedMedia(data, held, { senderMs: mediaSenderMs, inboundMessageId });
       // Held for a moment after its one description is how a forwarded
       // property arrives: it is placed when the burst is over, with nothing to say.
       const firstNotice = holdReason !== 'forward_run' && data.employee_unassigned_notice_sent !== true;
@@ -14325,6 +14493,7 @@ async function handleEmployeeWhatsappIntake({
         if (!pendingStoredMediaBeforeMessage.length || continuesPendingProperty) {
           releaseEmployeePendingCaption(data, { before: pendingCaptionBeforeMessage, caption });
         }
+        noteEmployeeDuplicateFound(data, existingProperty);
         await replaceEmployeeSession(phone, currentStep, data);
         return {
           handled: true,
@@ -14335,7 +14504,7 @@ async function handleEmployeeWhatsappIntake({
             ? `👍 That property is already with us${String(existingProperty.status) === 'pending' ? ' and with our team for review' : ''}${existingProperty.match_type === 'price_update' ? ' I updated its price.' : ''} — no need to send it again.`
             : (data.property_batch_mode || 'multiple') === 'multiple'
             ? ''
-            : `Duplicate property found — ${String(existingProperty.id).slice(0, 8).toUpperCase()} is already ${existingProperty.status}. Nothing was added twice.`
+            : employeeOnePropertyDuplicateMessage(existingProperty)
         };
       }
       const existingBatchProperties = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
@@ -14423,6 +14592,7 @@ async function handleEmployeeWhatsappIntake({
         if (!pendingStoredMediaBeforeMessage.length || continuesPendingProperty) {
           releaseEmployeePendingCaption(data, { before: pendingCaptionBeforeMessage, caption });
         }
+        noteEmployeeDuplicateFound(data, sameFiles);
         await replaceEmployeeSession(phone, currentStep, data);
         return {
           handled: true,
@@ -14431,7 +14601,7 @@ async function handleEmployeeWhatsappIntake({
           duplicate: true,
           message: (data.property_batch_mode || 'multiple') === 'multiple'
             ? ''
-            : `Duplicate property found — ${String(sameFiles.id).slice(0, 8).toUpperCase()} is already ${sameFiles.status}. Nothing was added twice.`
+            : employeeOnePropertyDuplicateMessage(sameFiles)
         };
       }
     }
@@ -14459,8 +14629,13 @@ async function handleEmployeeWhatsappIntake({
         const earlierHeld = data.whatsapp_agent_self_intake === true ? releaseAgentSavedReply(data, { force: true }) : '';
         const holdSaved = data.whatsapp_agent_self_intake === true && Number(runtime.mediaWaiting || 0) > 0;
         if (holdSaved) holdAgentSavedReply(data, { propertyId, caption, storedMedia, openedAgentSelfIntake });
+        // Staff, one property: the same, so a property sent with seven photos
+        // gets one "Saved" that counts them all (24 Nov 2026).
+        const holdStaffSaved = employeeOnePropertyStaffBatch(data) && Number(runtime.mediaWaiting || 0) > 0;
+        if (holdStaffSaved) data.employee_media_reply = { property_id: String(propertyId), saved: true, media: storedMedia.length };
         await replaceEmployeeSession(phone, currentStep, data);
         if (holdSaved) return { handled: true, nextStep: currentStep, propertyId, message: earlierHeld };
+        if (holdStaffSaved) return { handled: true, nextStep: currentStep, propertyId, message: '' };
         const agentSaved = agentSelfIntakeSavedReply({ data, facts, storedMedia, openedAgentSelfIntake, caption, albumCount: Number(runtime.mediaCount || 0) });
         return {
           handled: true,
@@ -14469,7 +14644,7 @@ async function handleEmployeeWhatsappIntake({
           message: agentSaved !== null && agentSaved !== undefined
             ? [earlierHeld, agentSaved].filter(Boolean).join('\n\n')
             : ((data.property_batch_mode || 'multiple') === 'single'
-              ? `✅ Saved the property to staff review — ${String(propertyId).slice(0, 8).toUpperCase()}\nMedia stored: ${storedMedia.length}\nStatus: pending, not live.\n\nSend any additional media without a new full property caption. When this property is finished, type *COMPLETE*.`
+              ? employeeStaffSavedMessage(propertyId, storedMedia.length)
               : staffDroppedMediaWarning(data, caption))
         };
       } catch (error) {
@@ -14506,7 +14681,15 @@ async function handleEmployeeWhatsappIntake({
         countAgentSavedMedia(data, data.current_property_id, storedMedia, attachment.attached);
       }
       const savedNow = releaseAgentSavedReply(data, { mediaWaiting: runtime.mediaWaiting });
-      if (!attachment.duplicate || savedNow) await replaceEmployeeSession(phone, currentStep, data);
+      // Staff, one property: one reply once the photos in line are all in (24 Nov 2026).
+      const onePropertyReply = employeeOnePropertyStaffBatch(data)
+        ? employeeOnePropertyMediaReply(data, {
+          propertyId: data.current_property_id,
+          attached: attachment.duplicate ? 0 : attachment.attached,
+          mediaWaiting: runtime.mediaWaiting
+        })
+        : null;
+      if (!attachment.duplicate || savedNow || onePropertyReply !== null) await replaceEmployeeSession(phone, currentStep, data);
       return {
         handled: true,
         nextStep: currentStep,
@@ -14516,6 +14699,8 @@ async function handleEmployeeWhatsappIntake({
         mediaAttachment: attachment,
         message: savedNow || ((data.property_batch_mode || 'multiple') === 'multiple')
           ? savedNow
+          : onePropertyReply !== null
+            ? onePropertyReply
           : attachment.duplicate
             ? 'That media is already attached. Nothing was duplicated.'
           : (data.property_batch_mode || 'multiple') === 'single'
@@ -14546,7 +14731,8 @@ async function handleEmployeeWhatsappIntake({
         }
       }
       logger.error('WhatsApp employee media attachment failed:', error);
-      const heldSaved = releaseAgentSavedReply(data, { force: Number(runtime.mediaWaiting || 0) === 0 });
+      const heldSaved = releaseAgentSavedReply(data, { force: Number(runtime.mediaWaiting || 0) === 0 })
+        || (Number(runtime.mediaWaiting || 0) === 0 ? releaseEmployeeOnePropertyReply(data) : '');
       if (heldSaved) await replaceEmployeeSession(phone, currentStep, data).catch(() => null);
       return { handled: true, nextStep: currentStep, message: [heldSaved, 'I could not attach that media to the pending property. Nothing changed and nothing went live.'].filter(Boolean).join('\n\n') };
     }
@@ -17635,6 +17821,7 @@ async function createOffPlanDraftFromIntake({ propertyId = '', caption = '', fac
 }
 
 function noteEmployeePropertyCreated(data = {}, propertyId = '', storedMedia = [], caption = '') {
+  delete data.employee_after_duplicate;
   const now = Date.now();
   if (propertyId) {
     try {
@@ -17787,19 +17974,30 @@ async function settleHeldMediaBySenderTime({ phone, data = {}, currentStep = 'em
   // Inside one run of messages forwarded together, the order says nothing about
   // which photo is whose (19 Nov 2026: a house tour forwarded after the next
   // property's description). A run with two descriptions in it is asked about.
+  // Where a description sent again was first sent (bringEmployeeCaptionForward):
+  // a photo still held there could be anyone's, and is asked about.
+  const firstSent = (Array.isArray(data.employee_resent_caption_ms) ? data.employee_resent_caption_ms : [])
+    .map(Number)
+    .filter((ms) => ms > 0);
   const timeline = [
     ...captions.map((entry) => ({ ms: entry.ms, description: true })),
-    ...media.map((item) => ({ ms: item.ms, description: false }))
+    ...firstSent.map((ms) => ({ ms, description: false, firstSent: true })),
+    ...media.map((item) => ({ ms: item.ms, description: false, media: true }))
   ].sort((a, b) => a.ms - b.ms);
   let run = 0;
   let previousMs = -Infinity;
   const descriptionsPerRun = new Map();
+  const firstSentRuns = new Set();
+  const mediaRuns = new Set();
   for (const event of timeline) {
     if (event.ms - previousMs > EMPLOYEE_FORWARD_RUN_GAP_MS) run += 1;
     previousMs = event.ms;
     if (event.description) descriptionsPerRun.set(run, (descriptionsPerRun.get(run) || 0) + 1);
+    if (event.firstSent) firstSentRuns.add(run);
+    if (event.media) mediaRuns.add(run);
   }
   if ([...descriptionsPerRun.values()].some((count) => count > 1)) return [];
+  if ([...firstSentRuns].some((where) => mediaRuns.has(where))) return [];
   const orphans = pairForwardedAlbums(captions, media);
   if (orphans.length || captions.some((entry) => !entry.media.length)) return [];
 
@@ -17823,6 +18021,7 @@ async function settleHeldMediaBySenderTime({ phone, data = {}, currentStep = 'em
   if (!data.pending_property_queue.length) delete data.pending_property_queue;
   delete data.employee_unassigned_media;
   delete data.employee_unassigned_notice_sent;
+  delete data.employee_resent_caption_ms;
   if (phone) await replaceEmployeeSession(phone, currentStep, data);
   return placed;
 }
@@ -28882,6 +29081,15 @@ module.exports.__test = {
   agentPropertyDetailLines,
   employeeWaitingCaptionCount,
   settleHeldMediaBySenderTime,
+  bringEmployeeCaptionForward,
+  holdEmployeeUnassignedMedia,
+  employeeUnassignedMedia,
+  employeeOnePropertyMediaReply,
+  releaseEmployeeOnePropertyReply,
+  employeeStaffSavedMessage,
+  noteEmployeeDuplicateFound,
+  employeePhotoIsTheDuplicates,
+  employeeOnePropertyDuplicateMessage,
   rememberEmployeeQueuedSubmission,
   promoteEmployeeQueuedSubmission,
   employeePendingSubmissionQueue,
