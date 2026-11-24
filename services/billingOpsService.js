@@ -128,13 +128,13 @@ function helpContact() {
 
 // --- Agent messages ---------------------------------------------------------
 
-const AGENT_MESSAGE_KINDS = ['pre_due', 'due_today', 'reminder', 'final_reminder', 'taken_down', 'reinstated', 'paid'];
+const AGENT_MESSAGE_KINDS = ['pre_due', 'due_today', 'reminder', 'final_reminder', 'taken_down', 'reinstated', 'paid', 'rejoin', 'welcome_back'];
 
 function payLinkLine(payLink) {
   return payLink ? `💳 Your payment page: ${payLink}` : '';
 }
 
-const PAY_LINK_KINDS = new Set(['pre_due', 'due_today', 'reminder', 'final_reminder', 'taken_down', 'views']);
+const PAY_LINK_KINDS = new Set(['pre_due', 'due_today', 'reminder', 'final_reminder', 'taken_down', 'views', 'rejoin']);
 
 /** A pay link for this reminder, or '' if one cannot be made right now. */
 async function payLinkFor(db, input) {
@@ -165,7 +165,74 @@ function keepOneBlank(line, i, all) {
   return line !== '' || (i > 0 && all[i - 1] !== '' && i < all.length - 1);
 }
 
-function buildAgentBillingMessage(kind, { agent = {}, settings = {}, payLink = '' } = {}) {
+/** "UGX 50,000" for a removed agent's messages. */
+function longDate(iso) {
+  if (!iso) return '';
+  const d = new Date(`${revenue.isoDay(iso)}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+function countOf(n, one, many) {
+  const count = Math.max(0, Math.round(Number(n) || 0));
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+/**
+ * An agent taken off makaug, written to kindly (24 Nov 2026). Arthur: "be kind
+ * but mention that his properties were taken down but happy to have them back
+ * if they want, and once reinstated all previous properties are reinstated…
+ * we always need to be nice, kind and understanding." `sentThing` is what they
+ * have just sent us ("plot", "property"), or '' for the notice at removal and
+ * for a hello. `left` is an agent who chose to leave rather than one who had
+ * not paid.
+ */
+function rejoinMessage({ agent = {}, fee = 0, payLink = '', howToPay = '', sentThing = '', left = false } = {}) {
+  const name = agentGreetingName(agent, 'there');
+  const thing = String(sentThing || '').trim();
+  return [
+    thing
+      ? `Hi ${name}, thank you for sending this ${thing}, and for all the properties you've shared with makaug. 🙏`
+      : `Hi ${name}, thank you for all the properties you've shared with makaug. 🙏`,
+    '',
+    left
+      ? `When you left makaug we took your listings down, and new ones can't go up for now. We'd be really happy to have you back whenever you're ready.`
+      : `Because the monthly agent plan (${ugx(fee)}) wasn't paid, we've had to take your listings down for now${thing ? ', and new ones can\'t go up yet' : ''}. We understand things come up, and we'd be really happy to have you back whenever you're ready.`,
+    '',
+    payLink ? `To rejoin, pay ${ugx(fee)} here: ${payLink}` : `To rejoin, pay ${ugx(fee)}:`,
+    howToPay,
+    '',
+    `As soon as it's in, your profile and all your previous properties go straight back up${thing ? `, and the ${thing} you've just sent goes to our team for review. You won't need to send anything again` : ''}.`,
+    '',
+    'Any questions, just reply here.',
+    '',
+    'Phillip, MakaUG'
+  ].filter(keepOneBlank).join('\n');
+}
+
+/** The welcome back, once a removed agent's payment is in (approved by Arthur, 24 Nov 2026). */
+function welcomeBackMessage({ agent = {}, amountUgx = 0, restored = 0, imported = 0 } = {}) {
+  const name = agentGreetingName(agent, 'there');
+  const until = longDate(agent.paid_until);
+  const amount = Number(amountUgx) > 0 ? ` of ${ugx(amountUgx)}` : '';
+  const back = Number(restored) > 0
+    ? `Your profile and your ${countOf(restored, 'property', 'properties')} are back on makaug`
+    : 'Your profile is back on makaug';
+  const sent = Number(imported) > 0
+    ? `, and the ${countOf(imported, 'property', 'properties')} you sent while you were away ${Number(imported) === 1 ? 'is' : 'are'} with our team for review. We'll let you know as soon as ${Number(imported) === 1 ? "it's" : "they're"} live.`
+    : '.';
+  return [
+    `Welcome back, ${name}! 🎉 Your payment${amount} is in${until ? `, and your plan runs to ${until}` : ''}.`,
+    '',
+    `${back}${sent}`,
+    '',
+    'Thank you for coming back.',
+    '',
+    'Phillip, MakaUG'
+  ].join('\n');
+}
+
+function buildAgentBillingMessage(kind, { agent = {}, settings = {}, payLink = '', extra = {} } = {}) {
   const name = agentGreetingName(agent, 'there');
   const fee = Number(settings.agent_fee?.monthly_ugx || agent.monthly_fee_ugx || publishedPricing().agent.monthly_ugx);
   const pay = payToLine(settings);
@@ -198,6 +265,10 @@ function buildAgentBillingMessage(kind, { agent = {}, settings = {}, payLink = '
       return [`Hi ${name},`, '', 'Your makaug profile and listings are *paused* because the monthly subscription has not been paid.', '', 'Nothing has been deleted. As soon as you pay, everything goes back live exactly as it was.', howToPay, '', `Please call or WhatsApp *${help.name}* on *${help.pretty}* and we will help you.`].filter(keepOneBlank).join('\n');
     case 'reinstated':
       return [`✅ *Payment received — thank you, ${name}!*`, '', `Your makaug profile and all your listings are live again${agent.paid_until ? `, paid until *${prettyDate(agent.paid_until)}*` : ''}.`, '', 'Send new properties here any time, the same way as before.'].join('\n');
+    case 'rejoin':
+      return rejoinMessage({ agent, fee, payLink, howToPay: pay ? momoHowToPay({ amountUgx: fee }) : '', sentThing: extra.sentThing || '', left: extra.left === true });
+    case 'welcome_back':
+      return welcomeBackMessage({ agent, amountUgx: extra.amountUgx, restored: extra.restored, imported: extra.imported });
     case 'paid':
       // The receipt for an agent who was never paused: "live again" would be odd.
       return [`✅ *Payment received — thank you, ${name}!*`, '', `Your makaug agent subscription is paid${agent.paid_until ? ` until *${prettyDate(agent.paid_until)}*` : ''}.`, '', 'Keep sending me properties here, the same way as before.'].join('\n');
@@ -217,7 +288,7 @@ async function deliver(to, body, kind, nonce, imageUrl = '') {
 async function loadAgent(db, agentId) {
   return (await db.query(
     `SELECT id, full_name, greeting_name, phone, whatsapp, status, paid_until, fee_exempt, monthly_fee_ugx,
-            billing_reminder_log, billing_suspended_at, billing_snapshot, removed_at,
+            billing_reminder_log, billing_suspended_at, billing_snapshot, removed_at, removed_reason, removal_snapshot,
             fee_offer_mode, fee_offer_until, fee_offer_at
        FROM agents WHERE id = $1::uuid`,
     [agentId]
@@ -232,7 +303,7 @@ function daysOverdue(agent, today = revenue.kampalaDate()) {
 }
 
 /** Send one of the agent billing messages, and remember that it went. */
-async function sendAgentBillingMessage(db, { agentId, kind, actor = 'admin', force = false }) {
+async function sendAgentBillingMessage(db, { agentId, kind, actor = 'admin', force = false, extra = {} }) {
   if (!AGENT_MESSAGE_KINDS.includes(kind)) throw revenue.httpError(400, 'Unknown message');
   const agent = await loadAgent(db, agentId);
   if (!agent) throw revenue.httpError(404, 'Agent not found');
@@ -247,7 +318,7 @@ async function sendAgentBillingMessage(db, { agentId, kind, actor = 'admin', for
   const to = String(agent.whatsapp || agent.phone || '').replace(/\D+/g, '');
   if (to.length < 9) throw revenue.httpError(400, 'This agent has no WhatsApp number');
   const payLink = PAY_LINK_KINDS.has(kind) ? await payLinkFor(db, { purpose: 'agent_subscription', agent_id: agent.id }) : '';
-  const body = buildAgentBillingMessage(kind, { agent, settings, payLink });
+  const body = buildAgentBillingMessage(kind, { agent, settings, payLink, extra });
   const periodKey = `${kind}:${agent.paid_until ? revenue.isoDay(agent.paid_until) : 'none'}`;
   // Every message that asks for money carries the merchant-code card.
   const card = PAY_LINK_KINDS.has(kind) ? payLinkCardUrl(payLink) : '';
@@ -296,12 +367,16 @@ async function takeDownAgentForBilling(db, { agentId, actor = 'admin' }) {
 }
 
 /** Everything back exactly as it was. Called automatically when a payment is recorded. */
-async function reinstateAgentAfterPayment(db, { agentId, actor = 'payment', notify = true, transactionClient = null }) {
+async function reinstateAgentAfterPayment(db, { agentId, actor = 'payment', notify = true, transactionClient = null, amountUgx = 0 }) {
   const agent = await loadAgent(transactionClient || db, agentId);
+  // Taken off makaug for not paying, or after leaving: paying brings them
+  // back (Arthur, 24 Nov 2026: "Restore automatically"). Removed for breaking
+  // the rules, as a duplicate or for anything else: staff decide in King.
+  if (agent?.removed_at) {
+    if (!require('./agentGoodbyeService').canRejoin(agent)) return { reinstated: false, reason: 'removed' };
+    return rejoinAfterPayment(db, { agent, actor, notify, transactionClient, amountUgx });
+  }
   if (!agent?.billing_suspended_at) return { reinstated: false };
-  // A removed agent is not put back by a payment: staff use Restore in King
-  // first (10 Nov 2026), so nobody ends up live and "removed" at once.
-  if (agent.removed_at) return { reinstated: false, reason: 'removed' };
   const snap = agent.billing_snapshot || {};
   const client = transactionClient || await db.getClient();
   try {
@@ -325,6 +400,97 @@ async function reinstateAgentAfterPayment(db, { agentId, actor = 'payment', noti
     ? await sendAgentBillingMessage(db, { agentId, kind: 'reinstated', actor, force: true }).catch((error) => ({ error: error.message }))
     : null;
   return { reinstated: true, listings_restored: (snap.listings || []).length, notice };
+}
+
+/**
+ * A removed agent has paid. Their listings and login come back as they were
+ * (as King's Restore does), then, once the payment is saved, the properties
+ * they sent while away go to staff review, they get the welcome back, and
+ * the team is told.
+ */
+async function rejoinAfterPayment(db, { agent, actor = 'payment', notify = true, transactionClient = null, amountUgx = 0 }) {
+  const goodbye = require('./agentGoodbyeService');
+  const removedAt = agent.removed_at;
+  const client = transactionClient || await db.getClient();
+  let restored;
+  try {
+    if (!transactionClient) await client.query('BEGIN');
+    restored = await goodbye.restoreRemovedAgent(client, agent.id);
+    if (!transactionClient) await client.query('COMMIT');
+  } catch (error) {
+    if (!transactionClient) await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    if (!transactionClient) client.release();
+  }
+  if (!restored) return { reinstated: false, reason: 'not_removed' };
+  // After the payment's own transaction has been saved. The welcome back goes
+  // however the payment was recorded, King included (Arthur, 24 Nov 2026).
+  void notify;
+  const later = () => welcomeBackAfterRejoin(db, { agentId: agent.id, removedAt, restored, actor, notify: true, amountUgx })
+    .catch((error) => logger.warn('Welcome back after a rejoin failed', { agent_id: agent.id, error: error.message }));
+  setTimeout(later, transactionClient ? 4000 : 0);
+  return { reinstated: true, rejoined: true, listings_restored: restored.listingsRestored };
+}
+
+async function welcomeBackAfterRejoin(db, { agentId, removedAt, restored = {}, actor = 'payment', notify = true, amountUgx = 0 }) {
+  const goodbye = require('./agentGoodbyeService');
+  const agent = await loadAgent(db, agentId);
+  // Rolled back with the payment, or removed again since: nothing to say.
+  if (!agent || agent.removed_at) return { skipped: 'still_removed' };
+  await goodbye.unmarkFormerAgentWhatsapp({ agent }).catch(() => null);
+  const imported = await goodbye.importAdvertsSentWhileAway(db, { agent, since: removedAt })
+    .catch((error) => { logger.warn('Importing adverts sent while away failed', { agent_id: agentId, error: error.message }); return { imported: 0 }; });
+  const message = notify
+    ? await sendAgentBillingMessage(db, {
+      agentId,
+      kind: 'welcome_back',
+      actor,
+      force: true,
+      extra: { amountUgx, restored: restored.listingsRestored || 0, imported: imported.imported || 0 }
+    }).catch((error) => ({ error: error.message }))
+    : null;
+  await require('./leadDeskService').sendToTeam(db, [
+    `✅ *${agent.full_name} paid and is back on makaug*`,
+    `${restored.listingsRestored || 0} listing${restored.listingsRestored === 1 ? '' : 's'} back up${imported.imported ? `, and ${imported.imported} propert${imported.imported === 1 ? 'y' : 'ies'} they sent while away ${imported.imported === 1 ? 'is' : 'are'} waiting in staff review` : ''}.`,
+    notify ? 'They have had the welcome back on WhatsApp.' : ''
+  ].filter(Boolean).join('\n'), 'agent_rejoined').catch(() => null);
+  return { imported: imported.imported || 0, message };
+}
+
+/**
+ * The kind message to an agent taken off makaug (24 Nov 2026): at removal for
+ * not paying, and when one writes to us later. With their payment link and
+ * the merchant-code card. `sentThing` is what they have just sent ("plot").
+ */
+async function sendRejoinMessage(db, { agentId, sentThing = '', actor = 'whatsapp' } = {}) {
+  const agent = await loadAgent(db, agentId);
+  if (!agent?.removed_at) return { skipped: 'not_removed' };
+  const goodbye = require('./agentGoodbyeService');
+  if (!goodbye.canRejoin(agent)) return { skipped: 'not_rejoinable' };
+  // One note at a time: an older one still waiting for them to write is
+  // replaced, so they never get two.
+  await db.query(
+    `UPDATE outbound_message_queue
+        SET status = 'failed', last_error = 'superseded_by_newer_rejoin_note', next_attempt_at = NOW(), updated_at = NOW()
+      WHERE channel = 'whatsapp' AND status IN ('pending', 'retry')
+        AND metadata->>'message_kind' = 'lead_handoff_agent_billing_rejoin'
+        AND RIGHT(regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g'), 9) = ANY($1::text[])`,
+    [goodbye.phoneKeys(agent)]
+  ).catch(() => null);
+  const result = await sendAgentBillingMessage(db, {
+    agentId,
+    kind: 'rejoin',
+    actor,
+    force: true,
+    extra: { sentThing, left: goodbye.removalCode(agent) === 'cancelled' }
+  });
+  await db.query(
+    `UPDATE agents SET removal_snapshot = COALESCE(removal_snapshot, '{}'::jsonb) || jsonb_build_object('rejoin_sent_at', NOW()::text)
+      WHERE id = $1::uuid AND removed_at IS NOT NULL`,
+    [agentId]
+  ).catch(() => null);
+  return result;
 }
 
 /** Daily: remind agents a few days before their month ends, and on the day. */
@@ -408,6 +574,9 @@ async function expectingPaymentFrom(db, phone) {
     const a = ctx.agent;
     if (a.fee_exempt) return null;
     if (a.billing_suspended_at || a.status === 'pending') return ctx;
+    // Taken off makaug for not paying (or after leaving): their payment is
+    // how they come back (24 Nov 2026).
+    if (a.removed_at) return ctx;
     const overdue = daysOverdue(a) > 0;
     const soon = a.paid_until && revenue.isoDay(a.paid_until) <= new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
     return overdue || soon ? ctx : null;
@@ -587,7 +756,7 @@ async function confirmClaim(db, { claimId, actor, method, accountKey, amountUgx,
   if (claim.purpose === 'agent_subscription' && claim.agent_id) {
     const agent = await loadAgent(db, claim.agent_id);
     result = await revenue.recordAgentPayment(db, { agent, payment, actor });
-    if (agent.billing_suspended_at) result.reinstatement = await reinstateAgentAfterPayment(db, { agentId: agent.id, actor });
+    if (agent.billing_suspended_at || agent.removed_at) result.reinstatement = await reinstateAgentAfterPayment(db, { agentId: agent.id, actor, amountUgx: payment.amount_ugx || payment.amount });
     else if (String(agent.status || '').toLowerCase() === 'pending') {
       result.pendingAgent = await require('./payLinkService').pendingAgentPaid(db, agent, { how: 'mobile money', amountUgx: payment.amount }).catch(() => null);
     }
@@ -1298,6 +1467,11 @@ module.exports = {
   sendAgentBillingMessage,
   takeDownAgentForBilling,
   reinstateAgentAfterPayment,
+  rejoinAfterPayment,
+  welcomeBackAfterRejoin,
+  sendRejoinMessage,
+  rejoinMessage,
+  welcomeBackMessage,
   runAgentFeeReminders,
   onFreeTrial,
   trialState,

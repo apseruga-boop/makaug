@@ -106,7 +106,9 @@ async function recordManagerPayment(db, { kind, id, body = {}, actor = 'staff' }
     let result;
     if (kind === 'agent_subscription') {
       const agent = (await client.query('SELECT * FROM agents WHERE id = $1 FOR UPDATE', [id])).rows[0];
-      if (!agent || agent.removed_at) throw revenue.httpError(404, 'Active agent not found');
+      // Taken off for not paying, or after leaving: paying is how they come
+      // back (24 Nov 2026). Removed for anything else: Restore in King first.
+      if (!agent || (agent.removed_at && !require('./agentGoodbyeService').canRejoin(agent))) throw revenue.httpError(404, 'Active agent not found');
       result = await revenue.recordAgentPayment(client, { agent, payment, actor });
       result.reinstatement = await billingOps.reinstateAgentAfterPayment(db, { agentId: id, actor, notify: false, transactionClient: client });
     } else {

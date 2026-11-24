@@ -19505,7 +19505,7 @@ async function adminAgentManagerMoveListing(propertyId) {
 // anything: the goodbye message and their goodbye film (Arthur, 10 Nov 2026).
 const ADMIN_AGENT_REMOVAL_REASONS = [
   { code: "cancelled", label: "They're leaving: cancelled or won't pay", does: "Listings and profile off, login closed, WhatsApp set back to normal. They get the goodbye message and film. ID and personal details deleted after 30 days; name and number kept." },
-  { code: "not_paying", label: "Has not paid yet", does: "Listings and profile off, login closed. Nothing is sent; their details are kept so they can come back when they pay." },
+  { code: "not_paying", label: "Has not paid yet", does: "Listings and profile off, login closed. They get a kind note with their payment link; when they pay, everything comes back by itself." },
   { code: "rules", label: "Broke the rules (fake or wrong listings)", does: "Listings and profile off, login closed. Nothing is sent. Their ID is kept, for fraud or police requests." },
   { code: "duplicate", label: "Duplicate or test record", does: "Profile and listings off. Nothing is sent." },
   { code: "other", label: "Something else", does: "Profile and listings off. Nothing is sent. Say why in the note." }

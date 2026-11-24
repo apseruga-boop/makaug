@@ -46,7 +46,7 @@ const REMOVAL_REASONS = Object.freeze([
     code: 'not_paying',
     label: 'Has not paid yet',
     closeLogin: true,
-    does: 'Listings and profile off makaug, login closed. Nothing is sent, and their details are kept so they can come back when they pay.'
+    does: 'Listings and profile off makaug, login closed. They get a kind note with their payment link, and their details are kept: when they pay, everything comes back by itself.'
   },
   {
     code: 'rules',
@@ -528,7 +528,7 @@ function kampalaDay(value) {
 }
 
 /** The WhatsApp Arthur and Ronald get when an agent is removed in King. */
-function buildRemovalAlert({ agent = {}, reason = null, reasonText = '', by = '', listingsHidden = 0, loginClosed = false, goodbye = null, personalDeleteAfter = null, baseUrl = 'https://makaug.com' } = {}) {
+function buildRemovalAlert({ agent = {}, reason = null, reasonText = '', by = '', listingsHidden = 0, loginClosed = false, goodbye = null, rejoinNote = false, personalDeleteAfter = null, baseUrl = 'https://makaug.com' } = {}) {
   const name = String(agent.full_name || 'An agent').trim();
   const phone = prettyPhone(agent.whatsapp || agent.phone);
   const lines = [`🚪 *Agent removed: ${name}*`];
@@ -543,6 +543,8 @@ function buildRemovalAlert({ agent = {}, reason = null, reasonText = '', by = ''
       ? '• Goodbye message and film on their way to them on WhatsApp'
       : '• No WhatsApp number on file, so no goodbye was sent');
     if (personalDeleteAfter) lines.push(`• Their ID and personal details are deleted on ${kampalaDay(personalDeleteAfter)} unless they are restored before then`);
+  } else if (rejoinNote) {
+    lines.push('• They were sent a kind note with their payment link; when they pay, everything comes back by itself');
   } else {
     lines.push('• Nothing was sent to them, and their details are kept');
   }
@@ -812,6 +814,131 @@ function forgetAgentNumbers(agent = {}) {
   }
 }
 
+// --- Coming back ------------------------------------------------------------
+//
+// 24 Nov 2026. An agent taken off makaug for not paying went on sending
+// properties: the next morning he still got the Morning Brief, queued before he
+// was removed, and his plot was answered with a lecture on land safety and the
+// menu. Arthur: be kind, say his properties were taken down and that we would
+// be happy to have him back, and that coming back brings back everything he had.
+
+/** Why an agent was removed, as a REMOVAL_REASONS code ('' when unknown). */
+function removalCode(agent = {}) {
+  const snap = agent.removal_snapshot && typeof agent.removal_snapshot === 'object' ? agent.removal_snapshot : {};
+  if (removalReason(snap.reason_code)) return removalReason(snap.reason_code).code;
+  const text = String(agent.removed_reason || '').trim();
+  const match = REMOVAL_REASONS.find((r) => text === r.label || text.startsWith(`${r.label} — `));
+  return match ? match.code : '';
+}
+
+/** Taken off for not paying, or left of their own accord: paying brings them back. */
+function canRejoin(agent = {}) {
+  return Boolean(agent.removed_at) && ['not_paying', 'cancelled'].includes(removalCode(agent));
+}
+
+/**
+ * Undo a removal, inside the caller's transaction: listings back to how they
+ * were, the closed login open again, the agent as they were. King's Restore
+ * and a removed agent's payment both use it. null when not removed.
+ */
+async function restoreRemovedAgent(client, agentId) {
+  const agent = (await client.query(
+    'SELECT id, full_name, phone, whatsapp, user_id, removed_at, removal_snapshot FROM agents WHERE id = $1 FOR UPDATE',
+    [agentId]
+  )).rows[0];
+  if (!agent?.removed_at) return null;
+  const snap = agent.removal_snapshot || {};
+  let listingsRestored = 0;
+  for (const item of Array.isArray(snap.listings) ? snap.listings : []) {
+    listingsRestored += (await client.query(
+      `UPDATE properties SET status = $2, updated_at = NOW() WHERE id = $1 AND status = 'hidden' RETURNING id`,
+      [item.id, item.previous_status]
+    )).rows.length;
+  }
+  // The login closed at removal opens again. Deleted details (ID, NIN,
+  // email, photo) cannot come back: staff ask the agent for them again.
+  let loginReopened = false;
+  if (snap.login_closed && agent.user_id) {
+    loginReopened = (await client.query(
+      `UPDATE users SET status = 'active', updated_at = NOW() WHERE id = $1 AND status = 'suspended' RETURNING id`,
+      [agent.user_id]
+    )).rows.length > 0;
+  }
+  await client.query(
+    `UPDATE agents SET removed_at = NULL, removed_reason = NULL, removed_by = NULL, removal_snapshot = NULL,
+            status = $2, updated_at = NOW() WHERE id = $1`,
+    [agentId, ['pending', 'approved', 'rejected', 'suspended'].includes(snap.previous_status) ? snap.previous_status : 'pending']
+  );
+  forgetAgentNumbers(agent);
+  return {
+    agent,
+    snapshot: snap,
+    listingsRestored,
+    loginReopened,
+    personalDeleted: Array.isArray(snap.personal_deleted) ? snap.personal_deleted : []
+  };
+}
+
+/**
+ * Nothing queued for an agent still goes once they are removed (24 Nov 2026:
+ * the Morning Brief queued the afternoon before went to an agent removed that
+ * evening). Returns how many messages were stopped.
+ */
+async function cancelQueuedForFormerAgent(dbc, agent = {}) {
+  const keys = phoneKeys(agent);
+  if (!keys.length) return 0;
+  const result = await dbc.query(
+    `UPDATE outbound_message_queue
+        SET status = 'failed',
+            last_error = 'agent_removed',
+            next_attempt_at = NOW(),
+            metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('cancelled_because', 'agent_removed', 'cancelled_at', NOW()::text),
+            updated_at = NOW()
+      WHERE channel = 'whatsapp'
+        AND status IN ('pending', 'retry')
+        AND RIGHT(regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g'), 9) = ANY($1::text[])
+      RETURNING id`,
+    [keys]
+  ).catch(() => ({ rows: [] }));
+  return result.rows.length;
+}
+
+/**
+ * What a former agent sent us while they were away, saved for staff review
+ * under their name now that they are back. The adverts are read from the chat
+ * as it was kept (whatsapp_messages), as for adverts forwarded by a stranger.
+ */
+async function importAdvertsSentWhileAway(dbc, { agent = {}, since = null } = {}) {
+  const keys = phoneKeys(agent);
+  if (!keys.length || !since) return { imported: 0 };
+  const phone = (await dbc.query(
+    `SELECT user_phone FROM whatsapp_messages
+      WHERE direction = 'inbound' AND created_at >= $2::timestamptz
+        AND RIGHT(regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g'), 9) = ANY($1::text[])
+      ORDER BY created_at DESC LIMIT 1`,
+    [keys, since]
+  )).rows[0]?.user_phone;
+  if (!phone) return { imported: 0 };
+  const whatsapp = require('../routes/whatsapp');
+  const approved = (await dbc.query(
+    `SELECT id, makaug_agent_number, full_name, greeting_name, company_name, phone, whatsapp, email, status, fee_exempt, profile_photo_url
+       FROM agents WHERE id = $1 AND removed_at IS NULL AND status = 'approved'`,
+    [agent.id]
+  )).rows[0];
+  if (!approved) return { imported: 0, skipped: 'not_approved' };
+  const { groups } = await whatsapp.groupForwardedAdverts(phone, { since });
+  const propertyIds = [];
+  for (const group of groups) {
+    try {
+      const result = await whatsapp.importForwardedAdvert({ phone, agent: approved, group, inboundMessageId: `${group.caption_message_id}:rejoin-import` });
+      if (result?.property_id) propertyIds.push(result.property_id);
+    } catch (error) {
+      console.warn('[agent-rejoin] an advert sent while away was not saved:', error.message);
+    }
+  }
+  return { imported: propertyIds.length, property_ids: propertyIds, adverts: groups.length };
+}
+
 module.exports = {
   REMOVAL_REASONS,
   AGENT_PERSONAL_COLUMNS,
@@ -839,5 +966,10 @@ module.exports = {
   runPendingGoodbyes,
   runFormerAgentDetailDeletion,
   startFormerAgentDetailScheduler,
-  phoneKeys
+  phoneKeys,
+  removalCode,
+  canRejoin,
+  restoreRemovedAgent,
+  cancelQueuedForFormerAgent,
+  importAdvertsSentWhileAway
 };
