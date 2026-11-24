@@ -580,7 +580,8 @@ async function settleFromOrder(db, link, order) {
     } else if (claimed.purpose === 'agent_subscription' && claimed.agent_id) {
       const agent = (await db.query('SELECT * FROM agents WHERE id = $1::uuid', [claimed.agent_id])).rows[0];
       recorded = await revenue.recordAgentPayment(db, { agent, payment, actor: 'revolut' });
-      if (agent?.billing_suspended_at) recorded.reinstatement = await billingOps.reinstateAgentAfterPayment(db, { agentId: agent.id, actor: 'revolut' });
+      // A paused agent, or one taken off for not paying, comes back on paying.
+      if (agent?.billing_suspended_at || agent?.removed_at) recorded.reinstatement = await billingOps.reinstateAgentAfterPayment(db, { agentId: agent.id, actor: 'revolut', amountUgx: claimed.amount_ugx });
       recorded.pendingAgent = await pendingAgentPaid(db, agent, { how: 'card', amountUgx: claimed.amount_ugx });
     } else if (claimed.purpose === 'short_term_fee' && claimed.st_listing_id) {
       recorded = await recordShortTermPayment(db, { stListingId: claimed.st_listing_id, payment, actor: 'revolut' });

@@ -18474,6 +18474,67 @@ async function handlePaymentClaimMessage({ phone, body = '', photoCandidates = [
   ].join('\n');
 }
 
+/**
+ * An agent taken off makaug writes to us (24 Nov 2026). An agent removed the
+ * evening before for not paying sent a plot and its photos the next morning:
+ * he was answered with a lecture on land safety and the menu, his photos were
+ * kept without a word, and nobody on the team heard. Someone removed for not
+ * paying, or who left, is sent the kind note with their payment link (at most
+ * once a day): what they send is kept, and comes in for review when they pay.
+ * The team hears, whatever the reason for the removal.
+ */
+const formerAgentNotedAt = new Map();
+const FORMER_AGENT_NOTE_EVERY_MS = 12 * 60 * 60 * 1000;
+const REJOIN_NOTE_EVERY_MS = 24 * 60 * 60 * 1000;
+
+async function findRemovedAgentByPhone(phone) {
+  const key = agentPhoneKey(phone);
+  if (!key || key.length < 9) return null;
+  const rows = (await db.query(
+    `SELECT id, full_name, greeting_name, phone, whatsapp, status, removed_at, removed_reason, removal_snapshot
+       FROM agents
+      WHERE RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = $1
+         OR RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = $1
+      ORDER BY (removed_at IS NULL) DESC, removed_at DESC
+      LIMIT 3`,
+    [key]
+  ).catch(() => ({ rows: [] }))).rows;
+  // Another record on this number still working as an agent: not a former agent.
+  if (!rows.length || rows.some((row) => !row.removed_at)) return null;
+  return rows[0];
+}
+
+async function removedAgentReply({ phone, body = '', hasMedia = false } = {}) {
+  if (isTeamNumber(phone)) return null;
+  const agent = await findRemovedAgentByPhone(phone);
+  if (!agent) return null;
+  const goodbye = require('../services/agentGoodbyeService');
+  const said = normalizeInput(body);
+  const property = hasMedia || looksLikeForwardedProperty({ cleanBody: said, mediaUrl: '', runtime: {} });
+  const rejoinable = goodbye.canRejoin(agent);
+  const reason = goodbye.removalReason(goodbye.removalCode(agent));
+  const lastNoted = formerAgentNotedAt.get(agent.id) || 0;
+  if (Date.now() - lastNoted > FORMER_AGENT_NOTE_EVERY_MS) {
+    formerAgentNotedAt.set(agent.id, Date.now());
+    const digits = String(phone || '').replace(/\D+/g, '');
+    require('../services/leadDeskService').sendToTeam(db, [
+      `🔁 *${agent.full_name} wrote to makaug* · number ending ${digits.slice(-3)}`,
+      `Removed: ${reason ? reason.label : (agent.removed_reason || 'reason not given')}`,
+      said ? `They wrote: "${said.slice(0, 200)}${said.length > 200 ? '…' : ''}"${hasMedia ? ' (with photos)' : ''}` : (hasMedia ? 'They sent photos.' : ''),
+      rejoinable
+        ? 'They have the kind note with their payment link. What they send is kept: when they pay, they come back by themselves and it goes to staff review.'
+        : 'Not invited back automatically (reason above); they are getting the usual replies. Restore them in King if they should come back.'
+    ].filter(Boolean).join('\n'), 'former_agent_wrote').catch(() => null);
+  }
+  if (!rejoinable) return null;
+  const sentAt = Date.parse(agent.removal_snapshot?.rejoin_sent_at || '') || 0;
+  if (Date.now() - sentAt < REJOIN_NOTE_EVERY_MS) return { message: '', silent: true };
+  const facts = said ? employeePropertyFacts(said, {}) : {};
+  const thing = !property ? '' : (facts.listingType === 'land' ? 'plot' : 'property');
+  await require('../services/billingOpsService').sendRejoinMessage(db, { agentId: agent.id, sentThing: thing, actor: 'whatsapp' });
+  return { message: '', silent: true };
+}
+
 /** An agent paused for an unpaid fee messages us: say so kindly, and tell Ronald. */
 async function billingPausedAgentReply({ phone, body = '' } = {}) {
   const key = String(phone || '').replace(/\D+/g, '').slice(-9);
@@ -26515,6 +26576,16 @@ async function processInboundRuntimeUnlocked({
   if (paymentReply) return { message: paymentReply, nextStep: sessionStep };
   const pausedReply = await billingPausedAgentReply({ phone, body: effectiveBody }).catch(() => null);
   if (pausedReply) return { message: pausedReply, nextStep: sessionStep };
+  // Taken off makaug: kindly, with the way back (24 Nov 2026).
+  const formerAgent = await removedAgentReply({
+    phone,
+    body: effectiveBody,
+    hasMedia: Boolean(inboundPhotoCandidates.length || (effectiveMediaUrl && !isAudioNote))
+  }).catch((error) => {
+    logger.warn('Former agent reply failed:', error.message || String(error));
+    return null;
+  });
+  if (formerAgent) return { message: formerAgent.message || '', nextStep: sessionStep };
 
   // A reply to something we sent: "Thanks", "This is in Mukono not Nakaseke",
   // "does the app really have clients?", "its not opening", "Delete". Answered
@@ -28585,6 +28656,8 @@ module.exports.__test = {
   logWhatsappMessage,
   looksLikeForwardedProperty,
   isVoiceMediaType,
+  removedAgentReply,
+  findRemovedAgentByPhone,
   askedAboutAFeature,
   featureQuestionReply,
   looksLikeSearchBrief,

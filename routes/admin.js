@@ -10192,9 +10192,22 @@ router.post('/agents/:id/remove', async (req, res, next) => {
     login_closed: loginClosed, personal_delete_after: personalDeleteAfter, goodbye: Boolean(reason.goodbye)
   }, actor);
   try {
+    // Nothing still queued for them as an agent goes (24 Nov 2026: a Morning
+    // Brief queued that afternoon went to an agent removed that evening).
+    result.queued_messages_stopped = await agentGoodbye.cancelQueuedForFormerAgent(db, agent);
     if (reason.closeLogin) {
       const day = new Date().toISOString().slice(0, 10);
       result.whatsapp = await agentGoodbye.resetFormerAgentWhatsapp({ agent, note: `Former agent: removed ${day} (${reason.label}).` });
+    }
+    // Removed for not paying: a kind note with their payment link, so they
+    // know, and paying brings everything back (Arthur, 24 Nov 2026). It waits
+    // for them to write first when the 7-day rule says so.
+    if (reason.code === 'not_paying') {
+      result.rejoin_note = 'sending';
+      setImmediate(() => {
+        billingOps.sendRejoinMessage(db, { agentId: agent.id, actor })
+          .catch((error) => console.warn('[agent-rejoin] removal note not sent:', error.message));
+      });
     }
     if (reason.goodbye) {
       // In the background: the film is made first so the message can say it
@@ -10223,6 +10236,7 @@ router.post('/agents/:id/remove', async (req, res, next) => {
       listingsHidden: listings.length,
       loginClosed,
       goodbye: result.goodbye || null,
+      rejoinNote: Boolean(result.rejoin_note),
       personalDeleteAfter,
       baseUrl: agentWeeklyReports.siteUrl()
     }).catch((error) => console.warn('[agent-goodbye] removal notice not sent:', error.message));
@@ -10668,29 +10682,12 @@ router.post('/agents/:id/restore', async (req, res, next) => {
   try {
     if (!/^[0-9a-f-]{36}$/i.test(String(req.params.id))) return res.status(400).json({ ok: false, error: 'Invalid agent id' });
     await client.query('BEGIN');
-    const agent = (await client.query('SELECT id, full_name, phone, whatsapp, user_id, removed_at, removal_snapshot FROM agents WHERE id = $1 FOR UPDATE', [req.params.id])).rows[0];
-    if (!agent?.removed_at) { await client.query('ROLLBACK'); return res.status(404).json({ ok: false, error: 'No removed agent with that id' }); }
-    const snap = agent.removal_snapshot || {};
-    for (const item of Array.isArray(snap.listings) ? snap.listings : []) {
-      await client.query(`UPDATE properties SET status = $2, updated_at = NOW() WHERE id = $1 AND status = 'hidden'`, [item.id, item.previous_status]);
-    }
-    // The login closed at removal opens again. Deleted details (ID, NIN,
-    // email, photo) cannot come back: staff ask the agent for them again.
-    let loginReopened = false;
-    if (snap.login_closed && agent.user_id) {
-      loginReopened = (await client.query(
-        `UPDATE users SET status = 'active', updated_at = NOW() WHERE id = $1 AND status = 'suspended' RETURNING id`,
-        [agent.user_id]
-      )).rows.length > 0;
-    }
-    await client.query(
-      `UPDATE agents SET removed_at = NULL, removed_reason = NULL, removed_by = NULL, removal_snapshot = NULL,
-              status = $2, updated_at = NOW() WHERE id = $1`,
-      [req.params.id, ['pending', 'approved', 'rejected', 'suspended'].includes(snap.previous_status) ? snap.previous_status : 'pending']
-    );
+    // The same undo a removed agent's payment uses (services/agentGoodbyeService.js).
+    const restored = await agentGoodbye.restoreRemovedAgent(client, req.params.id);
+    if (!restored) { await client.query('ROLLBACK'); return res.status(404).json({ ok: false, error: 'No removed agent with that id' }); }
+    const { agent, snapshot: snap, loginReopened, personalDeleted } = restored;
     await client.query('COMMIT');
     if (snap.whatsapp_reset || snap.login_closed) await agentGoodbye.unmarkFormerAgentWhatsapp({ agent }).catch(() => null);
-    const personalDeleted = Array.isArray(snap.personal_deleted) ? snap.personal_deleted : [];
     await writeAudit('admin_agent_restored', { agent_id: req.params.id, login_reopened: loginReopened, details_to_ask_again: personalDeleted }, adminActorId(req));
     return res.json({ ok: true, data: { id: agent.id, full_name: agent.full_name, login_reopened: loginReopened, details_to_ask_again: personalDeleted } });
   } catch (error) {
