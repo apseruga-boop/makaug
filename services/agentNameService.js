@@ -22,13 +22,33 @@ function firstWord(fullName = '') {
   return word ? word.charAt(0).toUpperCase() + word.slice(1) : '';
 }
 
+// A registered company's name ends in one of these; a person's never does.
+const COMPANY_SUFFIX = /[\s,]+(?:\(u\)\s*)?(?:ltd|limited|smc(?:\s+ltd|\s+limited)?|co|company|inc|plc|llc|uganda)\.?\s*$/i;
+// What follows a company's own name and is not said in a greeting.
+const COMPANY_KIND = /\s+(?:property|properties|real\s+estate|estates?|realtors?|realty|agency|agencies|agents?|homes?|housing|investments?|enterprises?|holdings|group|consult(?:s|ants|ing)?|services?|developers?|management|land|lands|brokers?|solutions|international)\s*$/i;
+
+/**
+ * 24 Nov 2026: a new agent was greeted by his company's full registered
+ * name, "… Property Services Ltd", the name staff had typed for his page. A
+ * company is greeted by its own name, without the Ltd and the kind of business.
+ * Names that are not a company's are left as they are.
+ */
+function greetingFromCompanyName(name = '') {
+  const full = String(name || '').replace(/\s+/g, ' ').trim();
+  if (!full || !COMPANY_SUFFIX.test(full)) return full;
+  let short = full;
+  while (COMPANY_SUFFIX.test(short)) short = short.replace(COMPANY_SUFFIX, '').trim();
+  while (COMPANY_KIND.test(short)) short = short.replace(COMPANY_KIND, '').trim();
+  return short || full.replace(COMPANY_SUFFIX, '').trim() || full;
+}
+
 function agentGreetingName(agent = {}, fallback = '') {
   // The cache is updated the moment an admin changes the name, so it wins over
   // a copy of the agent row held in a session or a lookup cache.
   const cached = agent?.id ? cache.get(String(agent.id)) : '';
-  if (cached) return cached;
+  if (cached) return greetingFromCompanyName(cached);
   const own = String(agent?.greeting_name || '').trim();
-  if (own) return own;
+  if (own) return greetingFromCompanyName(own);
   return firstWord(agent?.full_name || agent?.name || agent?.agent_name || '') || fallback;
 }
 
@@ -59,4 +79,4 @@ function setCachedGreetingName(agentId, name) {
   else cache.delete(String(agentId));
 }
 
-module.exports = { agentGreetingName, firstWord, refreshGreetingNames, startGreetingNameCache, setCachedGreetingName, _cache: cache, _loadedAt: () => loadedAt };
+module.exports = { agentGreetingName, greetingFromCompanyName, firstWord, refreshGreetingNames, startGreetingNameCache, setCachedGreetingName, _cache: cache, _loadedAt: () => loadedAt };

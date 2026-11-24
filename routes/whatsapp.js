@@ -1963,6 +1963,27 @@ async function conversationalAssistantFallback({ phone, body, lang, step, intent
   return friendlyUnknownReply(lang);
 }
 
+// How long somebody's own "Talk to a person" keeps the assistant out of their chat.
+const PERSON_REQUEST_LASTS_MS = 24 * 60 * 60 * 1000;
+// How often a chat the team has is told its message is in the inbox.
+const HANDOFF_ACK_EVERY_MS = 12 * 60 * 60 * 1000;
+
+/** Their own "Talk to a person", a day old: the assistant answers again. */
+function personRequestHasLapsed(control = {}, now = Date.now()) {
+  if (String(control?.status || '').toLowerCase() !== 'needs_human') return false;
+  if (['off', 'copilot'].includes(String(control?.ai_mode || '').toLowerCase())) return false;
+  if (control?.metadata?.needs_person_reason !== 'asked_for_person') return false;
+  const at = Date.parse(control?.metadata?.needs_person_at || '') || 0;
+  return at > 0 && now - at > PERSON_REQUEST_LASTS_MS;
+}
+
+/** In a chat the team has: nothing to say to a thank-you, an ok or a sorry, nor a second "in the inbox" within 12 hours. */
+function handoffAckIsQuiet({ conversationControl = {}, said = '', now = Date.now() } = {}) {
+  if (isCourtesyOnly(said)) return true;
+  const last = Date.parse(conversationControl?.metadata?.handoff_ack_at || '') || 0;
+  return last > 0 && now - last < HANDOFF_ACK_EVERY_MS;
+}
+
 function humanHandoffAck(lang) {
   const code = resolveLangCode(lang);
   const messages = {
@@ -2028,6 +2049,24 @@ async function withTimeout(promise, timeoutMs, fallbackValue = null, label = 'op
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+/**
+ * 24 Nov 2026: a new agent said Hi after Ronald's call at 12:56 and was
+ * approved, but his welcome pack (his page, the agent terms to AGREE to, the
+ * how-to film) went at 17:05, and only because the site restarted then; King's
+ * Approve sends it, the Hi did not. It goes a few seconds after the hello now.
+ */
+function sendCalledAgentWelcomePack(agent = {}, { delayMs = 5000 } = {}) {
+  if (!agent?.id) return;
+  const timer = setTimeout(() => {
+    deferWhatsappWork('called agent welcome pack', () => require('./admin').runAgentApprovalFollowUps({
+      agentId: agent.id,
+      wasApproved: true,
+      actor: 'calling_hello'
+    }));
+  }, delayMs);
+  timer.unref?.();
 }
 
 function deferWhatsappWork(label, task) {
@@ -8955,6 +8994,22 @@ function isOwnAgentSelfIntake(session = {}, phone = '') {
 }
 
 const AGENT_COURTESY = /^(ok(ay)?|thanks?|thank you|asante|webale|noted|alright|sure|fine|got it|cool|yes|yeah|yep|please|okay please|ok please|good|great|nice|👍|🙏|💪|✅)[\s.!👍🙏😊]*$/i;
+// 24 Nov 2026: a new agent's "Sorry", a minute after his welcome, went to
+// Arthur and Ronald as a message "the assistant could not place", and he was
+// told it had been passed to the team. An agent who had asked for a person days
+// before said "Ok thanks" to her "property is live" and was told a team member
+// would reply shortly. Sorry, thanks and ok are said back, not passed on.
+const SORRY_ONLY = /^(?:(?:ok(?:ay)?|oh|ah)[\s,]+)?(?:(?:i\s*a?m|i'm|im)\s+)?(?:so\s+|very\s+|really\s+)?(?:sorry|sori|sory|my bad|apologies|pardon)(?:\s+(?:sir|madam|boss|bro|dear|team|about that|for that|for the delay|for the late reply|for replying late))?[\s.!🙏😊]*$/i;
+
+/** Thanks, ok, sorry, a thumbs-up: courtesy, with nothing to answer or pass on. */
+function isCourtesyOnly(text = '') {
+  const said = normalizeInput(text);
+  if (!said) return false;
+  return AGENT_COURTESY.test(said)
+    || SORRY_ONLY.test(said)
+    || /^(?:god bless(?: you)?|stay blessed|be blessed|blessings|amen)[\s.!🙏😊]*$/i.test(said)
+    || ['thanks', 'praise', 'ack'].includes(replyPlaybook.replyKind(said));
+}
 const AGENT_HOW_TO_POST = /\b(how (do|can) i (post|list|upload|add)|how to (post|list|upload|add)|where (do|can) i (post|list)|how does (this|it) work|what (do|should) i (do|send))\b/i;
 // "I WANT TO POST HOUSES" (Ronald, 13 Nov 2026, 08:35) got the customer
 // listing questions, five of them, before the staff menu showed. Saying you
@@ -9100,10 +9155,13 @@ function agentConversationalAside({ data = {}, cleanBody = '' } = {}) {
     return `Yes — ${saved === 1 ? 'it is' : `all ${saved} are`} with our team for review. Nothing is live until they have checked it, and the moment it is I will send you the link to share.`;
   }
 
-  if (AGENT_COURTESY.test(text)) {
+  if (isCourtesyOnly(text)) {
+    const opener = SORRY_ONLY.test(text)
+      ? `No problem at all${first ? `, ${first}` : ''} 😊`
+      : (/\b(?:thank|thanks|thx|webale|asante|apwoyo|merci)/i.test(text) ? `You're welcome${first ? `, ${first}` : ''} 😊` : '👍');
     return saved
-      ? `👍 ${saved === 1 ? 'That one is' : `All ${saved} are`} with the team. Send the next property whenever you are ready.`
-      : '👍 Send the property whenever you are ready — photos and a caption with the type, area and price.';
+      ? `${opener} ${saved === 1 ? 'That one is' : `All ${saved} are`} with the team. Send the next property whenever you are ready.`
+      : `${opener} Send the property whenever you are ready — photos and a caption with the type, area and price.`;
   }
   return null;
 }
@@ -9136,7 +9194,7 @@ function agentTalkKind(text = '') {
   const said = normalizeInput(text);
   if (!said || agentAsksTheAssistant(said)) return '';
   if (AGENT_GREETING.test(said)) return 'greeting';
-  if (AGENT_COURTESY.test(said)) return 'courtesy';
+  if (isCourtesyOnly(said)) return 'courtesy';
   return /\p{L}{2,}/u.test(said) ? 'other' : '';
 }
 
@@ -26708,6 +26766,7 @@ async function processInboundRuntimeUnlocked({
     });
   if (calledHello?.message && calledHello.agent) {
     await replaceEmployeeSession(phone, 'employee_property_media', agentSelfIntakeSessionData(calledHello.agent));
+    sendCalledAgentWelcomePack(calledHello.agent);
     deferWhatsappWork('WhatsApp calling hello intent log', () => logIntent({
       userPhone: phone,
       waMessageId: inboundMessageId,
@@ -27171,6 +27230,19 @@ async function processInboundRuntimeUnlocked({
     shouldPauseAutomation = false;
   }
 
+  // 24 Nov 2026: an agent who picked "Talk to a person" on 18 Nov, and was
+  // called, was still waiting for one six days later: every message she sent
+  // was answered "a team member will reply here shortly", her "Ok thanks" to
+  // a listing going live included. Asking for a person lasts a day; the team
+  // answering in King, or MENU, ends it sooner.
+  if (shouldPauseAutomation && personRequestHasLapsed(conversationControl)) {
+    await safeConversationControl(phone, {
+      status: 'open',
+      metadata: { needs_person_reason: null, needs_person_released_at: new Date().toISOString(), needs_person_released_by: 'a_day_passed' }
+    }, 'whatsapp_talk_to_person_lapsed');
+    shouldPauseAutomation = false;
+  }
+
   if (shouldPauseAutomation) {
     await updateSession(phone, { current_step: sessionStep, current_intent: intentResult.intent || null });
     await upsertWhatsappUserProfile(phone, {
@@ -27196,6 +27268,12 @@ async function processInboundRuntimeUnlocked({
       }
     });
 
+    // A thank-you or an ok to the team needs no answer; and "a team member
+    // will reply here shortly" is said once, not to every message (24 Nov 2026).
+    if (handoffAckIsQuiet({ conversationControl, said: transcriptRecord?.text ? '' : effectiveBody })) {
+      return { message: '', nextStep: sessionStep };
+    }
+    await safeConversationControl(phone, { metadata: { handoff_ack_at: new Date().toISOString() } }, 'whatsapp_handoff_ack');
     const transcriptEcho = formatVoiceTranscriptEcho(activeLang, transcriptRecord?.text);
     return {
       message: [transcriptEcho, humanHandoffAck(activeLang)].filter(Boolean).join('\n\n'),
@@ -29080,6 +29158,10 @@ module.exports.__test = {
   employeeMediaFailureMessage,
   agentPropertyDetailLines,
   employeeWaitingCaptionCount,
+  isCourtesyOnly,
+  personRequestHasLapsed,
+  handoffAckIsQuiet,
+  sendCalledAgentWelcomePack,
   settleHeldMediaBySenderTime,
   bringEmployeeCaptionForward,
   holdEmployeeUnassignedMedia,
