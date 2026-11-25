@@ -47,6 +47,8 @@ function registerStaffDeskRoutes(router) {
   router.post('/desk/owed/:id', wrap(async (req, res) => res.json({ ok: true, data: await pipe.lateOutcome(needMe(req), req.params.id, req.body || {}) })));
   router.get('/desk/pipeline', wrap(async (req, res) => res.json({ ok: true, data: await pipe.pipeline(personFor(req)) })));
   router.get('/desk/approve', wrap(async (req, res) => res.json({ ok: true, data: await pipe.toApprove(personFor(req), { caller: !isKing(req) && scopeOf(req) === 'caller' }) })));
+  // Opened on a call, waiting for their Hi (Arthur, 25 Nov 2026: King listed them, the staff desk said 0).
+  router.get('/desk/approve/awaiting-hi', wrap(async (req, res) => res.json({ ok: true, data: await pipe.toApprove(personFor(req), { caller: !isKing(req) && scopeOf(req) === 'caller', awaitingHi: true }) })));
   router.get('/desk/owes', wrap(async (req, res) => res.json({ ok: true, data: await pipe.owes(personFor(req)) })));
   router.post('/desk/owes/:id/chase', wrap(async (req, res) => res.json({ ok: true, data: await pipe.chase(needMe(req), req.params.id, { note: req.body?.note }) })));
   router.get('/desk/missed', wrap(async (req, res) => res.json({ ok: true, data: await pipe.missed(personFor(req)) })));
