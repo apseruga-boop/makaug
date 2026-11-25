@@ -5710,6 +5710,9 @@ function normalizeCaptionPriceNotation(caption = '') {
     // its caption gave, and the batch it was in was never closed (14 Nov 2026).
     // "1.5m" is untouched: there a digit follows the stop.
     .replace(/(\d)\.\s*(?=(?:m|mn|million|millions|bn|billion|billions|k)\b)/gi, '$1')
+    // "owner wants 750mbut negotiable" (25 Nov 2026): the m typed against the
+    // next word, and twelve units were held back for a price they gave.
+    .replace(/(\d)(m|mn|bn|k)(but|and|only|negotiable|nego|neg|cash|each|per|fixed|ugx|ush|shs)\b/gi, '$1$2 $3')
     // $2,000 · US$ 2000 · USD2000
     .replace(/(?:us\s*)?\$\s*(\d[\d,.]*)/gi, 'USD $1')
     .replace(/\busd\s*(\d[\d,.]*)/gi, 'USD $1')
@@ -18849,7 +18852,13 @@ async function removedAgentReply({ phone, body = '', hasMedia = false } = {}) {
   if (!agent) return null;
   const goodbye = require('../services/agentGoodbyeService');
   const said = normalizeInput(body);
-  const property = hasMedia || looksLikeForwardedProperty({ cleanBody: said, mediaUrl: '', runtime: {} });
+  const facts = said ? employeePropertyFacts(said, {}) : {};
+  // A property described in words is a property, not a question (25 Nov 2026:
+  // "The above senior secondary school it's on sale … the owner wants 300m"
+  // was answered "I've passed your message to our team").
+  const property = hasMedia
+    || looksLikeForwardedProperty({ cleanBody: said, mediaUrl: '', runtime: {} })
+    || Boolean(facts.listingType && Number(facts.price) > 0);
   const rejoinable = goodbye.canRejoin(agent);
   const reason = goodbye.removalReason(goodbye.removalCode(agent));
   const sentAt = Date.parse(agent.removal_snapshot?.rejoin_sent_at || '') || 0;
@@ -18881,7 +18890,6 @@ async function removedAgentReply({ phone, body = '', hasMedia = false } = {}) {
     }
     return { message: '', silent: true };
   }
-  const facts = said ? employeePropertyFacts(said, {}) : {};
   const thing = !property ? '' : (facts.listingType === 'land' ? 'plot' : 'property');
   await require('../services/billingOpsService').sendRejoinMessage(db, { agentId: agent.id, sentThing: thing, actor: 'whatsapp' });
   return { message: '', silent: true };
