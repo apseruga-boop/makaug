@@ -343,15 +343,23 @@
   }
   function loadApprove(host) {
     host.innerHTML = pageWrap('Agents to approve', '', '<div class="sd-card">Loading…</div>');
-    api('/desk/approve').then(function (list) {
+    // Also the profiles opened on a call that wait for their Hi (Arthur, 25 Nov 2026: King
+    // listed them as Pending while this page said nobody was waiting).
+    Promise.all([api('/desk/approve'), api('/desk/approve/awaiting-hi').catch(function () { return []; })]).then(function (both) {
       if (S.page !== 'approve') return;
+      var list = both[0], hi = both[1] || [];
       var caller = S.scope === 'caller';
-      var rows = (list || []).map(function (a) {
-        return '<tr data-sd-approve-row><td><b>' + esc(a.name || 'No name') + '</b>' + (a.agency ? '<div class="sd-muted" style="font-size:12px">' + esc(a.agency) + '</div>' : '') + '</td><td>' + esc(a.phone) + '</td><td>' + esc(niceDay(String(a.signed_up_at || '').slice(0, 10))) + '<div class="sd-muted" style="font-size:12px">' + n(a.waiting_days) + ' day' + (n(a.waiting_days) === 1 ? '' : 's') + ' waiting</div></td><td>' + (a.mine ? 'You' : esc(a.called_by || '–')) + '</td></tr>';
-      }).join('');
+      var row = function (a) {
+        return '<tr data-sd-approve-row><td><b>' + esc(a.name || 'No name') + '</b>' + (a.agency && a.agency !== a.name ? '<div class="sd-muted" style="font-size:12px">' + esc(a.agency) + '</div>' : '') + '</td><td>' + esc(a.phone) + '</td><td>' + esc(niceDay(String(a.signed_up_at || '').slice(0, 10))) + '<div class="sd-muted" style="font-size:12px">' + n(a.waiting_days) + ' day' + (n(a.waiting_days) === 1 ? '' : 's') + ' waiting</div></td><td>' + (a.mine ? 'You' : esc(a.called_by || '–')) + '</td></tr>';
+      };
+      var rows = (list || []).map(row).join('');
+      var hiRows = hi.map(row).join('');
       host.innerHTML = pageWrap('Agents to approve', caller ? 'Agents you called who signed up and are waiting for approval. King or a moderator approves them.' : 'Everyone who signed up and is waiting. Approve them in Desk tools → Agents.',
         '<div class="sd-card"><div class="sd-scroll"><table class="sd-table" data-sd-approve><tr><th>Agent</th><th>Phone</th><th>Signed up</th><th>Called by</th></tr>' + (rows || '<tr><td colspan="4" class="sd-muted">Nobody is waiting.</td></tr>') + '</table></div>'
-        + (caller ? '' : '<button type="button" class="sd-btn" style="margin-top:10px" data-sd-go-tools>Open Desk tools</button>') + '</div>');
+        + (caller ? '' : '<button type="button" class="sd-btn" style="margin-top:10px" data-sd-go-tools>Open Desk tools</button>') + '</div>'
+        + '<div class="sd-card" style="margin-top:12px" data-sd-awaiting-hi><h3 style="margin:0 0 4px">👋 Waiting for their Hi (' + hi.length + ')</h3>'
+        + '<div class="sd-muted" style="font-size:13px;margin-bottom:8px">Opened when ' + (caller ? 'you' : 'the team') + ' logged Interested or Signed up on a call. They are approved by themselves the moment they send Hi from this number on WhatsApp or by text, so nobody needs to approve them. If they have not said Hi, call them back and ask them to.</div>'
+        + '<div class="sd-scroll"><table class="sd-table"><tr><th>Agent</th><th>Phone</th><th>Opened</th><th>Called by</th></tr>' + (hiRows || '<tr><td colspan="4" class="sd-muted">Nobody is waiting for their Hi.</td></tr>') + '</table></div></div>');
       var t = q('[data-sd-go-tools]', host); if (t) t.onclick = function () { go('tools'); };
     }, function (e) { failed(host, 'Agents to approve', e); });
   }

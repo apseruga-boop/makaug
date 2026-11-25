@@ -67,7 +67,7 @@ async function callerName(personKey) {
  * Interested on a call: open or link the pending agent profile and the prospect row.
  * attempt = the wrapped call_attempts row. Returns { agent_id, created, status }.
  */
-async function provisionInterested(attempt, { name, phone, caller = '' } = {}) {
+async function provisionInterested(attempt, { name, phone, caller = '', outcomeLabel = 'Interested' } = {}) {
   const shown = cleanShownName(name);
   const key = tail9(attempt && attempt.phone_key);
   if (!shown || key.length !== 9) return null;
@@ -84,7 +84,7 @@ async function provisionInterested(attempt, { name, phone, caller = '' } = {}) {
        VALUES ($1, $1, $2, 'not_registered', 2147483647, $3, $3, '{}'::text[], '{}'::text[], FALSE, FALSE, 'pending', $4, $5, $1, $6)
        RETURNING *`,
       [shown, `CALL-${crypto.randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`, e164, CHANNEL,
-        `[CALLING_INTERESTED] Opened when ${by} logged Interested on a call. Approved by itself when they say Hi from this number (3 free days to load places). ID still to check.`, by]))[0];
+        `[CALLING_INTERESTED] Opened when ${by} logged ${outcomeLabel} on a call. Approved by itself when they say Hi from this number (3 free days to load places). ID still to check.`, by]))[0];
     created = true;
   } else if (agent.status === 'pending' && names.nameProblem(agent.full_name) && !names.nameProblem(shown)) {
     // Opened earlier under a name that isn't theirs ("tiktok.com"): the real one replaces it (24 Nov 2026).

@@ -987,14 +987,16 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   let cb = parseCallback(callbackAt, now);
   if (rules.INTERESTED_OUTCOMES.includes(def.key) && !cb) throw httpError(400, 'Interested: pick the follow-up date and time.');
   // Interested on a new-agents call (Arthur, 22 Nov 2026): the name they want shown and the number, checked with them.
-  const newAgentInterested = def.key === 'interested' && task.key === 'new_agents';
+  // Signed up (not paid yet) opens the profile too (Arthur, 25 Nov 2026: Ronald's
+  // "Un named" sign-up left no agent, nothing in King and no welcome on their Hi).
+  const newAgentInterested = ['interested', 'signed_up'].includes(def.key) && task.key === 'new_agents';
   const shownName = newAgentInterested ? followThrough.cleanShownName(contactName) : '';
-  if (newAgentInterested && !shownName) throw httpError(400, 'Interested: type their name as they want it shown.');
+  if (newAgentInterested && !shownName) throw httpError(400, def.key === 'signed_up' ? 'Signed up: type their name as they want it shown.' : 'Interested: type their name as they want it shown.');
   // Their real name, never where we found them (Arthur, 24 Nov 2026): ten
   // profiles opened that day as "tiktok.com", "Unnamed", "WhatsApp enquirer".
   const shownProblem = newAgentInterested ? (callingNames.nameProblem(contactName) || callingNames.nameProblem(shownName)) : '';
   if (shownProblem) throw httpError(400, `${shownProblem} ${callingNames.ASK}`);
-  if (newAgentInterested && phoneConfirmed !== true) throw httpError(400, 'Interested: read the number back to them and tick that it is right.');
+  if (newAgentInterested && phoneConfirmed !== true) throw httpError(400, def.key === 'signed_up' ? 'Signed up: read the number back to them and tick that it is right.' : 'Interested: read the number back to them and tick that it is right.');
   // A call that goes on, to a number the list has no real name for, is not
   // saved without the name they gave.
   const listNameProblem = callingNames.nameProblem(a.full_name);
@@ -1076,7 +1078,7 @@ async function wrapUp(attemptId, { sessionId, outcome = '', note = '', callbackA
   let profile = null;
   // Their pending agent profile under that name. A practice login never opens one for a real number.
   if (shownName && (sandbox.isTestKey(out.phone_key) || !(await sandbox.isSandbox(out.person_key)))) {
-    profile = await followThrough.provisionInterested(out, { name: shownName }).catch((e) => { console.warn('Interested profile not opened:', e.message); return null; });
+    profile = await followThrough.provisionInterested(out, { name: shownName, outcomeLabel: def.key === 'signed_up' ? 'Signed up' : 'Interested' }).catch((e) => { console.warn('Interested profile not opened:', e.message); return null; });
   }
   // A practice login never writes the real do-not-contact list (its own test phones are real numbers).
   if (def.key === 'do_not_contact' && (sandbox.isTestKey(out.phone_key) || !(await sandbox.isSandbox(out.person_key)))) await blockNumber(out.phone_key, { by: out.person_key, reason: out.note || 'Asked not to be called', attemptId: out.id });

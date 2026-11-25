@@ -150,14 +150,17 @@ async function pipeline(personKey, { days = null } = {}) {
 // --------------------------------------------------------- agents to approve --
 
 /** Agents waiting for approval. Staff see all of them; a caller only those they called. */
-async function toApprove(personKey, { caller = false } = {}) {
+async function toApprove(personKey, { caller = false, awaitingHi = false } = {}) {
+  // awaitingHi: the profiles opened on an Interested / Signed up call instead. They approve
+  // themselves when they say Hi, so they are not waiting on staff and are not in the badge,
+  // but the page lists them so the staff desk shows what King sees (Arthur, 25 Nov 2026).
   const list = await rows(
     `SELECT a.id, a.full_name, COALESCE(NULLIF(a.phone, ''), a.whatsapp) AS phone, a.created_at, a.company_name AS agency_name,
             RIGHT(REGEXP_REPLACE(COALESCE(NULLIF(a.phone, ''), a.whatsapp, ''), '[^0-9]', '', 'g'), 9) AS k
        FROM agents a WHERE a.removed_at IS NULL AND a.status = 'pending'
         -- Opened on an Interested call: approved by itself when they say Hi, so not waiting on staff.
-        AND COALESCE(a.agent_application_channel, '') <> 'calling_interested'
-      ORDER BY a.created_at LIMIT 200`);
+        AND (COALESCE(a.agent_application_channel, '') = 'calling_interested') = $1
+      ORDER BY a.created_at LIMIT 200`, [Boolean(awaitingHi)]);
   const keys = list.map((a) => a.k).filter(Boolean);
   const calledBy = new Map();
   if (keys.length) {

@@ -1483,7 +1483,7 @@
     return html + '<div data-mkc-wraperr></div><div class="mkc-row" style="flex-wrap:nowrap;gap:6px"><button type="button" class="mkc-btn go mkc-call mkc-save" style="flex:1" data-mkc-save>✓ Save &amp; call next ›</button></div></div>';
   }
   // Interested on a new-agents call: the name they want shown and the number, checked with them (Arthur, 22 Nov 2026).
-  function needsName(task, o) { return Boolean(o && o.key === 'interested' && task && task.key === 'new_agents'); }
+  function needsName(task, o) { return Boolean(o && (o.key === 'interested' || o.key === 'signed_up') && task && task.key === 'new_agents'); }
   // A call that goes on, to a number the list has no real name for: their name, before it can be saved.
   function nameRequired(task, o) {
     var a = S && S.cur && S.cur.attempt;

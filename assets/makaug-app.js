@@ -18189,6 +18189,10 @@ function adminAgentManagerStatusChip(agent = {}) {
   const st = String(agent.status || "pending");
   const map = { approved: ["Approved", "bg-green-100 text-green-800"], pending: ["Pending", "bg-amber-100 text-amber-800"], rejected: ["Rejected", "bg-red-100 text-red-800"], suspended: ["Suspended", "bg-yellow-100 text-yellow-800"] };
   const [label, cls] = map[st] || [st, "bg-gray-100 text-gray-700"];
+  // Opened on a call (Interested / Signed up): approved by itself when they say Hi (Arthur, 25 Nov 2026).
+  if (st === "pending" && agent.agent_application_channel === "calling_interested") {
+    return adminAgentManagerChip(label, cls) + `<span data-agent-awaiting-hi class="block text-[11px] text-sky-800 font-bold mt-1">👋 Opened on a call · approved by itself when they say Hi</span>`;
+  }
   return adminAgentManagerChip(label, cls);
 }
 
