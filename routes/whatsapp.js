@@ -3720,6 +3720,16 @@ function ownerForwardListingType(caption = '', parsed = {}) {
     if (/\b(?:for rent|to let|to rent)\b/i.test(clean) && !/\b(?:for sale|on sale|selling)\b/i.test(clean)) return 'rent';
     return 'sale';
   }
+  // What the advert says it is, before what it stands on (25 Nov 2026): "Those
+  // unfinished houses are on sale … 50 by 100 feet with title" and "The above
+  // senior secondary school it's on sale … on 1 acre and 50 decimals" both came
+  // in as land. Only an advert that opens with the building counts.
+  const subject = clean.match(BUILDING_SUBJECT);
+  if (subject) {
+    if (subject[1]) return 'commercial';
+    if (/\b(?:for rent|to let|to rent)\b/i.test(clean) && !/\b(?:for sale|on sale|selling)\b/i.test(clean)) return 'rent';
+    return 'sale';
+  }
   const inferred = normalizeListingType(parsed.listing_type || '');
   if (inferred && inferred !== 'any') return inferred;
   if (/\b(?:land|plot|plots|acre|acres|decimal|decimals|kibanja|bibanja)\b/i.test(clean)) return 'land';
@@ -3729,6 +3739,11 @@ function ownerForwardListingType(caption = '', parsed = {}) {
   if (/\b(?:for sale|on sale|selling|sale price|asking price)\b/i.test(clean) || SOLD_AT_PRICE.test(clean)) return 'sale';
   return '';
 }
+
+// An advert that opens with the building it sells: "Those unfinished houses…",
+// "The above senior secondary school…", "12 self contained units…".
+// [1] a school, hotel or the like (commercial); [2] homes.
+const BUILDING_SUBJECT = /^(?:(?:the\s+above|those|these|this|that)\s+)?(?:\d+\s+)?(?:(?:unfinished|finished|complete|completed|new|newly\s+built|beautiful|lovely|nice|executive|modern|storeyed|self[-\s]?contained)\s+)*(?:(senior\s+secondary\s+school|secondary\s+school|primary\s+school|nursery\s+school|school|hotel|lodge|hospital|clinic|factory|warehouse)|(houses|homes|bungalows|units|house|home|bungalow|villa|mansion|duplex))\b/i;
 
 // "Wamala, 3roomed house, sold at 28m" (Ronald, 13 Nov 2026) and Gilbert's
 // "... found in Kibwa, Nabweru, Nansana wakiso sold at 140M" the same evening:
@@ -6020,6 +6035,8 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     && Number(price) > 0
     && !Number(bedroomDraft.bedrooms)
     && !/\b(?:house|home|villa|bungalow|mansion|apartment|flat|townhouse|shop|office|warehouse|hostel|rentals?|units?|building|storey|storied|quarters?)\b/i.test(cleanCaption)
+    // An advert that opens with its building is the building (25 Nov 2026).
+    && !BUILDING_SUBJECT.test(cleanCaption)
     && (
       /\b\d{2,4}\s*(?:by|x|\*)\s*\d{2,4}\b/i.test(cleanCaption)
       || /\b\d+(?:\.\d+)?\s*(?:decimals?|acres?|hectares?)\b/i.test(cleanCaption)
@@ -6035,6 +6052,7 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   if (
     listingType === 'commercial'
     && /\b(?:land|plots?|acres?|decimals?|hectares?|kibanja|bibanja)\b/i.test(cleanCaption)
+    && !BUILDING_SUBJECT.test(cleanCaption)
     && !/\b(?:commercial|offices?|shops?|retail|warehouses?|industrial|showroom|factory|factories|godown|arcade|buildings?|storey|storied|units?|rooms?|rentals?|houses?|apartments?|hotel|hostel|lodge)\b/i
       .test(cleanCaption.replace(CAPTION_USE_LIST, ' '))
   ) {
