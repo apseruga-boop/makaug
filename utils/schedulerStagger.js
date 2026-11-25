@@ -28,7 +28,9 @@ const BOOT_DELAY_MS = Object.freeze({
   // Deletes the details of agents who cancelled 30+ days ago; nothing urgent.
   former_agent_details: 720_000,
   // The morning "Names to fix" message from King on the callers' dashboards.
-  name_digest: 760_000
+  name_digest: 760_000,
+  // Signed up calls from before #878 that opened no profile (25 Nov 2026).
+  signed_up_backfill: 790_000
 });
 
 // Two instances overlap for a few minutes on a Render deploy. A pid offset

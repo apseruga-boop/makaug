@@ -282,4 +282,39 @@ async function fixProfileName({ agentId = '', name = '', by = '', now = new Date
   return { agent_id: agent.id, name: shown, approved: Boolean(approved) };
 }
 
-module.exports = { CHANNEL, FREE_DAYS, looksLikeHello, cleanShownName, provisionInterested, onHello, welcomeText, heldHelloText, holdForName, approveCalledAgent, renameProfile, fixProfileName };
+/**
+ * Signed up on a new-agents call opened no profile before #878 (25 Nov 2026:
+ * "Un named" …680, "Signed up, will pay tomorrow", left nothing in King and
+ * nothing to greet their Hi). Opens the pending profile those calls should
+ * have opened, under the name on the call (a stand-in name goes on the
+ * callers' names-to-fix list and their WhatsApp name, as for any other).
+ * Only numbers with no agent profile at all (removed ones included), real
+ * callers only, the last `days` days. Safe to run again: a number done once
+ * has a profile. Returns what was opened.
+ */
+async function openMissedSignups({ days = 14 } = {}) {
+  const sandbox = require('./callingSandbox');
+  const found = await rows(
+    `SELECT DISTINCT ON (c.phone_key) c.*
+       FROM call_attempts c
+      WHERE c.status = 'done' AND c.task_key = 'new_agents' AND c.outcome = 'signed_up'
+        AND c.wrapped_at > NOW() - ($1::int * INTERVAL '1 day')
+        AND LENGTH(COALESCE(c.phone_key, '')) = 9
+        AND NOT EXISTS (
+          SELECT 1 FROM agents a
+           WHERE RIGHT(REGEXP_REPLACE(COALESCE(a.whatsapp, ''), '[^0-9]', '', 'g'), 9) = c.phone_key
+              OR RIGHT(REGEXP_REPLACE(COALESCE(a.phone, ''), '[^0-9]', '', 'g'), 9) = c.phone_key)
+      ORDER BY c.phone_key, c.wrapped_at DESC`, [Math.max(1, Number(days) || 14)]);
+  const opened = [];
+  for (const attempt of found) {
+    if (sandbox.isTestKey(attempt.phone_key) || await sandbox.isSandbox(attempt.person_key)) continue;
+    const name = cleanShownName(attempt.full_name) || 'Unnamed';
+    const out = await provisionInterested(attempt, { name, outcomeLabel: 'Signed up' })
+      .catch((error) => { logger.warn('A signed-up profile could not be opened', { error: error.message }); return null; });
+    if (out) opened.push({ ...out, attempt_id: attempt.id, phone_tail: attempt.phone_key.slice(-3) });
+  }
+  if (opened.length) logger.info('Calling: opened profiles for earlier Signed up calls', { opened: opened.length });
+  return opened;
+}
+
+module.exports = { CHANNEL, FREE_DAYS, looksLikeHello, cleanShownName, provisionInterested, openMissedSignups, onHello, welcomeText, heldHelloText, holdForName, approveCalledAgent, renameProfile, fixProfileName };

@@ -2954,6 +2954,13 @@ async function start() {
     require('./services/payLinkService').startPayLinkScheduler(db);
     // Every morning, the callers' "Names to fix" as a message from King on their dashboard (24 Nov 2026).
     require('./services/callingNames').startNameDigest();
+    // Signed up calls from before #878 that opened no profile (25 Nov 2026): opened once at start-up.
+    if (process.env.DATABASE_URL && process.env.SIGNED_UP_BACKFILL !== 'false') {
+      setTimeout(() => {
+        require('./services/callingFollowThrough').openMissedSignups({ days: 14 })
+          .catch((error) => logger.warn('Signed-up backfill failed', { error: error.message }));
+      }, require('./utils/schedulerStagger').staggeredBootDelay('signed_up_backfill')).unref?.();
+    }
     // Agents who cancelled: their ID and personal details are deleted 30 days
     // after removal (name and number kept), unless they are restored first.
     require('./services/agentGoodbyeService').startFormerAgentDetailScheduler(db, {
