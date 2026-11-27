@@ -71,7 +71,11 @@ test('"has written" means a message of theirs in the last seven days; an answer 
   const first = sql.slice(0, sql.indexOf('OR EXISTS'));
   const answer = sql.slice(sql.indexOf('OR EXISTS'));
   assert.match(first, /AND m\.created_at >= NOW\(\) - INTERVAL '7 days'/);
-  assert.doesNotMatch(answer, /created_at/, 'a reply to their message is not timed');
+  // A reply to a message of theirs is not timed. An answer to a call is: it
+  // goes while the call is fresh (27 Nov 2026, whatsapp-missed-call-answered-1127).
+  const callWindow = /AND \(m\.message_type <> 'call' OR m\.created_at >= NOW\(\) - INTERVAL '2 hours'\)/;
+  assert.match(answer, callWindow, 'an answer to a call goes within two hours of it');
+  assert.doesNotMatch(answer.replace(callWindow, ''), /created_at/, 'a reply to their message is not timed');
   assert.match(answer, /m\.wa_message_id = q\.metadata->>'inbound_message_id'/);
   assert.match(bridge.hasWrittenSql('q', { days: 3 }), /INTERVAL '3 days'/);
   assert.match(bridge.hasWrittenSql('q', { days: "1'; DROP TABLE x; --" }), /INTERVAL '7 days'/, 'only a whole number reaches the SQL');
