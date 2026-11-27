@@ -218,7 +218,8 @@ test('a number after results is that property, MORE is the next three, and the m
     assert.strictEqual(patches[1].last_results_shown, 5);
 
     const which = await route.handleResultsReply({ phone: '256700000101', step: 'main_menu', text: 'contact', sessionData: fresh });
-    assert.strictEqual(which.message, "Which one? Reply *1*, *2* or *3* to see it, then *CONTACT* for the owner's number.");
+    // 25 Nov 2026: not "for the owner's number", which a listing found online may not have.
+    assert.strictEqual(which.message, 'Which one? Reply *1*, *2* or *3* to see it, then *CONTACT* to get in touch.');
 
     const beyond = await route.handleResultsReply({ phone: '256700000101', step: 'main_menu', text: '6', sessionData: fresh });
     assert.strictEqual(beyond, null, '6 is not one of the three shown: it is the menu');

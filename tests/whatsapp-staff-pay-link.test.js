@@ -91,9 +91,15 @@ test('all four new steps are steps the flow recognises', () => {
 // The whole exchange, against the real state machine
 // ---------------------------------------------------------------------------
 
+// The rest of the team: whoever asks is answered in their own chat, and the
+// others get the staff note (25 Nov 2026: the one who asked was told twice).
+const OWNER = '256700000998';
+
 function withStubbedWorld(run, { agents = [], feeExempt = false } = {}) {
   const originalQuery = db.query;
   const originalGetClient = db.getClient;
+  const originalOwners = process.env.AI_CEO_OWNER_PHONES;
+  process.env.AI_CEO_OWNER_PHONES = `+${OWNER}`;
   const sent = [];
   const payLinkRows = [];
   const agentUpdates = [];
@@ -169,7 +175,12 @@ function withStubbedWorld(run, { agents = [], feeExempt = false } = {}) {
     getSession: () => session,
     getProspect: () => prospect,
     getSentStamp: () => sentStamp
-  })).finally(() => { db.query = originalQuery; db.getClient = originalGetClient; });
+  })).finally(() => {
+    db.query = originalQuery;
+    db.getClient = originalGetClient;
+    if (originalOwners === undefined) delete process.env.AI_CEO_OWNER_PHONES;
+    else process.env.AI_CEO_OWNER_PHONES = originalOwners;
+  });
 }
 
 const AGENT = {
@@ -220,9 +231,12 @@ test('6 → 1 → a name → confirm, and the link goes with the reference back 
     assert.strictEqual(payLinkRows[0].purpose, 'agent_subscription');
     assert.strictEqual(payLinkRows[0].agent_id, AGENT.id);
 
-    // The agent gets the link; Ronald and the owners get the notice.
+    // The agent gets the link; the rest of the team gets the notice, and
+    // Ronald, who asked, has his answer above instead of a second one.
     const payload = sent.map((p) => JSON.stringify(p)).join(' ');
-    assert.ok(sent.length >= 2, 'the agent and at least the requester must both be told');
+    assert.ok(sent.length >= 2, 'the agent and the rest of the team must both be told');
+    assert.ok(sent.some((p) => p[0] === OWNER && /Payment link sent/.test(JSON.stringify(p))), 'the owner gets the staff note');
+    assert.ok(!sent.some((p) => String(p[0]).replace(/\D/g, '') === RONALD.replace(/\D/g, '') && /Payment link sent/.test(JSON.stringify(p))), 'Ronald is not told twice');
     assert.match(payload, /MKTEST1234/);
     assert.match(payload, /256772123456/, 'it went to the agent');
     assert.match(payload, /Payment link sent/i, 'the staff notice');

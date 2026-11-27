@@ -53,8 +53,10 @@ test('land that is "good for a country home" is land, not a house', () => {
   });
   assert.match(reply, /🏠 land · for sale/);
   assert.doesNotMatch(reply, /house/);
+  // The type it is saved with (advertPropertyType, 26 Nov 2026): none for land.
+  assert.strictEqual(route.advertPropertyType(caption, facts.listingType), null, 'and the listing is saved with no house type');
   const source = read('routes/whatsapp.js');
-  assert.match(source, /facts\.listingType === 'land' \? null : \(parsePropertyType\(withEnglishPropertyTerms\(caption\)\) \|\| null\)/, 'and the listing is saved with no house type');
+  assert.match(source, /const advertType = advertPropertyType\(caption, facts\.listingType\);/);
 });
 
 test('a landmark, or a person with a title, is not where the property is', () => {

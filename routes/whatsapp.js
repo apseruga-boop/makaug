@@ -2569,8 +2569,21 @@ function labelledPriceFragment(clean = '') {
   return match ? match[1].trim() : '';
 }
 
+/**
+ * A caption's prices with the thousands commas taken out ("1,200,000"), and
+ * every other comma kept as a gap. 26 Nov 2026: "plots ranges from 18m,20m and
+ * 25m" lost its commas, "18m20m" was no figure at all, and the plots went into
+ * review at 25m.
+ */
+function priceTextWithoutSeparators(input = '') {
+  return normalizeInput(input).toLowerCase()
+    .replace(/(\d),(?=\d{3}(?!\d))/g, '$1')
+    .replace(/(\d),(?=\d{3}(?!\d))/g, '$1')
+    .replace(/,/g, ' ');
+}
+
 function listingPriceSourceFragment(input = '') {
-  const clean = normalizeInput(input).toLowerCase().replace(/,/g, '');
+  const clean = priceTextWithoutSeparators(input);
   if (!clean) return '';
   const labelled = labelledPriceFragment(clean);
   if (labelled) return labelled;
@@ -2600,7 +2613,7 @@ function listingPriceSourceFragment(input = '') {
 }
 
 function parseListingPriceDraft(input = '') {
-  const clean = normalizeInput(input).toLowerCase().replace(/,/g, '');
+  const clean = priceTextWithoutSeparators(input);
   if (!clean) return null;
   const sourceFragment = listingPriceSourceFragment(clean);
   if (sourceFragment) {
@@ -3791,14 +3804,61 @@ function captionSellsNotLets(caption = '', price = 0) {
   return Number(price) >= 50000000 && !MONTHLY_WORDS.test(clean);
 }
 
-function ownerForwardListingTitle({ listingType = '', area = '', bedrooms = null } = {}) {
+function ownerForwardListingTitle({ listingType = '', area = '', bedrooms = null, propertyType = '', block = null } = {}) {
   const place = normalizeInput(area) || 'Uganda';
   const bedPrefix = Number(bedrooms) > 0 ? `${Number(bedrooms)}-bed ` : '';
   if (listingType === 'land') return `Land for sale in ${place}`;
   if (listingType === 'rent') return `${bedPrefix}property for rent in ${place}`;
   if (listingType === 'student') return `Student property in ${place}`;
-  if (listingType === 'commercial') return `Commercial property in ${place}`;
+  if (listingType === 'commercial') return propertyType === 'commercial_land' ? `Commercial land for sale in ${place}` : `Commercial property in ${place}`;
+  // "9 units of 2 bedrooms apartments … on Sale UGX 1BILLION" went live as a
+  // "2-bed property for sale" (25 Nov 2026): the block, not one of its flats.
+  if (block && Number(block.units) >= 2) return `${unitBlockWords(block)} for sale in ${place}`;
   return `${bedPrefix}property for sale in ${place}`;
+}
+
+/**
+ * An advert for a block of homes sold together: { units, bedroomsEach, noun },
+ * or null. "9 units of 2 bedrooms apartments", "12 units self contained",
+ * "4 rental units", "block of 6 flats". Rooms are left alone: "4 rooms" is as
+ * often a house as a block.
+ */
+function advertUnitBlock(caption = '') {
+  const clean = normalizeInput(caption).toLowerCase()
+    .replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/g, (word) => String(BEDROOM_NUMBER_WORDS[word] || word));
+  const m = clean.match(/\b(\d{1,3})\s+(?:rental\s+|self[-\s]?contained\s+|double\s+|single\s+)?(units?|apartments?|flats?|rentals?)\b(?:\s+(?:of|with)\s+(\d{1,2})\s*(?:bed\s*rooms?|bedrooms?|beds?|br)\b)?/)
+    || clean.match(/\bblock\s+of\s+(\d{1,3})\s+(units?|apartments?|flats?|rentals?)\b()/);
+  if (!m) return null;
+  const units = Number(m[1]);
+  if (!(units >= 2 && units <= 300)) return null;
+  const each = Number(m[3]) || Number((clean.match(/\b(\d{1,2})\s*(?:bed\s*rooms?|bedrooms?|beds?|br)\s+(?:each|apiece)\b/) || [])[1]) || null;
+  const noun = /\b(?:apartments?|flats?)\b/.test(clean) ? 'apartments' : 'rental units';
+  return { units, bedroomsEach: each, noun };
+}
+
+/** "9 two-bedroom apartments", "12 rental units". */
+function unitBlockWords(block = {}) {
+  const words = ['', 'one', 'two', 'three', 'four', 'five', 'six'];
+  const each = Number(block.bedroomsEach) > 0 ? `${words[Number(block.bedroomsEach)] || Number(block.bedroomsEach)}-bedroom ` : '';
+  return `${Number(block.units)} ${each}${block.noun || 'rental units'}`;
+}
+
+/**
+ * What the advert sells, read without what the place is "suitable for" (26 Nov
+ * 2026): "Commercial acres … 10 acres on main road, suitable for a school,
+ * warehouse, factory, hotel" went into review as a warehouse. Land a business
+ * would buy is commercial land.
+ */
+function advertPropertyType(caption = '', listingType = '') {
+  if (listingType === 'land') return null;
+  const own = withEnglishPropertyTerms(caption).replace(CAPTION_USE_LIST, ' ');
+  if (listingType === 'commercial'
+    && /\b(?:land|plots?|acres?|decimals?|hectares?)\b/i.test(own)
+    && !BUILDING_SUBJECT.test(normalizeInput(own))
+    && !/\b(?:offices?|shops?|retail|warehouses?|industrial|showroom|factory|factories|godown|arcade|buildings?|storey|storied|units?|rooms?|rentals?|houses?|apartments?|hotel|hostel|lodge)\b/i.test(own)) {
+    return 'commercial_land';
+  }
+  return parsePropertyType(own) || null;
 }
 
 function ownerForwardPricePeriod(listingType = '', caption = '', price = 0) {
@@ -5926,8 +5986,13 @@ const CAPTION_PERSON_TITLE_NAME = /\b(?:pastor|rev(?:erend)?|bishop|sheikh|imam|
 // What comes after these words is a landmark, not where the property is.
 const CAPTION_LANDMARK_WORD = /\b(?:near|opposite|next\s+to|behind|close\s+to|adjacent\s+to)\b/i;
 // What a plot is "suitable for", "ideal for" or "can be used for", to the end
-// of the sentence: "suitable for many projects, factory, school, hotel".
-const CAPTION_USE_LIST = /\b(?:(?:suitable|ideal|best|good|perfect|fit|great)\s+(?:use\s+)?(?:for|to\s+build)|(?:can\s+be\s+)?used\s+for)\b[^.;!?\n]*/gi;
+// of the sentence: "suitable for many projects, factory, school, hotel". And
+// the list that follows one use to a line (25 Nov 2026): "This land good for /
+// Factory / Warehouses / School / Or any project" went into review as a
+// commercial property, because the uses after the first line were read as
+// what was for sale. A line of one to three words with no figure carries the
+// list on; a blank line, a figure or a sentence ends it.
+const CAPTION_USE_LIST = /\b(?:(?:suitable|ideal|best|good|perfect|fit|great)\s+(?:use\s+)?(?:for|to\s+build)|(?:can\s+be\s+)?used\s+for)\b[^.;!?\n]*(?:\n[ \t]*[^\w\s\n]{0,3}[ \t]*(?:(?:or|and)\s+)?[a-z][a-z'&/-]*(?:[ \t]+[a-z][a-z'&/-]*){0,2}[ \t]*[,.]?[ \t]*(?=\n|$))*/gi;
 
 function employeePropertyFacts(caption = '', sessionData = {}) {
   // Luganda/Swahili captions are read through their English equivalents.
@@ -8104,13 +8169,38 @@ async function applyEmployeePriceDrop(existing, facts) {
 /** "12 decimals", "2.5 acres", "1 hectare" → { value, unit } for the listing row. */
 function employeeLandSize(caption = '') {
   const clean = normalizeInput(withEnglishPropertyTerms(caption));
+  // "1 acre and 50 decimals" is an acre and a half.
+  const both = clean.match(/\b(\d+(?:\.\d+)?)\s*acres?\s*(?:and|&|\+)\s*(\d{1,2})\s*decimals?\b/i);
+  if (both) {
+    const value = Number(both[1]) + Number(both[2]) / 100;
+    if (Number.isFinite(value) && value > 0 && value <= 10000) return { value, unit: 'acres' };
+  }
   const m = clean.match(/\b(\d+(?:\.\d+)?)\s*(decimals?|acres?|hectares?)\b/i);
-  if (!m) return { value: null, unit: null };
-  const value = Number(m[1]);
-  if (!Number.isFinite(value) || value <= 0 || value > 10000) return { value: null, unit: null };
-  const word = m[2].toLowerCase();
-  const unit = word.startsWith('decimal') ? 'decimals' : word.startsWith('acre') ? 'acres' : 'hectares';
-  return { value, unit };
+  if (m) {
+    const value = Number(m[1]);
+    if (!Number.isFinite(value) || value <= 0 || value > 10000) return { value: null, unit: null };
+    const word = m[2].toLowerCase();
+    const unit = word.startsWith('decimal') ? 'decimals' : word.startsWith('acre') ? 'acres' : 'hectares';
+    return { value, unit };
+  }
+  // 26 Nov 2026: "Half acre", "100by 100feet" and "50 by 100 feet" all went
+  // into review with no plot size. A plot's two sides here are in feet unless
+  // metres are said.
+  const words = clean.match(/\b(half|a\s+half|quarter|a\s+quarter|one|an?|two|three|four|five)\s+(?:of\s+an?\s+)?acres?\b/i);
+  if (words) {
+    const value = { half: 0.5, 'a half': 0.5, quarter: 0.25, 'a quarter': 0.25, one: 1, a: 1, an: 1, two: 2, three: 3, four: 4, five: 5 }[words[1].toLowerCase().replace(/\s+/g, ' ')];
+    if (value) return { value, unit: 'acres' };
+  }
+  const sides = clean.match(/\b(\d{2,4})\s*(?:by|x|\*|×)\s*(\d{2,4})\s*(ft|fts|feet|foot|m|metres?|meters?)?\b/i);
+  if (sides) {
+    const a = Number(sides[1]);
+    const b = Number(sides[2]);
+    if (a >= 10 && b >= 10 && a <= 2000 && b <= 2000) {
+      const metres = /^m/i.test(sides[3] || '');
+      return { value: a * b, unit: metres ? 'm2' : 'sq_ft' };
+    }
+  }
+  return { value: null, unit: null };
 }
 
 async function createEmployeeReviewProperty({
@@ -8158,12 +8248,17 @@ async function createEmployeeReviewProperty({
   sessionData.last_create_media_kept = (Array.isArray(storedMedia) ? storedMedia : []).length;
   const listerName = normalizeInput(agent?.full_name || customer?.fullName || 'WhatsApp customer');
   const listerPhone = normalizeInput(agent?.whatsapp || agent?.phone || customer?.phone || '');
+  const advertType = advertPropertyType(caption, facts.listingType);
+  // A block sold together is the block: its flats' bedrooms are not its own.
+  const unitBlock = facts.listingType === 'sale' ? advertUnitBlock(caption) : null;
   const title = facts.offPlan
     ? `Off-plan: ${facts.offPlanName || 'new development'} in ${normalizeInput(facts.locationPatch.area) || 'Uganda'}`
     : ownerForwardListingTitle({
       listingType: facts.listingType,
       area: facts.locationPatch.area,
-      bedrooms: facts.bedroomDraft.bedrooms
+      bedrooms: facts.bedroomDraft.bedrooms,
+      propertyType: advertType,
+      block: unitBlock
     });
   const imageMedia = storedMedia.filter((item) => item.kind === 'image' && item.publicEligible !== false);
   const evidenceMedia = storedMedia.filter((item) => item.kind === 'image' && item.publicEligible === false);
@@ -8302,7 +8397,7 @@ async function createEmployeeReviewProperty({
         facts.priceMetadata?.price_fx_rate_ugx || null,
         facts.priceMetadata?.price_fx_as_of || null,
         ownerForwardPricePeriod(facts.listingType, caption, facts.price),
-        facts.bedroomDraft.bedrooms || null,
+        unitBlock ? null : (facts.bedroomDraft.bedrooms || null),
         listerName,
         listerPhone || null,
         agent?.email || null,
@@ -8314,7 +8409,7 @@ async function createEmployeeReviewProperty({
         // Buyers filter by type; a WhatsApp listing with none never showed under "house".
         // Land is not a house because the advert says it is "good for a country
         // home" (17 Nov 2026): a land listing carries no house type.
-        facts.listingType === 'land' ? null : (parsePropertyType(withEnglishPropertyTerms(caption)) || null),
+        advertType,
         intakeLatitude,
         intakeLongitude,
         // Every listing gets an MK reference when it is created. 424 Agent 007
@@ -9874,7 +9969,18 @@ function agentPropertyDetailLines(facts = {}, caption = '') {
   }
   const bedrooms = facts.listingType === 'land' ? 0 : (Number(facts.bedroomDraft?.bedrooms) || 0);
   // Land is land, whatever it is "good for" (a country home, say).
-  const kind = facts.listingType === 'land' ? 'land' : (parsePropertyType(english) || (facts.listingType === 'commercial' || /\bcommercial\b/i.test(english) ? 'commercial property' : 'property'));
+  // What it is as the advert says it, not what it is "suitable for" (26 Nov
+  // 2026: ten acres "suitable for a school, warehouse, factory" were "🏠
+  // warehouse"), and a block of flats as the block (25 Nov 2026).
+  const ownType = advertPropertyType(caption, facts.listingType);
+  const block = facts.listingType === 'sale' ? advertUnitBlock(caption) : null;
+  const kind = facts.listingType === 'land'
+    ? 'land'
+    : (block
+      ? unitBlockWords(block)
+      : (ownType === 'commercial_land'
+        ? 'commercial land'
+        : (ownType || (facts.listingType === 'commercial' || /\bcommercial\b/i.test(english) ? 'commercial property' : 'property'))));
   const deal = facts.listingType === 'rent' || facts.listingType === 'student'
     ? 'for rent'
     : (facts.listingType === 'commercial'
@@ -9882,7 +9988,7 @@ function agentPropertyDetailLines(facts = {}, caption = '') {
         ? (/\b(?:sale|selling)\b/i.test(english) ? 'for sale or rent' : 'for rent')
         : (/\b(?:sale|selling)\b/i.test(english) ? 'for sale' : ''))
       : (facts.listingType ? 'for sale' : ''));
-  lines.push(`🏠 ${bedrooms ? `${bedrooms} bedroom ` : ''}${kind}${deal ? ` · ${deal}` : ''}`);
+  lines.push(`🏠 ${bedrooms && !block ? `${bedrooms} bedroom ` : ''}${kind}${deal ? ` · ${deal}` : ''}`);
   const area = normalizeInput(facts.locationPatch?.area || '');
   const district = normalizeInput(facts.locationPatch?.district || '');
   if (area || district) lines.push(`📍 ${[area, district].filter((v, i, all) => v && all.indexOf(v) === i).join(', ')}`);
@@ -9916,7 +10022,13 @@ function agentSelfIntakeSavedReply({ data = {}, facts = {}, storedMedia = [], op
   const missing = employeePropertyMissing(facts);
   const what = normalizeInput(facts.locationPatch?.area || facts.locationPatch?.district || '');
   const label = what ? ` in *${what}*` : '';
-  const photos = storedMedia.filter((item) => item.kind === 'image').length;
+  // 26 Nov 2026, 23:55 in Kampala: the only picture with a plot in Matugga was
+  // a photo of its title. It was kept private, as titles are, and the agent was
+  // told "📸 1 photo saved"; the listing reached review with nothing to show.
+  // A document is counted as what it is, and a property with nothing to show
+  // is said to need its photos.
+  const privateDocs = storedMedia.filter(isPrivateDocumentMedia).length;
+  const photos = storedMedia.filter((item) => item.kind === 'image' && !isPrivateDocumentMedia(item)).length;
   const videos = storedMedia.filter((item) => item.kind === 'video').length;
 
   const lines = [];
@@ -9954,8 +10066,12 @@ function agentSelfIntakeSavedReply({ data = {}, facts = {}, storedMedia = [], op
   const bits = [];
   if (photos) bits.push(`${photos} ${photos === 1 ? 'photo' : 'photos'}`);
   if (videos) bits.push(`${videos} ${videos === 1 ? 'video' : 'videos'}`);
-  if (Number(albumCount) > photos + videos) lines.push(`📸 Your ${Number(albumCount)} photos are being added to this property`);
+  if (Number(albumCount) > photos + videos + privateDocs) lines.push(`📸 Your ${Number(albumCount)} photos are being added to this property`);
   else if (bits.length) lines.push(`📸 ${bits.join(' · ')} saved${photos + videos === 1 ? ' — send more and I will add them to this one' : ''}`);
+  if (privateDocs) lines.push(privateDocumentLine(privateDocs));
+  if (!(Number(albumCount) > photos + videos + privateDocs) && !photos && !videos) {
+    lines.push('📸 *Still needed:* a few photos or a short video of the property itself — it cannot go live without one.');
+  }
   lines.push('');
   lines.push('Anything wrong? Just reply with the correction — e.g. _price 1.5m_ or _area Najjera, Wakiso_.');
   lines.push('');
@@ -9969,10 +10085,23 @@ function agentSelfIntakeSavedReply({ data = {}, facts = {}, storedMedia = [], op
   return lines.join('\n');
 }
 
+/** A picture kept off the site because it is a document (a title, an ID, a screenshot). */
+function isPrivateDocumentMedia(item = {}) {
+  return item?.kind === 'image' && (item.evidenceOnly === true || item.publicEligible === false);
+}
+
+/** "🔒 The photo of a document is kept private — titles and IDs are never shown on the site." */
+function privateDocumentLine(count = 1) {
+  return count === 1
+    ? '🔒 The photo of a document (a title, say) is kept private — we never show those on the site.'
+    : `🔒 ${count} photos of documents (titles, say) are kept private — we never show those on the site.`;
+}
+
 /** A second property saved by the same message: the short confirmation. */
 function agentAlsoSavedReply({ facts = {}, storedMedia = [], caption = '' } = {}) {
   const what = normalizeInput(facts.locationPatch?.area || facts.locationPatch?.district || '');
-  const photos = storedMedia.filter((item) => item.kind === 'image').length;
+  const privateDocs = storedMedia.filter(isPrivateDocumentMedia).length;
+  const photos = storedMedia.filter((item) => item.kind === 'image' && !isPrivateDocumentMedia(item)).length;
   const videos = storedMedia.filter((item) => item.kind === 'video').length;
   const bits = [];
   if (photos) bits.push(`${photos} ${photos === 1 ? 'photo' : 'photos'}`);
@@ -9983,6 +10112,8 @@ function agentAlsoSavedReply({ facts = {}, storedMedia = [], caption = '' } = {}
     ...agentPropertyDetailLines(facts, caption || facts.cleanCaption || '')
   ];
   if (bits.length) lines.push(`📸 ${bits.join(' · ')} saved`);
+  if (privateDocs) lines.push(privateDocumentLine(privateDocs));
+  if (!photos && !videos) lines.push('📸 *Still needed:* a few photos or a short video of the property itself — it cannot go live without one.');
   return lines.join('\n');
 }
 
@@ -9999,7 +10130,8 @@ function holdAgentSavedReply(data = {}, { propertyId = '', caption = '', storedM
   data.agent_saved_reply_waiting = {
     property_id: String(propertyId || ''),
     caption: String(caption || '').slice(0, 2000),
-    photos: storedMedia.filter((item) => item.kind === 'image').length,
+    photos: storedMedia.filter((item) => item.kind === 'image' && !isPrivateDocumentMedia(item)).length,
+    documents: storedMedia.filter(isPrivateDocumentMedia).length,
     videos: storedMedia.filter((item) => item.kind === 'video').length,
     opened: Boolean(openedAgentSelfIntake),
     at: Date.now()
@@ -10094,6 +10226,7 @@ function releaseAgentSavedReply(data = {}, { force = false, mediaWaiting = 0 } =
   delete data.agent_saved_reply_waiting;
   const storedMedia = [
     ...Array.from({ length: Number(waiting.photos || 0) }, () => ({ kind: 'image' })),
+    ...Array.from({ length: Number(waiting.documents || 0) }, () => ({ kind: 'image', evidenceOnly: true, publicEligible: false })),
     ...Array.from({ length: Number(waiting.videos || 0) }, () => ({ kind: 'video' }))
   ];
   const facts = employeePropertyFacts(waiting.caption || '', data);
@@ -10533,7 +10666,12 @@ function agentPendingNotice(data = {}) {
     else needs = agentMissingPhrases(employeePropertyMissing(employeePropertyFacts(item.caption, data))).join('; ') || 'nothing — it will save shortly';
     lines.push('', `${index + 1}. ${label}`, `   needs: ${needs}`);
   });
-  lines.push('', 'Reply with what the first one needs and I will add it, then the next. No need to send photos again.');
+  // "needs: its photos or a short video … No need to send photos again" (26 Nov
+  // 2026): the line only holds for the ones that already have theirs.
+  const allHaveMedia = items.every((item) => item.media.length > 0);
+  lines.push('', allHaveMedia
+    ? 'Reply with what the first one needs and I will add it, then the next. No need to send photos again.'
+    : 'Send what the first one needs and I will add it, then the next. Photos you have already sent are safe with me.');
   return lines.join('\n');
 }
 
@@ -13992,6 +14130,34 @@ async function handleEmployeeWhatsappIntake({
       const existingBatchProperties = Array.isArray(data.property_ids) ? data.property_ids.length : 0;
       const pendingStoredMedia = employeePendingStoredMedia(data);
       const pendingCaption = normalizeInput(data.pending_property_caption || '');
+      // 26 Nov 2026, 13:21 in Kampala: a new agent sent a video, was asked what
+      // it was, and said "Okay". The "Okay" was kept as the description, and he
+      // was asked which district *Okay* is in. While his photos wait for their
+      // words, an "ok" or a "thank you" is him saying he heard us: the photos
+      // stay safe and he is told, in a line, what to send when he is ready.
+      if (data.whatsapp_agent_self_intake === true && pendingStoredMedia.length && isCourtesyOnly(cleanBody)) {
+        const photos = pendingStoredMedia.filter((item) => item.kind === 'image').length;
+        const videos = pendingStoredMedia.filter((item) => item.kind === 'video').length;
+        const what = [photos ? `${photos === 1 ? 'photo' : `${photos} photos`}` : '', videos ? `${videos === 1 ? 'video' : `${videos} videos`}` : ''].filter(Boolean).join(' and ') || 'photos';
+        const one = photos + videos === 1;
+        const stillNeeded = pendingCaption ? agentMissingPhrases(employeePropertyMissing(employeePropertyFacts(pendingCaption, data))) : [];
+        // Words and photos both here, only waiting to be saved: nothing to ask.
+        if (pendingCaption && !stillNeeded.length) return { handled: true, nextStep: currentStep, message: '' };
+        return {
+          handled: true,
+          nextStep: currentStep,
+          message: [
+            `👍 Your ${what} ${one ? 'is' : 'are'} safe with me.`,
+            '',
+            ...(stillNeeded.length
+              ? ['Whenever you are ready, I just need:', ...stillNeeded.map((item) => `• ${item}`)]
+              : [
+                'Whenever you are ready, tell me about the property in one message: what it is, for *rent* or *sale*, the *area and district*, and the *price*.',
+                'Like this: _"3 bedroom house for rent in Kira, Wakiso — UGX 1.2m a month"_'
+              ])
+          ].join('\n')
+        };
+      }
       let textCaption = cleanBody;
       let textOnlyFacts = employeePropertyFacts(cleanBody, data);
       let textOnlyMissing = employeePropertyMissing(textOnlyFacts);
@@ -15314,6 +15480,9 @@ async function sendMetaTextMessage(phone, message) {
   return { sent: true, chunks: sentCount };
 }
 
+// "To buy", "rent", "for sale", "I want to buy": an answer to rent-or-buy, and nothing else.
+const ONLY_RENT_OR_BUY = /^(?:(?:i\s+)?(?:want|need|would\s+like|am\s+looking|i'?m\s+looking)\s+(?:to\s+)?)?(?:to\s+)?(?:buy|buying|purchase|rent|renting|let|lease|for\s+(?:sale|rent)|on\s+sale)(?:\s+(?:it|one|please|pls|plz))?[\s.!]*$/i;
+
 const SEARCH_TYPE_KEYWORDS = [
   { type: 'student', re: /\b(student|students|hostel|dorm|dormitory|campus|university)\b/i },
   { type: 'commercial', re: /\b(commercial|office|retail|warehouse|shop|business premises)\b/i },
@@ -15643,6 +15812,23 @@ function parseBudgetRange(lower = '') {
   return { low, high, currency: currency === '$' ? 'usd' : (currency || ''), raw: m[0] };
 }
 
+/**
+ * "House starting at 100k and above" (25 Nov 2026, 15:24 in Kampala) was read
+ * as a budget of at most 100k, and answered with "the cheapest houses to rent
+ * I have, all within USh 100,000/month": two single rooms, at 80k and 100k.
+ * A figure said as where the price starts ("from", "starting at", "at least",
+ * "above", "100k and above", "100k+") is the least they will pay, not the
+ * most. `before` and `after` are the words either side of the figure.
+ */
+function budgetIsAFloor(before = '', after = '') {
+  const b = String(before || '').toLowerCase();
+  const a = String(after || '').toLowerCase();
+  // "not more than", "no more than", "not above": still the most they will pay.
+  if (/\b(?:not|no|never)\s+(?:more\s+than|above|over|beyond|exceeding)\s*$/.test(b)) return false;
+  if (/^\s*(?:\+|plus\b|and\s+(?:above|more|over|beyond|higher|upwards?)\b|or\s+(?:more|above|higher|over)\b|upwards?\b|onwards?\b)/.test(a)) return true;
+  return /\b(?:from|starting(?:\s+(?:at|from))?|starts?\s+(?:at|from)|at\s+least|min(?:imum)?(?:\s+of)?|above|over|more\s+than|not\s+less\s+than|no\s+less\s+than|beyond)\s*$/.test(b);
+}
+
 function parseBudget(text) {
   const raw = stripLinksAndIdsForNumericParsing(text);
   if (!raw) return null;
@@ -15705,8 +15891,16 @@ function parseBudget(text) {
       || /\b(bed|beds|bedroom|bedrooms|bath|bathroom|toilet|room|rooms)\s*$/i.test(beforeNumber)) score -= 6;
     if (/\b(acre|acres|sq\s?m|sqm|sqft|hectare|plot|plots)\b/i.test(context)) score -= 3;
     if (/\b(year built|built in|built)\b/i.test(context)) score -= 4;
+    // "from 500k", "500k and above": the figure is where their price starts.
+    // Read from the figure itself: the currency group can take the last
+    // letter of "over" as an R, and "from UGX 500k" has the money word between.
+    const numberStart = (m.index || 0) + Math.max(0, m[0].indexOf(m[2]));
+    const floorBefore = lower.slice(Math.max(0, numberStart - 30), numberStart)
+      .replace(/(?:^|\s)(?:usd|\$|eur|€|gbp|£|zar|ugx|ush|shs)\.?\s*$/i, ' ');
+    const floor = budgetIsAFloor(floorBefore, afterNumber);
+    if (floor) score += 4;
 
-    candidates.push({ amount, currency, score, context });
+    candidates.push({ amount, currency, score, context, floor });
   }
 
   if (!candidates.length) return null;
@@ -15733,7 +15927,9 @@ function parseBudget(text) {
   return {
     originalAmount: best.amount,
     currency: best.currency === '$' ? 'usd' : best.currency,
-    maxBudgetUgx: ugxAmount,
+    // A floor has no ceiling: the search starts at it and goes up.
+    maxBudgetUgx: best.floor ? 0 : ugxAmount,
+    ...(best.floor ? { minBudgetUgx: ugxAmount } : {}),
     period,
     convertedFromUsd: best.currency === 'usd' || best.currency === '$',
     convertedFromForeign,
@@ -15759,6 +15955,12 @@ function parseSearchType(text) {
   if (/\b(student|students|hostel|dorm|dormitory|campus|university)\b/i.test(clean)) return 'student';
   const mapped = mapSearchTypeInput(clean);
   if (mapped) return mapped;
+  // "Looking for rental houses to buy" (27 Nov 2026, 06:59 in Kampala) was
+  // searched as a place to rent, from the For Sale page. Rentals are a kind of
+  // property people buy for the income: buying, said in words, wins over
+  // "rental", unless renting is said as well.
+  if (/\b(?:to\s+buy|buy|buying|purchase|purchasing|for\s+sale|on\s+sale)\b/i.test(clean)
+    && !/\b(?:rent|renting|per\s*month|a\s+month|monthly|lease|to\s+let)\b|\/month/i.test(clean)) return 'sale';
   for (const rule of SEARCH_TYPE_KEYWORDS) {
     if (rule.re.test(clean)) return rule.type;
   }
@@ -15866,7 +16068,9 @@ function sanitizeSearchAreaCandidate(area, originalText = '') {
  */
 function budgetInFullShillings(filters = {}, previousBudget = 0) {
   if (!filters || typeof filters !== 'object') return filters;
-  const budget = Number(filters.maxBudgetUgx) || 0;
+  const ceiling = Number(filters.maxBudgetUgx) || 0;
+  // "from 300" is a floor of 300k just as "under 300" is a ceiling of 300k.
+  const budget = ceiling || Number(filters.minBudgetUgx) || 0;
   if (IS_SOUTH_AFRICA || !(budget > 0 && budget < 1000) || filters.convertedFromForeign || filters.convertedFromUsd) return filters;
   const type = normalizeListingType(filters.searchType || 'any');
   let scale = 0;
@@ -15879,7 +16083,7 @@ function budgetInFullShillings(filters = {}, previousBudget = 0) {
     scale = 1_000_000;
   }
   if (!scale) return filters;
-  const out = { ...filters, maxBudgetUgx: budget * scale };
+  const out = { ...filters, maxBudgetUgx: ceiling ? ceiling * scale : filters.maxBudgetUgx };
   const min = Number(filters.minBudgetUgx) || 0;
   if (min > 0 && min < 1000) out.minBudgetUgx = min * scale;
   if (!out.budgetPeriod && scale === 1_000 && ['rent', 'student', 'any'].includes(type)) out.budgetPeriod = 'month';
@@ -15896,6 +16100,7 @@ function sanitizeNaturalSearchFilters(filters = {}, originalText = '') {
     || Number(next.bedsMin || 0) > 0
     || next.propertyType
     || Number(next.maxBudgetUgx || 0) > 0
+    || Number(next.minBudgetUgx || 0) > 0
     || next.useSharedLocation
     || (next.searchType && next.searchType !== 'any')
   );
@@ -15936,9 +16141,12 @@ function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any', 
   const categorySearchType = ['land', 'student', 'commercial'].includes(parsedSearchType)
     ? parsedSearchType
     : (asksForStation ? 'commercial' : null);
+  // Buying said in words is not undone by a model that read "rental" as renting.
+  const saysBuying = parsedSearchType === 'sale' && /\brentals?\b/i.test(clean)
+    && normalizeListingType(entitySearchType || 'any') === 'rent';
 
   let searchType = normalizeListingType(
-    categorySearchType || entitySearchType || parsedSearchType || fallbackType || 'any'
+    categorySearchType || (saysBuying ? 'sale' : entitySearchType) || parsedSearchType || fallbackType || 'any'
   );
   const area = sanitizeSearchAreaCandidate(e.area || e.location || e.district || parseAreaFromText(clean, sessionData), clean);
   const bedsMin = Number(e.bedrooms || e.beds || parseBedCount(clean) || 0) || 0;
@@ -15947,13 +16155,25 @@ function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any', 
   if (searchType === 'land' && propertyType && /^(house|home|houses|homes)$/i.test(propertyType)) propertyType = null;
   // Distances ("10 miles from"), plot sizes (50x100) and acres are not prices.
   const budgetParsed = parseBudget(stripWhatsappNonBudgetNumbers(clean));
-  const maxBudgetUgx = Number(e.budget_max || e.budget || budgetParsed?.maxBudgetUgx || 0) || 0;
+  // "starting at 100k and above" is a floor, whatever an intent model made of
+  // the figure: with no range in the words, a ceiling it read is the same
+  // figure read the wrong way.
+  const budgetFloorSaid = Number(budgetParsed?.minBudgetUgx || 0) > 0 && !(Number(budgetParsed?.maxBudgetUgx || 0) > 0);
+  const maxBudgetUgx = budgetFloorSaid ? 0 : (Number(e.budget_max || e.budget || budgetParsed?.maxBudgetUgx || 0) || 0);
   const minBudgetUgx = Number(e.budget_min || budgetParsed?.minBudgetUgx || 0) || 0;
   const budgetPeriod = normalizeInput(e.period || budgetParsed?.period) || null;
   // "house for 300 million" with no rent words is a purchase budget.
   if ((!searchType || searchType === 'any') && !entitySearchType && !budgetPeriod
     && maxBudgetUgx >= 50_000_000 && !/\b(rent|rental|let|lease|per\s*month|monthly)\b/i.test(clean)) {
     searchType = 'sale';
+  }
+  // A floor says which market they are in by its size, the way a ceiling of
+  // 100k does without saying so (nothing is for sale under it): from 100k is
+  // rent, from 100m is a purchase. Without this, "a house from 100k" would
+  // bring every house for sale in the country.
+  if ((!searchType || searchType === 'any') && !entitySearchType && !(maxBudgetUgx > 0) && minBudgetUgx > 0) {
+    if (minBudgetUgx >= 20_000_000 && !/\b(rent|rental|let|lease|per\s*month|monthly)\b/i.test(clean)) searchType = 'sale';
+    else if (minBudgetUgx < 20_000_000 && !/\b(buy|buying|sale|purchase|selling)\b/i.test(clean)) searchType = 'rent';
   }
   const useSharedLocation = Boolean(
     e.near_me === true
@@ -15967,6 +16187,7 @@ function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any', 
     || bedsMin > 0
     || propertyType
     || maxBudgetUgx > 0
+    || minBudgetUgx > 0
     || useSharedLocation
     || (searchType && searchType !== 'any')
   );
@@ -16010,6 +16231,13 @@ function mergeNaturalSearchFilters(primary = {}, secondary = {}) {
     sourceText: normalizeInput(p.sourceText || s.sourceText || ''),
     aiConfidence: Number(p.confidence || 0) || 0
   };
+  // The words said the figure is a floor ("from 100k and above"): a ceiling
+  // the model read at or under it is that floor read the wrong way.
+  if (Number(s.minBudgetUgx) > 0 && !(Number(s.maxBudgetUgx) > 0)
+    && merged.maxBudgetUgx > 0 && merged.maxBudgetUgx <= Number(s.minBudgetUgx)) {
+    merged.maxBudgetUgx = 0;
+    merged.minBudgetUgx = Number(s.minBudgetUgx);
+  }
 
   merged.hasSignal = Boolean(
     merged.area
@@ -16017,6 +16245,7 @@ function mergeNaturalSearchFilters(primary = {}, secondary = {}) {
     || merged.bedsMin > 0
     || merged.propertyType
     || merged.maxBudgetUgx > 0
+    || merged.minBudgetUgx > 0
     || merged.useSharedLocation
     || (merged.searchType && merged.searchType !== 'any')
   );
@@ -16039,6 +16268,7 @@ function shouldUseAiNaturalSearchExtraction(deterministic = {}, text = '') {
     || deterministic.bedsMin > 0
     || deterministic.propertyType
     || deterministic.maxBudgetUgx > 0
+    || deterministic.minBudgetUgx > 0
     || (deterministic.searchType && deterministic.searchType !== 'any')
   );
   return !hasActionableSignal;
@@ -16112,6 +16342,7 @@ async function resolveNaturalSearchFiltersBase({
       || merged.bedsMin > 0
       || merged.propertyType
       || merged.maxBudgetUgx > 0
+      || merged.minBudgetUgx > 0
       || merged.useSharedLocation
       || (merged.searchType && merged.searchType !== 'any')
     );
@@ -16130,7 +16361,28 @@ function describeNaturalFilters(filters = {}, lang = 'en') {
     chips.push(filters.propertyType);
   }
   if (filters.maxBudgetUgx > 0) chips.push(`max ${formatPrice(filters.maxBudgetUgx, filters.budgetPeriod || '')}`);
+  else if (filters.minBudgetUgx > 0) chips.push(`from ${formatPrice(filters.minBudgetUgx, filters.budgetPeriod || '')}`);
   return chips.join(' • ');
+}
+
+/**
+ * The budget as they said it: " up to USh 150,000/month" for a ceiling,
+ * " from USh 100,000/month" for a floor (25 Nov 2026), or nothing. A range
+ * is searched by its top, so it reads as its top.
+ */
+function budgetWords(filters = {}, period = '') {
+  const max = Number(filters.maxBudgetUgx) || 0;
+  const min = Number(filters.minBudgetUgx) || 0;
+  if (max > 0) return ` up to ${formatPrice(max, period)}`;
+  if (min > 0) return ` from ${formatPrice(min, period)}`;
+  return '';
+}
+
+/** The least a search will show: a floor they gave with no ceiling, else 0. */
+function budgetFloorOf(filters = {}) {
+  const max = Number(filters?.maxBudgetUgx) || 0;
+  const min = Number(filters?.minBudgetUgx) || 0;
+  return !(max > 0) && min > 0 ? min : 0;
 }
 
 /**
@@ -16144,7 +16396,7 @@ function filtersLeadLine(filters = {}, lang = 'en', { fxNote = '' } = {}) {
   if (!chips) return '';
   if (resolveLangCode(lang) !== 'en') return `✅ Filters applied: ${chips}${fxNote || '\n'}`;
   const period = filters.budgetPeriod || (['rent', 'student'].includes(normalizeListingType(filters.searchType || 'any')) ? 'month' : '');
-  const budget = Number(filters.maxBudgetUgx) > 0 ? ` up to ${formatPrice(filters.maxBudgetUgx, period)}` : '';
+  const budget = budgetWords(filters, period);
   const home = Boolean(normalizeInput(filters.propertyType || '')) || Number(filters.bedsMin) > 0;
   if (!budget && !home) return fxNote ? `${fxNote.replace(/^\n+/, '')}` : '';
   const where = searchPlacesOf(filters).length ? ` ${searchPlacePhrase(filters)}` : '';
@@ -16195,7 +16447,11 @@ function naturalSearchPrompt(lang, filters = {}, mode = 'area') {
   // Filters: house. Send the area or district." became one question, with
   // renting or buying in it when that is not said either.
   const askType = asksRentOrBuyFirst({ ...filters, area: 'x' });
-  const areaEn = `${whatsappBrandHeader('Property search')}\nSure, I can look for ${searchWhatSingular(filters)} for you 🔎\nWhich area? For example Ntinda, Kira or Kyanja.${askType ? ' And do you want to rent or to buy?' : ''}`;
+  // "a house to rent from USh 100,000/month": a floor is said back, so they
+  // can see it was understood as one (25 Nov 2026).
+  const floorPeriod = filters.budgetPeriod || (['rent', 'student'].includes(normalizeListingType(filters.searchType || 'any')) ? 'month' : '');
+  const floorWords = budgetFloorOf(filters) ? budgetWords(filters, floorPeriod) : '';
+  const areaEn = `${whatsappBrandHeader('Property search')}\nSure, I can look for ${searchWhatSingular(filters)}${floorWords} for you 🔎\nWhich area? For example Ntinda, Kira or Kyanja.${askType ? ' And do you want to rent or to buy?' : ''}`;
 
   const copy = {
     area: {
@@ -16508,6 +16764,7 @@ function parseBudgetFromQuestion(text) {
     const parsed = extractNaturalSearchFilters(text, {}, 'any', {});
     return {
       maxBudgetUgx: Number(parsed?.maxBudgetUgx || 0) || 0,
+      minBudgetUgx: Number(parsed?.minBudgetUgx || 0) || 0,
       budgetPeriod: parsed?.budgetPeriod || null,
       convertedFromUsd: Boolean(parsed?.convertedFromUsd),
       convertedFromForeign: Boolean(parsed?.convertedFromForeign),
@@ -16596,8 +16853,10 @@ function formatAffordabilityAdviceMessage(lang, rows = [], areaStats = [], filte
   const searchType = normalizeListingType(filters.searchType || 'any');
   const budget = Number(filters.maxBudgetUgx || 0) || 0;
   const type = searchType && searchType !== 'any' ? typeLabel(searchType, lang) : typeLabel('any', lang);
+  const floor = budgetFloorOf(filters);
   const filterBits = [type];
   if (budget > 0) filterBits.push(`up to ${formatPrice(budget, filters.budgetPeriod || '')}`);
+  else if (floor > 0) filterBits.push(`from ${formatPrice(floor, filters.budgetPeriod || '')}`);
   if (Number(filters.bedsMin || 0) > 0) filterBits.push(`${Number(filters.bedsMin)}+ bed`);
   if (filters.propertyType) filterBits.push(filters.propertyType);
   const fxNote = whatsappBudgetFxNote(filters);
@@ -16609,7 +16868,7 @@ function formatAffordabilityAdviceMessage(lang, rows = [], areaStats = [], filte
     // budget" over a row of filter chips.
     const what = searchWhatPhrase(filters);
     const lead = exactMatch
-      ? `Here are the cheapest ${what} I have${where ? ` ${where}` : ''}${budget > 0 ? `, all within ${formatPrice(budget, filters.budgetPeriod || '')}` : ''}:`
+      ? `Here are the cheapest ${what} I have${where ? ` ${where}` : ''}${budget > 0 ? `, all within ${formatPrice(budget, filters.budgetPeriod || '')}` : (floor > 0 ? `, from ${formatPrice(floor, filters.budgetPeriod || '')} up` : '')}:`
       : teamLine
         ? `${teamLine}\n\nMeanwhile, here are the cheapest ${what} I have${where ? ` ${where}` : ''} right now:`
         : `Nothing${where ? ` ${where}` : ''} is live at ${formatPrice(budget, filters.budgetPeriod || '')} yet. Here are the cheapest ${what} I have${where ? ' there' : ''}:`;
@@ -16789,6 +17048,7 @@ function findLegacyWebsitePublicListings(filters = {}, limit = 5) {
     .filter((row) => listingMatchesArea(row, area))
     .filter((row) => listingMatchesPropertyType(row, propertyType))
     .filter((row) => !Number.isFinite(maxBudget) || maxBudget <= 0 || !row.price || Number(row.price) <= maxBudget)
+    .filter((row) => !budgetFloorOf(filters) || (Number(row.price) >= budgetFloorOf(filters)))
     .filter((row) => !Number.isFinite(bedsMin) || bedsMin <= 0 || Number(row.bedrooms || 0) >= bedsMin)
     .slice(0, limit);
 }
@@ -16863,6 +17123,11 @@ function buildWhatsappAffordableWhere(filters = {}, { includeBudget = true } = {
   if (includeBudget && Number.isFinite(Number(filters.maxBudgetUgx)) && Number(filters.maxBudgetUgx) > 0) {
     values.push(Number(filters.maxBudgetUgx));
     where += ` AND p.price <= $${values.length}`;
+  }
+  // "from 100k and above": nothing under the floor (25 Nov 2026).
+  if (includeBudget && budgetFloorOf(filters) > 0) {
+    values.push(budgetFloorOf(filters));
+    where += ` AND p.price >= $${values.length}`;
   }
 
   if (Number.isFinite(Number(filters.bedsMin)) && Number(filters.bedsMin) > 0) {
@@ -17100,7 +17365,7 @@ function searchAreaKeys(filters = {}) {
 function asksRentOrBuyFirst(filters = {}) {
   if (!filters || filters.rentOrBuyAsked || normalizeListingType(filters.searchType || 'any') !== 'any') return false;
   if (filters?.proximity?.center || filters.useSharedLocation) return false;
-  if (Number(filters.maxBudgetUgx) > 0) return false;
+  if (Number(filters.maxBudgetUgx) > 0 || Number(filters.minBudgetUgx) > 0) return false;
   const home = normalizeInput(filters.propertyType || '').toLowerCase();
   if (/\b(?:land|plot|room|hostel|student|shop|office|warehouse|commercial)\b/.test(home)) return false;
   return Boolean(filters.road) || Boolean(home) || Number(filters.bedsMin) > 0;
@@ -17130,17 +17395,18 @@ async function buildAffordabilityAdviceReply({ phone, text, lang, filters = {} }
     ...filters,
     searchType: inferAffordabilitySearchType(text, filters)
   };
-  if (!Number(normalizedFilters.maxBudgetUgx || 0)) {
+  if (!Number(normalizedFilters.maxBudgetUgx || 0) && !Number(normalizedFilters.minBudgetUgx || 0)) {
     const parsedBudget = parseBudgetFromQuestion(text);
     normalizedFilters.maxBudgetUgx = parsedBudget.maxBudgetUgx;
+    if (parsedBudget.minBudgetUgx > 0) normalizedFilters.minBudgetUgx = parsedBudget.minBudgetUgx;
     normalizedFilters.budgetPeriod = normalizedFilters.budgetPeriod || parsedBudget.budgetPeriod;
     normalizedFilters.convertedFromUsd = Boolean(normalizedFilters.convertedFromUsd || parsedBudget.convertedFromUsd);
     normalizedFilters.convertedFromForeign = Boolean(normalizedFilters.convertedFromForeign || parsedBudget.convertedFromForeign);
     normalizedFilters.budgetCurrency = normalizedFilters.budgetCurrency || parsedBudget.budgetCurrency || null;
     normalizedFilters.fxRate = normalizedFilters.fxRate || parsedBudget.fxRate || null;
   }
-  // A rent budget is a month's rent (23 Nov 2026).
-  if (Number(normalizedFilters.maxBudgetUgx) > 0 && !normalizedFilters.budgetPeriod
+  // A rent budget is a month's rent (23 Nov 2026), a floor as much as a ceiling.
+  if ((Number(normalizedFilters.maxBudgetUgx) > 0 || budgetFloorOf(normalizedFilters) > 0) && !normalizedFilters.budgetPeriod
     && ['rent', 'student'].includes(normalizeListingType(normalizedFilters.searchType || 'any'))) normalizedFilters.budgetPeriod = 'month';
 
   let rows = await findAffordableWhatsappListings(normalizedFilters, { includeBudget: true });
@@ -17187,6 +17453,7 @@ async function buildAffordabilityAdviceReply({ phone, text, lang, filters = {} }
     last_affordability_search: {
       search_type: normalizedFilters.searchType || 'any',
       max_budget_ugx: normalizedFilters.maxBudgetUgx || null,
+      min_budget_ugx: budgetFloorOf(normalizedFilters) || null,
       exact_match: exactMatch,
       query: text,
       created_at: new Date().toISOString()
@@ -17382,6 +17649,14 @@ async function findPropertiesByNaturalFilters(filters = {}) {
     values.push(Number(filters.maxBudgetUgx));
     where += ` AND price IS NOT NULL AND price <= $${values.length}`;
   }
+  // A floor (25 Nov 2026): nothing under it, and the nearest to it first, so
+  // "a house from 300k" opens at 300k whether they meant "300k and up" or
+  // "about 300k".
+  const floor = budgetFloorOf(filters);
+  if (floor > 0) {
+    values.push(floor);
+    where += ` AND price IS NOT NULL AND price >= $${values.length}`;
+  }
 
   if (Number.isFinite(Number(filters.bedsMin)) && Number(filters.bedsMin) > 0) {
     values.push(Number(filters.bedsMin));
@@ -17407,7 +17682,7 @@ async function findPropertiesByNaturalFilters(filters = {}) {
        LIMIT 1
      ) img ON TRUE
      ${where}
-     ORDER BY ${searchOrderBySql('p')}
+     ORDER BY ${floor > 0 ? 'p.price ASC NULLS LAST, ' : ''}${searchOrderBySql('p')}
      LIMIT $${limitIdx}`,
     values
   );
@@ -18966,7 +19241,7 @@ function replyAsksSomething(text = '') {
  */
 function whatsappReplyKind(text = '') {
   const clean = String(text || '');
-  if (/Reply \*CONTACT\* for the owner's number/.test(clean)) return 'pick';
+  if (/Reply \*CONTACT\* (?:for the owner's number|for their number|to see who posted it)/.test(clean)) return 'pick';
   if (/Reply \*\d+\*(?:, \*\d+\*)*(?: or \*\d+\*)? to see (?:one|it)\b/.test(clean)) return 'results';
   if (/What can I help you with\?|Choose what you need:/.test(clean)) return 'menu';
   return '';
@@ -19046,7 +19321,8 @@ async function loadResultRows(ids = []) {
   if (!wanted.length) return [];
   const result = await db.query(
     `SELECT id::text AS id, title, listing_type, transaction_type, property_type, price, price_period,
-            price_on_application, area, district, bedrooms, extra_fields, status, updated_at
+            price_on_application, area, district, bedrooms, extra_fields, status, updated_at,
+            listed_via, source, lister_phone
        FROM properties
       WHERE id = ANY($1::uuid[]) AND status = 'approved'`,
     [wanted]
@@ -19099,7 +19375,8 @@ async function handleResultsReply({ phone, step = '', text = '', sessionData = {
     if (kind === 'results' && shown > 1) {
       const numbers = Array.from({ length: shown }, (_, i) => `*${i + 1}*`);
       return {
-        message: `Which one? Reply ${numbers.slice(0, -1).join(', ')} or ${numbers[numbers.length - 1]} to see it, then *CONTACT* for the owner's number.`,
+        // Not "for the owner's number": a listing found online may have none (25 Nov 2026).
+        message: `Which one? Reply ${numbers.slice(0, -1).join(', ')} or ${numbers[numbers.length - 1]} to see it, then *CONTACT* to get in touch.`,
         nextStep: 'main_menu'
       };
     }
@@ -19288,11 +19565,183 @@ function pickShownListing(text = '', rows = []) {
   return top[0].row;
 }
 
+/*
+ * "How much is from ndejje to city centre" (25 Nov 2026, 15:29 in Kampala),
+ * a minute after a renter had opened two rooms in Ndejje. It named Ndejje, so
+ * it was taken as picking the Ndejje room, and the answer was that room's card
+ * again, "We found this one published online", the poster's TikTok page, five
+ * safety steps and the terms. He had asked what it takes to get to town.
+ *
+ * A question about getting from one place to another is answered with how far
+ * it is, in a straight line and said so, because that is what we know. No fare
+ * and no journey time: those change with the route and the hour, and a figure
+ * we made up is worse than none.
+ */
+// The point the landmark service measures "Kampala" from: the city centre.
+const CITY_CENTRE = { name: 'Kampala city centre', lat: 0.3136, lng: 32.5811 };
+const CITY_CENTRE_WORDS = /^(?:the\s+)?(?:city(?:\s+cent(?:er|re))?|town|kampala(?:\s+(?:city|town|cent(?:er|re)|city\s+cent(?:er|re)|cbd))?|cbd|cent(?:er|re)|downtown|kla)$/i;
+// Words that only ever ask about a journey.
+const JOURNEY_WORDS = /\b(?:how\s+far|how\s+long|distance|transport|fare|taxi|matatu|boda(?:\s*boda)?|commute|journey|kms?|kilomet(?:er|re)s?|minutes?|hours?)\b/i;
+// Words that make "how much ... from A to B" about a home, not a journey.
+const HOME_SEARCH_WORDS = /\b(?:rent|rental|house|houses|home|homes|room|rooms|apartment|apartments|flat|flats|plot|plots|land|hostel|bedroom|bedrooms|buy|sale|price|budget|shop|office)\b/i;
+// The property they were just sent, by another name: "it", "there", "the house".
+const THE_PLACE_SHOWN = /^(?:it|there|that|this|the\s+(?:house|home|room|place|property|apartment|flat|rental|one)|(?:this|that)\s+(?:house|home|room|place|property|apartment|flat|one))$/i;
+// Where they are, which we cannot know: no answer is better than a guess.
+const WHERE_THEY_ARE = /^(?:here|home|my\s+(?:place|home|house|location|work|office|job|school)|where\s+i\s+(?:am|stay|live|work))$/i;
+const MONTH_OR_DAY = /^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|monday|tuesday|wednesday|thursday|friday|saturday|sunday|morning|evening|today|tomorrow)$/i;
+
+/** A place in a journey question: { name, lat, lng }, or null when it is not a place we can find. */
+function journeyPlace(raw = '') {
+  const clean = normalizeInput(raw).toLowerCase()
+    .replace(/[?.!,]+/g, ' ')
+    .replace(/\b(?:please|pliz|plz|pls|by\s+(?:taxi|boda|car|road|matatu)|using\s+(?:a\s+)?(?:taxi|boda)|on\s+(?:a\s+)?(?:taxi|boda))\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!clean || clean.length > 40 || /\d/.test(clean)) return null;
+  if (CITY_CENTRE_WORDS.test(clean)) return CITY_CENTRE;
+  let point = null;
+  try {
+    point = require('../services/landmarkService').resolveProximityCenter(clean);
+  } catch (_error) {
+    point = null;
+  }
+  if (!point || !Number.isFinite(Number(point.lat)) || !Number.isFinite(Number(point.lng))) return null;
+  // A known area, or a place everyone knows by name; not the nearest school
+  // whose name happens to contain the word.
+  if (point.source !== 'area' && !['airport', 'university', 'hospital', 'mall', 'market'].includes(point.kind)) return null;
+  return { name: point.name, lat: Number(point.lat), lng: Number(point.lng) };
+}
+
+/**
+ * What a journey question asks: { from, to, money, time } as the words said
+ * them (one end may be "it"), or null when it is not one.
+ */
+function readJourneyQuestion(text = '') {
+  const clean = normalizeInput(text).toLowerCase().replace(/[?!.]+\s*$/g, '').trim();
+  if (!clean || clean.length > 140) return null;
+  const journeyWords = JOURNEY_WORDS.test(clean);
+  if (!journeyWords && !/\bhow\s+much\b/.test(clean)) return null;
+  // "How much is a single room from 100k to 300k", "how much is rent from Kira
+  // to Ntinda": a home, not a journey.
+  if (HOME_SEARCH_WORDS.test(clean) && !journeyWords) return null;
+  let from = '';
+  let to = '';
+  const ends = clean.match(/\bfrom\s+(.+?)\s+(?:to|up\s+to|upto|till|until)\s+(.+)$/)
+    || clean.match(/\bbetween\s+(.+?)\s+and\s+(.+)$/)
+    || clean.match(/\bhow\s+far\s+is\s+(.+?)\s+(?:from|to)\s+(.+)$/)
+    || clean.match(/\b(?:fare|transport|taxi|boda|matatu)\s+(?:fare\s+)?(.+?)\s+to\s+(.+)$/);
+  if (ends) {
+    [from, to] = [ends[1], ends[2]];
+  } else if (journeyWords) {
+    // "How far is it from town?", "transport to Makerere": one end, and the other is where they are looking.
+    const one = clean.match(/\b(?:from|to)\s+(.+)$/);
+    if (!one) return null;
+    from = 'it';
+    to = one[1];
+  } else {
+    return null;
+  }
+  from = from.trim();
+  to = to.trim();
+  // "from 100k to 300k", "from January to March", "from here": not two places we can measure between.
+  if (/\d/.test(from) || /\d/.test(to)) return null;
+  if ([from, to].some((end) => MONTH_OR_DAY.test(end) || WHERE_THEY_ARE.test(end))) return null;
+  return {
+    from,
+    to,
+    journeyWords,
+    money: /\b(?:how\s+much|fare|cost|costs|price|transport)\b/.test(clean),
+    time: /\b(?:how\s+long|minutes?|hours?)\b/.test(clean)
+  };
+}
+
+/** "Ndejje is about 8 km from Kampala city centre in a straight line, a bit more by road." */
+function journeyReply({ from, to, money = false, time = false } = {}) {
+  const { kmBetween } = require('../services/landmarkService');
+  const km = kmBetween(from, to);
+  const distance = km < 1
+    ? `${from.name} is less than a kilometre from ${to.name}.`
+    : `${from.name} is about ${Math.max(1, Math.round(km))} km from ${to.name} in a straight line, a bit more by road.`;
+  const lines = [distance];
+  if (money) lines.push("I can't tell you the fare: taxi and boda prices change with the route and the time of day, so people there will know today's price.");
+  if (time) lines.push('How long it takes depends on the traffic.');
+  lines.push('', to === CITY_CENTRE
+    ? "If you'd like somewhere closer to town, tell me the area and your budget and I'll look 🏡"
+    : "If you'd like somewhere closer, tell me the area and your budget and I'll look 🏡");
+  return lines.join('\n');
+}
+
+/** A question about getting from one place to another, answered; null when the message is not one. */
+async function handleJourneyQuestion({ phone, step = '', text = '' } = {}) {
+  if (!['main_menu', 'greeting', ''].includes(String(step || ''))) return null;
+  const asked = readJourneyQuestion(text);
+  if (!asked) return null;
+  let from = THE_PLACE_SHOWN.test(asked.from) ? null : journeyPlace(asked.from);
+  let to = journeyPlace(asked.to);
+  if (THE_PLACE_SHOWN.test(asked.from)) {
+    // "it" is the one property they were just sent, where it is.
+    const rows = await recentlySentListings(phone).catch(() => []);
+    const shown = rows.length === 1 ? rows[0] : null;
+    from = shown ? journeyPlace(shown.area || '') || journeyPlace(shown.district || '') : null;
+    if (!from) return null;
+  }
+  if (!from || !to) {
+    // Only a question that is plainly about a journey is told we could not
+    // place it; a bare "how much" goes on to be read as anything else.
+    const unknown = normalizeInput(!from ? asked.from : asked.to);
+    if (!asked.journeyWords || !unknown || THE_PLACE_SHOWN.test(unknown)) return null;
+    const named = /^[a-z][a-z' -]{1,28}$/i.test(unknown) ? unknown.replace(/\b\w/g, (c) => c.toUpperCase()) : '';
+    return {
+      message: `Sorry, I don't know where ${named || 'that'} is, so I can't tell you how far it is.\n\nI can help you find a place to rent or buy: tell me the area and your budget 🏡`,
+      nextStep: 'main_menu'
+    };
+  }
+  if (from.name === to.name) return null;
+  return { message: journeyReply({ from, to, money: asked.money, time: asked.time }), nextStep: 'main_menu' };
+}
+
+/*
+ * "Am Tusiime Beb's Edwards" (27 Nov 2026, 06:58 in Kampala): a buyer who had
+ * just been sent nine houses for sale in Kyebando told us his name, and was
+ * sent the menu. Someone who says who they are is greeted by that name.
+ */
+const NOT_PART_OF_A_NAME = /\b(?:looking|searching|interested|in|at|from|on|here|fine|good|ok|okay|okey|well|ready|not|also|still|available|coming|going|waiting|sorry|happy|glad|an?|the|agent|broker|landlord|owner|tenant|student|buyer|seller|renter|selling|buying|renting|asking|done|back|new|very|so|just|really|sure|now|with|for|to|and|you|your|it|this|that|there|calling|writing|working|staying|living|based|thanks|thank|me|myself|interested|requesting|inquiring|enquiring|single|married|alive|well|great|nice|okay|hungry|tired|busy|free|available|outside|inside|abroad|home|house|room|land|plot|property|properties|rent|sale|buy|price|budget|number|phone|whatsapp|makaug)\b/i;
+
+/** The name someone gave ("Am Tusiime Beb's Edwards", "My name is Grace"), or ''. */
+function nameTheyGave(text = '') {
+  const clean = normalizeInput(text).replace(/[.!]+$/, '').trim();
+  if (!clean || clean.length > 60 || /[?\d@]/.test(clean)) return '';
+  const m = clean.match(/^(?:(?:hi|hello|hey|good\s+(?:morning|afternoon|evening))[,!\s]+)?(?:i\s+am|i'?m|am|my\s+name\s+is|my\s+names?\s+are|names?\s*:?|this\s+is|it'?s)\s+([a-z][a-z'’.-]*(?:\s+[a-z][a-z'’.-]*){0,3})$/i);
+  if (!m) return '';
+  const name = m[1].trim();
+  if (NOT_PART_OF_A_NAME.test(name)) return '';
+  // A place is not a name: "this is Kira".
+  if (parseAreaFromText(name, {})) return '';
+  return name;
+}
+
+/** "Nice to meet you, Tusiime 🙏", with where we were if a search was just made. */
+function introductionReply(name = '', sessionData = {}) {
+  const firstWord = normalizeInput(name).split(/\s+/)[0] || '';
+  const first = firstWord ? firstWord.charAt(0).toUpperCase() + firstWord.slice(1) : '';
+  const brief = recentSearchBrief(sessionData);
+  const kinds = { sale: 'homes for sale', rent: 'places to rent', land: 'land', student: 'student rooms', commercial: 'commercial spaces' };
+  const what = brief ? (kinds[normalizeListingType(brief.search_type || 'any')] || 'places') : '';
+  return [
+    `Nice to meet you${first ? `, ${first}` : ''} 🙏`,
+    brief
+      ? `Would you like more ${what}${brief.area ? ` in ${brief.area}` : ''}, or something else? Tell me your budget and I'll find the best options.`
+      : "How can I help? Tell me what you're looking for, the area and your budget, and I'll find options."
+  ].join('\n');
+}
+
 /** A reply that points at one of the properties just sent: who holds it and how to reach them. */
 async function handleShownListingPick({ phone, step = '', text = '', lang = 'en' } = {}) {
   if (!['main_menu', 'greeting', ''].includes(String(step || ''))) return null;
   const clean = normalizeInput(text);
   if (!clean || clean.length > 160 || /^\d{1,2}$/.test(clean)) return null;
+  // A journey ("how much is from Ndejje to town") names a place, but it is not a pick.
+  if (readJourneyQuestion(clean)) return null;
   const rows = await recentlySentListings(phone);
   if (!rows.length) return null;
   const picked = pickShownListing(clean, rows);
@@ -20713,6 +21162,10 @@ async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocat
     values.push(Number(f.maxBudgetUgx));
     where += ` AND price IS NOT NULL AND price <= $${values.length}`;
   }
+  if (budgetFloorOf(f) > 0) {
+    values.push(budgetFloorOf(f));
+    where += ` AND price IS NOT NULL AND price >= $${values.length}`;
+  }
 
   if (Number.isFinite(Number(f.bedsMin)) && Number(f.bedsMin) > 0) {
     values.push(Number(f.bedsMin));
@@ -21171,8 +21624,11 @@ function continueFromLastSearch(filters = {}, sessionData = {}, { keepArea = tru
       carried.push('beds');
     }
   }
-  if (sameHome && !(Number(out.maxBudgetUgx) > 0) && Number(brief.max_budget_ugx) > 0) {
-    out.maxBudgetUgx = Number(brief.max_budget_ugx);
+  // A new floor ("from 200k") is a new budget: the old one is not carried.
+  const saidAFloor = !(Number(out.maxBudgetUgx) > 0) && Number(out.minBudgetUgx) > 0;
+  if (sameHome && !(Number(out.maxBudgetUgx) > 0) && !saidAFloor
+    && (Number(brief.max_budget_ugx) > 0 || Number(brief.min_budget_ugx) > 0)) {
+    if (Number(brief.max_budget_ugx) > 0) out.maxBudgetUgx = Number(brief.max_budget_ugx);
     if (!(Number(out.minBudgetUgx) > 0) && Number(brief.min_budget_ugx) > 0) out.minBudgetUgx = Number(brief.min_budget_ugx);
     if (!out.budgetPeriod && brief.budget_period) out.budgetPeriod = brief.budget_period;
     // A rent budget is a month's rent: "USh 150,000/month", not "USh 150,000".
@@ -21215,7 +21671,9 @@ function describeSearchBrief(brief = {}) {
     ? (brief.min_budget_ugx
       ? `${formatPrice(brief.min_budget_ugx, '')}–${maxText.replace(/^[A-Za-z$€£]+\s*/, '')}`
       : `up to ${maxText}`)
-    : '';
+    : (brief.min_budget_ugx
+      ? `from ${formatPrice(brief.min_budget_ugx, brief.budget_period || (brief.search_type === 'rent' ? 'mo' : ''))}`
+      : '');
   return [home, type, place, budget].filter(Boolean).join(' ') || normalizeInput(brief.query || '').slice(0, 160);
 }
 
@@ -21928,7 +22386,9 @@ async function formatNoMatchOrFallbackReply({
   const budgetPeriodForCopy = filters.pricePeriod
     || filters.budgetPeriod
     || (['rent', 'student'].includes(normalizedSearchType) ? 'mo' : null);
-  const budgetClause = budgetUgx ? ` under *${formatPrice(budgetUgx, budgetPeriodForCopy)}*` : '';
+  const budgetClause = budgetUgx
+    ? ` under *${formatPrice(budgetUgx, budgetPeriodForCopy)}*`
+    : (budgetFloorOf(filters) ? ` from *${formatPrice(budgetFloorOf(filters), budgetPeriodForCopy)}*` : '');
   const cheapestMultiple = cheapest && budgetUgx ? Number(cheapest.price) / budgetUgx : 0;
   const cheapestClause = cheapest
     ? ` The lowest I have is *${formatListingPrice(cheapest)}*${cheapestMultiple >= 2 ? ` — about ${cheapestMultiple >= 2.75 ? Math.round(cheapestMultiple) : cheapestMultiple.toFixed(1).replace(/\.0$/, '')}× your budget` : ''}.`
@@ -23735,7 +24195,11 @@ async function sendStaffPayLink({
     + `${allowExempt ? 'Fee-exempt — paying by choice, the exemption stays\n' : ''}`
     + `Paid: not yet\n\n`
     + `${url}\n\nI will tell you the moment it is paid, and chase it if it goes quiet.`;
-  for (const target of recipients) {
+  // 25 Nov 2026, 10:16: Ronald sent a link from Agent 007 and got "💳 Payment
+  // link sent" and "✅ Payment link sent" nine seconds apart. Whoever asked is
+  // answered in their own chat by the step that asked; the rest of the team
+  // hears it here, as when the link waits.
+  for (const target of team.filter((digits) => digits.slice(-9) !== requester.slice(-9))) {
     await queueWhatsappWebBridgeMessage({
       recipient: target,
       text: note,
@@ -24349,6 +24813,21 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     return null;
   });
   if (resultsReply) return respond(resultsReply.message, resultsReply.nextStep);
+
+  // "How much is from Ndejje to city centre" asks how far, not for the Ndejje room (25 Nov 2026).
+  const journey = await handleJourneyQuestion({ phone, step, text: cleanBody }).catch((error) => {
+    logger.warn('Journey question failed:', error.message || String(error));
+    return null;
+  });
+  if (journey) return respond(journey.message, journey.nextStep);
+
+  // "Am Tusiime …": greeted by name, not sent the menu (27 Nov 2026).
+  // Mid-conversation only: a first "Hi, I'm Grace" still gets the welcome.
+  const introducedAs = String(step || '') === 'main_menu' ? nameTheyGave(cleanBody) : '';
+  if (introducedAs) {
+    await patchSessionData(phone, { display_name: introducedAs.slice(0, 80) }).catch(() => null);
+    return respond(introductionReply(introducedAs, sessionData), 'main_menu');
+  }
 
   const shownPick = await handleShownListingPick({ phone, step, text: cleanBody, lang }).catch((error) => {
     logger.warn('Shown listing pick failed:', error.message || String(error));
@@ -25732,9 +26211,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       for (const key of ['maxBudgetUgx', 'minBudgetUgx', 'budgetPeriod', 'pricePeriod', 'bedsMin', 'propertyType']) {
         if (told[key] && !naturalFilters[key]) naturalFilters[key] = told[key];
       }
-      // "To rent" answers the question "rent or buy?" (23 Nov 2026).
+      // "To rent" answers the question "rent or buy?" (23 Nov 2026). And "To
+      // buy", said when we had taken them to be renting (27 Nov 2026), puts it
+      // right: it was answered "I don't have *To buy* on my map yet".
       const toldType = normalizeListingType(told.searchType || 'any');
-      if (toldType !== 'any' && normalizeListingType(naturalFilters.searchType || 'any') === 'any') naturalFilters.searchType = toldType;
+      if (toldType !== 'any' && (normalizeListingType(naturalFilters.searchType || 'any') === 'any' || ONLY_RENT_OR_BUY.test(cleanBody))) naturalFilters.searchType = toldType;
       if (eitherWay) naturalFilters.rentOrBuyAsked = true;
       // A road or places in the answer are where to look now; an answer with
       // no place in it ("rent, 800k") leaves the road or the places they gave.
@@ -25745,7 +26226,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       } else if (answerNamesAPlace && searchPlacesOf(naturalFilters).length) {
         naturalFilters = { ...naturalFilters, searchAreas: null, searchAreaLabel: null, road: null, area: '' };
       }
-      const answeredOnlyTheQuestion = !answerNamesAPlace && (eitherWay || toldType !== 'any' || Number(told.maxBudgetUgx) > 0 || Number(told.bedsMin) > 0);
+      const answeredOnlyTheQuestion = !answerNamesAPlace && (eitherWay || toldType !== 'any' || Number(told.maxBudgetUgx) > 0 || Number(told.minBudgetUgx) > 0 || Number(told.bedsMin) > 0);
       if (!answerNamesAPlace && !answeredOnlyTheQuestion && !searchPlacesOf(naturalFilters).length
         && (!naturalFilters.area || naturalFilters.location_blocked) && looksLikeTalkNotAPlace(cleanBody)) {
         return respond(await talkWhileWaitingForAPlace({ phone, said: cleanBody, contactName: runtime.contactName }), 'main_menu');
@@ -25841,6 +26322,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     }
 
     if (cleanBody.length < 2) return respond(t(lang, 'askSearchArea'), 'search_area');
+    // "To buy" is renting-or-buying, not a place: the area is still to come.
+    if (ONLY_RENT_OR_BUY.test(cleanBody)) {
+      const kept = naturalFilters || pendingFilters || { searchType };
+      const told = normalizeListingType(parseSearchType(cleanBody) || 'any');
+      const asked = told !== 'any' ? { ...kept, searchType: told, hasSignal: true } : kept;
+      await patchSessionData(phone, { search_type: asked.searchType || searchType || 'any', pending_search_filters: asked });
+      return respond(naturalSearchPrompt(lang, asked, 'area'), 'search_area');
+    }
     const locationFilters = resolveWhatsappSearchLocation({ area: cleanBody, searchType }, cleanBody);
     const locationBlockReply = whatsappSearchLocationBlockReply(locationFilters, cleanBody);
     if (locationBlockReply) {
@@ -29024,6 +29513,24 @@ module.exports.__test = {
   releaseEmployeePendingCaption,
   employeeMediaTooLargeKeptMessage,
   pickShownListing,
+  handleShownListingPick,
+  readJourneyQuestion,
+  journeyPlace,
+  handleJourneyQuestion,
+  budgetIsAFloor,
+  budgetFloorOf,
+  budgetWords,
+  buildWhatsappAffordableWhere,
+  loadResultRows,
+  nameTheyGave,
+  introductionReply,
+  advertUnitBlock,
+  advertPropertyType,
+  ownerForwardListingTitle,
+  priceTextWithoutSeparators,
+  parseSearchType,
+  ONLY_RENT_OR_BUY,
+  isPrivateDocumentMedia,
   listingCodesInText,
   pickPriceFigures,
   settleAgentWaitingAdverts,

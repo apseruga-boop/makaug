@@ -188,8 +188,10 @@ test('to an agent who has written lately, the payment link goes as before', asyn
   assert.strictEqual(sent.held_message, undefined);
   const link = inserts.find((row) => row.metadata.message_kind === 'agent_pay_link_staff_sent');
   assert.strictEqual(link.metadata.held_for_first_message, undefined);
+  // Whoever asked is answered in their own chat (25 Nov 2026: Ronald was told
+  // twice, nine seconds apart); the rest of the team gets the notice.
   const notices = inserts.filter((row) => row.metadata.message_kind === 'agent_pay_link_staff_notice');
-  assert.deepStrictEqual(notices.map((row) => row.to), [STAFF, OWNER]);
+  assert.deepStrictEqual(notices.map((row) => row.to), [OWNER]);
   assert.match(notices[0].payload.text, /^💳 \*Payment link sent\* — Kato Test/);
 });
 
