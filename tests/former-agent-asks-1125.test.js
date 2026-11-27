@@ -32,7 +32,8 @@ const AGENT_ID = '0e0e0e0e-0000-4000-8000-000000000051';
 const removed = {
   id: AGENT_ID, full_name: 'Moses Testname', greeting_name: 'Moses', phone: '+256700000151', whatsapp: '+256700000151', status: 'suspended',
   removed_at: '2026-11-23T14:08:01Z', removed_reason: 'Has not paid yet',
-  removal_snapshot: { reason_code: 'not_paying', rejoin_sent_at: new Date(Date.now() - 15 * 60e3).toISOString() }
+  // Welcomed back, chose to rejoin, and have the payment link (27 Nov 2026).
+  removal_snapshot: { reason_code: 'not_paying', welcome_back_at: new Date(Date.now() - 20 * 60e3).toISOString(), former_agent_choice: 'rejoin', former_agent_choice_at: new Date(Date.now() - 15 * 60e3).toISOString(), rejoin_sent_at: new Date(Date.now() - 15 * 60e3).toISOString() }
 };
 
 async function withRemovedAgent(run) {

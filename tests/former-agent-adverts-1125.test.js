@@ -34,7 +34,8 @@ test('a removed agent\'s advert in words is kept as an advert, not passed on as 
   const agent = {
     id: '0e0e0e0e-0000-4000-8000-000000000061', full_name: 'Moses Testname', phone: '+256700000161', whatsapp: '+256700000161', status: 'suspended',
     removed_at: '2026-11-24T14:08:01Z', removed_reason: 'Has not paid yet',
-    removal_snapshot: { reason_code: 'not_paying', rejoin_sent_at: new Date(Date.now() - 2 * 3600e3).toISOString() }
+    // Welcomed back, chose to rejoin, and have the payment link (27 Nov 2026).
+    removal_snapshot: { reason_code: 'not_paying', welcome_back_at: new Date(Date.now() - 3 * 3600e3).toISOString(), former_agent_choice: 'rejoin', former_agent_choice_at: new Date(Date.now() - 2 * 3600e3).toISOString(), rejoin_sent_at: new Date(Date.now() - 2 * 3600e3).toISOString() }
   };
   const saved = { query: db.query, send: desk.sendToTeam };
   db.query = async (sql) => (/FROM agents\s+WHERE RIGHT\(REGEXP_REPLACE\(COALESCE\(whatsapp/i.test(String(sql)) ? { rows: [agent] } : { rows: [] });

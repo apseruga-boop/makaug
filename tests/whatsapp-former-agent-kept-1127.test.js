@@ -117,7 +117,7 @@ test('a photo kept when it arrived is the one used when they come back', async (
 test('the pieces are wired: the note after the burst, the media kept, the inbox told', () => {
   const source = fs.readFileSync(path.join(__dirname, '../routes/whatsapp.js'), 'utf8');
   const reply = source.slice(source.indexOf('async function removedAgentReply'), source.indexOf('/** An agent paused for an unpaid fee messages us'));
-  assert.match(reply, /if \(property\) keptAdvertsNoteLater\(\{ agent, phone \}\);\n\s+return \{ message: '', silent: true \};/);
+  assert.match(reply, /if \(property\) \{\n\s+keptAdvertsNoteLater\(\{ agent, phone \}\);\n\s+return \{ message: '', silent: true \};/);
   assert.match(source, /if \(formerAgent\) \{\n\s+answeredEarly\('former_agent'\);\n\s+if \(effectiveMediaUrl && !isAudioNote\) \{\n\s+deferWhatsappWork\('keep a former agent\\'s media', \(\) => keepFormerAgentMedia\(/);
   assert.match(source, /if \(paymentReply\) \{\n\s+answeredEarly\('payment_claim'\);/);
   assert.match(source, /if \(pausedReply\) \{\n\s+answeredEarly\('paused_agent'\);/);

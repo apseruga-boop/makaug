@@ -19267,7 +19267,6 @@ async function handlePaymentClaimMessage({ phone, body = '', photoCandidates = [
  */
 const formerAgentNotedAt = new Map();
 const FORMER_AGENT_NOTE_EVERY_MS = 12 * 60 * 60 * 1000;
-const REJOIN_NOTE_EVERY_MS = 24 * 60 * 60 * 1000;
 
 // Words after the note (24 Nov 2026, 23:02: "I was suggesting to reduce ko for
 // me … then next year u Bill that amount per month. How do u see"). The note
@@ -19307,7 +19306,7 @@ function keptAdvertLabel(group = {}) {
 }
 
 /** The note: what is kept for them, and how it comes back. */
-function keptAdvertsMessage({ agent = {}, groups = [], fresh = 1, fee = 0 } = {}) {
+function keptAdvertsMessage({ agent = {}, groups = [], fresh = 1, fee = 0, linkSent = true } = {}) {
   const first = agentGreetingName(agent, '');
   const all = groups.length;
   const one = Number(fresh) <= 1;
@@ -19316,7 +19315,7 @@ function keptAdvertsMessage({ agent = {}, groups = [], fresh = 1, fee = 0 } = {}
     '',
     ...groups.slice(-6).reverse().map((group) => `• ${keptAdvertLabel(group)}`),
     '',
-    `${all === 1 ? 'It goes' : 'They all go'} to our team for review as soon as you rejoin${Number(fee) > 0 ? ` (the agent plan is UGX ${Math.round(Number(fee)).toLocaleString('en-US')} a month)` : ''}, and your earlier listings come back up at the same time. The payment link is in my message above.`,
+    `${all === 1 ? 'It goes' : 'They all go'} to our team for review as soon as you rejoin${Number(fee) > 0 ? ` (the agent plan is UGX ${Math.round(Number(fee)).toLocaleString('en-US')} a month)` : ''}, and your earlier listings come back up at the same time. ${linkSent ? 'The payment link is in my message above.' : `Reply *REJOIN* and ${agentHelpContact().name} will call you, with the payment link.`}`,
     '',
     'Any questions, just reply here.'
   ].join('\n');
@@ -19327,12 +19326,13 @@ async function sendKeptAdvertsNote({ agent = {}, phone = '' } = {}) {
   const current = (await db.query('SELECT id, full_name, greeting_name, removed_at, removal_snapshot FROM agents WHERE id = $1', [agent.id]).catch(() => ({ rows: [] }))).rows[0];
   if (!current?.removed_at) return { sent: false, reason: 'not_removed' };
   const snapshot = current.removal_snapshot && typeof current.removal_snapshot === 'object' ? current.removal_snapshot : {};
-  const toldUpTo = Math.max(Date.parse(snapshot.rejoin_sent_at || '') || 0, Date.parse(snapshot.kept_note_at || '') || 0);
+  const linkSentAt = Date.parse(snapshot.rejoin_sent_at || '') || 0;
+  const toldUpTo = Math.max(linkSentAt, Date.parse(snapshot.kept_note_at || '') || 0, Date.parse(snapshot.welcome_back_at || '') || 0);
   const { groups } = await groupForwardedAdverts(phone, { since: current.removed_at });
   const fresh = groups.filter((group) => Date.parse(group.caption_at) > toldUpTo).length;
   if (!fresh) return { sent: false, reason: 'nothing_new' };
   const settings = await require('../services/billingOpsService').getSettings(db).catch(() => ({}));
-  const body = keptAdvertsMessage({ agent: current, groups, fresh, fee: Number(settings?.agent_fee?.monthly_ugx || 0) });
+  const body = keptAdvertsMessage({ agent: current, groups, fresh, fee: Number(settings?.agent_fee?.monthly_ugx || 0), linkSent: Date.now() - linkSentAt < FORMER_AGENT_LINK_FRESH_MS });
   const delivery = await require('../services/leadHandoffService').deliverWhatsapp({ to: phone, body, kind: 'former_agent_kept', leadId: null, nonce: `${agent.id}:${groups.length}` });
   await db.query(
     `UPDATE agents SET removal_snapshot = COALESCE(removal_snapshot, '{}'::jsonb) || jsonb_build_object('kept_note_at', NOW()::text) WHERE id = $1::uuid AND removed_at IS NOT NULL`,
@@ -19420,7 +19420,7 @@ async function findRemovedAgentByPhone(phone) {
   const key = agentPhoneKey(phone);
   if (!key || key.length < 9) return null;
   const rows = (await db.query(
-    `SELECT id, full_name, greeting_name, phone, whatsapp, status, removed_at, removed_reason, removal_snapshot
+    `SELECT id, full_name, greeting_name, phone, whatsapp, status, removed_at, removed_reason, removal_snapshot, makaug_agent_number
        FROM agents
       WHERE RIGHT(REGEXP_REPLACE(COALESCE(whatsapp, ''), '[^0-9]', '', 'g'), 9) = $1
          OR RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = $1
@@ -19433,6 +19433,92 @@ async function findRemovedAgentByPhone(phone) {
   return rows[0];
 }
 
+/*
+ * The welcome back (Arthur, 27 Nov 2026). A removed agent who writes to us is
+ * greeted kindly, told they were removed but that we'd love to have them back,
+ * and asked: 1, look for a property, or 2, rejoin as an agent. Rejoining:
+ * Ronald will call them, they get the payment link at once, and Arthur and
+ * Ronald are asked to call them urgently. When they pay they are back by
+ * themselves, with everything they sent while away going to staff review.
+ */
+const FORMER_AGENT_WELCOME_EVERY_MS = 7 * 24 * 60 * 60 * 1000;
+const FORMER_AGENT_LINK_FRESH_MS = 7 * 24 * 60 * 60 * 1000;
+const FORMER_AGENT_CUSTOMER_MS = 30 * 24 * 60 * 60 * 1000;
+const FORMER_AGENT_REMIND_EVERY_MS = 12 * 60 * 60 * 1000;
+const formerAgentRemindedAt = new Map();
+const FORMER_AGENT_PICKS_CUSTOMER = /^\s*(?:1|1️⃣|one|customer|(?:i\s+(?:want\s+to|am)\s+)?look(?:ing)?\s+for\s+(?:a\s+)?(?:property|house|home|plot|land|place)|search(?:\s+properties)?)\s*[.!]*\s*$/i;
+const FORMER_AGENT_PICKS_REJOIN = /^\s*(?:2|2️⃣|two|re-?\s?join(?:\s+as\s+(?:an?\s+)?agent)?|join\s+again|re-?sign|sign\s+(?:up|in)\s+again|(?:i\s+)?want\s+to\s+(?:rejoin|come\s+back|join\s+again))\s*[.!]*\s*$/i;
+const FORMER_AGENT_SAYS_REJOIN = /\b(?:re-?join|come\s+back\s+as\s+(?:an?\s+)?agent)\b/i;
+
+/** Their answer to the welcome back: 'customer', 'rejoin' or ''. "Rejoin" is understood at any time. */
+function formerAgentChoice(said = '', { asked = false } = {}) {
+  const text = normalizeInput(said);
+  if (!text || text.length > 80) return '';
+  // "How much is it to rejoin?" is answered by the way back; "I don't want to rejoin" is not.
+  if (FORMER_AGENT_SAYS_REJOIN.test(text) && !/\b(?:don'?t|do\s+not|not|never|no\s+longer|won'?t|cannot|can'?t)\b/i.test(text)) return 'rejoin';
+  if (!asked) return '';
+  if (FORMER_AGENT_PICKS_REJOIN.test(text)) return 'rejoin';
+  if (FORMER_AGENT_PICKS_CUSTOMER.test(text)) return 'customer';
+  return '';
+}
+
+function formerAgentShortDate(iso) {
+  const date = new Date(iso || '');
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Africa/Kampala' });
+}
+
+function formerAgentWelcomeBack(agent = {}, { kept = false, left = false } = {}) {
+  const first = agentGreetingName(agent, '');
+  const when = formerAgentShortDate(agent.removed_at);
+  return [
+    `Hi${first ? ` ${first}` : ''}, welcome back 👋`,
+    '',
+    left
+      ? `You left makaug as an agent${when ? ` on ${when}` : ''}, but we'd love to have you back.`
+      : `You were removed as a makaug agent${when ? ` on ${when}` : ''}, but we'd love to have you back.`,
+    ...(kept ? ['', "I've kept what you've just sent safe: it goes to our team for review when you rejoin."] : []),
+    '',
+    'What would you like to do? Reply with the number:',
+    '1️⃣ Look for a property',
+    '2️⃣ Rejoin as an agent'
+  ].join('\n');
+}
+
+function formerAgentOptionsReminder(agent = {}) {
+  const first = agentGreetingName(agent, '');
+  return `Hi${first ? ` ${first}` : ''} 👋 Reply *1* to look for a property, or *2* to rejoin as an agent.`;
+}
+
+function formerAgentCustomerReply(agent = {}) {
+  const first = agentGreetingName(agent, '');
+  return [
+    `Of course${first ? `, ${first}` : ''} 🙂 What are you looking for? Tell me in one message, e.g. _3 bedroom house to rent in Kira under 1.5m_.`,
+    '',
+    'If you would like to rejoin as an agent later, just reply *REJOIN*.'
+  ].join('\n');
+}
+
+async function rememberFormerAgent(agentId, patch = {}) {
+  await db.query(
+    `UPDATE agents SET removal_snapshot = COALESCE(removal_snapshot, '{}'::jsonb) || $2::jsonb WHERE id = $1::uuid AND removed_at IS NOT NULL`,
+    [agentId, JSON.stringify(patch)]
+  ).catch(() => null);
+}
+
+/** Arthur and Ronald: this person wants to rejoin, call them. */
+function alertTeamRejoinRequest({ agent = {}, phone = '', reason = null } = {}) {
+  const digits = String(phone || '').replace(/\D+/g, '');
+  const contact = agentHelpContact();
+  const when = formerAgentShortDate(agent.removed_at);
+  return require('../services/leadDeskService').sendToTeam(db, [
+    `📞 *${agent.full_name} wants to rejoin as an agent* · number ending ${digits.slice(-3)}`,
+    `Removed${when ? ` ${when}` : ''}: ${reason ? reason.label : (agent.removed_reason || 'reason not given')}.`,
+    `They have the payment link and have been told ${contact.name} will call. Please call them urgently${agent.makaug_agent_number ? ` (agent ${agent.makaug_agent_number} in King)` : ''}.`,
+    'When they pay they come back by themselves, and everything they sent while away goes to staff review.'
+  ].join('\n'), 'former_agent_rejoin_request').catch(() => null);
+}
+
 async function removedAgentReply({ phone, body = '', hasMedia = false } = {}) {
   if (isTeamNumber(phone)) return null;
   const agent = await findRemovedAgentByPhone(phone);
@@ -19440,47 +19526,88 @@ async function removedAgentReply({ phone, body = '', hasMedia = false } = {}) {
   const goodbye = require('../services/agentGoodbyeService');
   const said = normalizeInput(body);
   const facts = said ? employeePropertyFacts(said, {}) : {};
+  const rejoinable = goodbye.canRejoin(agent);
+  const code = goodbye.removalCode(agent);
+  const reason = goodbye.removalReason(code);
+  const snap = agent.removal_snapshot && typeof agent.removal_snapshot === 'object' ? agent.removal_snapshot : {};
+  const now = Date.now();
+  const linkSentAt = Date.parse(snap.rejoin_sent_at || '') || 0;
+  const greetedAt = Date.parse(snap.welcome_back_at || '') || 0;
+  const choiceAt = Date.parse(snap.former_agent_choice_at || '') || 0;
+  const linkIsFresh = now - linkSentAt < FORMER_AGENT_LINK_FRESH_MS;
+  const greetingIsFresh = now - greetedAt < FORMER_AGENT_WELCOME_EVERY_MS;
+  // Asked "1 or 2", and not yet answered.
+  const awaitingChoice = greetingIsFresh && choiceAt < greetedAt;
+  const shopping = snap.former_agent_choice === 'customer' && now - choiceAt < FORMER_AGENT_CUSTOMER_MS;
   // A property described in words is a property, not a question (25 Nov 2026:
   // "The above senior secondary school it's on sale … the owner wants 300m"
-  // was answered "I've passed your message to our team").
+  // was answered "I've passed your message to our team"). What somebody wants
+  // is not an advert: "2 bedroom house to rent in Kira under 1m" from a former
+  // agent looking for a property is a search (27 Nov 2026).
   const property = hasMedia
-    || looksLikeForwardedProperty({ cleanBody: said, mediaUrl: '', runtime: {} })
-    || Boolean(facts.listingType && Number(facts.price) > 0);
-  const rejoinable = goodbye.canRejoin(agent);
-  const reason = goodbye.removalReason(goodbye.removalCode(agent));
-  const sentAt = Date.parse(agent.removal_snapshot?.rejoin_sent_at || '') || 0;
-  const noteIsFresh = Date.now() - sentAt < REJOIN_NOTE_EVERY_MS;
-  // A question after the note goes to the team with everything they write next.
-  const asksAfterNote = rejoinable && noteIsFresh && Boolean(said) && !property && formerAgentAsks(said);
+    || (shopping
+      ? looksLikeAdvertText(said)
+      : (!looksLikeSearchBrief(said) && (looksLikeForwardedProperty({ cleanBody: said, mediaUrl: '', runtime: {} }) || Boolean(facts.listingType && Number(facts.price) > 0))));
+  const rejoining = snap.former_agent_choice === 'rejoin' && now - choiceAt < FORMER_AGENT_LINK_FRESH_MS;
+  const choice = rejoinable && !property ? formerAgentChoice(said, { asked: awaitingChoice }) : '';
+  // A question or a request goes to a person, with everything they write next.
+  const asks = rejoinable && (linkIsFresh || greetingIsFresh) && Boolean(said) && !property && !choice && !shopping && formerAgentAsks(said);
   const lastNoted = formerAgentNotedAt.get(agent.id) || 0;
-  if (!asksAfterNote && Date.now() - lastNoted > FORMER_AGENT_NOTE_EVERY_MS) {
-    formerAgentNotedAt.set(agent.id, Date.now());
+  if (!asks && !choice && !(shopping && !property) && now - lastNoted > FORMER_AGENT_NOTE_EVERY_MS) {
+    formerAgentNotedAt.set(agent.id, now);
     const digits = String(phone || '').replace(/\D+/g, '');
     require('../services/leadDeskService').sendToTeam(db, [
       `🔁 *${agent.full_name} wrote to makaug* · number ending ${digits.slice(-3)}`,
       `Removed: ${reason ? reason.label : (agent.removed_reason || 'reason not given')}`,
       said ? `They wrote: "${said.slice(0, 200)}${said.length > 200 ? '…' : ''}"${hasMedia ? ' (with photos)' : ''}` : (hasMedia ? 'They sent photos.' : ''),
       rejoinable
-        ? 'They have the kind note with their payment link. What they send is kept: when they pay, they come back by themselves and it goes to staff review.'
+        ? (linkIsFresh
+          ? 'They have the payment link. What they send is kept: when they pay, they come back by themselves and it goes to staff review.'
+          : 'They are welcomed back and asked: look for a property, or rejoin as an agent. What they send is kept for review when they pay.')
         : 'Not invited back automatically (reason above); they are getting the usual replies. Restore them in King if they should come back.'
     ].filter(Boolean).join('\n'), 'former_agent_wrote').catch(() => null);
   }
   if (!rejoinable) return null;
-  if (noteIsFresh) {
-    if (asksAfterNote) {
-      passFormerAgentWordsOn({ agent, phone, said, reason });
-      const acked = formerAgentAckedAt.get(String(agent.id)) || 0;
-      if (Date.now() - acked > FORMER_AGENT_ACK_EVERY_MS) {
-        formerAgentAckedAt.set(String(agent.id), Date.now());
-        return { message: formerAgentHeldReply(agent) };
-      }
-    }
-    // A property is kept, and they hear so once the burst is over.
-    if (property) keptAdvertsNoteLater({ agent, phone });
+  if (choice === 'rejoin') {
+    await rememberFormerAgent(agent.id, { former_agent_choice: 'rejoin', former_agent_choice_at: new Date(now).toISOString() });
+    await require('../services/billingOpsService').sendRejoinMessage(db, { agentId: agent.id, actor: 'whatsapp', callBack: true });
+    alertTeamRejoinRequest({ agent, phone, reason });
     return { message: '', silent: true };
   }
-  const thing = !property ? '' : (facts.listingType === 'land' ? 'plot' : 'property');
-  await require('../services/billingOpsService').sendRejoinMessage(db, { agentId: agent.id, sentThing: thing, actor: 'whatsapp' });
+  if (choice === 'customer') {
+    await rememberFormerAgent(agent.id, { former_agent_choice: 'customer', former_agent_choice_at: new Date(now).toISOString() });
+    return { message: formerAgentCustomerReply(agent) };
+  }
+  // Looking for a property: the usual conversation, until they send one or ask to rejoin.
+  if (shopping && !property) return null;
+  if (asks) {
+    passFormerAgentWordsOn({ agent, phone, said, reason });
+    const acked = formerAgentAckedAt.get(String(agent.id)) || 0;
+    if (now - acked > FORMER_AGENT_ACK_EVERY_MS) {
+      formerAgentAckedAt.set(String(agent.id), now);
+      return { message: formerAgentHeldReply(agent) };
+    }
+    return { message: '', silent: true };
+  }
+  // The first word from them in a while: the welcome back, even when the note
+  // at their removal already carried the payment link.
+  if (!greetingIsFresh && !rejoining) {
+    await rememberFormerAgent(agent.id, { welcome_back_at: new Date(now).toISOString() });
+    return { message: formerAgentWelcomeBack(agent, { kept: property, left: code === 'cancelled' }) };
+  }
+  // A property is kept, and they hear so once the burst is over.
+  if (property) {
+    keptAdvertsNoteLater({ agent, phone });
+    return { message: '', silent: true };
+  }
+  // A hello while the question waits: the choice again, now and then.
+  if (awaitingChoice && said) {
+    const reminded = formerAgentRemindedAt.get(String(agent.id)) || 0;
+    if (now - reminded > FORMER_AGENT_REMIND_EVERY_MS) {
+      formerAgentRemindedAt.set(String(agent.id), now);
+      return { message: formerAgentOptionsReminder(agent) };
+    }
+  }
   return { message: '', silent: true };
 }
 
@@ -30137,6 +30264,10 @@ module.exports.__test = {
   findPendingAgentByPhone,
   pendingAgentHelloReply,
   formerAgentAsks,
+  formerAgentChoice,
+  formerAgentWelcomeBack,
+  formerAgentCustomerReply,
+  formerAgentOptionsReminder,
   keptAdvertLabel,
   keptAdvertsMessage,
   sendKeptAdvertsNote,
