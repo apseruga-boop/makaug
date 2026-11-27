@@ -684,6 +684,14 @@ function wroteWithinDays(env = process.env) {
 }
 
 /**
+ * How long the answer to a missed call may wait to go (27 Nov 2026). On
+ * WhatsApp's own business platform a call, answered or not, opens a day in
+ * which the business may write back; here it is two hours, so the answer
+ * reaches the person while their call is still on their mind.
+ */
+const CALL_ANSWER_WITHIN_HOURS = 2;
+
+/**
  * SQL, true when the person a queued row is for has written to us lately, or
  * the row answers a message of theirs. `q` is the row's alias. The first test
  * uses the index on (user_phone, created_at); the second is for a reply whose
@@ -712,9 +720,13 @@ function hasWrittenSql(q = 'q', { days = wroteWithinDays() } = {}) {
                AND m.direction = 'inbound'
                AND RIGHT(regexp_replace(m.user_phone, '\\D', '', 'g'), 9)
                  = RIGHT(regexp_replace(COALESCE(${q}.user_phone, ''), '\\D', '', 'g'), 9)
+               -- An answer to a call goes while the call is fresh: somebody who
+               -- rang reached out to us, but not to hear from us hours later.
+               AND (m.message_type <> 'call' OR m.created_at >= NOW() - INTERVAL '${CALL_ANSWER_WITHIN_HOURS} hours')
           )
         )`;
 }
+
 
 /** Whether this number has written to us lately (wroteWithinDays). When it cannot be told, no. */
 async function hasWrittenToUs(phone) {

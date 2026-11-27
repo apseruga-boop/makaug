@@ -1082,14 +1082,80 @@ function maskNumbersForTeam(text = '') {
 async function sendToTeam(db, body, type, { extraRecipients = [] } = {}) {
   const results = [];
   body = maskNumbersForTeam(body);
-  for (const recipient of await teamRecipientsNow(db, extraRecipients)) {
+  const recipients = await teamRecipientsNow(db, extraRecipients);
+  for (const recipient of recipients) {
     const delivery = await deliverWhatsapp({ to: recipient, body, kind: type, leadId: null, nonce: Date.now() });
     results.push({ to: recipient, status: delivery.status });
   }
   if (results.length) {
     await logNotification(db, { channel: 'whatsapp', type, status: results.some((r) => ['queued', 'sent', 'simulated'].includes(r.status)) ? 'sent' : 'failed', payloadSummary: { results } });
   }
+  if (recipients.length > 1 && type !== 'team_member_quiet_notice') {
+    await warnAboutQuietTeamMembers(db, recipients).catch(() => null);
+  }
   return results;
+}
+
+/** The name the team knows a member by: Ronald by AGENT_HELP_CONTACT_*, staff by the Agent 007 list, anyone else by their number's end. */
+function teamMemberName(recipient, env = process.env) {
+  const last9 = String(recipient || '').replace(/\D+/g, '').slice(-9);
+  const help = String(env.AGENT_HELP_CONTACT_PHONE || '').replace(/\D+/g, '').slice(-9);
+  if (last9 && help && last9 === help) return String(env.AGENT_HELP_CONTACT_NAME || 'Ronald').trim() || 'Ronald';
+  try {
+    const member = require('./whatsappEmployeeIntakeService').savedAgent007StaffFor(recipient);
+    const first = String(member?.name || '').trim().split(/\s+/)[0];
+    if (first) return first;
+  } catch (_) { /* by number */ }
+  return `The team member on the number ending ${last9.slice(-3)}`;
+}
+
+/**
+ * A team note reaches only somebody who has written to the number lately:
+ * the rule that keeps the number from being blocked holds for staff too
+ * (whatsappWebBridgeService.onlyToPeopleWhoWrote). A member of the team who
+ * goes quiet stops getting notes, which wait and are let go after twelve
+ * hours, and nobody would know. So the others are told, once a day, to ask
+ * them to write (Arthur, 27 Nov 2026: "so that he never misses the message").
+ */
+async function warnAboutQuietTeamMembers(db, recipients = [], { bridge = null, deliver = deliverWhatsapp } = {}) {
+  let rule = bridge;
+  if (!rule) {
+    try { rule = require('./whatsappWebBridgeService'); } catch (_) { return { skipped: 'no_bridge' }; }
+  }
+  if (!rule.onlyToPeopleWhoWrote()) return { skipped: 'rule_off' };
+  const status = [];
+  for (const to of recipients) status.push({ to, wrote: await rule.hasWrittenToUs(to) });
+  const quiet = status.filter((s) => !s.wrote);
+  const reachable = status.filter((s) => s.wrote);
+  if (!quiet.length || !reachable.length) return { quiet: quiet.length, told: 0 };
+  const days = typeof rule.wroteWithinDays === 'function' ? rule.wroteWithinDays() : 7;
+  let told = 0;
+  for (const member of quiet) {
+    const digits = String(member.to).replace(/\D+/g, '');
+    // Once a day for each quiet member, remembered on their conversation.
+    const marked = await db.query(
+      `INSERT INTO whatsapp_conversation_state (phone, metadata)
+       VALUES ($1, jsonb_build_object('team_quiet_warned_at', NOW()::text))
+       ON CONFLICT (phone) DO UPDATE
+         SET metadata = COALESCE(whatsapp_conversation_state.metadata, '{}'::jsonb)
+           || jsonb_build_object('team_quiet_warned_at', NOW()::text)
+       WHERE COALESCE(NULLIF(whatsapp_conversation_state.metadata->>'team_quiet_warned_at', ''), '1970-01-01')::timestamptz < NOW() - INTERVAL '24 hours'
+       RETURNING phone`,
+      [digits]
+    ).catch(() => ({ rows: [] }));
+    if (!marked.rows.length) continue;
+    const name = teamMemberName(digits);
+    const body = [
+      `⚠️ *${name} isn't getting the team notes*`,
+      `${name} hasn't written to the makaug number in the last ${days} days. To keep the number safe from WhatsApp's spam checks, it only messages people who have written lately, so the notes for ${name.startsWith('The team member') ? 'them' : name} are waiting.`,
+      'Please ask them to send any message (even "hi") to this number: the notes from the last 12 hours go to them straight away.'
+    ].join('\n');
+    for (const r of reachable) {
+      await deliver({ to: r.to, body, kind: 'team_member_quiet_notice', leadId: null, nonce: Date.now() });
+    }
+    told += 1;
+  }
+  return { quiet: quiet.length, told };
 }
 
 /** A WhatsApp to the team the moment new requests land (one message per batch). */
@@ -1250,21 +1316,62 @@ async function alertTeamConversationNeedsPerson(db, { phone = '', contactName = 
  * events never reached makaug. Arthur noticed a missed call on the phone that
  * the system had no record of.
  */
-async function alertTeamMissedCall(db, { phone = '', contactName = '', callType = 'voice', status = 'missed', at = new Date(), lastMessage = '', likelyInquiry = '', extraRecipients = [] } = {}) {
+/** "Fri 27 Nov, 13:02" in Kampala. */
+function kampalaWhen(date = new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Kampala', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
+      .formatToParts(date).reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
+    return `${parts.weekday} ${parts.day} ${parts.month}, ${parts.hour}:${parts.minute}`;
+  } catch (_) {
+    return kampalaClock(date);
+  }
+}
+
+function nthCall(n) {
+  const words = ['', '', '2nd', '3rd', '4th', '5th'];
+  return words[n] || `${n}th`;
+}
+
+/**
+ * Who rang, as the team needs it to call back (27 Nov 2026): an agent, a
+ * former agent, somebody who has written to us before, or somebody new.
+ */
+function missedCallWho(caller = {}) {
+  const day = (value) => {
+    const d = value ? new Date(value) : null;
+    return d && !Number.isNaN(d.getTime()) ? kampalaWhen(d).replace(/,.*$/, '') : '';
+  };
+  if (caller.kind === 'agent') return `An agent${caller.agentNumber ? ` (${caller.agentNumber})` : ''}.`;
+  if (caller.kind === 'former_agent') return `A former agent${day(caller.removedAt) ? `, removed ${day(caller.removedAt).replace(/^\w+ /, '')}` : ''}.`;
+  if (caller.kind === 'customer') return `Has written to us before${day(caller.wroteAt) ? ` (last on ${day(caller.wroteAt)})` : ''}.`;
+  if (caller.kind === 'new') return 'New: has never written to makaug.';
+  return '';
+}
+
+async function alertTeamMissedCall(db, {
+  phone = '', contactName = '', callType = 'voice', status = 'missed', at = new Date(), lastMessage = '', likelyInquiry = '',
+  extraRecipients = [], caller = {}, callsToday = 1, told = '', numberHidden = false
+} = {}) {
   const digits = String(phone || '').replace(/\D+/g, '');
   const extra = (Array.isArray(extraRecipients) ? extraRecipients : []).map((v) => String(v || '').replace(/\D+/g, '')).filter(Boolean);
   if (!teamRecipients(extra).length) return { skipped: 'no_recipients' };
   const when = at instanceof Date ? at : new Date(at || Date.now());
+  const repeat = Number(callsToday) > 1 ? ` (${nthCall(Number(callsToday))} call today)` : '';
+  const said = String(lastMessage || '').replace(/\s+/g, ' ').trim().slice(0, 240);
+  // Arthur, 27 Nov 2026: "this person called on this day, on this number,
+  // please give them a call back". The number shows by its last three digits,
+  // as in every team note; the call-back link carries it whole.
   const body = [
-    `📞 *Missed WhatsApp ${callType === 'video' ? 'video ' : ''}call*`,
-    `${text(contactName, 'Unknown caller')}${digits ? ` · +${digits}` : ''}`,
-    `${kampalaClock(when)} Kampala · ${status === 'declined' ? 'declined' : 'not answered'} — the assistant cannot take calls`,
-    lastMessage ? `Last thing they wrote: "${String(lastMessage).replace(/\s+/g, ' ').trim().slice(0, 240)}"` : (likelyInquiry ? `Likely about: ${likelyInquiry}` : 'They have not written anything yet.'),
-    digits ? `Call back or reply: https://wa.me/${digits}` : '',
-    `${siteUrl()}/admin (WhatsApp inbox)`
+    `📞 *Missed WhatsApp ${callType === 'video' ? 'video ' : ''}call: please call them back*`,
+    `${text(contactName, 'Someone')} · ${digits ? `number ending ${digits.slice(-3)}` : 'WhatsApp did not share their number'}`,
+    `Called ${kampalaWhen(when)} Kampala, ${status === 'declined' ? 'declined' : 'not answered'}${repeat}`,
+    missedCallWho(caller),
+    said ? `Last thing they wrote: "${said}"` : (likelyInquiry && caller.kind !== 'new' ? `Likely about: ${likelyInquiry}` : ''),
+    text(told),
+    digits ? `Call back: https://wa.me/${digits}` : (numberHidden ? 'Their number is in the Calls tab on the makaug phone.' : '')
   ].filter(Boolean).join('\n');
   const results = await sendToTeam(db, body, 'whatsapp_missed_call_alert', { extraRecipients: extra });
-  return { sent: true, results };
+  return { sent: true, results, body };
 }
 
 function overnightHeader({ submitted = 0, rejected = 0, other = 0 } = {}) {
@@ -1513,6 +1620,10 @@ module.exports = {
   alertTeamListingRejected,
   alertTeamConversationNeedsPerson,
   alertTeamMissedCall,
+  missedCallWho,
+  kampalaWhen,
+  warnAboutQuietTeamMembers,
+  teamMemberName,
   listingRejectedAlertBody,
   sendToTeam,
   teamRecipients,

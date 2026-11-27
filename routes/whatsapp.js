@@ -20956,7 +20956,10 @@ function notifyMissedCallLeadInBackground(input = {}) {
  * road. Ronald loads and checks properties on the ground, so he is on this
  * whether or not he is on the lead-desk alert list.
  */
-async function alertTeamMissedCall({ phone, contactName = '', callType = 'voice', callStatus = 'missed', inquiryContext = {}, eventTime = new Date() } = {}) {
+async function alertTeamMissedCall({
+  phone, contactName = '', callType = 'voice', callStatus = 'missed', inquiryContext = {}, eventTime = new Date(),
+  caller = {}, callsToday = 1, told = '', numberHidden = false
+} = {}) {
   try {
     const desk = require('../services/leadDeskService');
     if (typeof desk.alertTeamMissedCall !== 'function') return { skipped: 'no_desk' };
@@ -20969,13 +20972,172 @@ async function alertTeamMissedCall({ phone, contactName = '', callType = 'voice'
       status: callStatus,
       at: eventTime,
       lastMessage: recent[0]?.text || '',
-      likelyInquiry: inquiryContext.likelyInquiry || '',
-      extraRecipients: contact.digits ? [contact.digits] : []
+      // "No written enquiry is available yet" is what the email says when nothing is known; the team note says nothing.
+      likelyInquiry: /^no written enquiry/i.test(String(inquiryContext.likelyInquiry || '')) ? '' : (inquiryContext.likelyInquiry || ''),
+      extraRecipients: contact.digits ? [contact.digits] : [],
+      caller,
+      callsToday,
+      told,
+      numberHidden
     });
   } catch (error) {
     logger.warn('Missed call team WhatsApp alert failed', { phone, error: error.message || String(error) });
     return { skipped: 'error' };
   }
+}
+
+/*
+ * A missed call, answered by the number (Arthur, 27 Nov 2026). He sent the
+ * phone's Calls tab: six people had rung since 4 Nov and makaug knew of none
+ * of them. "We can tell them, hey, your call has been received ... we'll get
+ * a member of the team to call you back, or how can we help you." So the
+ * caller is sent one short, kind message a moment after the call, and Arthur
+ * and Ronald are told who rang and how to call them back.
+ *
+ * Is writing to somebody who only rang safe? On WhatsApp's own business
+ * platform a call, answered or not, counts as the person reaching out: it
+ * opens a day in which the business may write back. The number was
+ * restricted in November each time it wrote to people who had not been in
+ * touch lately, never for answering them. So the answer goes once, at once
+ * (within two hours at most, see CALL_ANSWER_WITHIN_HOURS), never twice in a
+ * day, and never to a number we were asked not to message.
+ */
+const MISSED_CALL_ALERT_GAP_MINUTES = 30;
+const MISSED_CALL_STATUSES = ['missed', 'declined', 'rejected', 'no_answer', 'unanswered'];
+
+function kampalaHourNow(date = new Date()) {
+  try {
+    return Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Africa/Kampala' }).format(date)) % 24;
+  } catch (_) {
+    return (date.getUTCHours() + 3) % 24;
+  }
+}
+
+/** What the caller is sent. Before 7 and after 10 at night the call back is in the morning. */
+function missedCallCallerReply({ greeting = '', at = new Date() } = {}) {
+  const hour = kampalaHourNow(at instanceof Date ? at : new Date(at));
+  const night = hour >= 22 || hour < 7;
+  return [
+    `Hi${greeting ? ` ${greeting}` : ''} 👋 Sorry we missed your call.`,
+    '',
+    `Someone from our team will call you back ${night ? 'in the morning' : 'shortly'}. Or, if it's easier, reply here with what you need and I'll help straight away.`,
+    '',
+    'Phillip, makaug.com'
+  ].join('\n');
+}
+
+/** Who rang: an agent, a former agent, somebody who has written before, or somebody new. */
+async function whoIsCalling(phone, { contactName = '', inquiryContext = {} } = {}) {
+  const agent = await findAgentByPhoneAnyStatus(phone).catch(() => null);
+  if (agent) {
+    return {
+      kind: 'agent',
+      name: normalizeInput(agent.full_name) || cleanDisplayName(contactName),
+      greeting: agentGreetingName(agent, ''),
+      agentNumber: normalizeInput(agent.makaug_agent_number),
+      fullName: normalizeInput(agent.full_name)
+    };
+  }
+  const removed = await findRemovedAgentByPhone(phone).catch(() => null);
+  if (removed) {
+    return {
+      kind: 'former_agent',
+      name: normalizeInput(removed.full_name) || cleanDisplayName(contactName),
+      greeting: agentGreetingName(removed, ''),
+      removedAt: removed.removed_at || null,
+      fullName: normalizeInput(removed.full_name)
+    };
+  }
+  const recent = Array.isArray(inquiryContext.recentMessages) ? inquiryContext.recentMessages : [];
+  return {
+    kind: recent.length ? 'customer' : 'new',
+    name: cleanDisplayName(contactName),
+    // Somebody we do not know is not greeted by a WhatsApp name: "Hi Mr Property" is no greeting.
+    greeting: '',
+    wroteAt: recent[0]?.createdAt || null
+  };
+}
+
+const last9Of = (phone) => String(phone || '').replace(/\D+/g, '').slice(-9);
+
+/** Missed calls from this number since midnight in Kampala, this one included. */
+async function missedCallsToday(phone, now = new Date()) {
+  const key = last9Of(phone);
+  if (key.length < 9) return 1;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const kampalaOffsetMs = 3 * 60 * 60 * 1000;
+  const midnight = new Date(Math.floor((now.getTime() + kampalaOffsetMs) / dayMs) * dayMs - kampalaOffsetMs);
+  const result = await db.query(
+    `SELECT COUNT(*)::int AS n FROM whatsapp_call_events
+      WHERE RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1
+        AND LOWER(COALESCE(status, '')) = ANY($2::text[])
+        AND COALESCE(first_seen_at, created_at) >= $3`,
+    [key, MISSED_CALL_STATUSES, midnight.toISOString()]
+  ).catch(() => ({ rows: [] }));
+  return Math.max(1, Number(result.rows?.[0]?.n) || 1);
+}
+
+/** Whether the team heard of a missed call from this number in the last half hour: then a ring again is not news. */
+async function missedCallToldRecently(phone, callId) {
+  const key = last9Of(phone);
+  if (key.length < 9) return false;
+  const result = await db.query(
+    `SELECT 1 FROM whatsapp_call_events
+      WHERE RIGHT(regexp_replace(COALESCE(phone, ''), '\\D', '', 'g'), 9) = $1
+        AND call_id IS DISTINCT FROM $2
+        AND LOWER(COALESCE(status, '')) = ANY($3::text[])
+        AND COALESCE(first_seen_at, created_at) >= NOW() - ($4::text || ' minutes')::interval
+      LIMIT 1`,
+    [key, normalizeInput(callId) || null, MISSED_CALL_STATUSES, String(MISSED_CALL_ALERT_GAP_MINUTES)]
+  ).catch(() => ({ rows: [] }));
+  return Boolean(result.rows?.length);
+}
+
+/**
+ * Whether the caller is sent the message, and what the team is told about it.
+ * Not to a number staff have paused or one Arthur said never to message, and
+ * not twice in a day.
+ */
+async function missedCallReplyFor({ phone, caller = {}, at = new Date() } = {}) {
+  const key = last9Of(phone);
+  if (key.length < 9) return { message: '', told: '' };
+  let neverSend = [];
+  try { neverSend = require('../services/agentBriefBroadcastService').NEVER_SEND || []; } catch (_) { neverSend = []; }
+  const fullName = String(caller.fullName || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (fullName && neverSend.includes(fullName)) {
+    return { message: '', told: 'Not messaged: they are on the never-message list.' };
+  }
+  const paused = await whatsappWebBridgeService.pausedNumbers({ fresh: true }).catch(() => ({ tails: [] }));
+  if ((paused.tails || []).includes(key)) {
+    return { message: '', told: 'Not messaged: their number is paused.' };
+  }
+  const already = await db.query(
+    `SELECT 1 FROM outbound_message_queue
+      WHERE channel = 'whatsapp'
+        AND RIGHT(regexp_replace(COALESCE(user_phone, ''), '\\D', '', 'g'), 9) = $1
+        AND metadata->>'message_kind' = 'missed_call_reply'
+        AND created_at >= NOW() - INTERVAL '24 hours'
+      LIMIT 1`,
+    [key]
+  ).catch(() => ({ rows: [] }));
+  if (already.rows?.length) {
+    return { message: '', told: 'Not messaged again: they were sent "sorry we missed your call" earlier today.' };
+  }
+  return {
+    message: missedCallCallerReply({ greeting: caller.greeting || '', at }),
+    told: 'They have been sent: "Sorry we missed your call. Someone from our team will call you back."'
+  };
+}
+
+/** A call with its number hidden is told to the team once, however often the bridge says so. */
+const hiddenNumberCalls = new Map();
+function rememberHiddenNumberCall(callId) {
+  const key = String(callId || '').trim();
+  if (!key) return true;
+  if (hiddenNumberCalls.has(key)) return false;
+  hiddenNumberCalls.set(key, Date.now());
+  if (hiddenNumberCalls.size > 200) hiddenNumberCalls.delete(hiddenNumberCalls.keys().next().value);
+  return true;
 }
 
 async function markMissedCallLeadResolved({ leadId, phone, resolved = true, note = '' } = {}) {
@@ -21111,7 +21273,7 @@ async function handleWhatsappCallEvent({
       current_step: activeEmployeeStep,
       duplicate
     });
-    if (!duplicate) {
+    if (!duplicate && String(status || '').toLowerCase() !== 'answered') {
       const inquiryContext = await getWhatsappCallInquiryContext(cleanPhone, {
         ...session,
         current_step: activeEmployeeStep
@@ -21167,9 +21329,39 @@ async function handleWhatsappCallEvent({
   }
 
   const inquiryContext = await getWhatsappCallInquiryContext(cleanPhone, session);
+  const eventTime = (() => {
+    const at = new Date(metadata.created_at || Date.now());
+    return Number.isNaN(at.getTime()) ? new Date() : at;
+  })();
+
+  // Answered on the phone: somebody spoke to them. The call is kept on their
+  // conversation, and nobody is told or written to.
+  if (String(status || '').toLowerCase() === 'answered') {
+    await logWhatsappMessage({
+      userPhone: cleanPhone,
+      waMessageId: callId ? `call:${provider}:${callId}` : null,
+      direction: 'inbound',
+      messageType: 'call',
+      payload: { provider, call_id: callId || null, status, call_type: callType, contact_name: contactName || null, metadata }
+    });
+    await syncWhatsappConversationState({
+      phone: cleanPhone,
+      direction: 'inbound',
+      intent: preservedIntent || 'support',
+      preferredLanguage: activeLang,
+      currentStep: preservedStep,
+      provider,
+      messageType: 'call',
+      metadata: { call_id: callId || null, call_status: 'answered', language: activeLang }
+    });
+    return { duplicate: false, message: '', nextStep: preservedStep, lead: null };
+  }
+
+  const caller = await whoIsCalling(cleanPhone, { contactName, inquiryContext });
+  const reply = await missedCallReplyFor({ phone: cleanPhone, caller, at: eventTime });
   const lead = await createMissedCallLead({
     phone: cleanPhone,
-    contactName,
+    contactName: caller.name || contactName,
     provider,
     callId,
     callType,
@@ -21177,7 +21369,7 @@ async function handleWhatsappCallEvent({
     language: activeLang,
     metadata: {
       ...metadata,
-      customer_reply_suppressed: true,
+      caller_answered_by_message: Boolean(reply.message),
       callback_notification_recipients: getWhatsappCallNotificationEmails(),
       likely_inquiry: inquiryContext.likelyInquiry,
       conversation_step_preserved: preservedStep,
@@ -21196,7 +21388,7 @@ async function handleWhatsappCallEvent({
       call_type: callType,
       contact_name: contactName || null,
       likely_inquiry: inquiryContext.likelyInquiry,
-      customer_reply_suppressed: true,
+      caller_answered_by_message: Boolean(reply.message),
       metadata
     }
   });
@@ -21210,28 +21402,29 @@ async function handleWhatsappCallEvent({
     messageType: 'call',
     metadata: {
       callback_required: true,
-      customer_reply_suppressed: true,
       call_id: callId || null,
       call_status: status || 'received',
       lead_id: lead?.id || null,
       language: activeLang
     }
   });
+  // The chat stays with the assistant: the caller was told they can write what
+  // they need here. Until 27 Nov 2026 a missed call handed the chat to the team
+  // and the assistant went quiet, which no caller ever met, since no call had
+  // reached makaug since September.
   await safeConversationControl(cleanPhone, {
-    status: 'needs_human',
     category: preservedIntent || 'support',
     priority: 'urgent',
-    ai_mode: 'copilot',
     last_summary: inquiryContext.likelyInquiry,
     metadata: {
       callback_required: true,
-      customer_reply_suppressed: true,
       call_id: callId || null,
       lead_id: lead?.id || null,
       language: activeLang,
       preserved_step: preservedStep,
       preserved_intent: preservedIntent,
-      likely_inquiry: inquiryContext.likelyInquiry
+      likely_inquiry: inquiryContext.likelyInquiry,
+      last_missed_call_at: eventTime.toISOString()
     }
   }, 'whatsapp_call_callback_request');
 
@@ -21252,13 +21445,24 @@ async function handleWhatsappCallEvent({
       error: error.message || String(error)
     });
   });
-  if (status !== 'answered') {
-    await alertTeamMissedCall({ phone: cleanPhone, contactName, callType, callStatus: status, inquiryContext });
+  // Ringing again within half an hour is not news: the team heard of the first call.
+  if (!(await missedCallToldRecently(cleanPhone, callId))) {
+    await alertTeamMissedCall({
+      phone: cleanPhone,
+      contactName: caller.name || contactName,
+      callType,
+      callStatus: status,
+      inquiryContext,
+      eventTime,
+      caller,
+      callsToday: await missedCallsToday(cleanPhone, eventTime),
+      told: reply.told
+    });
   }
 
   return {
     duplicate: false,
-    message: '',
+    message: reply.message,
     nextStep: preservedStep,
     lead
   };
@@ -28894,11 +29098,37 @@ router.post('/web-bridge/call', asyncRoute(async (req, res) => {
 
   const phone = normalizeBridgeInboundKey(req.body.phone || req.body.chat_key || req.body.contact_key);
   const dryRun = ['1', 'true', 'yes'].includes(String(req.body.dry_run || req.body.dryRun || '').trim().toLowerCase());
+  const inboundMetadata = req.body.metadata && typeof req.body.metadata === 'object' ? req.body.metadata : {};
+
+  // A call WhatsApp did not share the number of: the bridge could not map the
+  // caller's LID. The team is told so they can look on the phone itself; a
+  // LID's digits are never taken for a number (27 Nov 2026).
+  if (!phone && inboundMetadata.number_hidden === true
+    && normalizeInput(inboundMetadata.call_detector_release) === WHATSAPP_CALL_EVENT_TRUST_MARKER
+    && normalizeInput(inboundMetadata.detection_kind) === 'waha_call_event'
+    && inboundMetadata.source === 'waha_gows_call') {
+    const hiddenCallId = normalizeInput(req.body.call_id || req.body.callId);
+    const answered = String(req.body.status || '').toLowerCase() === 'answered';
+    let told = false;
+    if (!answered && !dryRun && rememberHiddenNumberCall(hiddenCallId)) {
+      const at = new Date(req.body.created_at || Date.now());
+      await alertTeamMissedCall({
+        phone: '',
+        contactName: cleanDisplayName(req.body.contact_name || ''),
+        callType: req.body.call_type === 'video' ? 'video' : 'voice',
+        callStatus: 'missed',
+        eventTime: Number.isNaN(at.getTime()) ? new Date() : at,
+        numberHidden: true
+      });
+      told = true;
+    }
+    return res.json({ ok: true, duplicate: !told && !answered, data: { number_hidden: true, team_told: told, message: '', queued_reply: false } });
+  }
+
   if (!phone) {
     return res.status(400).json({ ok: false, error: 'phone or chat_key is required' });
   }
 
-  const inboundMetadata = req.body.metadata && typeof req.body.metadata === 'object' ? req.body.metadata : {};
   const callDetectorRelease = normalizeInput(inboundMetadata.call_detector_release);
   const detectionKind = normalizeInput(inboundMetadata.detection_kind);
   const trustedLiveCallOverlay = detectionKind === 'live_call_overlay'
@@ -28960,13 +29190,17 @@ router.post('/web-bridge/call', asyncRoute(async (req, res) => {
 
   let queuedReply = null;
   if (message && !dryRun && !duplicate) {
+    // It answers the call itself (logged as call:web_bridge:<id>), which is
+    // what lets it go to somebody who rang but has never written, and only
+    // while the call is fresh (whatsappWebBridgeService.hasWrittenSql).
     queuedReply = await queueWhatsappWebBridgeAutoReply({
       phone,
       message,
       nextStep,
-      inboundMessageId: callId,
+      inboundMessageId: `call:web_bridge:${callId}`,
       source: 'whatsapp_missed_call',
-      actorId: 'system'
+      actorId: 'system',
+      kind: 'missed_call_reply'
     });
   }
 
@@ -30165,6 +30399,12 @@ module.exports.__test = {
   messageOutsideTheAssistant,
   personWillReplyMessage,
   alertTeamMissedCall,
+  missedCallCallerReply,
+  whoIsCalling,
+  missedCallReplyFor,
+  missedCallsToday,
+  missedCallToldRecently,
+  rememberHiddenNumberCall,
   SOLD_CONFIRM_STEP,
   SOLD_LINK_STEP,
   extractAgentSearchKeywords,

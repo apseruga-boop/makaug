@@ -38,10 +38,14 @@ const callHandlerStart = routeSource.indexOf('async function handleWhatsappCallE
 const callHandlerEnd = routeSource.indexOf('async function handleMissedCallNeedReply', callHandlerStart);
 const callHandler = routeSource.slice(callHandlerStart, callHandlerEnd);
 
-assert(callHandler.includes("message: ''"), 'genuine calls must not send an automatic customer reply');
+// 27 Nov 2026 (Arthur): a missed call is answered by one short message, and the
+// chat stays with the assistant while the team is told to call back
+// (tests/whatsapp-missed-call-answered-1127.test.js). An answered call is not.
+assert(callHandler.includes('message: reply.message'), 'a missed call is answered by one message, decided by missedCallReplyFor');
+assert(callHandler.includes("return { duplicate: false, message: '', nextStep: preservedStep, lead: null };"), 'an answered call gets no message');
 assert(!callHandler.includes('missedCallIntroMessage('), 'new call events must not start the old missed-call chatbot flow');
 assert(!callHandler.includes("current_step: 'missed_call_need'"), 'new calls must preserve the current chatbot session');
-assert(callHandler.includes("status: 'needs_human'"), 'genuine calls must be marked for human callback');
+assert(callHandler.includes('callback_required: true') && callHandler.includes("priority: 'urgent'"), 'genuine calls must be marked for human callback');
 assert(callHandler.includes('getWhatsappCallInquiryContext'), 'callback emails must contain recent inquiry context');
 assert(routeSource.includes("'arthur@makaug.com'"), 'Arthur must receive genuine WhatsApp call notifications');
 assert(routeSource.includes("'ronald@makaug.com'"), 'Ronald must receive genuine WhatsApp call notifications');
