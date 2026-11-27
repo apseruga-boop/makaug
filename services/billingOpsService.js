@@ -187,9 +187,25 @@ function countOf(n, one, many) {
  * for a hello. `left` is an agent who chose to leave rather than one who had
  * not paid.
  */
-function rejoinMessage({ agent = {}, fee = 0, payLink = '', howToPay = '', sentThing = '', left = false } = {}) {
+function rejoinMessage({ agent = {}, fee = 0, payLink = '', howToPay = '', sentThing = '', left = false, callBack = '' } = {}) {
   const name = agentGreetingName(agent, 'there');
   const thing = String(sentThing || '').trim();
+  // They chose to rejoin from the welcome back (Arthur, 27 Nov 2026): Ronald
+  // calls them, and the payment link comes with it.
+  if (callBack) {
+    return [
+      `Great, ${name} 🙌 ${callBack} from our team will give you a call shortly.`,
+      '',
+      payLink ? `To rejoin, pay ${ugx(fee)} here: ${payLink}` : `To rejoin, pay ${ugx(fee)}:`,
+      howToPay,
+      '',
+      "As soon as it's in, you're back on makaug: your profile and earlier listings go straight back up, and everything you've sent us while you were away goes to our team for review. I'll let you know as each one goes live.",
+      '',
+      'Any questions, just reply here.',
+      '',
+      'Phillip, MakaUG'
+    ].filter(keepOneBlank).join('\n');
+  }
   return [
     thing
       ? `Hi ${name}, thank you for sending this ${thing}, and for all the properties you've shared with makaug. 🙏`
@@ -266,7 +282,7 @@ function buildAgentBillingMessage(kind, { agent = {}, settings = {}, payLink = '
     case 'reinstated':
       return [`✅ *Payment received — thank you, ${name}!*`, '', `Your makaug profile and all your listings are live again${agent.paid_until ? `, paid until *${prettyDate(agent.paid_until)}*` : ''}.`, '', 'Send new properties here any time, the same way as before.'].join('\n');
     case 'rejoin':
-      return rejoinMessage({ agent, fee, payLink, howToPay: pay ? momoHowToPay({ amountUgx: fee }) : '', sentThing: extra.sentThing || '', left: extra.left === true });
+      return rejoinMessage({ agent, fee, payLink, howToPay: pay ? momoHowToPay({ amountUgx: fee }) : '', sentThing: extra.sentThing || '', left: extra.left === true, callBack: extra.callBack === true ? help.name : '' });
     case 'welcome_back':
       return welcomeBackMessage({ agent, amountUgx: extra.amountUgx, restored: extra.restored, imported: extra.imported });
     case 'paid':
@@ -450,9 +466,18 @@ async function welcomeBackAfterRejoin(db, { agentId, removedAt, restored = {}, a
       extra: { amountUgx, restored: restored.listingsRestored || 0, imported: imported.imported || 0 }
     }).catch((error) => ({ error: error.message }))
     : null;
+  // Nothing they sent is missed (Arthur, 27 Nov 2026): what could not be saved
+  // by itself is named for the team to load from their chat.
+  const notSaved = Array.isArray(imported.not_saved) ? imported.not_saved : [];
+  const loose = Number(imported.loose_media || 0);
   await require('./leadDeskService').sendToTeam(db, [
     `✅ *${agent.full_name} paid and is back on makaug*`,
     `${restored.listingsRestored || 0} listing${restored.listingsRestored === 1 ? '' : 's'} back up${imported.imported ? `, and ${imported.imported} propert${imported.imported === 1 ? 'y' : 'ies'} they sent while away ${imported.imported === 1 ? 'is' : 'are'} waiting in staff review` : ''}.`,
+    ...(notSaved.length ? [
+      `⚠️ ${notSaved.length === 1 ? '1 advert' : `${notSaved.length} adverts`} they sent while away could not be saved by ${notSaved.length === 1 ? 'itself' : 'themselves'}. Please load ${notSaved.length === 1 ? 'it' : 'them'} from their chat:`,
+      ...notSaved.slice(0, 6).map((item) => `• "${item.caption}" (${item.why})`)
+    ] : []),
+    loose ? `📸 ${loose === 1 ? '1 photo' : `${loose} photos`} came without a description: check their chat.` : '',
     notify ? 'They have had the welcome back on WhatsApp.' : ''
   ].filter(Boolean).join('\n'), 'agent_rejoined').catch(() => null);
   return { imported: imported.imported || 0, message };
@@ -463,7 +488,7 @@ async function welcomeBackAfterRejoin(db, { agentId, removedAt, restored = {}, a
  * not paying, and when one writes to us later. With their payment link and
  * the merchant-code card. `sentThing` is what they have just sent ("plot").
  */
-async function sendRejoinMessage(db, { agentId, sentThing = '', actor = 'whatsapp' } = {}) {
+async function sendRejoinMessage(db, { agentId, sentThing = '', actor = 'whatsapp', callBack = false } = {}) {
   const agent = await loadAgent(db, agentId);
   if (!agent?.removed_at) return { skipped: 'not_removed' };
   const goodbye = require('./agentGoodbyeService');
@@ -483,7 +508,7 @@ async function sendRejoinMessage(db, { agentId, sentThing = '', actor = 'whatsap
     kind: 'rejoin',
     actor,
     force: true,
-    extra: { sentThing, left: goodbye.removalCode(agent) === 'cancelled' }
+    extra: { sentThing, left: goodbye.removalCode(agent) === 'cancelled', callBack: callBack === true }
   });
   await db.query(
     `UPDATE agents SET removal_snapshot = COALESCE(removal_snapshot, '{}'::jsonb) || jsonb_build_object('rejoin_sent_at', NOW()::text)

@@ -109,21 +109,24 @@ async function withDb(fake, run) {
   try { return await run(); } finally { db.query = original; }
 }
 
-test('a removed agent who sends a property gets the kind note, once a day; the team hears', async () => {
+test('a removed agent who writes first is welcomed back and asked; the payment link waits for their choice', async () => {
+  // 27 Nov 2026 (Arthur): the kind note with the payment link no longer goes
+  // on their first message. They are welcomed back and asked to choose: look
+  // for a property, or rejoin (tests/former-agent-welcome-back-1127.test.js).
   const sent = [];
   const originalSend = billing.sendRejoinMessage;
   billing.sendRejoinMessage = async (_db, args) => { sent.push(args); return { status: 'queued' }; };
   try {
     const fresh = fakeDb({ agents: [removedFor('not_paying', { removal_snapshot: { reason_code: 'not_paying', listings: [] } })] });
     const reply = await withDb(fresh, () => route.removedAgentReply({ phone: '256700000091', body: 'Plot for sale in Kira 50x100 at 45m with a land title', hasMedia: true }));
-    assert.deepStrictEqual(reply, { message: '', silent: true });
-    assert.strictEqual(sent.length, 1);
-    assert.strictEqual(sent[0].sentThing, 'plot');
-    // Within a day of the last note: kept quietly.
-    const recent = fakeDb({ agents: [removedFor('not_paying', { removal_snapshot: { reason_code: 'not_paying', rejoin_sent_at: new Date(Date.now() - 3600e3).toISOString() } })] });
+    assert.match(reply.message, /^Hi Test, welcome back 👋\n\nYou were removed as a makaug agent on \d{1,2} [A-Z][a-z]{2}, but we'd love to have you back\.\n\nI've kept what you've just sent safe: it goes to our team for review when you rejoin\./);
+    assert.strictEqual(sent.length, 0, 'no payment link until they choose to rejoin');
+    assert.ok(fresh.calls.some((call) => /UPDATE agents SET removal_snapshot/.test(call.sql) && /welcome_back_at/.test(String(call.params[1]))), 'the welcome back is remembered');
+    // Chose to rejoin and have the payment link: a hello is kept quietly.
+    const recent = fakeDb({ agents: [removedFor('not_paying', { removal_snapshot: { reason_code: 'not_paying', welcome_back_at: new Date(Date.now() - 2 * 3600e3).toISOString(), former_agent_choice: 'rejoin', former_agent_choice_at: new Date(Date.now() - 3600e3).toISOString(), rejoin_sent_at: new Date(Date.now() - 3600e3).toISOString() } })] });
     const quiet = await withDb(recent, () => route.removedAgentReply({ phone: '256700000091', body: 'Hello', hasMedia: false }));
     assert.deepStrictEqual(quiet, { message: '', silent: true });
-    assert.strictEqual(sent.length, 1, 'no second note the same day');
+    assert.strictEqual(sent.length, 0);
   } finally {
     billing.sendRejoinMessage = originalSend;
   }

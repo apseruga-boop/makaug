@@ -928,17 +928,22 @@ async function importAdvertsSentWhileAway(dbc, { agent = {}, since = null } = {}
     [agent.id]
   )).rows[0];
   if (!approved) return { imported: 0, skipped: 'not_approved' };
-  const { groups } = await whatsapp.groupForwardedAdverts(phone, { since });
+  const { groups, orphans = [] } = await whatsapp.groupForwardedAdverts(phone, { since });
   const propertyIds = [];
+  // What could not be saved by itself, for the team to load (27 Nov 2026).
+  const notSaved = [];
+  const caption = (group) => String(group.caption || '').replace(/\s+/g, ' ').trim().slice(0, 100);
   for (const group of groups) {
     try {
       const result = await whatsapp.importForwardedAdvert({ phone, agent: approved, group, inboundMessageId: `${group.caption_message_id}:rejoin-import` });
       if (result?.property_id) propertyIds.push(result.property_id);
+      else if (result?.skipped === 'missing') notSaved.push({ caption: caption(group), why: `needs ${(result.missing || []).join(', ') || 'a detail'}` });
     } catch (error) {
+      notSaved.push({ caption: caption(group), why: 'could not be saved' });
       console.warn('[agent-rejoin] an advert sent while away was not saved:', error.message);
     }
   }
-  return { imported: propertyIds.length, property_ids: propertyIds, adverts: groups.length };
+  return { imported: propertyIds.length, property_ids: propertyIds, adverts: groups.length, not_saved: notSaved, loose_media: orphans.length };
 }
 
 module.exports = {
