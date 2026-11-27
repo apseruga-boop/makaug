@@ -54,6 +54,28 @@ an HMAC signature on every request.
 | `SEND_MIN_INTERVAL_MS` | | `3000` | Anti-ban pacing; floor is 1000. |
 | `SEND_JITTER_MS` | | `1500` | Randomises the gap; fixed intervals look automated. |
 | `HEARTBEAT_MS` | | `30000` | |
+| `CALL_EVENTS` | | on | `off` stops listening for WhatsApp calls (see below). |
+
+### WhatsApp calls
+
+Nobody answers calls on the number, so each call is told to makaug
+(`POST /api/whatsapp/web-bridge/call`) once it is over: `answered`, or
+`missed`. makaug then tells the team to call back. Calls are read from WAHA's
+websocket (`/ws`, only the three call events, with the API key this service
+already holds) because the session's webhook carries messages only and the
+session is not changed for this. The webhook is handled too, should it ever
+carry calls; a call heard both ways is told once.
+
+- `call.received` starts a call; `call.accepted` (answered on the phone) ends
+  it as answered; `call.rejected` (declined, or the caller gave up) ends it as
+  missed. A call never said to have ended is counted missed after two minutes.
+- A call from a LID gets its number from the event or WAHA's mapping table.
+  When WhatsApp did not share it, makaug is told the number is hidden: a LID's
+  digits are never sent as a phone number.
+- Group calls are ignored. The Neondaku child never listens.
+- `/health` has a `calls` section (listening, counts, what makaug was told), and
+  a blocker appears when the websocket has been down for ten minutes. Log lines
+  show callers by their last three digits.
 
 `DRY_RUN` no longer exists. It used to make the service accept messages and
 drop them while still reporting healthy — the one failure mode you cannot see
