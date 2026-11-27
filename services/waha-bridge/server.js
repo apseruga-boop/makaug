@@ -80,6 +80,7 @@ if (missing.length) {
 // ------------------------------------------------------------- utilities ---
 
 const { hasDeviceSuffix, toChatId, toPhone } = require('./jid');
+const calls = require('./calls');
 
 function sign(value) {
   return crypto.createHmac('sha256', cfg.mediaSecret || 'unset').update(String(value)).digest('hex').slice(0, 32);
@@ -190,9 +191,14 @@ async function senderAddress(p) {
   return toPhone(from);
 }
 
+// The number this session is linked to, so a caller is never taken for us.
+let ownNumber = '';
+
 async function wahaSessionStatus() {
   try {
     const s = await waha(`/api/sessions/${encodeURIComponent(cfg.wahaSession)}`);
+    const me = toPhone(s?.me?.id || '');
+    if (me) ownNumber = me;
     return String(s?.status || 'UNKNOWN');
   } catch (err) {
     if (err.statusCode === 404) return 'NOT_FOUND';
@@ -667,6 +673,13 @@ async function handleWahaEvent(evt) {
     log('session.status ->', status);
     sessionStatusCache = status;
     return { handled: true, kind: 'session.status', status };
+  }
+
+  // A call, should the webhook ever carry one: the same tracker as the websocket,
+  // so a call heard both ways is told to makaug once.
+  if (calls.isCallEvent(event)) {
+    if (!callEventsOn) return { handled: false, kind: 'call_events_off' };
+    return { ...callTracker.onEvent(event, evt.payload || {}), kind: event };
   }
 
   if (event !== 'message') return { handled: false, kind: event || 'unknown' };
@@ -1161,6 +1174,212 @@ async function heartbeat() {
   }
 }
 
+// ----------------------------------------------------------------- calls --
+
+/**
+ * Calls to the number, told to makaug (see calls.js for why and how). The
+ * websocket is read with the API key this service already holds; nothing
+ * about the WAHA session changes. The Neondaku child never listens: its
+ * session is not ours to answer for. CALL_EVENTS=off turns it off.
+ */
+const CALL_TRUST_MARKER = 'whatsapp-call-card-trust-gate-20260831'; // makaug's gate for call events
+const callEventsOn = !process.env.BRIDGE_IS_CHILD
+  && !/^(?:off|false|0|no)$/i.test(String(process.env.CALL_EVENTS || '').trim());
+const callForwarding = { told: 0, failed: 0, numbers_hidden: 0, last_error: null, last_told_at: 0 };
+const callSocket = { state: callEventsOn ? 'starting' : 'off', since: 0, down_since: 0, reconnects: 0, last_close: null, last_error: null };
+
+function endsIn(phone) {
+  const digits = String(phone || '').replace(/\D+/g, '');
+  return digits ? `…${digits.slice(-3)}` : 'number hidden';
+}
+
+/** Never let the API key reach a log line or /health. */
+function scrubKey(text) {
+  const raw = String(text || '');
+  return cfg.wahaApiKey ? raw.split(cfg.wahaApiKey).join('[key]') : raw;
+}
+
+/** The caller's number (digits), or '' when WhatsApp did not share it. A LID's digits are never a number. */
+async function callerPhone(call) {
+  const from = String(call.from || '');
+  if (/@(?:c\.us|s\.whatsapp\.net)$/.test(from)) return toPhone(from);
+  const inEvent = calls.callerJidIn(call.data, ownNumber);
+  if (inEvent) return toPhone(inEvent);
+  if (from.endsWith('@lid')) return resolveLidToPhone(from);
+  return '';
+}
+
+/** The caller's WhatsApp name, when WAHA knows it. Best effort: a call is told without one. */
+async function callerName(phone) {
+  try {
+    const qs = new URLSearchParams({ contactId: `${phone}@c.us`, session: cfg.wahaSession });
+    const c = await waha(`/api/contacts?${qs.toString()}`, { timeoutMs: 5000 });
+    return String(c?.pushname || c?.name || c?.shortName || '').trim().slice(0, 80);
+  } catch {
+    return '';
+  }
+}
+
+const CALL_TELL_ATTEMPTS = 4;
+
+async function tellMakaugAboutCall(call) {
+  const phone = await callerPhone(call).catch(() => '');
+  const name = phone ? await callerName(phone) : '';
+  if (!phone) callForwarding.numbers_hidden += 1;
+  const wahaEvent = call.endedBy === 'answered_on_phone' ? 'call.accepted'
+    : (call.endedBy === 'ended' ? 'call.rejected' : 'call.received');
+  const body = {
+    phone,
+    contact_name: name,
+    call_id: call.id,
+    call_type: call.isVideo ? 'video' : 'voice',
+    status: call.status,
+    created_at: new Date(call.startedAt).toISOString(),
+    client_id: cfg.clientId,
+    metadata: {
+      source: 'waha_gows_call',
+      detection_kind: 'waha_call_event',
+      call_detector_release: CALL_TRUST_MARKER,
+      waha_event: wahaEvent,
+      provider: 'waha',
+      engine: 'GOWS',
+      waha_session: cfg.wahaSession,
+      ended_by: call.endedBy,
+      ring_seconds: Math.max(0, Math.round((call.endedAt - call.startedAt) / 1000)),
+      ...(phone ? {} : { number_hidden: true, chat_id: call.from }),
+    },
+  };
+  for (let attempt = 1; attempt <= CALL_TELL_ATTEMPTS; attempt += 1) {
+    try {
+      await makaug('/api/whatsapp/web-bridge/call', { method: 'POST', body });
+      callForwarding.told += 1;
+      callForwarding.last_told_at = Date.now();
+      callForwarding.last_error = null;
+      log(`call ${call.status} (${call.endedBy}) from ${endsIn(phone)} told to makaug`);
+      return true;
+    } catch (err) {
+      const status = Number(err.statusCode || 0);
+      const worthRetrying = !status || status === 408 || status === 429 || status >= 500;
+      callForwarding.last_error = String(err.message || err).slice(0, 160);
+      if (!worthRetrying || attempt === CALL_TELL_ATTEMPTS) break;
+      await sleep(2000 * attempt * attempt);
+    }
+  }
+  callForwarding.failed += 1;
+  log(`WARN call from ${endsIn(phone)} NOT told to makaug: ${callForwarding.last_error}`);
+  return false;
+}
+
+const callTracker = calls.createCallTracker({
+  settle: (call) => { tellMakaugAboutCall(call).catch((err) => log('call telling error:', err.message)); },
+});
+
+function startCallSocket() {
+  if (!callEventsOn) return;
+  let WebSocket;
+  try {
+    WebSocket = require('ws');
+  } catch {
+    callSocket.state = 'unavailable';
+    log('WARN call events off: the ws package is not installed');
+    return;
+  }
+  const params = new URLSearchParams();
+  params.set('session', cfg.wahaSession);
+  for (const name of calls.CALL_EVENTS) params.append('events', name);
+  params.set('x-api-key', cfg.wahaApiKey);
+  const url = `${cfg.wahaUrl.replace(/^http/i, 'ws')}/ws?${params.toString()}`;
+  let backoffMs = 2000;
+  let lastDownLogAt = 0;
+
+  const retry = () => {
+    const t = setTimeout(connect, backoffMs);
+    t.unref?.();
+    backoffMs = Math.min(backoffMs * 2, 60000);
+  };
+
+  function connect() {
+    callSocket.state = callSocket.since ? 'reconnecting' : 'connecting';
+    let ws;
+    try {
+      ws = new WebSocket(url, { handshakeTimeout: 15000, headers: { 'X-Api-Key': cfg.wahaApiKey } });
+    } catch (err) {
+      callSocket.last_error = scrubKey(err.message).slice(0, 160);
+      retry();
+      return;
+    }
+    let pinger = null;
+    let steady = null;
+    let wasSteady = false;
+    ws.on('open', () => {
+      callSocket.state = 'listening';
+      callSocket.since = Date.now();
+      callSocket.last_error = null;
+      // Keeps the line open through proxies that drop quiet connections.
+      pinger = setInterval(() => { try { ws.ping(); } catch { /* closing */ } }, 25000);
+      pinger.unref?.();
+      // WAHA opens the socket before it checks the key and then closes it, so
+      // the line counts as up only once it has stayed open for half a minute.
+      steady = setTimeout(() => {
+        wasSteady = true;
+        callSocket.down_since = 0;
+        backoffMs = 2000;
+        log('call events: listening to WAHA');
+      }, 30000);
+      steady.unref?.();
+    });
+    ws.on('message', (raw) => {
+      let evt;
+      try { evt = JSON.parse(String(raw)); } catch { return; }
+      if (evt?.session && evt.session !== cfg.wahaSession) return;
+      callTracker.onEvent(evt?.event, evt?.payload || {});
+    });
+    ws.on('error', (err) => { callSocket.last_error = scrubKey(err?.message || err).slice(0, 160); });
+    ws.on('close', (code, reason) => {
+      if (pinger) clearInterval(pinger);
+      if (steady) clearTimeout(steady);
+      callSocket.state = 'reconnecting';
+      if (!callSocket.down_since) callSocket.down_since = Date.now();
+      callSocket.reconnects += 1;
+      callSocket.last_close = `${code}${reason && String(reason) ? ` ${scrubKey(String(reason)).slice(0, 80)}` : ''}`;
+      // One line when a steady line drops, then one every ten minutes while it stays down.
+      if (wasSteady || Date.now() - lastDownLogAt >= 10 * 60 * 1000) {
+        lastDownLogAt = Date.now();
+        log(`call events: WAHA websocket closed (${callSocket.last_close}${callSocket.last_error ? `; ${callSocket.last_error}` : ''}); retrying`);
+      }
+      retry();
+    });
+  }
+
+  connect();
+}
+
+function callsHealth() {
+  const now = Date.now();
+  return {
+    listening: callSocket.state,
+    listening_for_ms: callSocket.state === 'listening' && callSocket.since ? now - callSocket.since : null,
+    down_for_ms: callSocket.down_since ? now - callSocket.down_since : null,
+    reconnects: callSocket.reconnects,
+    last_close: callSocket.last_close,
+    last_error: callSocket.last_error,
+    ringing_now: callTracker.ringing(),
+    ...callTracker.stats,
+    last_call_ms_ago: callTracker.stats.last_call_at ? now - callTracker.stats.last_call_at : null,
+    told_makaug: callForwarding.told,
+    not_told: callForwarding.failed,
+    numbers_hidden: callForwarding.numbers_hidden,
+    last_tell_error: callForwarding.last_error,
+  };
+}
+
+/** A plain-English blocker once calls have not been heard for ten minutes. */
+function callsBlocker() {
+  if (!callEventsOn || !callSocket.down_since) return null;
+  if (Date.now() - callSocket.down_since < 10 * 60 * 1000) return null;
+  return `WhatsApp calls are not reaching makaug: the WAHA websocket is down (${callSocket.last_close || callSocket.last_error || 'no answer'})`;
+}
+
 // ------------------------------------------------------------ http server --
 
 function tenantAdminAuthorized(req, tenant) {
@@ -1269,6 +1488,8 @@ const server = http.createServer(async (req, res) => {
       if (lostCount) blockers.push(`${lostCount} inbound message(s) failed to reach makaug and were released for retry — check the log for WARN message NOT delivered`);
       const degraded = degradeReason();
       if (degraded) blockers.push(degraded);
+      const callsDown = callsBlocker();
+      if (callsDown) blockers.push(callsDown);
 
       return json(res, 200, {
         ok: true,
@@ -1287,6 +1508,8 @@ const server = http.createServer(async (req, res) => {
           last_error: link.lastError,
         },
         ffmpeg: ffmpegVersion,
+        // WhatsApp calls to the number: whether they are heard, and what makaug was told.
+        calls: callsHealth(),
         ready_to_reply: tokenOk && linkOk && sessionStatusCache === 'WORKING' && !degraded,
         blockers,
       });
@@ -1366,6 +1589,7 @@ server.listen(cfg.port, '0.0.0.0', () => {
   log(`outbox poll=${cfg.outboxPollMs}ms send-interval>=${cfg.sendMinIntervalMs}ms (+<=${cfg.sendJitterMs}ms jitter)`);
   checkFfmpeg().catch(() => {});
   if (!cfg.publicUrl) log('WARN ADAPTER_PUBLIC_URL is not set - inbound media will be dropped.');
+  startCallSocket();
 });
 
 // -------------------------------------------------------------- schedulers --
