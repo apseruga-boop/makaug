@@ -69,7 +69,9 @@ test('the alias is respected, so it can be used wherever the table is joined', (
  */
 test('every WhatsApp search path ranks, and none is left on newest-first', () => {
   const source = require('fs').readFileSync(require.resolve('../routes/whatsapp'), 'utf8');
-  const ranked = (source.match(/ORDER BY \$\{searchOrderBySql\('p'\)\}/g) || []).length;
+  // A search from a floor ("from 100k and above", 25 Nov 2026) opens at the
+  // floor: price first, then the same ranking.
+  const ranked = (source.match(/ORDER BY \$\{(?:floor > 0 \? 'p\.price ASC NULLS LAST, ' : ''\}\$\{)?searchOrderBySql\('p'\)\}/g) || []).length;
   assert.strictEqual(ranked, 5, 'two result queries, two nearby candidate pools, and the rooms that name a university');
 
   // Nothing in a property search may still sort purely by recency. The one

@@ -438,6 +438,24 @@ function buildWhatsappResultsList(rows = [], {
 }
 
 /**
+ * What CONTACT will give for this property, said truthfully. 25 Nov 2026: two
+ * rooms found on TikTok, with no number on either post, each said "Reply
+ * CONTACT for the owner's number"; CONTACT gave the poster's page and "There
+ * is no phone number on the post". A listing found online gets who posted it
+ * (and their number when the post had one); one listed with us, its owner's.
+ */
+function contactPromise(row = {}) {
+  let facts = {};
+  try {
+    facts = require('./whatsappListingEnquiryService').listingSourceFacts(row) || {};
+  } catch (_error) {
+    facts = {};
+  }
+  if (!facts.foundOnline) return "for the owner's number";
+  return facts.phone ? 'for their number' : 'to see who posted it';
+}
+
+/**
  * One property, when somebody has picked it from a list (or it was the only
  * match): what it is, the price, where, the short link, and the word that gets
  * them the person holding it. `others` are the other numbers they can pick.
@@ -460,7 +478,7 @@ function buildWhatsappPropertyPickCard(row = {}, { homeUrl = DEFAULT_HOME_URL, o
   let otherWords = '';
   if (rest.length === 1) otherWords = `, or *${rest[0]}* to see the other`;
   if (rest.length > 1) otherWords = `, or ${rest.slice(0, -1).map((n) => `*${n}*`).join(', ')} or *${rest[rest.length - 1]}* to see the others`;
-  lines.push(`Reply *CONTACT* for the owner's number${otherWords}.`);
+  lines.push(`Reply *CONTACT* ${contactPromise(row)}${otherWords}.`);
   return lines.join('\n');
 }
 
@@ -481,7 +499,8 @@ function buildWhatsappPropertySearchReply(rows = [], {
 
   const visibleRows = safeRows.slice(0, WHATSAPP_PROPERTY_SEARCH_PREVIEW_LIMIT);
   const totalMatches = totalWhatsappSearchMatches(safeRows);
-  const cleanLocation = cleanText(location);
+  // "2 homes to rent in Any area" (25 Nov 2026): no place said is no place named.
+  const cleanLocation = /^(?:any|any ?where|any area)$/i.test(cleanText(location)) ? '' : cleanText(location);
   const proximityHeader = cleanText(safeRows[0]?.proximity_header);
   // "3 homes to rent in Kira", or "3 homes to rent within 2 km of Ntinda".
   const header = proximityHeader
