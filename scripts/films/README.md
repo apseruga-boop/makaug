@@ -11,6 +11,7 @@ own replies, because people who are asked to pay want to see the thing working.
 | Owner intro | `makaug-owner-intro-v1.mp4` | Someone selling or letting their own property | Agent 007 → 4 |
 | How to post (agents) | `makaug-agent-how-to-post-v3.mp4` | An approved agent | Agent 007 → 5 → 1 |
 | How to list (owners) | `makaug-owner-how-to-list-v5.mp4` | An owner | Agent 007 → 5 → 2, by itself when an owner replies LIST to the owner film, and when somebody picks 1, List my property, on the menu |
+| Off-plan walkthroughs | `makaug-off-plan-walkthroughs-v1.mp4` | Agents, once (27 Nov 2026) | Sent as an afternoon brief to the agents who wrote in the last 7 days |
 
 The paths and captions are in `EXPLAINER_VIDEOS` in `routes/whatsapp.js`. Each has a Luganda
 (`-lg.mp4`) and a Swahili (`-sw.mp4`) twin beside it; see below.
@@ -137,3 +138,29 @@ and a developer's project page. All are public on makaug.com. Kimuli Brian and
 John Yan of Vanta House are happy to be shown (Arthur, 14 Nov 2026). The 2-bed
 house in Seeta in the two owner films is a listing by another agency, which has
 not been asked; swap it for one of Brian's listings if that matters.
+
+## Off-plan walkthroughs (27 Nov 2026)
+
+    FILM_SCALE=1.5 node scripts/films/render.js off-plan-walkthroughs
+
+Tells agents that makaug now makes walkthroughs for their off-plan projects,
+included in their subscription, and how to send a project (the loop is in
+`scripts/off-plan-walkthroughs/README.md`). 61 seconds, 1080x1920, silent.
+
+Its two walkthrough clips are cut from the Vanta House films
+(`assets/off-plan/vanta-house/tour-2bhk.mp4` from 61.5s, `tour-3bhk.mp4` from
+12s) into `.build/clips` by render.js, and shown frame by frame: an
+`<img data-seq>` in a scene (engine.js).
+
+- **The pages** are screenshots of makaug.com taken on 27 Nov 2026 with a phone
+  profile (360 CSS pixels wide, twice the density): the Vanta House page
+  (`page-vanta-walk.jpg`, the top 8,190 CSS pixels, down to the walkthroughs)
+  and its 3D tour (`tour-start-2bhk.jpg`). Nothing on them is redrawn; the
+  only number on them is makaug's own.
+- **The floor plan** and **the walkthroughs** are the developer's 2-bedroom
+  plan and makaug's walkthrough films of Vanta House, as they are on the page.
+- **The chat** is an example: "Example Court" is not a real project and its
+  floor plan (`example-floor-plan.svg`) was drawn for the film. The
+  assistant's two replies are its own words for that message on 27 Nov 2026
+  (`agentSelfIntakeSavedReply` with the plan as the photo, and
+  `walkthroughReadyMessage`), and the film says so.

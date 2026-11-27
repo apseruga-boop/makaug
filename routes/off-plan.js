@@ -410,6 +410,14 @@ function mountManagementRoutes(router, authMiddleware, { allowPermanentDelete = 
   router.patch('/walkthroughs/:id', asyncRoute(async (req, res) => {
     const walkthrough = await updateWalkthroughJob(db, req.params.id, req.body || {}, actor(req));
     if (!walkthrough) return res.status(404).json({ ok: false, error: 'Walkthrough job not found' });
+    // Approved: the agent who sent the floor plans on WhatsApp gets the link
+    // (27 Nov 2026). After the response; a failed message never undoes it.
+    if (walkthrough.status === 'approved') {
+      setImmediate(() => {
+        require('../services/offPlanWalkthroughRequestService').notifyWalkthroughReady(db, walkthrough)
+          .catch((error) => console.warn('[off-plan] walkthrough-ready message failed:', error.message));
+      });
+    }
     return res.json({ ok: true, walkthrough });
   }));
 }

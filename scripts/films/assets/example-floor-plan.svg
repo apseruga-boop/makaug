@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 600" width="840" height="600">
+  <!-- An example floor plan for the off-plan walkthrough film: drawn for the film, not a real project's plan. -->
+  <rect width="840" height="600" fill="#FBFAF6"/>
+  <g fill="none" stroke="#C9C3B6" stroke-width="1">
+    <path d="M0 40H840M0 80H840M0 120H840M0 160H840M0 200H840M0 240H840M0 280H840M0 320H840M0 360H840M0 400H840M0 440H840M0 480H840M0 520H840M0 560H840" opacity=".35"/>
+    <path d="M40 0V600M80 0V600M120 0V600M160 0V600M200 0V600M240 0V600M280 0V600M320 0V600M360 0V600M400 0V600M440 0V600M480 0V600M520 0V600M560 0V600M600 0V600M640 0V600M680 0V600M720 0V600M760 0V600M800 0V600" opacity=".35"/>
+  </g>
+  <g fill="#F1EDE3">
+    <rect x="70" y="60" width="380" height="330"/>
+    <rect x="450" y="60" width="320" height="190"/>
+    <rect x="450" y="250" width="320" height="140"/>
+    <rect x="70" y="390" width="230" height="150"/>
+    <rect x="300" y="390" width="150" height="150"/>
+    <rect x="450" y="390" width="320" height="150"/>
+  </g>
+  <g fill="#E3EEE6"><rect x="70" y="390" width="230" height="150"/></g>
+  <g stroke="#1F2933" stroke-width="12" fill="none" stroke-linecap="square">
+    <path d="M70 60H770V540H70Z"/>
+  </g>
+  <g stroke="#1F2933" stroke-width="7" fill="none" stroke-linecap="square">
+    <path d="M450 60V180M450 240V390"/>
+    <path d="M450 250H560M620 250H770"/>
+    <path d="M70 390H150M210 390H450M510 390H770"/>
+    <path d="M300 390V540"/>
+    <path d="M450 390V460M450 520V540"/>
+  </g>
+  <g stroke="#1F2933" stroke-width="2.5" fill="none">
+    <path d="M450 180A60 60 0 0 0 390 240"/><path d="M450 180V240"/>
+    <path d="M560 250A60 60 0 0 1 620 310"/><path d="M560 250H620"/>
+    <path d="M150 390A60 60 0 0 1 210 450"/><path d="M150 390H210"/>
+    <path d="M450 460A60 60 0 0 0 510 520"/>
+  </g>
+  <g stroke="#7FB2D6" stroke-width="9" fill="none">
+    <path d="M130 60H260M560 60H700M770 120V200M770 440V500M130 540H240"/>
+  </g>
+  <g fill="#1F2933" font-family="Helvetica, Arial, sans-serif" font-weight="700" text-anchor="middle">
+    <text x="260" y="215" font-size="26">LIVING &amp; DINING</text>
+    <text x="260" y="246" font-size="18" font-weight="500" fill="#55607A">5.4 × 4.7 m</text>
+    <text x="610" y="150" font-size="26">BEDROOM 1</text>
+    <text x="610" y="180" font-size="18" font-weight="500" fill="#55607A">4.0 × 3.4 m</text>
+    <text x="610" y="330" font-size="24">BATHROOM</text>
+    <text x="185" y="470" font-size="24">BALCONY</text>
+    <text x="375" y="470" font-size="22">KITCHEN</text>
+    <text x="610" y="470" font-size="26">BEDROOM 2</text>
+    <text x="610" y="500" font-size="18" font-weight="500" fill="#55607A">3.6 × 3.0 m</text>
+  </g>
+  <g font-family="Helvetica, Arial, sans-serif" fill="#1F2933">
+    <rect x="70" y="562" width="300" height="30" rx="6" fill="#1F2933"/>
+    <text x="84" y="583" font-size="17" font-weight="700" fill="#FFFFFF">2 BEDROOM · 85 m² · TYPE A</text>
+  </g>
+</svg>

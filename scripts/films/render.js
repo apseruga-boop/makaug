@@ -20,13 +20,34 @@ const FILMS = {
   'agent-intro': { out: 'makaug-agent-intro-v5.mp4', key: 0, seed: 7 },
   'owner-intro': { out: 'makaug-owner-intro-v1.mp4', key: 5, seed: 11 },
   'agent-howto': { out: 'makaug-agent-how-to-post-v3.mp4', key: 2, seed: 13 },
-  'owner-howto': { out: 'makaug-owner-how-to-list-v5.mp4', key: -3, seed: 17 }
+  'owner-howto': { out: 'makaug-owner-how-to-list-v5.mp4', key: -3, seed: 17 },
+  // 27 Nov 2026: off-plan walkthroughs, for the agents. Its walkthrough clips
+  // are cut from the Vanta House films into .build/clips before it is drawn.
+  'off-plan-walkthroughs': {
+    out: 'makaug-off-plan-walkthroughs-v1.mp4', key: 2, seed: 23,
+    clips: [
+      { name: 'vanta-2bhk-above', src: 'assets/off-plan/vanta-house/tour-2bhk.mp4', from: 61.5, dur: 5.6 },
+      { name: 'vanta-3bhk-walk', src: 'assets/off-plan/vanta-house/tour-3bhk.mp4', from: 12.0, dur: 8.2 }
+    ]
+  }
 };
 const FPS = 30;
 const ROOT = path.join(__dirname, '..', '..');
 
 function browserType() {
   try { return require('playwright').chromium; } catch (error) { return require('playwright-core').chromium; }
+}
+
+/** Cuts a film's clips into frames (1000 wide, 30 a second) once; they are reused after. */
+function cutClips(film) {
+  for (const clip of film.clips || []) {
+    const dir = path.join(__dirname, '.build', 'clips', clip.name);
+    const want = Math.round(clip.dur * FPS);
+    if (fs.existsSync(dir) && fs.readdirSync(dir).filter((f) => f.endsWith('.jpg')).length >= want) continue;
+    fs.mkdirSync(dir, { recursive: true });
+    run('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(clip.from), '-i', path.join(ROOT, clip.src), '-t', String(clip.dur),
+      '-vf', `fps=${FPS},scale=1000:-2`, '-q:v', '3', path.join(dir, '%04d.jpg')]);
+  }
 }
 
 function run(cmd, args) {
@@ -65,6 +86,7 @@ async function renderScene(page, scene, file) {
   const lang = ['lg', 'sw'].includes(flag('--lang')) ? flag('--lang') : '';
   const build = path.join(__dirname, '.build', lang ? `${name}-${lang}` : name);
   fs.mkdirSync(build, { recursive: true });
+  cutClips(film);
 
   const browser = await browserType().launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
   // FILM_SCALE=1.5 draws the same film at 1080x1920 (full HD), sharper on the

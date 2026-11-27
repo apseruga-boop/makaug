@@ -198,6 +198,7 @@ const {
   updateEnquiryDelivery: updateOffPlanEnquiryDelivery
 } = require('../services/offPlanService');
 const { notifyOffPlanEnquiry } = require('../services/offPlanNotificationService');
+const offPlanWalkthroughs = require('../services/offPlanWalkthroughRequestService');
 
 const router = express.Router();
 const ACTIVE_COUNTRY_CODE = String(process.env.COUNTRY_CODE || 'UG').trim().toUpperCase();
@@ -5937,6 +5938,16 @@ function explicitDistrictInCaption(caption = '', { area = '' } = {}) {
 // The off-plan projects an approved agent is the source of, as kept on their
 // session: [{ id, name, slug, status }]. A caption that names one is about
 // that project's page, whatever else it says.
+// An off-plan project's homes run from the smallest it offers to the largest.
+function offPlanBedrooms(offPlan, bedroomDraft = {}, caption = '') {
+  if (!offPlan) return bedroomDraft;
+  const range = offPlanBedroomRange(caption);
+  if (range && range.max > range.min) {
+    return { ...bedroomDraft, bedrooms: range.min, bedroom_options_min: range.min, bedroom_options_max: range.max, bedroom_options_text: bedroomDraft.bedroom_options_text || `${range.min}-${range.max} bedrooms` };
+  }
+  return bedroomDraft.bedroom_options_min != null ? { ...bedroomDraft, bedrooms: bedroomDraft.bedroom_options_min } : bedroomDraft;
+}
+
 function knownProjectInCaption(caption = '', sessionData = {}) {
   const text = normalizeInput(caption).toLowerCase();
   if (!text) return null;
@@ -5965,10 +5976,68 @@ function employeeCaptionLooksOffPlan(caption = '', sessionData = {}) {
   return projectTalk && (unitMenu || /\boff[\s-]?plan\b/i.test(text));
 }
 
+// Words that start an advert but are never a project's name ("New off-plan
+// apartments", "Luxury off plan homes").
+const NOT_A_PROJECT_NAME = /^(?:new|luxury|luxurious|modern|beautiful|affordable|executive|prime|exclusive|premium|spacious|own|buy|invest|investment|hot|offer|special|limited|great|good|best|latest|upcoming|ongoing|selling|sale|for|an?|the|our|my|we|these|this|off|plan|project|apartments?|flats?|homes?|houses?|units?|villas?)$/i;
+
+/**
+ * A project's name as agents label it: "Off-plan project: Example Court, Kira",
+ * "Off plan: Example Court in Kira", "Project name: Example Court", or the
+ * name before the words: "Example Court off-plan apartments in Kira" (27 Nov
+ * 2026: how the walkthrough film asks agents to send a project). A place or a
+ * word of the advert is not a name.
+ */
+function offPlanLabelledProjectName(caption = '') {
+  const lines = normalizeInput(caption).split(/\n/).map((line) => line.trim()).filter(Boolean).slice(0, 6);
+  const usable = (name = '') => {
+    const clean = normalizeInput(name).replace(/[*_~]+/g, '').trim();
+    if (clean.length < 3 || clean.length > 48 || !/^[A-Z0-9]/.test(clean) || /^\d/.test(clean)) return '';
+    const words = clean.split(/\s+/);
+    if (words.every((word) => NOT_A_PROJECT_NAME.test(word))) return '';
+    if (/\b(?:bed(?:room)?s?|bhk|apartments?|flats?|homes?|houses?|units?|villas?|plots?|from|price|ugx|usd)\b/i.test(clean)) return '';
+    // "Kira" is a place; "Kira Heights" is a project named after one.
+    const place = parseAreaFromText(clean, {});
+    const placeName = normalizeInput(typeof place === 'string' ? place : (place?.area || place?.name || '')).toLowerCase();
+    if (placeName && placeName === clean.toLowerCase()) return '';
+    return clean;
+  };
+  for (const line of lines) {
+    const labelled = line.match(/^(?:off[\s-]?plan(?:\s+(?:project|development|apartments?|homes?))?|(?:project|development)(?:\s+name)?|name)\s*[:\-–—]\s*(.+)$/i);
+    if (!labelled) continue;
+    const name = usable(labelled[1].split(/\s*[,.;(|]|\s+[-–—]\s+|\s+(?:in|at|on|along|near|off|opposite|located|situated)\s+/i)[0]);
+    if (name) return name;
+  }
+  const before = (lines[0] || '').match(/^([A-Z][A-Za-z0-9'’&-]*(?:\s+[A-Z][A-Za-z0-9'’&-]*){0,4})\s*(?:[-–—:,]\s*)?(?:is\s+an?\s+|are\s+)?off[\s-]?plan\b/);
+  return before ? usable(before[1]) : '';
+}
+
+/**
+ * The home sizes an off-plan project offers, from every "N bedroom" it names
+ * and lists like "2 and 3 bedroom", "1, 2 & 3 bed", "2-3 bedroom" or "2BHK".
+ * "Off-plan project · 3 bedroom homes" for a project of 2- and 3-bedroom homes
+ * was what the agent saw (27 Nov 2026).
+ */
+function offPlanBedroomRange(caption = '') {
+  const words = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
+  const text = normalizeInput(caption).toLowerCase().replace(/\b(one|two|three|four|five|six)\b/g, (word) => String(words[word]));
+  const found = [];
+  const listRe = /\b(\d)((?:\s*(?:,|&|and|or|-|–|to|\/)\s*\d)*)\s*(?:bed(?:room)?s?|bhk|br)\b/g;
+  let match;
+  while ((match = listRe.exec(text)) !== null) {
+    found.push(Number(match[1]));
+    (match[2].match(/\d/g) || []).forEach((digit) => found.push(Number(digit)));
+  }
+  const rooms = [...new Set(found.filter((value) => value >= 1 && value <= 9))];
+  if (rooms.length < 2) return null;
+  return { min: Math.min(...rooms), max: Math.max(...rooms) };
+}
+
 /** The project's name: the words before "has reached", "is", "will" or the first sentence end. */
 function offPlanProjectNameFromCaption(caption = '', sessionData = {}) {
   const known = knownProjectInCaption(caption, sessionData);
   if (known) return normalizeInput(known.name);
+  const labelled = offPlanLabelledProjectName(caption);
+  if (labelled) return labelled;
   const first = normalizeInput(caption).split(/\n/)[0] || '';
   const match = first.match(/^\s*([A-Z][A-Za-z0-9'’&-]*(?:\s+[A-Z][A-Za-z0-9'’&-]*){0,4})\b(?=\s+(?:has|have|is|are|will|reached|offers?|launch|phase)\b)/);
   if (match) return match[1].trim();
@@ -6173,7 +6242,14 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
   }
   // An off-plan project's name ("Vanta House") is not where it is.
   const offPlanName = offPlan ? offPlanProjectNameFromCaption(caption, sessionData) : '';
-  const locationCaption = (offPlanName ? cleanCaption.replace(new RegExp(offPlanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' ') : cleanCaption).replace(
+  // The name is not where it is ("Vanta House"), unless the name carries the
+  // place and the words that follow it are not a place of their own: "Kira
+  // Heights off-plan apartments" is in Kira (27 Nov 2026), and "off-plan" is
+  // never a place.
+  const nameCarriesPlace = Boolean(offPlanName) && Boolean(parseAreaFromText(offPlanName, {}));
+  const locationCaption = (offPlanName && !nameCarriesPlace ? cleanCaption.replace(new RegExp(offPlanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' ') : cleanCaption)
+    .replace(/\boff[\s-]?plan\b/gi, ' ')
+    .replace(
     /\b(?:private|ready|freehold)?\s*m(?:ailo|olo|ilo)\s+(?:land\s+)?title\b/gi,
     ' '
   )
@@ -6573,7 +6649,7 @@ function employeePropertyFacts(caption = '', sessionData = {}) {
     pricePeriod: offPlan ? 'once' : (perUnit.pricePeriod || pricePeriodForUnitQuote(cleanCaption) || ownerForwardPricePeriod(listingType, cleanCaption, price)),
     priceMetadata,
     perUnitPrice: perUnit.perUnit ? perUnit : null,
-    bedroomDraft: offPlan && bedroomDraft.bedroom_options_min != null ? { ...bedroomDraft, bedrooms: bedroomDraft.bedroom_options_min } : bedroomDraft,
+    bedroomDraft: offPlanBedrooms(offPlan, bedroomDraft, cleanCaption),
     locationPatch,
     offPlan,
     offPlanName,
@@ -8735,9 +8811,24 @@ async function attachEmployeeReviewMedia({ propertyId, storedMedia, phone, inbou
       logger.warn('Video caption OCR schedule failed', { property_id: propertyId, error: scheduleError?.message });
     }
   }
+  // The floor plans that follow an off-plan project are what its walkthrough
+  // is made from: they go to the project, the team is told, and the agent hears
+  // that they arrived (27 Nov 2026).
+  const offPlanId = normalizeInput(property.extra_fields?.off_plan_development_id || '');
+  const floorPlans = offPlanId ? offPlanWalkthroughs.collectFloorPlans(uniqueMedia, { offPlan: true }) : [];
+  if (floorPlans.length) {
+    deferWhatsappWork('walkthrough request', () => offPlanWalkthroughs.requestWalkthrough(db, {
+      developmentId: offPlanId,
+      floorPlans,
+      propertyId,
+      phone,
+      tellSender: true
+    }));
+  }
   return {
     attached: uniqueMedia.length,
     duplicate: false,
+    floorPlans: floorPlans.length,
     publicImages: images.length,
     evidenceImages: evidenceImages.length,
     validationReasons: uniqueMedia
@@ -10027,9 +10118,16 @@ function agentSelfIntakeSavedReply({ data = {}, facts = {}, storedMedia = [], op
   // told "📸 1 photo saved"; the listing reached review with nothing to show.
   // A document is counted as what it is, and a property with nothing to show
   // is said to need its photos.
-  const privateDocs = storedMedia.filter(isPrivateDocumentMedia).length;
-  const photos = storedMedia.filter((item) => item.kind === 'image' && !isPrivateDocumentMedia(item)).length;
+  // 27 Nov 2026: an off-plan project's floor plans are what its walkthrough is
+  // made from, not documents kept private, and they are counted as plans.
+  const floorPlans = facts.offPlan ? offPlanWalkthroughs.collectFloorPlans(storedMedia, { caption, offPlan: true }) : [];
+  const planUrls = new Set(floorPlans.map((item) => item.url));
+  const privateDocs = storedMedia.filter((item) => isPrivateDocumentMedia(item) && !planUrls.has(item.url)).length;
+  const photos = storedMedia.filter((item) => item.kind === 'image' && !isPrivateDocumentMedia(item) && !planUrls.has(item.url)).length;
   const videos = storedMedia.filter((item) => item.kind === 'video').length;
+  const walkthroughLine = facts.offPlan
+    ? (floorPlans.length ? offPlanWalkthroughs.walkthroughReceivedLine(floorPlans) : offPlanWalkthroughs.walkthroughAskLine())
+    : '';
 
   const lines = [];
   if (openedAgentSelfIntake) lines.push(agentSelfIntakeOpeningLine(data.agent || {}), '');
@@ -10043,10 +10141,11 @@ function agentSelfIntakeSavedReply({ data = {}, facts = {}, storedMedia = [], op
     lines.push(`✅ *Thanks — received for ${project.name}.*`);
     lines.push('');
     if (bits.length) lines.push(`📸 ${bits.join(' · ')}${normalizeInput(caption) ? ' and your note' : ''} ${photos + videos === 1 && !normalizeInput(caption) ? 'is' : 'are'} with the team.`);
-    else lines.push('📝 Your note is with the team.');
+    else if (!floorPlans.length) lines.push('📝 Your note is with the team.');
+    if (floorPlans.length) lines.push(offPlanWalkthroughs.walkthroughReceivedLine(floorPlans));
     lines.push(`They will add it to the ${project.name} page${project.status === 'published' && project.slug ? ` (makaug.com/off-plan/${project.slug})` : ''} and tell you once it is updated.`);
     lines.push('');
-    lines.push('More photos, a price change or a construction update? Send them here the same way.');
+    lines.push('More photos, a price change, a construction update or floor plans? Send them here the same way.');
     return lines.join('\n');
   }
   if (missing.length) {
@@ -10066,12 +10165,15 @@ function agentSelfIntakeSavedReply({ data = {}, facts = {}, storedMedia = [], op
   const bits = [];
   if (photos) bits.push(`${photos} ${photos === 1 ? 'photo' : 'photos'}`);
   if (videos) bits.push(`${videos} ${videos === 1 ? 'video' : 'videos'}`);
-  if (Number(albumCount) > photos + videos + privateDocs) lines.push(`📸 Your ${Number(albumCount)} photos are being added to this property`);
+  if (Number(albumCount) > photos + videos + privateDocs + floorPlans.length) lines.push(`📸 Your ${Number(albumCount)} photos are being added to this property`);
   else if (bits.length) lines.push(`📸 ${bits.join(' · ')} saved${photos + videos === 1 ? ' — send more and I will add them to this one' : ''}`);
   if (privateDocs) lines.push(privateDocumentLine(privateDocs));
-  if (!(Number(albumCount) > photos + videos + privateDocs) && !photos && !videos) {
-    lines.push('📸 *Still needed:* a few photos or a short video of the property itself — it cannot go live without one.');
+  if (!(Number(albumCount) > photos + videos + privateDocs + floorPlans.length) && !photos && !videos) {
+    lines.push(facts.offPlan
+      ? '📸 *Still needed:* renders or site photos of the project — the page cannot go live without one.'
+      : '📸 *Still needed:* a few photos or a short video of the property itself — it cannot go live without one.');
   }
+  if (walkthroughLine) lines.push('', walkthroughLine);
   lines.push('');
   lines.push('Anything wrong? Just reply with the correction — e.g. _price 1.5m_ or _area Najjera, Wakiso_.');
   lines.push('');
@@ -10638,10 +10740,15 @@ function agentPendingNotice(data = {}) {
       return [`📸 Got your ${mediaWords(item.media) || 'photos'} — thank you!`, '', ...askForDetails].join('\n');
     }
     if (!item.media.length) {
+      // An off-plan project also needs the plan of each home: its walkthrough
+      // is made from them (27 Nov 2026).
+      const offPlan = employeeCaptionLooksOffPlan(item.caption, data);
       return [
         `📝 Got the details for ${employeeCaptionLabel(item.caption)}.`,
         '',
-        'Now send the *photos or a short video* of it and I will put it up for review.',
+        offPlan
+          ? 'Now send the *photos or a short video* of it (renders or site photos) and the *floor plan of each home type*. We make the walkthrough from the floor plans; it is included in your plan.'
+          : 'Now send the *photos or a short video* of it and I will put it up for review.',
         '_Every property needs at least one photo._'
       ].join('\n');
     }
@@ -12663,7 +12770,7 @@ async function handleEmployeeWhatsappIntake({
       const payAnswer = payingAgent ? await agentPayLinkAside({ agent: payingAgent, cleanBody: askedText }) : null;
       if (payAnswer) return { handled: true, nextStep: currentStep, message: payAnswer };
     }
-    if (!active && (agentVoiceOnly || AGENT_HELP.test(askedText) || AGENT_IS_IT_DONE.test(askedText) || AGENT_HOW_TO_POST.test(askedText) || WANTS_TO_POST.test(askedText) || AGENT_GREETING.test(askedText) || isAgentProfilePhotoRequest(askedText) || AGENT_SHARE_REQUEST.test(askedText) || AGENT_TERMS_AGREE.isAgreeReply(askedText) || isQuestionNotProperty(askedText))) {
+    if (!active && (agentVoiceOnly || AGENT_HELP.test(askedText) || AGENT_IS_IT_DONE.test(askedText) || AGENT_HOW_TO_POST.test(askedText) || WANTS_TO_POST.test(askedText) || AGENT_GREETING.test(askedText) || isAgentProfilePhotoRequest(askedText) || AGENT_SHARE_REQUEST.test(askedText) || offPlanWalkthroughs.asksAboutOffPlanWalkthroughs(askedText) || AGENT_TERMS_AGREE.isAgreeReply(askedText) || isQuestionNotProperty(askedText))) {
       const askingAgent = await findApprovedAgentByPhone(phone);
       if (askingAgent) {
         if (AGENT_TERMS_AGREE.isAgreeReply(askedText)) {
@@ -12697,6 +12804,16 @@ async function handleEmployeeWhatsappIntake({
         if (AGENT_SHARE_REQUEST.test(askedText)) {
           const share = agentShareReply({ agent: askingAgent });
           if (share) return { handled: true, nextStep: currentStep, message: share };
+        }
+        // "How do I send my off-plan project?" after the walkthrough film (27
+        // Nov 2026): what to send, and the team hears who is interested.
+        if (offPlanWalkthroughs.asksAboutOffPlanWalkthroughs(askedText) && !(await agentTalkIsForAPerson({ phone, agent: askingAgent, said: askedText }))) {
+          require('../services/leadDeskService').sendToTeam(
+            db,
+            `🏗️ *${askingAgent.full_name || 'An agent'} asked about off-plan walkthroughs* (number ending ${String(phone).replace(/\D/g, '').slice(-3)}): "${askedText.slice(0, 160)}". They have been told what to send.`,
+            'off_plan_walkthrough_interest'
+          ).catch(() => null);
+          return { handled: true, nextStep: currentStep, message: offPlanWalkthroughs.offPlanHowToShareReply({ name: agentGreetingName(askingAgent, '') }) };
         }
         // Before anything else: has he just been sent a bill? "What should I
         // do now?" means something different when a payment link landed a
@@ -14088,7 +14205,12 @@ async function handleEmployeeWhatsappIntake({
       data,
       inboundMessageId
     );
-    const placeholderBody = /^\s*\[(?:image|video|document|media)\]\s*$/i.test(cleanBody);
+    // "2 bedroom floor plan" on a photo sent after an off-plan project is that
+    // project's plan, not a new property to describe (27 Nov 2026): the words
+    // are kept on the file so the plan is known as one.
+    const planWords = candidates.length > 0 && floorPlanWordsForOffPlanProject(data, cleanBody);
+    if (planWords) candidates.forEach((candidate) => { candidate.name = `floor-plan ${normalizeInput(candidate.name || '')}`.trim(); });
+    const placeholderBody = planWords || /^\s*\[(?:image|video|document|media)\]\s*$/i.test(cleanBody);
     if (!candidates.length) {
       if (!cleanBody || placeholderBody) {
         return { handled: true, nextStep: currentStep, message: 'No usable media bytes reached makaug. Please resend the photo, video or document.' };
@@ -18074,7 +18196,14 @@ async function recordDeveloperProjectUpdate({ development = {}, propertyId = '',
     ].filter(Boolean).join('\n'),
     'off_plan_update_received'
   ).catch(() => null);
-  return { development: existing, update: entry };
+  // Floor plans among it are what a walkthrough is made from (27 Nov 2026).
+  const floorPlans = offPlanWalkthroughs.collectFloorPlans(storedMedia, { caption, offPlan: true });
+  if (floorPlans.length) {
+    await offPlanWalkthroughs.requestWalkthrough(db, { developmentId: existing.id, floorPlans, propertyId, from: entry.from, phone }).catch((error) => {
+      logger.warn('Walkthrough request from a project update not recorded', { development_id: existing.id, error: error.message || String(error) });
+    });
+  }
+  return { development: existing, update: entry, floorPlans };
 }
 
 // A developer's photos and videos with no words. With one project on makaug
@@ -18107,12 +18236,16 @@ async function fileDeveloperMediaToProject({ phone = '', data = {}, persistStep 
   await replaceEmployeeSession(phone, persistStep, data);
   const photos = media.filter((item) => item.kind === 'image').length;
   const videos = media.filter((item) => item.kind === 'video').length;
-  const words = [photos ? `${photos} ${photos === 1 ? 'photo' : 'photos'}` : '', videos ? `${videos} ${videos === 1 ? 'video' : 'videos'}` : ''].filter(Boolean).join(' and ');
+  const plans = Array.isArray(recorded.floorPlans) ? recorded.floorPlans : [];
+  const planImages = plans.filter((item) => item.kind !== 'document').length;
+  const shownPhotos = Math.max(0, photos - planImages);
+  const words = [shownPhotos ? `${shownPhotos} ${shownPhotos === 1 ? 'photo' : 'photos'}` : '', videos ? `${videos} ${videos === 1 ? 'video' : 'videos'}` : ''].filter(Boolean).join(' and ');
   return {
     project,
     update: recorded.update,
     message: [
-      `📸 Got your ${words || 'media'} — added to *${project.name}* for the team to put on the page. They will tell you here once it is up.`,
+      ...(words || !plans.length ? [`📸 Got your ${words || 'media'} — added to *${project.name}* for the team to put on the page. They will tell you here once it is up.`] : []),
+      ...(plans.length ? [`${words ? '' : `For *${project.name}*: `}${offPlanWalkthroughs.walkthroughReceivedLine(plans)}`] : []),
       '',
       'If any of it is for a different property, tell me what it is and I will move it.'
     ].join('\n')
@@ -18154,7 +18287,11 @@ async function createOffPlanDraftFromIntake({ propertyId = '', caption = '', fac
       price_ugx: priceUgx
     });
   }
-  const images = (Array.isArray(storedMedia) ? storedMedia : []).filter((item) => item.kind === 'image' && item.publicEligible !== false && /^https:\/\//i.test(String(item.url || ''))).slice(0, 20)
+  // The floor plans are the project's plans and what its walkthrough is made
+  // from, not construction photos (27 Nov 2026).
+  const floorPlans = offPlanWalkthroughs.collectFloorPlans(storedMedia, { caption, offPlan: true });
+  const planUrls = new Set(floorPlans.map((item) => item.url));
+  const images = (Array.isArray(storedMedia) ? storedMedia : []).filter((item) => item.kind === 'image' && item.publicEligible !== false && !planUrls.has(item.url) && /^https:\/\//i.test(String(item.url || ''))).slice(0, 20)
     .map((item, index) => ({ url: item.url, caption: `Supplied by the developer on WhatsApp (${index + 1})`, kind: 'construction_photo' }));
   const videos = (Array.isArray(storedMedia) ? storedMedia : []).filter((item) => item.kind === 'video' && /^https:\/\//i.test(String(item.url || ''))).slice(0, 4)
     .map((item) => ({ url: item.url, caption: 'Supplied by the developer on WhatsApp', kind: 'construction_update' }));
@@ -18195,6 +18332,15 @@ async function createOffPlanDraftFromIntake({ propertyId = '', caption = '', fac
         [propertyId, development.id, name]
       );
     }
+    if (development?.id && floorPlans.length) {
+      await offPlanWalkthroughs.requestWalkthrough(db, {
+        developmentId: development.id,
+        floorPlans,
+        propertyId,
+        from: normalizeInput(agent?.full_name || '') || 'Developer',
+        phone
+      }).catch((error) => logger.warn('Walkthrough request for a new off-plan draft not recorded', { development_id: development.id, error: error.message || String(error) }));
+    }
     return development;
   } catch (error) {
     // A second caption for the same project (same slug) is the usual cause: the
@@ -18204,6 +18350,27 @@ async function createOffPlanDraftFromIntake({ propertyId = '', caption = '', fac
   }
 }
 
+/**
+ * Words on a photo that name it as a floor plan, or give only a home's size
+ * ("2-bed, 92 m²"), while an off-plan project is being sent: the project's
+ * review listing is the current one, its description is waiting for photos,
+ * or the agent has one project on makaug. A price makes it a property.
+ */
+function floorPlanWordsForOffPlanProject(data = {}, text = '') {
+  const said = normalizeInput(text);
+  if (!said || said.length > 160 || /^\s*\[(?:image|video|document|media)\]\s*$/i.test(said)) return false;
+  const namesPlan = offPlanWalkthroughs.FLOOR_PLAN_WORDS.test(said);
+  const sizeOnly = /^\s*(?:\d|one|two|three|four|five)\s*[-\s]?(?:bed(?:room)?s?|bhk)\b[^\n]{0,30}?\b\d{2,4}\s*(?:m2|m²|sqm|sq\.?\s*m|square\s+met(?:er|re)s?|sq\.?\s*ft|sqft|square\s+feet)\s*\.?\s*$/i.test(said);
+  if (!namesPlan && !sizeOnly) return false;
+  if (/(?:usd|ugx|ush|shs?|\$)\s*\d|\b\d[\d,.]*\s*(?:mn|million|millions|bn|billion|k)\b|\b\d[\d,.]*\s*m\b(?![²2])/i.test(said)) return false;
+  const offPlanIds = Array.isArray(data.off_plan_property_ids) ? data.off_plan_property_ids.map(String) : [];
+  const current = String(data.current_property_id || '');
+  const pending = normalizeInput(data.pending_property_caption || '');
+  return Boolean((current && offPlanIds.includes(current))
+    || (pending && employeeCaptionLooksOffPlan(pending, data))
+    || developerSingleProject(data));
+}
+
 function noteEmployeePropertyCreated(data = {}, propertyId = '', storedMedia = [], caption = '') {
   delete data.employee_after_duplicate;
   const now = Date.now();
@@ -18211,8 +18378,12 @@ function noteEmployeePropertyCreated(data = {}, propertyId = '', storedMedia = [
     try {
       const facts = employeePropertyFacts(caption, data);
       if (facts.offPlan) {
+        data.off_plan_property_ids = [...(Array.isArray(data.off_plan_property_ids) ? data.off_plan_property_ids : []), String(propertyId)].slice(-10);
         const snapshot = Array.isArray(storedMedia) ? storedMedia.map((item) => ({ ...item })) : [];
         deferWhatsappWork('off-plan draft', () => createOffPlanDraftFromIntake({ propertyId, caption, facts, storedMedia: snapshot, agent: data.agent || null, phone: data.phone || data.sender_phone || '' }));
+        // The new project is theirs: the floor plans that follow on their own
+        // are filed to it, so its list of projects is read again.
+        if (!facts.knownDevelopment?.id) delete data.known_projects_checked_at;
       }
     } catch (error) {
       logger.warn('Off-plan draft check failed', { error: error.message || String(error) });
@@ -29873,6 +30044,9 @@ module.exports.__test = {
   employeeHoldReason,
   EMPLOYEE_FORWARD_RUN_GAP_MS,
   employeeCaptionLooksOffPlan,
+  floorPlanWordsForOffPlanProject,
+  offPlanLabelledProjectName,
+  offPlanBedroomRange,
   offPlanProjectNameFromCaption,
   createOffPlanDraftFromIntake,
   knownProjectInCaption,
