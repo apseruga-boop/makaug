@@ -19252,7 +19252,7 @@ async function propertyByShortCode(code = '') {
   const clean = String(code || '').trim().toLowerCase();
   if (!/^[0-9a-f]{8}$/.test(clean)) return null;
   const result = await db.query(
-    `SELECT id::text AS id, updated_at
+    `SELECT id::text AS id, updated_at, listed_via, source, extra_fields
        FROM properties
       WHERE id::text LIKE $1 AND status = 'approved'
       ORDER BY updated_at DESC NULLS LAST
@@ -19701,6 +19701,70 @@ async function handleJourneyQuestion({ phone, step = '', text = '' } = {}) {
 }
 
 /*
+ * "Can you send me same photos of those houses" (27 Nov 2026, 08:43 in
+ * Kampala), from a buyer we had just sent a listing, got the menu. A
+ * property's photos are on its page, so the answer is its link, and an ask to
+ * open it. Pictures of a listing found online are not ours and are never sent
+ * on (Arthur, 27 Nov 2026: to keep our liability as low as we can); a listing
+ * an agent or owner put up with us still carries its card.
+ */
+const ASKS_FOR_PHOTOS = /\b(?:photos?|pictures?|pics?|pix|images?|videos?|clips?)\b/i;
+const PHOTO_ASK_WORDS = /\b(?:send|share|see|show|have|get|view|more|any|some|same|other|the|those|these|it|them|please|pls|plz|can|could|may|need|want|got)\b/i;
+// "how do I post photos of my house" is someone listing, not asking.
+const NOT_A_PHOTO_ASK = /\b(?:my|our)\s+(?:house|home|property|plot|land|place|listing|rental|apartment|room|shop)s?\b|\b(?:post|posting|upload|uploading|list|listing|advertise|sell|selling)\b/i;
+
+function asksForListingPhotos(text = '') {
+  const clean = normalizeInput(text);
+  if (!clean || clean.length > 140) return false;
+  return ASKS_FOR_PHOTOS.test(clean) && PHOTO_ASK_WORDS.test(clean) && !NOT_A_PHOTO_ASK.test(clean);
+}
+
+function isFoundOnlineListing(row = {}) {
+  try {
+    return require('../services/whatsappListingEnquiryService').listingSourceFacts(row).foundOnline === true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+/** Where to see the photos of the properties just sent: their links, and the word for more. */
+function listingPhotosReply(rows = []) {
+  const cardService = require('../services/whatsappPropertyCardService');
+  const list = (Array.isArray(rows) ? rows : []).filter(Boolean).slice(0, 5);
+  if (!list.length) return '';
+  if (list.length === 1) {
+    const row = list[0];
+    const link = cardService.shortPropertyUrl(row, HOME_URL);
+    return isFoundOnlineListing(row)
+      ? [
+        `📸 Its photos are on its page. Please tap the link to see them:\n${link}`,
+        '',
+        'It was posted online, not listed with us, so for more photos or a viewing, ask whoever posted it. Reply *CONTACT* to see who posted it.'
+      ].join('\n')
+      : [
+        `📸 All its photos are on its page. Please tap the link to see them:\n${link}`,
+        '',
+        "For more photos, a video or a viewing, reply *CONTACT* for the owner's number."
+      ].join('\n');
+  }
+  const lines = ['📸 The photos of each one are on its page. Please tap a link to see them:', ''];
+  list.forEach((row, index) => lines.push(`*${index + 1}* · ${cardService.resultLabel(row)} · ${cardService.shortPropertyUrl(row, HOME_URL)}`));
+  const numbers = list.map((_row, index) => `*${index + 1}*`);
+  lines.push('', `Reply ${numbers.slice(0, -1).join(', ')} or ${numbers[numbers.length - 1]} to see one, then *CONTACT* to get in touch.`);
+  return lines.join('\n');
+}
+
+/** "Send me photos of it": the links of what was just sent, or null when nothing was. */
+async function handleListingPhotosRequest({ phone, step = '', text = '' } = {}) {
+  if (!['main_menu', 'greeting', ''].includes(String(step || ''))) return null;
+  if (!asksForListingPhotos(text)) return null;
+  const rows = await recentlySentListings(phone).catch(() => []);
+  if (!rows.length) return null;
+  const message = listingPhotosReply(rows);
+  return message ? { message, nextStep: 'main_menu' } : null;
+}
+
+/*
  * "Am Tusiime Beb's Edwards" (27 Nov 2026, 06:58 in Kampala): a buyer who had
  * just been sent nine houses for sale in Kyebando told us his name, and was
  * sent the menu. Someone who says who they are is greeted by that name.
@@ -19797,7 +19861,7 @@ async function queueWhatsappWebBridgeAutoReply({
   if (propertyId && !isListingEnquiryReply(text) && !staffCard) {
     const result = await db.query(
       `SELECT p.id, p.title, p.listing_type, p.transaction_type, p.district, p.area,
-              p.price, p.price_period, p.extra_fields, img.url AS primary_image_url
+              p.price, p.price_period, p.extra_fields, p.listed_via, p.source, img.url AS primary_image_url
        FROM properties p
        LEFT JOIN LATERAL (
          SELECT CASE WHEN url ~* '^https?://' AND length(url) < 2000 THEN url ELSE NULL END AS url
@@ -19810,7 +19874,9 @@ async function queueWhatsappWebBridgeAutoReply({
        LIMIT 1`,
       [propertyId]
     );
-    if (result.rows[0]) {
+    // A listing found online is someone else's post: its picture is not sent
+    // on, and the reply stays as written, with its link (27 Nov 2026).
+    if (result.rows[0] && !isFoundOnlineListing(result.rows[0])) {
       const card = buildWhatsappPropertyCard(result.rows[0], { homeUrl: HOME_URL });
       if (replyAsksSomething(text)) {
         // A question keeps its words, with the listing's photo on it. "🏷️
@@ -19834,7 +19900,8 @@ async function queueWhatsappWebBridgeAutoReply({
   if (!mediaUrl && !staffCard && whatsappReplyKind(text) && text.length <= WHATSAPP_PHOTO_CAPTION_LIMIT) {
     const code = shortCodesFromWhatsappReply(text, HOME_URL)[0];
     const row = code ? await propertyByShortCode(code).catch(() => null) : null;
-    const cardUrl = row ? shareCardImageUrl(row, HOME_URL) : '';
+    // Not the picture of a listing found online (27 Nov 2026): words and links only.
+    const cardUrl = row && !isFoundOnlineListing(row) ? shareCardImageUrl(row, HOME_URL) : '';
     if (cardUrl) {
       mediaUrl = cardUrl;
       mediaType = 'image';
@@ -24821,6 +24888,13 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   });
   if (journey) return respond(journey.message, journey.nextStep);
 
+  // "Can you send me photos of those houses": their links (27 Nov 2026).
+  const photos = await handleListingPhotosRequest({ phone, step, text: cleanBody }).catch((error) => {
+    logger.warn('Listing photos request failed:', error.message || String(error));
+    return null;
+  });
+  if (photos) return respond(photos.message, photos.nextStep);
+
   // "Am Tusiime …": greeted by name, not sent the menu (27 Nov 2026).
   // Mid-conversation only: a first "Hi, I'm Grace" still gets the welcome.
   const introducedAs = String(step || '') === 'main_menu' ? nameTheyGave(cleanBody) : '';
@@ -29524,6 +29598,10 @@ module.exports.__test = {
   loadResultRows,
   nameTheyGave,
   introductionReply,
+  asksForListingPhotos,
+  listingPhotosReply,
+  handleListingPhotosRequest,
+  isFoundOnlineListing,
   advertUnitBlock,
   advertPropertyType,
   ownerForwardListingTitle,
