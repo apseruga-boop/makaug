@@ -18344,9 +18344,37 @@ async function createOffPlanDraftFromIntake({ propertyId = '', caption = '', fac
     return development;
   } catch (error) {
     // A second caption for the same project (same slug) is the usual cause: the
-    // draft already exists, so only the review listing is kept.
+    // draft already exists, so only the review listing is kept. Its floor plans
+    // still go to that project's walkthrough, and the listing is linked to it
+    // (27 Nov 2026: the agent is told the plans arrived).
     logger.warn('Off-plan draft from Agent 007 not created', { name, error: error.message || String(error) });
-    return null;
+    if (!/duplicate key|unique/i.test(String(error?.message || ''))) return null;
+    try {
+      const existing = (await db.query(
+        `SELECT id, name FROM off_plan_developments WHERE country_code = 'UG' AND slug = $1 LIMIT 1`,
+        [offPlanService.slugify(name)]
+      )).rows[0];
+      if (!existing) return null;
+      if (propertyId) {
+        await db.query(
+          `UPDATE properties SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('off_plan_development_id', $2::text, 'off_plan_project_name', $3::text) WHERE id = $1`,
+          [propertyId, existing.id, existing.name]
+        );
+      }
+      if (floorPlans.length) {
+        await offPlanWalkthroughs.requestWalkthrough(db, {
+          developmentId: existing.id,
+          floorPlans,
+          propertyId,
+          from: normalizeInput(agent?.full_name || '') || 'Developer',
+          phone
+        });
+      }
+      return null;
+    } catch (linkError) {
+      logger.warn('Off-plan listing not linked to its existing project', { name, error: linkError.message || String(linkError) });
+      return null;
+    }
   }
 }
 
@@ -18380,7 +18408,7 @@ function noteEmployeePropertyCreated(data = {}, propertyId = '', storedMedia = [
       if (facts.offPlan) {
         data.off_plan_property_ids = [...(Array.isArray(data.off_plan_property_ids) ? data.off_plan_property_ids : []), String(propertyId)].slice(-10);
         const snapshot = Array.isArray(storedMedia) ? storedMedia.map((item) => ({ ...item })) : [];
-        deferWhatsappWork('off-plan draft', () => createOffPlanDraftFromIntake({ propertyId, caption, facts, storedMedia: snapshot, agent: data.agent || null, phone: data.phone || data.sender_phone || '' }));
+        deferWhatsappWork('off-plan draft', () => createOffPlanDraftFromIntake({ propertyId, caption, facts, storedMedia: snapshot, agent: data.agent || null, phone: data.phone || data.sender_phone || data.agent?.whatsapp || data.agent?.phone || '' }));
         // The new project is theirs: the floor plans that follow on their own
         // are filed to it, so its list of projects is read again.
         if (!facts.knownDevelopment?.id) delete data.known_projects_checked_at;

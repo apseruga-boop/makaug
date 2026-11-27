@@ -210,7 +210,8 @@ async function requestWalkthrough(db, { developmentId = '', floorPlans = [], pro
   request.job_id = job?.id || request.job_id || null;
 
   const nowMs = now.getTime();
-  const teamTold = !(request.team_told_at && nowMs - Date.parse(request.team_told_at) < TEAM_NOTICE_GAP_MS);
+  // A new request (a walkthrough already made, and plans for another) is always news.
+  const teamTold = reopened || !(request.team_told_at && nowMs - Date.parse(request.team_told_at) < TEAM_NOTICE_GAP_MS);
   if (teamTold) request.team_told_at = at;
   let senderTold = false;
   let agentPhone = '';

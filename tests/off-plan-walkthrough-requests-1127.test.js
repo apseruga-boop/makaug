@@ -261,3 +261,25 @@ test('an off-plan project sent without photos is asked for its pictures and the 
   const house = route.agentPendingNotice({ whatsapp_agent_self_intake: true, pending_property_caption: '3 bedroom house for sale in Kira at 450m' });
   assert.ok(!/floor plan/.test(house), house);
 });
+
+test('plans for a project whose walkthrough was already made are a new request, and the team hears at once', async () => {
+  await withStubs(async ({ team }) => {
+    const now = new Date('2026-11-27T09:00:00Z');
+    const state = fakeDb({ extra: { walkthrough_request: { status: 'ready', requested_at: '2026-11-20T09:00:00Z', team_told_at: new Date(now.getTime() - 60000).toISOString(), floor_plans: [PLAN.url], files: [] } } });
+    const next = { ...PLAN, url: 'https://media.makaug.com/plan-penthouse.jpg' };
+    const result = await walk.requestWalkthrough(state.db, { developmentId: DEV_ID, floorPlans: walk.collectFloorPlans([next]), now });
+    assert.strictEqual(result.teamTold, true, 'not held back by the last notice a minute ago');
+    assert.strictEqual(team.length, 1);
+    assert.strictEqual(state.development.extra_fields.walkthrough_request.status, 'requested');
+    assert.strictEqual(state.development.extra_fields.walkthrough_request.requested_at, now.toISOString());
+  });
+});
+
+test('a project sent again under the same name: its plans go to the project that is already there', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../routes/whatsapp.js'), 'utf8');
+  const start = source.indexOf("logger.warn('Off-plan draft from Agent 007 not created'");
+  const branch = source.slice(start, start + 1600);
+  assert.match(branch, /SELECT id, name FROM off_plan_developments WHERE country_code = 'UG' AND slug = \$1 LIMIT 1/);
+  assert.match(branch, /offPlanWalkthroughs\.requestWalkthrough\(db, \{\s*developmentId: existing\.id,/);
+  assert.match(source, /phone: data\.phone \|\| data\.sender_phone \|\| data\.agent\?\.whatsapp \|\| data\.agent\?\.phone \|\| ''/);
+});
