@@ -19280,6 +19280,101 @@ const FORMER_AGENT_QUIET_MS = 90 * 1000;
 const formerAgentAckedAt = new Map();
 const formerAgentWords = new Map(); // agent id -> { agent, phone, reason, words, timer }
 
+/*
+ * 26 Nov 2026: an agent removed for not paying sent a 58M house in Kasangati
+ * with nine photos, the afternoon after the kind note had gone with his
+ * payment link. The note goes once a day, so nothing was said: from his side
+ * the house went nowhere. What a former agent sends is kept until they rejoin,
+ * and now they are told so: once the burst of messages is over, a short note
+ * names everything that is waiting for them. Their photos are kept at once
+ * (keepFormerAgentMedia), not only as the WhatsApp bridge's copy.
+ */
+const FORMER_AGENT_KEPT_QUIET_MS = 75 * 1000;
+const formerAgentKeptTimers = new Map(); // agent id -> timer
+
+/** "4-bedroom house in Buwambo · UGX 58,000,000", "Plot in Manyangwa · UGX 55,000,000". */
+function keptAdvertLabel(group = {}) {
+  const facts = group.facts || {};
+  const caption = String(group.caption || '');
+  const area = normalizeInput(facts.locationPatch?.area || facts.locationPatch?.district || '');
+  const beds = facts.listingType === 'land' ? 0 : (Number(facts.bedroomDraft?.bedrooms) || 0);
+  const own = facts.listingType === 'land'
+    ? (/\bplots?\b/i.test(caption) ? 'plot' : 'land')
+    : (advertPropertyType(caption, facts.listingType) || 'property').replace(/_/g, ' ');
+  const what = `${beds ? `${beds}-bedroom ` : ''}${own}`;
+  const price = Number(facts.price) > 0 ? ` · UGX ${Math.round(Number(facts.price)).toLocaleString('en-US')}` : '';
+  return `${what.charAt(0).toUpperCase()}${what.slice(1)}${area ? ` in ${area}` : ''}${price}`;
+}
+
+/** The note: what is kept for them, and how it comes back. */
+function keptAdvertsMessage({ agent = {}, groups = [], fresh = 1, fee = 0 } = {}) {
+  const first = agentGreetingName(agent, '');
+  const all = groups.length;
+  const one = Number(fresh) <= 1;
+  return [
+    `Thank you${first ? `, ${first}` : ''} 🙏 I've kept ${one ? 'this one' : `these ${fresh}`} safe${all > fresh ? ' with the others you sent' : ''}:`,
+    '',
+    ...groups.slice(-6).reverse().map((group) => `• ${keptAdvertLabel(group)}`),
+    '',
+    `${all === 1 ? 'It goes' : 'They all go'} to our team for review as soon as you rejoin${Number(fee) > 0 ? ` (the agent plan is UGX ${Math.round(Number(fee)).toLocaleString('en-US')} a month)` : ''}, and your earlier listings come back up at the same time. The payment link is in my message above.`,
+    '',
+    'Any questions, just reply here.'
+  ].join('\n');
+}
+
+/** After the burst: tell them what is kept, if anything arrived since they were last told. */
+async function sendKeptAdvertsNote({ agent = {}, phone = '' } = {}) {
+  const current = (await db.query('SELECT id, full_name, greeting_name, removed_at, removal_snapshot FROM agents WHERE id = $1', [agent.id]).catch(() => ({ rows: [] }))).rows[0];
+  if (!current?.removed_at) return { sent: false, reason: 'not_removed' };
+  const snapshot = current.removal_snapshot && typeof current.removal_snapshot === 'object' ? current.removal_snapshot : {};
+  const toldUpTo = Math.max(Date.parse(snapshot.rejoin_sent_at || '') || 0, Date.parse(snapshot.kept_note_at || '') || 0);
+  const { groups } = await groupForwardedAdverts(phone, { since: current.removed_at });
+  const fresh = groups.filter((group) => Date.parse(group.caption_at) > toldUpTo).length;
+  if (!fresh) return { sent: false, reason: 'nothing_new' };
+  const settings = await require('../services/billingOpsService').getSettings(db).catch(() => ({}));
+  const body = keptAdvertsMessage({ agent: current, groups, fresh, fee: Number(settings?.agent_fee?.monthly_ugx || 0) });
+  const delivery = await require('../services/leadHandoffService').deliverWhatsapp({ to: phone, body, kind: 'former_agent_kept', leadId: null, nonce: `${agent.id}:${groups.length}` });
+  await db.query(
+    `UPDATE agents SET removal_snapshot = COALESCE(removal_snapshot, '{}'::jsonb) || jsonb_build_object('kept_note_at', NOW()::text) WHERE id = $1::uuid AND removed_at IS NOT NULL`,
+    [agent.id]
+  ).catch(() => null);
+  return { sent: true, delivery, body };
+}
+
+function keptAdvertsNoteLater({ agent = {}, phone = '' } = {}) {
+  const key = String(agent.id || '');
+  if (!key) return;
+  const waiting = formerAgentKeptTimers.get(key);
+  if (waiting) clearTimeout(waiting);
+  const timer = setTimeout(() => {
+    formerAgentKeptTimers.delete(key);
+    sendKeptAdvertsNote({ agent, phone }).catch((error) => logger.warn('Kept adverts note failed', { agent_id: key, error: error.message || String(error) }));
+  }, FORMER_AGENT_KEPT_QUIET_MS);
+  timer.unref?.();
+  formerAgentKeptTimers.set(key, timer);
+}
+
+/**
+ * A former agent's photo or video, stored now and remembered on its message,
+ * so that what comes in for review when they rejoin does not depend on the
+ * bridge still having its copy.
+ */
+async function keepFormerAgentMedia({ phone = '', inboundMessageId = '', provider = 'whatsapp', runtime = {}, mediaUrl = '' } = {}) {
+  if (!inboundMessageId) return null;
+  const candidates = employeeMediaCandidates(runtime, mediaUrl);
+  if (!candidates.length) return null;
+  const stored = await storeEmployeeMedia(candidates.slice(0, 1), { privateMedia: false, phone, inboundMessageId, provider });
+  const item = stored[0];
+  if (!/^https:\/\//i.test(String(item?.url || ''))) return null;
+  await db.query(
+    `UPDATE whatsapp_messages
+        SET payload = COALESCE(payload, '{}'::jsonb) || jsonb_build_object('keptMediaUrl', $2::text, 'keptMediaType', $3::text)
+      WHERE wa_message_id = $1 AND direction = 'inbound'`,
+    [inboundMessageId, item.url, normalizeInput(item.mimeType || '')]
+  );
+  return item;
+}
+
 /** Something a person should answer: not a greeting, a thank-you or an "ok". */
 function formerAgentAsks(said = '') {
   const text = normalizeInput(said);
@@ -19380,6 +19475,8 @@ async function removedAgentReply({ phone, body = '', hasMedia = false } = {}) {
         return { message: formerAgentHeldReply(agent) };
       }
     }
+    // A property is kept, and they hear so once the burst is over.
+    if (property) keptAdvertsNoteLater({ agent, phone });
     return { message: '', silent: true };
   }
   const thing = !property ? '' : (facts.listingType === 'land' ? 'plot' : 'property');
@@ -27733,9 +27830,26 @@ async function processInboundRuntimeUnlocked({
     logger.warn('Payment claim handling failed:', error.message || String(error));
     return null;
   });
-  if (paymentReply) return { message: paymentReply, nextStep: sessionStep };
+  // A message answered here, before the main flow, is still theirs in the
+  // team's inbox (26 Nov 2026: a removed agent's house and nine photos left the
+  // inbox showing the note we had sent the night before).
+  const answeredEarly = (reason) => deferWhatsappWork('early answer conversation sync', () => syncWhatsappConversationState({
+    phone,
+    direction: 'inbound',
+    currentStep: sessionStep,
+    provider,
+    messageType,
+    metadata: { last_inbound_message_id: inboundMessageId || null, answered_early: reason }
+  }));
+  if (paymentReply) {
+    answeredEarly('payment_claim');
+    return { message: paymentReply, nextStep: sessionStep };
+  }
   const pausedReply = await billingPausedAgentReply({ phone, body: effectiveBody }).catch(() => null);
-  if (pausedReply) return { message: pausedReply, nextStep: sessionStep };
+  if (pausedReply) {
+    answeredEarly('paused_agent');
+    return { message: pausedReply, nextStep: sessionStep };
+  }
   // Taken off makaug: kindly, with the way back (24 Nov 2026).
   const formerAgent = await removedAgentReply({
     phone,
@@ -27745,7 +27859,19 @@ async function processInboundRuntimeUnlocked({
     logger.warn('Former agent reply failed:', error.message || String(error));
     return null;
   });
-  if (formerAgent) return { message: formerAgent.message || '', nextStep: sessionStep };
+  if (formerAgent) {
+    answeredEarly('former_agent');
+    if (effectiveMediaUrl && !isAudioNote) {
+      deferWhatsappWork('keep a former agent\'s media', () => keepFormerAgentMedia({
+        phone,
+        inboundMessageId,
+        provider,
+        runtime: { provider, mediaType: normalizedMediaType, photoCandidates: inboundPhotoCandidates, mediaCandidates: inboundMediaCandidates },
+        mediaUrl: effectiveMediaUrl
+      }));
+    }
+    return { message: formerAgent.message || '', nextStep: sessionStep };
+  }
 
   // A reply to something we sent: "Thanks", "This is in Mukono not Nakaseke",
   // "does the app really have clients?", "its not opening", "Delete". Answered
@@ -29704,8 +29830,11 @@ async function groupForwardedAdverts(phone, { since = null, until = null } = {})
   for (const row of rows) {
     const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
     const body = normalizeInput(foldAdvertText(payload.body || payload.effectiveBody || ''));
-    const mediaUrl = normalizeInput(payload.mediaUrl || payload.media_url || '');
-    const mediaType = forwardedAdvertMimeType(payload, mediaUrl);
+    // A former agent's photo kept when it arrived (keepFormerAgentMedia) is
+    // used before the bridge's copy.
+    const kept = /^https:\/\//i.test(String(payload.keptMediaUrl || ''));
+    const mediaUrl = normalizeInput((kept ? payload.keptMediaUrl : '') || payload.mediaUrl || payload.media_url || '');
+    const mediaType = kept && payload.keptMediaType ? normalizeInput(payload.keptMediaType) : forwardedAdvertMimeType(payload, mediaUrl);
     const isMedia = /^https:\/\//i.test(mediaUrl);
     // When the phone sent it, not when we got round to it: on 26 Oct 2026 the
     // nine morning adverts were sent in eight minutes and processed over
@@ -30008,6 +30137,10 @@ module.exports.__test = {
   findPendingAgentByPhone,
   pendingAgentHelloReply,
   formerAgentAsks,
+  keptAdvertLabel,
+  keptAdvertsMessage,
+  sendKeptAdvertsNote,
+  keepFormerAgentMedia,
   formerAgentHeldReply,
   sendFormerAgentWords,
   formerAgentWords,
