@@ -54,7 +54,7 @@ test('an enquiry answer is recognised, and a plain card is not', () => {
   assert.strictEqual(isListingEnquiryReply(`🏡 APARTMENT FOR RENT IN NTINDA\n🔗 https://makaug.com/property/${ID}`), false);
 });
 
-function withQueue(run) {
+function withQueue(run, listing = NTINDA) {
   const original = db.query;
   const inserted = [];
   db.query = async (sql, params = []) => {
@@ -63,7 +63,7 @@ function withQueue(run) {
       return { rows: [{ id: `q-${inserted.length}`, status: 'pending' }] };
     }
     if (/FROM properties p/i.test(sql) && /property_images/i.test(sql)) {
-      return { rows: [{ ...NTINDA, transaction_type: null, primary_image_url: 'https://media.makaug.com/x.jpg' }] };
+      return { rows: [{ ...listing, transaction_type: null, primary_image_url: 'https://media.makaug.com/x.jpg' }] };
     }
     return { rows: [] };
   };
@@ -80,11 +80,19 @@ test('the enquiry answer goes out whole, not as the bare card', async () => {
     assert.match(inserted[0].text, /View the property in person before you pay anything/);
     assert.strictEqual(inserted[0].media_url, undefined, 'no card in its place');
   });
-  // A reply that is only the property still becomes its card, as before.
+  // A reply that is only the property: a listing found online stays words
+  // and its link, never its picture (27 Nov 2026, to keep our liability
+  // down); one listed with us still becomes its card, as before.
   await withQueue(async (inserted) => {
     await route.queueWhatsappWebBridgeAutoReply({ phone: RENTER, message: `Here it is: https://makaug.com/property/${ID}`, inboundMessageId: 'in-2' });
-    assert.ok(inserted[0].media_url, 'the card, with its photo');
+    assert.strictEqual(inserted[0].media_url, undefined, 'no picture of someone else\'s post');
+    assert.match(inserted[0].text, /^Here it is: https:\/\/makaug\.com\/property\//);
   });
+  const ours = { ...NTINDA, source: 'whatsapp_employee_intake', listed_via: 'whatsapp', lister_name: 'Replay Agent', extra_fields: {} };
+  await withQueue(async (inserted) => {
+    await route.queueWhatsappWebBridgeAutoReply({ phone: RENTER, message: `Here it is: https://makaug.com/property/${ID}`, inboundMessageId: 'in-3' });
+    assert.ok(inserted[0].media_url, 'the card, with its photo');
+  }, ours);
 });
 
 test('"Is this available and how can we arrange for viewing" is about the listing just sent', async () => {
