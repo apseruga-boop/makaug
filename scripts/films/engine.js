@@ -6,6 +6,11 @@
  * elements say when they come in (data-in, seconds from the start of their
  * scene) and how. renderAt(T) draws the film at second T, so render.js can
  * photograph it frame by frame and the same second always looks the same.
+ *
+ * A video in a scene is its frames (render.js cuts them from the film file
+ * into .build/clips): <img data-seq='{"src":".build/clips/x/%04d.jpg","n":180,"at":1.2}'>
+ * shows frame n of the clip at second `at` + n/30, and renderAt waits for the
+ * picture before the frame is photographed.
  */
 (function () {
   const clamp = (x) => Math.min(1, Math.max(0, x));
@@ -177,6 +182,12 @@
       scene.marks = [...el.querySelectorAll('mark[data-hl]')].map((node) => ({ node, at: Number(node.dataset.hl) }));
       scene.dots = [...el.querySelectorAll('[data-dots]')].map((node) => [...node.children]);
       scene.kb = [...el.querySelectorAll('[data-kb]')].map((node) => ({ node, v: node.dataset.kb.split(',').map(Number) }));
+      scene.seqs = [...el.querySelectorAll('[data-seq]')].map((node) => {
+        const o = JSON.parse(node.dataset.seq);
+        const seq = { node, src: o.src, n: Number(o.n) || 1, fps: Number(o.fps) || 30, at: Number(o.at) || 0, cur: 1 };
+        node.src = seqFrame(seq, 1);
+        return seq;
+      });
       scene.typed = [...el.querySelectorAll('[data-type]')].map((node) => ({ node, text: node.textContent, at: Number(node.dataset.type), cps: Number(node.dataset.cps || 13), clear: node.dataset.clear === undefined ? Infinity : Number(node.dataset.clear), field: node.closest('.field') }));
       for (const item of scene.typed) item.node.textContent = '';
       return scene;
@@ -271,6 +282,10 @@
     });
   }
 
+  function seqFrame(seq, i) {
+    return seq.src.replace('%04d', String(i).padStart(4, '0'));
+  }
+
   function keyed(keys, t) {
     if (t <= keys[0][0]) return keys[0][1];
     for (let i = 1; i < keys.length; i += 1) {
@@ -346,6 +361,15 @@
       const u = t / scene.dur; const [s0, x0, y0, s1, x1, y1] = k.v;
       k.node.style.transform = `scale(${s0 + (s1 - s0) * u}) translate(${x0 + (x1 - x0) * u}px, ${y0 + (y1 - y0) * u}px)`;
     }
+    const waits = [];
+    for (const seq of scene.seqs) {
+      const i = Math.max(1, Math.min(seq.n, Math.floor((t - seq.at) * seq.fps) + 1));
+      if (i !== seq.cur) {
+        seq.cur = i;
+        seq.node.src = seqFrame(seq, i);
+        if (seq.node.decode) waits.push(seq.node.decode().catch(() => null));
+      }
+    }
     const fields = new Map();
     for (const ty of scene.typed) {
       const on = t >= ty.at && t < ty.clear;
@@ -359,6 +383,7 @@
       const ph = field.querySelector('.ph');
       if (ph) ph.style.display = on ? 'none' : '';
     }
+    return waits.length ? Promise.all(waits).then(() => true) : true;
   };
 
   window.addEventListener('DOMContentLoaded', () => {
