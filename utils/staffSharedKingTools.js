@@ -34,8 +34,9 @@ function isStaffSharedKingTool(path, method = 'GET') {
   if (['/desk/home', '/desk/performance', '/desk/pay', '/desk/profile'].includes(p) && m === 'GET') return true;
   if (p === '/desk/profile' && m === 'PUT') return true;
   // Staff desk 3b: own pipeline pages (outcome owed, pipeline, agents to approve, owes us money, missed calls).
-  if (['/desk/owed', '/desk/pipeline', '/desk/approve', '/desk/owes', '/desk/missed', '/desk/badges'].includes(p) && m === 'GET') return true;
+  if (['/desk/owed', '/desk/pipeline', '/desk/approve', '/desk/approve/awaiting-hi', '/desk/owes', '/desk/missed', '/desk/badges'].includes(p) && m === 'GET') return true;
   // Staff Leads & WhatsApp (ops 3): read the queue, add a chat as a lead, record an outcome. Never sends.
+  if (p === '/desk/pipeline/call-again' && m === 'POST') return true;
   if (p === '/desk/leads' && m === 'GET') return true;
   if (m === 'POST' && (p === '/desk/leads/from-chat' || /^\/desk\/leads\/(ss:)?[0-9a-f-]{36}\/outcome$/i.test(p))) return true;
   // Team hub (ops 3c): read King's messages and the team pages, and say "Got it". King writes from /king/hub only.
@@ -53,7 +54,7 @@ function isStaffSharedKingTool(path, method = 'GET') {
   if (['/calling/meeting', '/calling/meeting/report'].includes(p) && m === 'GET') return true;
   if (p === '/calling/meeting/notes' && m === 'POST') return true;
   if (/^\/calling\/sms-proofs\/[^/]+\/image$/.test(p) && m === 'GET') return true;
-  if (['/calling/search', '/calling/my-money', '/calling/lookup', '/calling/live'].includes(p) && m === 'GET') return true;
+  if (['/calling/search', '/calling/my-money', '/calling/lookup', '/calling/live', '/calling/connect-status'].includes(p) && m === 'GET') return true;
   if (['/calling/day-split', '/calling/housekeeping'].includes(p) && m === 'GET') return true;
   if (p === '/calling/housekeeping/done' && m === 'POST') return true;
   if (/^\/calling\/attempts\/[^/]+\/(tap|end|wrapup|skip|pay|paid-claim)$/.test(p) && m === 'POST') return true;

@@ -46,6 +46,7 @@ function registerStaffDeskRoutes(router) {
   router.get('/desk/owed', wrap(async (req, res) => res.json({ ok: true, data: await pipe.owed(personFor(req)) })));
   router.post('/desk/owed/:id', wrap(async (req, res) => res.json({ ok: true, data: await pipe.lateOutcome(needMe(req), req.params.id, req.body || {}) })));
   router.get('/desk/pipeline', wrap(async (req, res) => res.json({ ok: true, data: await pipe.pipeline(personFor(req)) })));
+  router.post('/desk/pipeline/call-again', wrap(async (req, res) => res.json({ ok: true, data: await pipe.callAgain(needMe(req), req.body?.attempt_id) })));
   router.get('/desk/approve', wrap(async (req, res) => res.json({ ok: true, data: await pipe.toApprove(personFor(req), { caller: !isKing(req) && scopeOf(req) === 'caller' }) })));
   // Opened on a call, waiting for their Hi (Arthur, 25 Nov 2026: King listed them, the staff desk said 0).
   router.get('/desk/approve/awaiting-hi', wrap(async (req, res) => res.json({ ok: true, data: await pipe.toApprove(personFor(req), { caller: !isKing(req) && scopeOf(req) === 'caller', awaitingHi: true }) })));
