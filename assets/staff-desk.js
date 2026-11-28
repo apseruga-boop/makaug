@@ -332,12 +332,21 @@
           return '<div class="sd-pitem" data-sd-pitem><b>' + esc(x.name || 'No name') + '</b> <span class="sd-muted">' + esc(x.phone) + '</span>'
             + '<div class="sd-muted" style="font-size:12px">' + esc(OUTCOME[x.last_outcome] || String(x.last_outcome || '').replace(/_/g, ' ')) + ' · ' + esc(when(x.last_at)) + '</div>'
             + (x.next_step ? '<div style="font-size:12px"><b>Next:</b> ' + esc(x.next_step) + (x.callback_at ? ' · ' + esc(when(x.callback_at)) : '') + '</div>' : '')
-            + '<button type="button" class="sd-btn ghost sm" data-sd-hist="' + esc(x.attempt_id) + '">History</button></div>';
+            + '<button type="button" class="sd-btn ghost sm" data-sd-hist="' + esc(x.attempt_id) + '">History</button>'
+            + (['contacted', 'interested', 'said_hi'].indexOf(st.key) >= 0 && !x.signed_up ? ' <button type="button" class="sd-btn ghost sm" data-sd-callagain="' + esc(x.attempt_id) + '" title="Puts this number at the top of your calls">📞 Call again</button>' : '') + '</div>';
         }).join('') || '<p class="sd-muted" style="font-size:13px">Nobody here yet.</p>';
         return '<div class="sd-card sd-stage" data-sd-stage="' + esc(st.key) + '"><h3>' + esc(st.label) + ' <span class="sd-count">' + st.items.length + '</span></h3>' + items + '</div>';
       }).join('');
       host.innerHTML = pageWrap('My pipeline', 'Every number you called stays here until they pay or say a clear no. Interested only counts once you sent the follow-up text (Texts tab); until then they wait in Contacted.', '<div class="sd-stages">' + cols + '</div>');
       qa('[data-sd-hist]', host).forEach(function (b) { b.onclick = function () { if (window.makaugCalling && window.makaugCalling.openHistory) window.makaugCalling.openHistory(b.getAttribute('data-sd-hist')); }; });
+      qa('[data-sd-callagain]', host).forEach(function (b) {
+        b.onclick = function () {
+          b.disabled = true; var was = b.textContent; b.textContent = 'Adding…';
+          api('/desk/pipeline/call-again', { method: 'POST', body: { attempt_id: b.getAttribute('data-sd-callagain') } }).then(function (r) {
+            b.textContent = r && r.queued === false ? '✓ Already on your calls' : '✓ On your calls';
+          }, function (e) { b.disabled = false; b.textContent = was; b.title = (e && e.message) || ''; var n = document.createElement('div'); n.className = 'sd-muted'; n.style.fontSize = '12px'; n.textContent = (e && e.message) || 'Could not add this number.'; b.parentNode.appendChild(n); });
+        };
+      });
       duePipelineNote();
     }, function (e) { failed(host, 'My pipeline', e); });
   }
@@ -345,7 +354,10 @@
     host.innerHTML = pageWrap('Agents to approve', '', '<div class="sd-card">Loading…</div>');
     // Also the profiles opened on a call that wait for their Hi (Arthur, 25 Nov 2026: King
     // listed them as Pending while this page said nobody was waiting).
-    Promise.all([api('/desk/approve'), api('/desk/approve/awaiting-hi').catch(function () { return []; })]).then(function (both) {
+    // A failed Hi list must say so: an empty answer here read as "Nobody is waiting" for a caller whose
+    // login was refused (Ronald, 28 Nov 2026: 109 were waiting).
+    var hiFailed = '';
+    Promise.all([api('/desk/approve'), api('/desk/approve/awaiting-hi').catch(function (e) { hiFailed = (e && e.message) || 'Could not load this list.'; return []; })]).then(function (both) {
       if (S.page !== 'approve') return;
       var list = both[0], hi = both[1] || [];
       var caller = S.scope === 'caller';
@@ -359,7 +371,7 @@
         + (caller ? '' : '<button type="button" class="sd-btn" style="margin-top:10px" data-sd-go-tools>Open Desk tools</button>') + '</div>'
         + '<div class="sd-card" style="margin-top:12px" data-sd-awaiting-hi><h3 style="margin:0 0 4px">👋 Waiting for their Hi (' + hi.length + ')</h3>'
         + '<div class="sd-muted" style="font-size:13px;margin-bottom:8px">Opened when ' + (caller ? 'you' : 'the team') + ' logged Interested or Signed up on a call. They are approved by themselves the moment they send Hi from this number on WhatsApp or by text, so nobody needs to approve them. If they have not said Hi, call them back and ask them to.</div>'
-        + '<div class="sd-scroll"><table class="sd-table"><tr><th>Agent</th><th>Phone</th><th>Opened</th><th>Called by</th></tr>' + (hiRows || '<tr><td colspan="4" class="sd-muted">Nobody is waiting for their Hi.</td></tr>') + '</table></div></div>');
+        + '<div class="sd-scroll"><table class="sd-table"><tr><th>Agent</th><th>Phone</th><th>Opened</th><th>Called by</th></tr>' + (hiRows || '<tr><td colspan="4" class="sd-muted" data-sd-hi-empty>' + (hiFailed ? 'Could not load this list (' + esc(hiFailed) + '). Open this page again in a minute.' : 'Nobody is waiting for their Hi.') + '</td></tr>') + '</table></div></div>');
       var t = q('[data-sd-go-tools]', host); if (t) t.onclick = function () { go('tools'); };
     }, function (e) { failed(host, 'Agents to approve', e); });
   }

@@ -17,9 +17,14 @@ const { canonicalUgPhone, phoneKey9 } = require('../utils/ugPhone');
 
 const logger = require('../config/logger');
 
-// Reads never break a page; a failing query is logged so it is not silent.
+// A failed read must not look like an empty list. On 23 Nov 2026 the database refused connections
+// for two minutes and these pages said "Nobody is waiting" instead of saying they could not load.
+// The page gets a 503 with plain words; the badge counts (which catch per count) are unchanged.
 async function rows(sql, params = []) {
-  try { return (await db.query(sql, params)).rows || []; } catch (e) { logger.warn('staffPipeline read failed', { error: e.message }); return []; }
+  try { return (await db.query(sql, params)).rows || []; } catch (e) {
+    logger.warn('staffPipeline read failed', { error: e.message });
+    throw httpError(503, 'This page could not load just now. Wait a minute and open it again.');
+  }
 }
 const httpError = calling.httpError;
 const key9 = (phone) => String(phone || '').replace(/\D/g, '').slice(-9);
@@ -145,6 +150,27 @@ async function pipeline(personKey, { days = null } = {}) {
   }
   for (const s of out.stages) s.items.sort((a, b) => new Date(b.last_at) - new Date(a.last_at));
   return out;
+}
+
+/**
+ * "Call again" on a pipeline card (Arthur, 28 Nov 2026: interested people who have not joined must be
+ * texted or put back on the call list). Puts the number at the top of my own "Get new agents" list,
+ * once. Only a number I called myself; the do-not-contact list still wins. Nothing is sent to them.
+ */
+async function callAgain(personKey, attemptId) {
+  if (!personKey) throw httpError(403, 'Your login has no calling name.');
+  if (!/^[0-9a-f-]{36}$/i.test(String(attemptId || ''))) throw httpError(400, 'Invalid call id.');
+  const a = (await rows(`SELECT person_key, full_name, phone, phone_key FROM call_attempts WHERE id = $1`, [attemptId]))[0];
+  if (!a || a.person_key !== personKey || !a.phone_key) throw httpError(404, 'That call was not found.');
+  const k = a.phone_key;
+  if (await calling.blockOf(k).catch(() => null)) throw httpError(409, 'This number is on the do-not-contact list.');
+  const queued = (await rows(`SELECT id FROM call_number_submissions WHERE person_key = $1 AND phone_key = $2 AND status = 'own' AND COALESCE(mode, 'new_agents') = 'new_agents'`, [personKey, k]))[0];
+  if (queued) return { ok: true, queued: false, phone: last3(a.phone || k) };
+  await db.query(
+    `INSERT INTO call_number_submissions (person_key, full_name, phone, phone_key, note, status, added_by, mode, how_known)
+     VALUES ($1, $2, $3, $4, 'Interested, not joined yet: call again', 'own', $1, 'new_agents', 'pipeline_follow_up')`,
+    [personKey, a.full_name || '', a.phone || k, k]);
+  return { ok: true, queued: true, phone: last3(a.phone || k) };
 }
 
 // --------------------------------------------------------- agents to approve --
@@ -337,4 +363,4 @@ async function dismissMissed(personKey, id) {
   return { ok: true };
 }
 
-module.exports = { owed, lateOutcome, stageOf, pipeline, STAGES, STAGE_LABELS, toApprove, owes, chase, missed, whatsappMissed, takeWhatsappMissed, followUpsDue, logMissed, dismissMissed, feeUgx, last3 };
+module.exports = { owed, lateOutcome, stageOf, pipeline, callAgain, STAGES, STAGE_LABELS, toApprove, owes, chase, missed, whatsappMissed, takeWhatsappMissed, followUpsDue, logMissed, dismissMissed, feeUgx, last3 };
