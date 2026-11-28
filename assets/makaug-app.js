@@ -20094,14 +20094,54 @@ function staffPreviewVideosHtml(preview = {}) {
   </div>`;
 }
 
+// AC6732 (28 Nov 2026): a YouTube-sourced listing was saved with the same
+// thumbnail five times (maxres, sd, hq, mq, default) plus our own copy, so the
+// preview showed six identical pictures with the external link first and the
+// copy the approval gate actually counts last. Show our saved copies first and
+// one card per YouTube video; the other sizes stay stored and are counted.
+function staffPreviewImageOrder(images = []) {
+  const list = (Array.isArray(images) ? images : []).filter(Boolean);
+  const ours = (image) => /^https:\/\/media\.makaug\.com\//i.test(String(image?.url || ""));
+  const youtubeId = (image) => {
+    const match = String(image?.url || "").match(/^https?:\/\/i\.ytimg\.com\/vi\/([A-Za-z0-9_-]{11})\//i);
+    return match ? match[1] : "";
+  };
+  const seen = new Set();
+  const hiddenSizes = new Map();
+  const shown = [];
+  list.forEach((image) => {
+    const id = youtubeId(image);
+    if (!id) { shown.push(image); return; }
+    if (seen.has(id)) { hiddenSizes.set(id, (hiddenSizes.get(id) || 0) + 1); return; }
+    seen.add(id);
+    shown.push(image);
+  });
+  const ordered = [...shown.filter(ours), ...shown.filter((image) => !ours(image))];
+  return ordered.map((image) => {
+    const id = youtubeId(image);
+    return id && hiddenSizes.get(id) ? { ...image, staff_other_sizes: hiddenSizes.get(id) } : image;
+  });
+}
+
+function staffPreviewImageCaption(image = {}, restoring = false) {
+  if (restoring) return "Removed photo";
+  if (String(image.slot_key || "") === "video_still_tiktok_cover") return "TikTok cover (our saved copy)";
+  if (/^https:\/\/media\.makaug\.com\//i.test(String(image.url || "")) && image.is_primary) return "Primary property photo";
+  if (/^https?:\/\/i\.ytimg\.com\/vi\//i.test(String(image.url || ""))) {
+    const more = Number(image.staff_other_sizes) || 0;
+    return `YouTube thumbnail (external link, not our copy)${more ? `, ${more} more size${more === 1 ? "" : "s"} hidden` : ""}`;
+  }
+  return image.is_primary ? "Primary property photo" : (image.room_label || image.slot_key || "Property photo");
+}
+
 function staffPreviewImagesHtml(images = [], propertyId = "", removedImages = []) {
-  const list = Array.isArray(images) ? images : [];
+  const list = staffPreviewImageOrder(images);
   const removed = Array.isArray(removedImages) ? removedImages : [];
   const card = (image, restoring = false) => `
     <div class="rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
       <a href="${adminAttr(image.url || "")}" target="_blank" rel="noopener noreferrer" class="block">
         <img src="${adminAttr(image.url || "")}" alt="${adminAttr(image.room_label || "Listing photo")}" class="w-full aspect-square object-cover" loading="lazy">
-        <div class="px-2 py-1 text-[11px] text-gray-600">${adminEscape(restoring ? "Removed photo" : (image.is_primary ? "Primary property photo" : (image.room_label || image.slot_key || "Property photo")))}</div>
+        <div class="px-2 py-1 text-[11px] text-gray-600">${adminEscape(staffPreviewImageCaption(image, restoring))}</div>
       </a>
       ${propertyId && image.id ? `<button type="button" data-staff-photo-action onclick="staffChangePreviewPhoto(${propertyIdArg(propertyId)}, ${propertyIdArg(image.id)}, ${restoring})" class="w-full border-t border-gray-200 bg-white px-2 py-2 text-xs font-black ${restoring ? "text-emerald-800 hover:bg-emerald-50" : "text-red-700 hover:bg-red-50"}">${restoring ? "Restore photo" : "Remove photo"}</button>` : ""}
     </div>`;
