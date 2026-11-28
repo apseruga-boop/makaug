@@ -8657,7 +8657,11 @@
                   </div>
                   <span class="text-[11px] font-black text-emerald-800 bg-white border border-emerald-100 rounded-full px-3 py-1">Preview before approval</span>
                 </div>
-                <div id="staff-source-queue-list" class="space-y-2 text-sm"></div>
+                <label class="mt-3 block">
+                  <span class="sr-only">Search found-online listings by MK reference, property id, or title</span>
+                  <input id="staff-found-online-search" type="search" autocomplete="off" oninput="staffSearchFoundOnlineQueue(this.value)" placeholder="MK ref or property id (any status), or title, area, district (found online, pending and live)" class="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm focus:border-emerald-600 focus:outline-none">
+                </label>
+                <div id="staff-source-queue-list" class="mt-3 space-y-2 text-sm"></div>
               </div>
               <details class="rounded-xl border border-gray-200 bg-gray-50 p-4">
                 <summary class="cursor-pointer font-black text-gray-900">Source registry reference</summary>

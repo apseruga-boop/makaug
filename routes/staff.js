@@ -4680,9 +4680,12 @@ router.get('/properties/review-queue', async (req, res, next) => {
       // Title, area, source and phone searches include live listings so a
       // moderator can check duplicates. Removed and rejected rows stay out.
       // The queue with no search term stays pending.
+      // Found online keeps its own segment for a text search. A direct lookup
+      // above still ignores the segment, so an MK ref opens that listing.
       filters.length = 0;
       filters.push(staffVisiblePropertyWhere('p'));
       filters.push(propertyListingSearchClause('p', search, values));
+      if (segment === 'found_online') filters.push(foundOnlineReviewWhere('p'));
     }
     if (listingType && LISTING_TYPES.includes(listingType)) {
       filters.push(listingTypeMatchSql('p', listingType, values));

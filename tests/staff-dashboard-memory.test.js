@@ -8,7 +8,7 @@
  *   - one staff dashboard render at a time;
  *   - one reused Google review map (a Google map can't be destroyed);
  *   - review screens stop their TikTok/YouTube players when they go away;
- *   - the found-online "Load more" list is capped;
+ *   - the found-online "Load more" list keeps paging past 200 rows;
  *   - object URLs are released;
  *   - /staff-dashboard/review/<id> opens one listing's review without the dashboard.
  */
@@ -147,19 +147,23 @@ test('closing or replacing a review screen stops its players', () => {
   assert.match(slice('function closeAdminReviewPanel', 'function getAdminReviewChecklistFromDom'), /frame\.src = "about:blank"/);
 });
 
-test('the found-online "Load more" list stops at 200 rows', () => {
+test('the found-online "Load more" list keeps paging past 200 rows', () => {
   const context = {};
   vm.createContext(context);
-  vm.runInContext(`const STAFF_FOUND_ONLINE_MAX_ROWS = 200; ${slice('function staffFoundOnlineQueueView', 'function renderStaffFoundOnlineQueue')}; this.view = staffFoundOnlineQueueView;`, context);
+  const footer = slice('function staffQueueFooterModel', 'function staffDedupeRows');
+  const ownTotal = slice('function staffFoundOnlineOwnTotal', 'function staffFoundOnlineQueueView');
+  vm.runInContext(`${footer}\n${ownTotal}\n${slice('function staffFoundOnlineQueueView', 'function staffFoundOnlineSearchView')}; this.view = staffFoundOnlineQueueView;`, context);
   const rows = (n, offset = 0) => Array.from({ length: n }, (_, i) => ({ id: `r${i + offset}` }));
-  const state = { data: { queued_found_online: rows(8), queued_found_online_meta: { total: 900, page_limit: 8 } }, extra: rows(192, 8), page: 25, moreHint: true };
+  const state = { data: { queued_found_online: rows(8), queued_found_online_meta: { total: 900, page_limit: 8 } }, extra: rows(242, 8), fetchedPage: 5, moreHint: true };
   const view = context.view(state);
-  assert.equal(view.rows.length, 200);
-  assert.equal(view.hasMore, false);
-  assert.match(view.label, /search the review queue/);
-  const below = context.view({ ...state, extra: rows(40, 8) });
-  assert.equal(below.hasMore, true);
-  assert.match(slice('async function staffLoadMoreFoundOnline', 'function renderStaffSourceIntake'), /rows\.length >= STAFF_FOUND_ONLINE_MAX_ROWS\) return;/);
+  assert.equal(view.rows.length, 250);
+  assert.equal(view.hasMore, true);
+  assert.equal(view.label, 'Found online · Showing 250 of 900');
+  assert.doesNotMatch(view.label, /search the review queue/);
+  const loader = slice('async function staffLoadMoreFoundOnline', 'let staffFoundOnlineSearchTimer');
+  assert.match(loader, /segment=found_online&page=\$\{nextPage\}&limit=\$\{limit\}/);
+  assert.match(loader, /fetchedPage/);
+  assert.doesNotMatch(loader, /STAFF_FOUND_ONLINE_MAX_ROWS/);
 });
 
 test('object URLs are released', () => {
@@ -191,9 +195,9 @@ test('the direct review page loads only that listing\'s review payload', () => {
   const calls = direct.match(/apiRequest\(`[^`]+`/g) || [];
   assert.deepEqual(calls, ['apiRequest(`/api/staff/properties/${encodeURIComponent(id)}/preview`'], 'one request: the listing preview');
   assert.doesNotMatch(direct, /renderStaffDashboard|hydrateStaffDashboardPanels|\/api\/staff\/dashboard/);
-  assert.match(direct, /renderStaffListingPreviewModal\(response\?\.data \|\| \{\}\)/, 'same Preview & edit screen: save, approve, reject, photo upload');
+  assert.match(direct, /const data = response\?\.data \|\| \{\};[\s\S]*renderStaffListingPreviewModal\(data, \{ allowSwitch: true \}\)/, 'same Preview & edit screen: save, approve, reject, photo upload');
   const after = slice('function queueStaffDashboardRefreshAfterModeration', 'async function staffApprovePreviewListing');
-  assert.match(after, /if \(currentPage === "staff-review"\) \{[\s\S]*staffReloadDirectReview\(reviewId\)/, 'after a decision it reloads just this listing');
+  assert.match(after, /currentPage === "staff-review"[\s\S]*staffReloadDirectReview\(reviewId\)/, 'after a decision it reloads just this listing');
   assert.match(APP, /const directReviewNext = \["moderator", "admin"\]\.includes\(resolvedUser\.portal_mode\) \? directReviewNextPathAfterAuth\(\) : "";/, 'signing in returns to the listing');
   assert.match(APP, /normalizedNext === "\/staff-dashboard" \|\| normalizedNext\.startsWith\("\/staff-dashboard\/"\)\) return "moderator";/, 'the login page opens the staff sign-in');
   const build = fs.readFileSync(path.join(__dirname, '../scripts/build-js.js'), 'utf8');

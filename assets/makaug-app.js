@@ -15888,10 +15888,24 @@ function clearStaffDashboardPanelRetry() {
 // broker list. Rows are de-duplicated by id within and across the two lists.
 const STAFF_REVIEW_QUEUE_PAGE_LIMIT = 50;
 const staffReviewQueueState = {
-  main: { rows: [], total: null, page: 0, loading: false },
-  broker: { rows: [], total: null, page: 0, loading: false },
-  search: { term: "", rows: [], total: null, page: 0, loading: false, statusScope: "pending", moreHint: false }
+  main: { rows: [], total: null, page: 0, loading: false, epoch: 0 },
+  broker: { rows: [], total: null, page: 0, loading: false, epoch: 0 },
+  search: { term: "", rows: [], total: null, page: 0, loading: false, statusScope: "pending", moreHint: false, epoch: 0 }
 };
+
+// One list's footer. "Showing 100 of 58" happened when a panel painted its
+// own rows against another panel's total (the header count, or a segment
+// that had just been replaced). A total smaller than the rows on screen is
+// not this list's total, so it is not printed.
+function staffQueueFooterModel(shown, total, hasMoreHint) {
+  const n = Math.max(0, Number(shown) || 0);
+  const raw = Number(total);
+  const known = Number.isFinite(raw) && raw >= 0;
+  if (!known || raw < n) {
+    return { shown: n, total: null, label: `Showing ${n}`, hasMore: Boolean(hasMoreHint), foreignTotal: known && raw < n };
+  }
+  return { shown: n, total: raw, label: `Showing ${n} of ${raw}`, hasMore: n < raw, foreignTotal: false };
+}
 
 function staffDedupeRows(rows = [], excludeIds = new Set()) {
   const seen = new Set();
@@ -15907,13 +15921,14 @@ function staffDedupeRows(rows = [], excludeIds = new Set()) {
 
 function staffReviewQueueFooterHtml(segment, shown, total) {
   const state = staffReviewQueueState[segment] || {};
-  const totalKnown = total !== null && total !== undefined && total !== "" && Number.isFinite(Number(total));
-  const more = state.hasMore === true || (totalKnown ? shown < Number(total) : Boolean(state.moreHint));
+  const waitingOnSegmentTotal = state.total == null && Number(state.expectedCount) > shown;
+  const footer = staffQueueFooterModel(shown, total, state.hasMore === true || state.moreHint === true || waitingOnSegmentTotal);
   const listName = segment === "broker" ? "Broker review" : (segment === "search" && state.term ? `Matching ${state.term}` : "Pending review");
+  const totalLabel = footer.total !== null ? ` of ${staffNumber(footer.total)}` : "";
   return `
     <div class="flex items-center justify-between gap-3 flex-wrap rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600" data-staff-queue-footer="${adminAttr(segment)}">
-      <span>${adminEscape(listName)} · Showing ${staffNumber(shown)}${totalKnown ? ` of ${staffNumber(total)}` : ""} · oldest first</span>
-      ${more ? `<button type="button" onclick="staffLoadMoreReviewQueue('${adminAttr(segment)}')" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-black text-slate-800 hover:bg-slate-100">${staffReviewQueueState[segment]?.loading ? "Loading…" : "Load more"}</button>` : ""}
+      <span>${adminEscape(listName)} · Showing ${staffNumber(footer.shown)}${totalLabel} · oldest first</span>
+      ${footer.hasMore ? `<button type="button" onclick="staffLoadMoreReviewQueue('${adminAttr(segment)}')" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-black text-slate-800 hover:bg-slate-100">${staffReviewQueueState[segment]?.loading ? "Loading…" : "Load more"}</button>` : ""}
     </div>`;
 }
 
@@ -15965,11 +15980,20 @@ function staffPaintReviewQueue(segment) {
 
 function staffSetReviewQueue(segment, rows = [], meta = {}) {
   const state = staffReviewQueueState[segment];
+  // Replacing the list invalidates a Load more that was already in flight,
+  // so its rows and total cannot land on this new list.
+  state.epoch = (Number(state.epoch) || 0) + 1;
   state.rows = staffDedupeRows(rows);
   state.page = Number(meta?.page) > 0 ? Number(meta.page) : 0;
   state.hasMore = meta?.has_more === true;
   state.filling = false;
-  const total = meta?.total ?? meta?.expected_count;
+  // expected_count is the header's pending figure (brokers and, on the desk,
+  // found-online rows included). It can start paging, but it is not this
+  // list's footer total. Only the review-queue response for this same
+  // segment may set that.
+  const expected = meta?.expected_count;
+  state.expectedCount = expected === null || expected === undefined || expected === "" || !Number.isFinite(Number(expected)) ? null : Number(expected);
+  const total = meta?.total;
   state.total = total === null || total === undefined || total === "" || !Number.isFinite(Number(total)) ? null : Number(total);
 }
 
@@ -16115,6 +16139,7 @@ window.staffLoadAgentReviewQueue = staffLoadAgentReviewQueue;
 async function staffLoadMoreReviewQueue(segment = "main", searchSeq = 0) {
   const state = staffReviewQueueState[segment];
   if (!state || state.loading) return;
+  const epoch = Number(state.epoch) || 0;
   state.loading = true;
   staffPaintReviewQueue(segment);
   let openId = "";
@@ -16127,6 +16152,7 @@ async function staffLoadMoreReviewQueue(segment = "main", searchSeq = 0) {
       "Review queue"
     );
     if (segment === "search" && searchSeq && searchSeq !== staffReviewQueueSearchSeq) return;
+    if ((Number(state.epoch) || 0) !== epoch) return;
     const rows = Array.isArray(res?.data) ? res.data : [];
     state.rows = staffDedupeRows([...state.rows, ...rows]);
     state.page = nextPage;
@@ -16144,14 +16170,15 @@ async function staffLoadMoreReviewQueue(segment = "main", searchSeq = 0) {
     }
   } catch (error) {
     if (segment === "search" && searchSeq && searchSeq !== staffReviewQueueSearchSeq) return;
+    if ((Number(state.epoch) || 0) !== epoch) return;
     toast(`Could not load more listings: ${error.message || "request failed"}`);
   } finally {
-    if (!(segment === "search" && searchSeq && searchSeq !== staffReviewQueueSearchSeq)) {
+    if ((Number(state.epoch) || 0) === epoch && !(segment === "search" && searchSeq && searchSeq !== staffReviewQueueSearchSeq)) {
       state.loading = false;
       staffPaintReviewQueue(segment);
     }
   }
-  if (openId && (!searchSeq || searchSeq === staffReviewQueueSearchSeq)) openStaffListingPreview(openId);
+  if (openId && (!searchSeq || searchSeq === staffReviewQueueSearchSeq) && (Number(state.epoch) || 0) === epoch) openStaffListingPreview(openId);
 }
 
 function staffReviewQueueSettleCount(state) {
@@ -16166,7 +16193,9 @@ function staffReviewQueueHasMoreRows(segment) {
   if (!state || !state.rows.length) return false;
   if (state.hasMore === true) return true;
   const total = Number(state.total);
-  return Number.isFinite(total) && state.rows.length < total;
+  if (Number.isFinite(total)) return state.rows.length < total;
+  const expected = Number(state.expectedCount);
+  return Number.isFinite(expected) && state.rows.length < expected;
 }
 
 // The panel paints the first slice. Keep paging until that slice is the whole
@@ -16175,13 +16204,15 @@ async function staffFillReviewQueue(segment) {
   const state = staffReviewQueueState[segment];
   if (!state || state.filling || state.loading) return;
   if (!staffReviewQueueHasMoreRows(segment)) return;
+  const epoch = Number(state.epoch) || 0;
   state.filling = true;
   try {
     let guard = 0;
-    while (guard < 6 && staffReviewQueueHasMoreRows(segment)) {
+    while (guard < 6 && (Number(state.epoch) || 0) === epoch && staffReviewQueueHasMoreRows(segment)) {
       guard += 1;
       const before = state.rows.length;
       await staffLoadMoreReviewQueue(segment);
+      if ((Number(state.epoch) || 0) !== epoch) return;
       if (state.rows.length <= before) {
         // Fisher, Nov 2026: "Showing 12 of 31" stayed with a Load more that
         // returned nothing new. Nothing more is reachable: the count is what
@@ -16191,9 +16222,11 @@ async function staffFillReviewQueue(segment) {
       }
     }
   } finally {
-    state.filling = false;
-    state.loading = false;
-    staffPaintReviewQueue(segment === "search" && !state.term ? "main" : segment);
+    if ((Number(state.epoch) || 0) === epoch) {
+      state.filling = false;
+      state.loading = false;
+      staffPaintReviewQueue(segment === "search" && !state.term ? "main" : segment);
+    }
   }
 }
 
@@ -16498,11 +16531,13 @@ function renderStaffWhatsapp(rows = [], whatsapp = {}) {
 
 // The shared found-online queue: the first page comes with the dashboard
 // panels; "Load more" pages /api/staff/properties/review-queue?segment=found_online
-// (oldest first, the same set and order), so every row is reachable and the
-// count says how many there are. It used to stop silently at 8.
-let staffFoundOnlineState = { data: {}, extra: [], page: 1, loading: false, moreHint: false };
-// "Load more" stops here; past this the review queue search is the way in.
-const STAFF_FOUND_ONLINE_MAX_ROWS = 200;
+// (oldest first, the same set and order). The review-queue limit cap is 100;
+// this asks for 50. There is no row cap: moderators page until that endpoint
+// has nothing left. listTotal is only the found-online count, never the
+// agent queue's total.
+let staffFoundOnlineEpoch = 0;
+let staffFoundOnlineState = { data: {}, extra: [], page: 0, fetchedPage: 0, loading: false, moreHint: false, listTotal: null, epoch: 0, search: { term: "", rows: [], total: null, page: 0, loading: false, moreHint: false } };
+const STAFF_FOUND_ONLINE_PAGE_LIMIT = 50;
 
 function staffFoundOnlineCardHtml(row = {}) {
   return `
@@ -16517,29 +16552,60 @@ function staffFoundOnlineCardHtml(row = {}) {
     `;
 }
 
+function staffFoundOnlineOwnTotal(state = staffFoundOnlineState) {
+  const meta = state?.data?.queued_found_online_meta || null;
+  const fromList = Number(state?.listTotal);
+  if (Number.isFinite(fromList) && fromList >= 0) return fromList;
+  const fromMeta = Number(meta?.total);
+  return meta && meta.total !== null && meta.total !== undefined && Number.isFinite(fromMeta) ? fromMeta : null;
+}
+
 function staffFoundOnlineQueueView(state = staffFoundOnlineState) {
   const data = state?.data || {};
   const seen = new Set();
   const rows = [...(Array.isArray(data.queued_found_online) ? data.queued_found_online : []), ...(state?.extra || [])]
     .filter((row) => row && row.id && !seen.has(String(row.id)) && seen.add(String(row.id)));
   const meta = data.queued_found_online_meta || null;
-  const total = meta && meta.total !== null && meta.total !== undefined && Number.isFinite(Number(meta.total)) ? Number(meta.total) : null;
-  const capped = rows.length >= STAFF_FOUND_ONLINE_MAX_ROWS;
-  const baseLabel = !meta || !rows.length ? "" : (total === null ? `Found online · Showing ${rows.length}` : `Found online · Showing ${rows.length} of ${total}`);
-  const label = baseLabel && capped ? `${baseLabel} (search the review queue for the rest)` : baseLabel;
-  const hasMore = !capped && Boolean(meta) && (total === null ? Boolean(state?.page === 1 ? meta.has_more : state?.moreHint) : rows.length < total);
-  return { rows, label, hasMore, limit: Number(meta?.page_limit) || 8 };
+  const total = staffFoundOnlineOwnTotal(state);
+  const footer = staffQueueFooterModel(rows.length, total, state?.moreHint === true || (state?.fetchedPage ? false : meta?.has_more === true));
+  const countLabel = footer.total !== null ? `${footer.shown} of ${footer.total}` : String(footer.shown);
+  const label = !rows.length ? "" : `Found online · Showing ${countLabel}`;
+  const hasMore = Boolean(meta || total !== null) && footer.hasMore && rows.length > 0;
+  return { rows, label, hasMore, limit: Number(meta?.page_limit) || 8, total: footer.total };
+}
+
+function staffFoundOnlineSearchView() {
+  const search = staffFoundOnlineState.search || { term: "", rows: [], total: null, loading: false, moreHint: false };
+  const rows = staffDedupeRows(search.rows);
+  const footer = staffQueueFooterModel(rows.length, search.total, search.moreHint === true);
+  const label = search.term ? `Found online · Matching ${search.term} · ${footer.label}` : "";
+  return { rows, label, hasMore: Boolean(search.term) && footer.hasMore, loading: search.loading === true, term: search.term || "" };
 }
 
 function renderStaffFoundOnlineQueue() {
   const queue = document.getElementById("staff-source-queue-list");
   if (!queue) return;
+  const searching = staffFoundOnlineSearchView();
+  if (searching.term) {
+    const cards = searching.loading && !searching.rows.length
+      ? staffEmpty(`Searching for “${adminEscape(searching.term)}”…`)
+      : (searching.rows.length
+        ? `<div class="text-xs font-black text-slate-700" data-staff-found-online-search-results>Search results for “${adminEscape(searching.term)}”</div>` + searching.rows.map(staffFoundOnlineCardHtml).join("")
+        : staffEmpty(`No found-online listing matches “${adminEscape(searching.term)}”.`));
+    const footer = searching.label && searching.rows.length ? `
+      <div class="flex items-center justify-between gap-2 pt-1" data-staff-queue-footer="found_online_search">
+        <span id="staff-source-queue-count" class="text-[11px] font-black text-gray-600">${adminEscape(searching.label)}</span>
+        ${searching.hasMore ? `<button type="button" onclick="staffLoadMoreFoundOnlineSearch()" class="border border-emerald-200 text-emerald-800 hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-black"${searching.loading ? " disabled" : ""}>${searching.loading ? "Loading…" : "Load more"}</button>` : ""}
+      </div>` : "";
+    queue.innerHTML = cards + footer;
+    return;
+  }
   const view = staffFoundOnlineQueueView();
   const cards = view.rows.length
     ? view.rows.map(staffFoundOnlineCardHtml).join("")
     : staffEmpty("No found-online source rows are waiting in this panel.");
   const footer = view.label ? `
-      <div class="flex items-center justify-between gap-2 pt-1">
+      <div class="flex items-center justify-between gap-2 pt-1" data-staff-queue-footer="found_online">
         <span id="staff-source-queue-count" class="text-[11px] font-black text-gray-600">${adminEscape(view.label)}</span>
         ${view.hasMore ? `<button type="button" onclick="staffLoadMoreFoundOnline()" class="border border-emerald-200 text-emerald-800 hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-black"${staffFoundOnlineState.loading ? " disabled" : ""}>${staffFoundOnlineState.loading ? "Loading…" : "Load more"}</button>` : ""}
       </div>` : "";
@@ -16547,62 +16613,172 @@ function renderStaffFoundOnlineQueue() {
 }
 
 async function staffFillFoundOnlineQueue() {
+  if (staffFoundOnlineState.search?.term) return;
   if (staffFoundOnlineState.filling || staffFoundOnlineState.loading) return;
   if (!staffFoundOnlineQueueView().hasMore) return;
+  const epoch = staffFoundOnlineState.epoch;
   staffFoundOnlineState.filling = true;
   try {
     let guard = 0;
-    while (guard < 8 && staffFoundOnlineQueueView().hasMore) {
+    // The first few pages come in on their own. After that, Load more keeps
+    // going. A fixed page count must not hide the rest of a 268-row queue.
+    while (guard < 4 && staffFoundOnlineState.epoch === epoch && staffFoundOnlineQueueView().hasMore) {
       guard += 1;
       const before = staffFoundOnlineQueueView().rows.length;
       await staffLoadMoreFoundOnline();
+      if (staffFoundOnlineState.epoch !== epoch) return;
       if (staffFoundOnlineQueueView().rows.length <= before) {
         staffFoundOnlineSettleCount();
         break;
       }
     }
   } finally {
-    staffFoundOnlineState.filling = false;
-    staffFoundOnlineState.loading = false;
-    renderStaffFoundOnlineQueue();
+    if (staffFoundOnlineState.epoch === epoch) {
+      staffFoundOnlineState.filling = false;
+      staffFoundOnlineState.loading = false;
+      renderStaffFoundOnlineQueue();
+    }
   }
 }
 
 // A page that adds nothing means every reachable row is on screen: show that
 // count and drop "Load more" instead of "Showing 12 of 31" forever.
+// Do not do that when this panel's own total is still larger — that was
+// "Showing 199 of 199" while 268 rows were still pending.
 function staffFoundOnlineSettleCount() {
   const meta = staffFoundOnlineState.data?.queued_found_online_meta;
-  if (!meta) return;
   const shown = staffFoundOnlineQueueView().rows.length;
-  staffFoundOnlineState.data.queued_found_online_meta = { ...meta, total: shown, has_more: false };
+  const own = staffFoundOnlineOwnTotal();
+  if (Number.isFinite(own) && own > shown) {
+    staffFoundOnlineState.moreHint = true;
+    return;
+  }
+  staffFoundOnlineState.listTotal = shown;
+  if (meta) {
+    staffFoundOnlineState.data.queued_found_online_meta = { ...meta, total: shown, has_more: false, segment: "found_online" };
+  }
   staffFoundOnlineState.moreHint = false;
 }
 
 async function staffLoadMoreFoundOnline() {
   if (staffFoundOnlineState.loading) return;
-  if (staffFoundOnlineQueueView().rows.length >= STAFF_FOUND_ONLINE_MAX_ROWS) return;
-  const limit = 50;
-  const shown = staffFoundOnlineQueueView().rows.length;
-  const nextPage = Math.floor(shown / limit) + 1;
+  if (staffFoundOnlineState.search?.term) return;
+  const epoch = staffFoundOnlineState.epoch;
+  const limit = STAFF_FOUND_ONLINE_PAGE_LIMIT;
+  // The panel's first cards are a short prefix, not a page of `limit`.
+  // Counting pages from shown/limit refetched the same page once a duplicate
+  // made the length uneven, and then the queue looked finished.
+  const nextPage = (Number(staffFoundOnlineState.fetchedPage) || 0) + 1;
   staffFoundOnlineState.loading = true;
   renderStaffFoundOnlineQueue();
   try {
     const res = await staffApiRequestWithTimeout(
-      `/api/staff/properties/review-queue?segment=found_online&page=${nextPage}&limit=${limit}&include_total=0`,
+      `/api/staff/properties/review-queue?segment=found_online&page=${nextPage}&limit=${limit}&include_total=1`,
       {},
       STAFF_DASHBOARD_PANEL_TIMEOUT_MS,
       "Found-online queue"
     );
+    if (staffFoundOnlineState.epoch !== epoch) return;
     const rows = Array.isArray(res?.data) ? res.data : [];
     staffFoundOnlineState.extra.push(...rows);
+    staffFoundOnlineState.fetchedPage = nextPage;
     staffFoundOnlineState.page = nextPage;
     staffFoundOnlineState.moreHint = Boolean(res?.meta?.has_more);
+    const countStatus = res?.count_status || res?.meta?.count_status;
+    const total = res?.pagination?.total ?? res?.meta?.total;
+    if (countStatus !== "not_requested" && Number.isFinite(Number(total))) {
+      staffFoundOnlineState.listTotal = Number(total);
+      const meta = staffFoundOnlineState.data?.queued_found_online_meta || {};
+      if (staffFoundOnlineState.data) {
+        staffFoundOnlineState.data.queued_found_online_meta = { ...meta, total: Number(total), segment: "found_online" };
+      }
+    }
   } catch (error) {
+    if (staffFoundOnlineState.epoch !== epoch) return;
     setTextById("staff-source-monitor-status", "Could not load more found-online rows. Try again in a moment.");
   } finally {
-    staffFoundOnlineState.loading = false;
-    renderStaffFoundOnlineQueue();
+    if (staffFoundOnlineState.epoch === epoch) {
+      staffFoundOnlineState.loading = false;
+      renderStaffFoundOnlineQueue();
+    }
   }
+}
+
+let staffFoundOnlineSearchTimer = null;
+let staffFoundOnlineSearchSeq = 0;
+
+function staffFoundOnlineSearchUrl(page, term) {
+  const params = new URLSearchParams({
+    segment: "found_online",
+    page: String(page),
+    limit: String(STAFF_FOUND_ONLINE_PAGE_LIMIT),
+    include_total: "1",
+    search: term
+  });
+  return `/api/staff/properties/review-queue?${params.toString()}`;
+}
+
+async function staffLoadMoreFoundOnlineSearch(seq = 0) {
+  const search = staffFoundOnlineState.search;
+  if (!search || !search.term || search.loading) return;
+  const epoch = staffFoundOnlineState.epoch;
+  search.loading = true;
+  renderStaffFoundOnlineQueue();
+  let openId = "";
+  try {
+    const nextPage = (Number(search.page) || 0) + 1;
+    const res = await staffApiRequestWithTimeout(
+      staffFoundOnlineSearchUrl(nextPage, search.term),
+      {},
+      STAFF_DASHBOARD_PANEL_TIMEOUT_MS,
+      "Found-online search"
+    );
+    if (seq && seq !== staffFoundOnlineSearchSeq) return;
+    if (staffFoundOnlineState.epoch !== epoch) return;
+    const rows = Array.isArray(res?.data) ? res.data : [];
+    search.rows = staffDedupeRows([...(nextPage === 1 ? [] : search.rows), ...rows]);
+    search.page = nextPage;
+    search.moreHint = Boolean(res?.meta?.has_more);
+    const total = res?.pagination?.total ?? res?.meta?.total;
+    const countStatus = res?.count_status || res?.meta?.count_status;
+    if (countStatus === "not_requested") search.total = null;
+    else if (Number.isFinite(Number(total))) search.total = Number(total);
+    if (nextPage === 1 && rows.length === 1 && staffListingDirectLookup(search.term)) {
+      openId = String(rows[0]?.id || "");
+    }
+  } catch (error) {
+    if (seq && seq !== staffFoundOnlineSearchSeq) return;
+    toast(`Could not search found-online listings: ${error.message || "request failed"}`);
+  } finally {
+    if ((!seq || seq === staffFoundOnlineSearchSeq) && staffFoundOnlineState.epoch === epoch) {
+      search.loading = false;
+      renderStaffFoundOnlineQueue();
+    }
+  }
+  if (openId && (!seq || seq === staffFoundOnlineSearchSeq)) openStaffListingPreview(openId);
+}
+
+// Same lookup as Agent properties: a 6-character MK suffix, a full MK ref,
+// or an id prefix opens that listing. A title, area or district stays a list.
+function staffSearchFoundOnlineQueue(value = "") {
+  const term = String(value || "").trim();
+  if (staffFoundOnlineSearchTimer) window.clearTimeout(staffFoundOnlineSearchTimer);
+  const seq = ++staffFoundOnlineSearchSeq;
+  staffFoundOnlineSearchTimer = window.setTimeout(async () => {
+    if (seq !== staffFoundOnlineSearchSeq) return;
+    const search = staffFoundOnlineState.search;
+    search.term = term;
+    search.rows = [];
+    search.total = null;
+    search.page = 0;
+    search.moreHint = false;
+    search.loading = false;
+    if (!term) {
+      renderStaffFoundOnlineQueue();
+      return;
+    }
+    await staffLoadMoreFoundOnlineSearch(seq);
+  }, 300);
 }
 
 function renderStaffSourceIntake(data = {}) {
@@ -16690,7 +16866,34 @@ function renderStaffSourceIntake(data = {}) {
     `).join("") : `<span class="text-[11px] text-gray-500">No search presets returned.</span>`;
   }
   // A new dashboard payload starts the found-online list again from page 1.
-  staffFoundOnlineState = { data, extra: [], page: 1, loading: false, moreHint: false, filling: false };
+  // Keep this panel's own total when the fast payload has no count, and do
+  // not borrow the agent queue's total.
+  staffFoundOnlineEpoch += 1;
+  const previousTotal = staffFoundOnlineOwnTotal();
+  const rawIncoming = data?.queued_found_online_meta?.total;
+  const incomingTotal = rawIncoming === null || rawIncoming === undefined || rawIncoming === "" ? NaN : Number(rawIncoming);
+  const listTotal = Number.isFinite(incomingTotal) && incomingTotal >= 0 ? incomingTotal : previousTotal;
+  staffFoundOnlineState = {
+    data,
+    extra: [],
+    page: 0,
+    fetchedPage: 0,
+    loading: false,
+    moreHint: false,
+    filling: false,
+    listTotal,
+    epoch: staffFoundOnlineEpoch,
+    search: staffFoundOnlineState.search?.term
+      ? staffFoundOnlineState.search
+      : { term: "", rows: [], total: null, page: 0, loading: false, moreHint: false }
+  };
+  if (listTotal !== null && data && typeof data === "object") {
+    data.queued_found_online_meta = {
+      ...(data.queued_found_online_meta || {}),
+      total: listTotal,
+      segment: "found_online"
+    };
+  }
   renderStaffFoundOnlineQueue();
   staffFillFoundOnlineQueue();
   const registry = document.getElementById("staff-source-registry-list");
@@ -17188,15 +17391,23 @@ function applyStaffDashboardData(data = {}, user = {}) {
   const staffMainPendingTotal = Number.isFinite(Number(staffPendingTotal)) && Number.isFinite(Number(staffBrokerPendingTotal))
     ? Math.max(0, Number(staffPendingTotal) - Number(staffBrokerPendingTotal))
     : null;
-  renderStaffBrokerReviewQueue(data.broker_review_queue || [], {
-    ...(data.broker_review_queue_meta || {}),
-    expected_count: staffBrokerPendingTotal
-  });
-  renderStaffReviewQueue(data.review_queue || [], {
-    ...(data.review_queue_meta || {}),
-    expected_count: staffMainPendingTotal
-  });
-  if (staffDeskSplitsFoundOnline()) staffLoadAgentReviewQueue();
+  // On the staff desk the agent page excludes found-online rows. The panel
+  // slice does not, and its expected_count does not either. Painting that
+  // slice here made "Showing 100 of 58": found-online cards stayed in the
+  // list while the footer took the smaller agent-only total. The segment
+  // endpoint is the list.
+  if (staffDeskSplitsFoundOnline()) {
+    staffLoadAgentReviewQueue();
+  } else {
+    renderStaffBrokerReviewQueue(data.broker_review_queue || [], {
+      ...(data.broker_review_queue_meta || {}),
+      expected_count: staffBrokerPendingTotal
+    });
+    renderStaffReviewQueue(data.review_queue || [], {
+      ...(data.review_queue_meta || {}),
+      expected_count: staffMainPendingTotal
+    });
+  }
   renderStaffLeads(data.leads || []);
   renderStaffAdvertising(data.advertising_inquiries || []);
   renderStaffWhatsapp(data.whatsapp_conversations || [], data.summary?.whatsapp || {});
@@ -33789,27 +34000,77 @@ function adminReviewSourceMentionsPlace(source = "", name = "") {
   return new RegExp(`(?:^|[^A-Za-z])${escaped}(?=$|[^A-Za-z])`, "i").test(String(source || ""));
 }
 
+// Everyday words, and a place name that is only the name of a road
+// ("Entebbe road"), are not a location the source supports.
+const ADMIN_REVIEW_PLACE_STOP = new Set([
+  "uganda", "sale", "rent", "rental", "rentals", "land", "bank", "city", "road", "plot", "plots",
+  "house", "home", "acres", "acre", "mailo", "fully", "occupied", "unit", "units", "single", "singles",
+  "double", "doubles", "monthly", "income", "pressure", "found", "online", "property", "post", "source",
+  "original", "titled", "available", "bedroom", "bedrooms", "title"
+]);
+const ADMIN_REVIEW_ROAD_WORDS = new Set(["road", "rd", "street", "avenue", "highway", "bypass", "expressway"]);
+
+function adminReviewSourcePlaceTokens(text = "") {
+  const words = String(text || "").match(/[A-Za-z][A-Za-z'’-]{3,}/g) || [];
+  const out = [];
+  const seen = new Set();
+  for (let i = 0; i < words.length; i += 1) {
+    const key = words[i].toLowerCase();
+    if (ADMIN_REVIEW_PLACE_STOP.has(key) || seen.has(key)) continue;
+    if (ADMIN_REVIEW_ROAD_WORDS.has(String(words[i + 1] || "").toLowerCase())) continue;
+    seen.add(key);
+    out.push(words[i]);
+  }
+  return out.slice(0, 8);
+}
+
+// One catalogue place may be written into the form. Two places (Kawuku and
+// Wamala in the same caption) may only be offered as suggestions.
+function adminReviewLocationAutofillDecision(places = []) {
+  const unique = [];
+  const seen = new Set();
+  for (const place of places) {
+    const name = String(place?.name || place?.neighborhood || "").trim();
+    const id = String(place?.canonical_location_id || place?.key || "").trim();
+    const key = (id || `${place?.district || ""}|${name}`).toLowerCase();
+    if ((!name && !id) || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(place);
+  }
+  if (unique.length === 1 && !unique[0].ambiguous && (unique[0].canonical_location_id || unique[0].key)) {
+    return { apply: unique[0], suggestions: [] };
+  }
+  return { apply: null, suggestions: unique };
+}
+
+async function adminReviewSourceLocationDecision(review = {}) {
+  const tokens = adminReviewSourcePlaceTokens(adminReviewOriginalSourceText(review));
+  const places = [];
+  for (const token of tokens) {
+    const resolution = await resolveUgandaLocationFromSharedRegistry(token);
+    if (resolution.status === "matched" && resolution.location?.canonical_location_id) places.push(resolution.location);
+    else if (resolution.status === "ambiguous" && Array.isArray(resolution.candidates)) places.push(...resolution.candidates);
+  }
+  return adminReviewLocationAutofillDecision(places);
+}
+
 // Chips are places written in the original source. A district or area staff
-// typed into the editor is not a source chip.
+// typed into the editor is not a source chip. More than one place is not a
+// chip either: the form must not pick the first one.
 function adminReviewDetectedLocation(text = "", review = {}) {
   const source = adminReviewOriginalSourceText(review);
   if (!String(source || "").trim()) return { area: "", district: "" };
-  const district = DISTRICTS.find((item) => adminReviewSourceMentionsPlace(source, item)) || "";
-  const tokens = String(source).match(/[A-Za-z][A-Za-z'’-]{2,}/g) || [];
-  let area = "";
-  const seen = new Set();
-  for (const token of tokens) {
-    const key = token.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (district && key === district.toLowerCase()) continue;
-    const found = findLpCanonicalAreaOption(token, district);
+  const names = [];
+  for (const token of adminReviewSourcePlaceTokens(source)) {
+    const found = findLpCanonicalAreaOption(token);
     if (!found?.neighborhood) continue;
-    if (adminReviewPlaceEqualsDistrict(found.neighborhood, found.district || district)) continue;
-    area = found.neighborhood;
-    break;
+    if (adminReviewPlaceEqualsDistrict(found.neighborhood, found.district)) continue;
+    const key = `${found.district}|${found.neighborhood}`.toLowerCase();
+    if (names.some((item) => `${item.district}|${item.neighborhood}`.toLowerCase() === key)) continue;
+    names.push(found);
   }
-  return { area, district };
+  if (names.length !== 1) return { area: "", district: "" };
+  return { area: names[0].neighborhood, district: names[0].district || "" };
 }
 
 function adminReviewPropertyTypeFromText(text = "") {
@@ -35209,31 +35470,32 @@ async function adminReviewAutoPopulateLocationFromSource(review = {}) {
   // Staff already saved this location, or they picked a registry result.
   // Do not replace that with "Location not recognised", and clear a warning
   // that was already on screen.
-  if (extra.staff_location_reviewed_at || adminReviewRecognisedLocationSelected(review)) return adminReviewClearStaleUnrecognisedLocation();
-  const facts = adminExtractReviewFacts(review);
-  const query = uniqueTextParts([
-    facts.area,
-    extra.source_area,
-    extra.location_town
-  ]).filter((part) => part && !adminReviewPlaceEqualsDistrict(part, facts.district)).join(", ");
-  const searchEl = document.getElementById("admin-review-address-search-edit");
-  if (searchEl && !searchEl.value.trim() && query) searchEl.value = query;
-  const resolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([
-    extra.location_review_proposed_area || facts.area,
-    extra.location_review_proposed_district || ""
-  ]).join(", "));
+  if (extra.staff_location_reviewed_at) return adminReviewClearStaleUnrecognisedLocation();
+  if (adminReviewRecognisedLocationSelected(review)) return adminReviewClearStaleUnrecognisedLocation();
+  // A nearest-pin guess and a caption that names two places used to write
+  // Wakiso / Kawuku into a listing whose stored area was blank (MK-…F96C7C
+  // also says Wamala). Only one place the source actually names is filled in.
+  // Anything else stays blank, with suggestions the moderator can choose.
+  const decision = await adminReviewSourceLocationDecision(review);
   if (seq !== adminReviewLocationAutofillSeq) return;
   if (String(adminActiveReview?.id || "") !== String(review.id || "")) return;
   if (adminReviewRecognisedLocationSelected(review)) return adminReviewClearStaleUnrecognisedLocation();
-  if (resolution.status === "matched") {
-    applyAdminReviewCanonicalLocation(resolution.location);
-    adminReviewSetAddressSearchStatus("Stored area resolved through the shared canonical registry. Confirm the pin before approval.", "green");
-  } else if (adminReviewShouldClearUnmatchedLocation(adminReviewCurrentLocationFields())) {
-    clearAdminReviewCanonicalLocation();
-    adminReviewSetAddressSearchStatus("Location not recognised — pin set but region/district/area could NOT be auto-filled.", "amber");
-  } else {
-    adminReviewCanonicalLocationResolution = null;
-    adminReviewSetAddressSearchStatus("Location not recognised — pin set but region/district/area could NOT be auto-filled.", "amber");
+  if (!decision.apply) {
+    if (decision.suggestions.length) {
+      adminReviewRenderCanonicalSuggestions(decision.suggestions);
+      adminReviewSetAddressSearchStatus("The source does not name one place, so district and area were left blank. Choose a suggestion if one of them is right.", "amber");
+    } else if (adminReviewShouldClearUnmatchedLocation(adminReviewCurrentLocationFields())) {
+      adminReviewSetAddressSearchStatus("Location not recognised — pin set but region/district/area could NOT be auto-filled.", "amber");
+    }
+    return;
+  }
+  if (decision.apply.resolved_by === "nearest_area") {
+    adminReviewRenderCanonicalSuggestions([decision.apply]);
+    adminReviewSetAddressSearchStatus("The nearest place to the pin is a suggestion only. District and area were left blank.", "amber");
+    return;
+  }
+  if (applyAdminReviewCanonicalLocation(decision.apply)) {
+    adminReviewSetAddressSearchStatus("The source names this place. Confirm the pin before approval.", "green");
   }
   adminReviewScheduleLocationSync();
 }
@@ -36037,24 +36299,30 @@ async function adminApplyExtractedReviewFacts() {
   adminSetReviewEditValue("admin-review-listing-type-edit", facts.listing_type || adminActiveReview.listing_type || "");
   adminReviewOnListingTypeChange();
   adminSetReviewEditValue("admin-review-lister-phone-edit", facts.contact_phone || adminActiveReview.lister_phone || "");
-  if (locationProposal && !locationProposal.district_only) {
+  const locationDecision = await adminReviewSourceLocationDecision(adminActiveReview);
+  const proposalMatchesSource = locationProposal
+    && !locationProposal.district_only
+    && locationDecision.apply
+    && String(locationDecision.apply.canonical_location_id || locationDecision.apply.key || "") === String(locationProposal.canonical_location_id || "");
+  if (proposalMatchesSource) {
     applyAdminReviewCanonicalLocation({
+      ...locationDecision.apply,
       key: locationProposal.canonical_location_id,
+      canonical_location_id: locationProposal.canonical_location_id,
       level: locationProposal.canonical_location_level,
       name: locationProposal.area,
       town: locationProposal.city,
       district: locationProposal.district,
       region: locationProposal.region,
       lat: locationProposal.latitude,
-      lng: locationProposal.longitude
+      lng: locationProposal.longitude,
+      match: "exact_alias",
+      confidence: 1
     });
-  } else {
-    const locationResolution = await resolveUgandaLocationFromSharedRegistry(uniqueTextParts([
-      facts.area || adminActiveReview.area,
-      facts.district || adminActiveReview.district
-    ]).join(", "));
-    if (locationResolution.status === "matched") applyAdminReviewCanonicalLocation(locationResolution.location);
-    else clearAdminReviewCanonicalLocation();
+  } else if (locationDecision.apply && locationDecision.apply.resolved_by !== "nearest_area") {
+    applyAdminReviewCanonicalLocation(locationDecision.apply);
+  } else if (locationDecision.suggestions.length) {
+    adminReviewRenderCanonicalSuggestions(locationDecision.suggestions);
   }
   adminSetReviewEditValue("admin-review-property-type-edit", facts.property_type || adminActiveReview.property_type || "");
   adminSetReviewEditValue("admin-review-transaction-type-edit", commercialTransactionForProperty({ ...adminActiveReview, ...facts }));
