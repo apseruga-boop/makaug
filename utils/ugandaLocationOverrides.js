@@ -270,6 +270,14 @@ const CURATED_UGANDA_LOCATION_OVERRIDES = [
     source: 'makaug_verified_location_override_20261010'
   },
   {
+    // 28 Nov 2026: "Flat house for sale 330m kasangat jokorelera" came in
+    // from staff and was held for "exact area and district". Kasangati is
+    // often written without its last letter.
+    name: 'Kasangati', district: 'Wakiso', town: 'Kasangati', level: 'town',
+    aliases: ['Kasangati', 'Kasangat', 'Kasangati Town', 'Kasangati Town Council'],
+    source: 'makaug_verified_location_override_20261128'
+  },
+  {
     // UBOS files Masooli as a Kasangati Town Council ward.
     name: 'Masooli', district: 'Wakiso', town: 'Kasangati', level: 'area',
     aliases: ['Masooli', 'Masoli'],

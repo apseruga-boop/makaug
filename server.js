@@ -71,6 +71,7 @@ const { startLeadDeskScheduler } = require('./services/leadDeskService');
 const { startAgentBookingScheduler } = require('./services/agentBookingService');
 const agentBookingRoutes = require('./routes/agentBookings');
 const { startVideoStillScheduler } = require('./services/videoStillScheduler');
+const { startTikTokCoverScheduler } = require('./services/tiktokCoverScheduler');
 const { startGreetingNameCache } = require('./services/agentNameService');
 const { startBillingScheduler } = require('./services/billingOpsService');
 const { startDailySourceMonitorScheduler } = require('./services/dailySourceMonitorScheduler');
@@ -2941,6 +2942,7 @@ async function start() {
     startLeadDeskScheduler(db);
     startAgentBookingScheduler(db);
     startVideoStillScheduler(db);
+    startTikTokCoverScheduler(db);
     const whatsappBatchDelay = staggeredBootDelay('whatsapp_batch_summary');
     const whatsappMediaDelay = staggeredBootDelay('whatsapp_media_retry');
     setTimeout(() => whatsappRoutes.startEmployeeBatchSummarySweeper?.(), whatsappBatchDelay).unref?.();

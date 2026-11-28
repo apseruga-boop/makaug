@@ -102,9 +102,12 @@ test('a different search is left alone', () => {
   assert.strictEqual(bigger.searchType, 'rent');
   assert.strictEqual(bigger.maxBudgetUgx, undefined);
   assert.strictEqual(bigger.propertyType, undefined);
-  // Six hours on, it is a new conversation (two was too short, 23 Nov 2026).
+  // Six hours on, it is a new conversation (two was too short, 23 Nov 2026),
+  // but renting stays renting for the day (28 Nov 2026, whatsapp-chats-1128):
+  // the place, the budget and the kind of home are not carried.
   const late = { area: 'Kiwatule', hasSignal: true };
-  assert.strictEqual(route.continueFromLastSearch(late, renting(minutesAgo(361))), late);
+  assert.deepStrictEqual(route.continueFromLastSearch(late, renting(minutesAgo(361))),
+    { ...late, searchType: 'rent', continuedFromLastSearch: ['type'], hasSignal: true });
   assert.strictEqual(route.continueFromLastSearch(late, {}), late);
 });
 

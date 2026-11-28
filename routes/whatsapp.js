@@ -15605,27 +15605,31 @@ async function sendMetaTextMessage(phone, message) {
 // "To buy", "rent", "for sale", "I want to buy": an answer to rent-or-buy, and nothing else.
 const ONLY_RENT_OR_BUY = /^(?:(?:i\s+)?(?:want|need|would\s+like|am\s+looking|i'?m\s+looking)\s+(?:to\s+)?)?(?:to\s+)?(?:buy|buying|purchase|rent|renting|let|lease|for\s+(?:sale|rent)|on\s+sale)(?:\s+(?:it|one|please|pls|plz))?[\s.!]*$/i;
 
+// Plurals as well (28 Nov 2026): "I'm looking for houses in kireka" was
+// read as no kind of home at all, and a renter was shown land for sale;
+// "I mean rentals" was not read as renting. "Homes" stays any home: "homes
+// to rent" is flats and rooms as much as houses.
 const SEARCH_TYPE_KEYWORDS = [
-  { type: 'student', re: /\b(student|students|hostel|dorm|dormitory|campus|university)\b/i },
-  { type: 'commercial', re: /\b(commercial|office|retail|warehouse|shop|business premises)\b/i },
+  { type: 'student', re: /\b(student|students|hostels?|dorms?|dormitory|dormitories|campus|university)\b/i },
+  { type: 'commercial', re: /\b(commercial|offices?|retail|warehouses?|shops?|business premises)\b/i },
   { type: 'land', re: /\b(land|plot|plots|acre|acres|farm land|agricultural)\b/i },
-  { type: 'rent', re: /\b(rent|rental|to rent|monthly|per month|a month|\/month|lease)\b/i },
+  { type: 'rent', re: /\b(rent|rentals?|to rent|monthly|per month|a month|\/month|lease)\b/i },
   { type: 'sale', re: /\b(buy|buying|sale|for sale|purchase|own)\b/i }
 ];
 
 const PROPERTY_TYPE_KEYWORDS = [
-  { value: 'house', re: /\b(house|home)\b/i },
-  { value: 'villa', re: /\b(villa)\b/i },
-  { value: 'apartment', re: /\b(apartment|flat)\b/i },
-  { value: 'townhouse', re: /\b(townhouse)\b/i },
-  { value: 'bungalow', re: /\b(bungalow)\b/i },
+  { value: 'house', re: /\b(houses?|home)\b/i },
+  { value: 'villa', re: /\b(villas?)\b/i },
+  { value: 'apartment', re: /\b(apartments?|flats?)\b/i },
+  { value: 'townhouse', re: /\b(townhouses?)\b/i },
+  { value: 'bungalow', re: /\b(bungalows?)\b/i },
   { value: 'single room', re: /\b(single\s+rooms?|bed[-\s]?sitters?|one\s+room)\b/i },
-  { value: 'studio', re: /\b(studio)\b/i },
-  { value: 'duplex', re: /\b(duplex)\b/i },
-  { value: 'hostel', re: /\b(hostel|dorm|dormitory)\b/i },
-  { value: 'office', re: /\b(office)\b/i },
-  { value: 'warehouse', re: /\b(warehouse)\b/i },
-  { value: 'retail shop', re: /\b(retail|shop|storefront)\b/i }
+  { value: 'studio', re: /\b(studios?)\b/i },
+  { value: 'duplex', re: /\b(duplex|duplexes)\b/i },
+  { value: 'hostel', re: /\b(hostels?|dorms?|dormitory|dormitories)\b/i },
+  { value: 'office', re: /\b(offices?)\b/i },
+  { value: 'warehouse', re: /\b(warehouses?)\b/i },
+  { value: 'retail shop', re: /\b(retail|shops?|storefronts?)\b/i }
 ];
 
 const WORD_NUMBERS = {
@@ -16073,8 +16077,8 @@ function parseSearchType(text) {
   // Natural phrases like "land for sale" contain sale/rent words, but the
   // category intent is land. Check category-specific nouns before exact maps.
   if (/\b(land|plot|plots|acre|acres|farm land|agricultural)\b/i.test(clean)) return 'land';
-  if (/\b(commercial|office|retail|warehouse|shop|business premises)\b/i.test(clean)) return 'commercial';
-  if (/\b(student|students|hostel|dorm|dormitory|campus|university)\b/i.test(clean)) return 'student';
+  if (/\b(commercial|offices?|retail|warehouses?|shops?|business premises)\b/i.test(clean)) return 'commercial';
+  if (/\b(student|students|hostels?|dorms?|dormitory|dormitories|campus|university)\b/i.test(clean)) return 'student';
   const mapped = mapSearchTypeInput(clean);
   if (mapped) return mapped;
   // "Looking for rental houses to buy" (27 Nov 2026, 06:59 in Kampala) was
@@ -22277,6 +22281,26 @@ function recentSearchBrief(sessionData = {}, now = Date.now()) {
   return brief;
 }
 
+/*
+ * Renting stays renting for the day (28 Nov 2026). A renter looked at single
+ * rooms in Kireka at half past one in the morning and came back at ten with
+ * "I'm looking for houses in kireka": the six hours had passed, and he was
+ * shown land for sale. Past the six hours only the market goes on, to rent or
+ * to buy, and only for a day; the place, the budget and the kind of home are
+ * said again.
+ */
+const LAST_SEARCH_MARKET_CARRIES_MS = 24 * 60 * 60 * 1000;
+
+/** 'rent' or 'sale' from a search earlier today, past the six hours, or ''. */
+function marketFromEarlierToday(sessionData = {}, now = Date.now()) {
+  const brief = sessionData && typeof sessionData === 'object' ? sessionData.last_search_brief : null;
+  if (!brief || typeof brief !== 'object') return '';
+  const at = Date.parse(brief.at || '');
+  if (!Number.isFinite(at) || at - now > 60000 || now - at > LAST_SEARCH_MARKET_CARRIES_MS) return '';
+  const type = normalizeListingType(brief.search_type || 'any');
+  return ['rent', 'sale'].includes(type) ? type : '';
+}
+
 /**
  * This search with the gaps filled from the last one: a new area keeps the
  * budget and the kind of home, a new budget keeps the area. Renting after
@@ -22286,6 +22310,10 @@ function recentSearchBrief(sessionData = {}, now = Date.now()) {
  */
 function continueFromLastSearch(filters = {}, sessionData = {}, { keepArea = true, now = Date.now() } = {}) {
   const brief = recentSearchBrief(sessionData, now);
+  if (!brief && filters && typeof filters === 'object' && normalizeListingType(filters.searchType || 'any') === 'any') {
+    const market = marketFromEarlierToday(sessionData, now);
+    if (market) return { ...filters, searchType: market, continuedFromLastSearch: ['type'], hasSignal: true };
+  }
   if (!brief || !filters || typeof filters !== 'object') return filters;
   const lastType = normalizeListingType(brief.search_type || 'any');
   const newType = normalizeListingType(filters.searchType || 'any');
@@ -27932,7 +27960,11 @@ async function processInboundRuntimeUnlocked({
   if (!effectiveMediaUrl && !inboundPhotoCandidates.length && replyPlaybook.looksLikeAutoReply(effectiveBody)
     && !isStaffIntakeNumber({ phone, session: sessionForMessage })) {
     const [lastSent] = await recentOutboundTo(phone, { days: 1, limit: 1 });
-    if (lastSent && (Date.now() - new Date(lastSent.created_at).getTime()) / 1000 <= replyPlaybook.AUTO_REPLY_WINDOW_SECONDS) {
+    // An away message comes when their phone does, hours later sometimes (27 Nov 2026).
+    const window = replyPlaybook.looksLikeAwayMessage(effectiveBody)
+      ? replyPlaybook.AWAY_MESSAGE_WINDOW_SECONDS
+      : replyPlaybook.AUTO_REPLY_WINDOW_SECONDS;
+    if (lastSent && (Date.now() - new Date(lastSent.created_at).getTime()) / 1000 <= window) {
       logger.info(`WhatsApp auto-reply from …${String(phone).slice(-3)} left unanswered`);
       return { message: '', nextStep: sessionStep };
     }
