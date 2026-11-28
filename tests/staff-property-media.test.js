@@ -49,7 +49,7 @@ test('image approval gate defaults to blocked and records an explicit human over
 
 test('photo controls render every image and preserve a restore action', () => {
   const source = fs.readFileSync(require.resolve('../assets/makaug-app.js'), 'utf8');
-  const start = source.indexOf('function staffPreviewImagesHtml(');
+  const start = source.indexOf('function staffPreviewImageOrder(');
   const end = source.indexOf('let staffPhotoChangePending', start);
   const context = { adminAttr: String, adminEscape: String, propertyIdArg: JSON.stringify, staffEmpty: String, adminActiveReview: null };
   vm.runInNewContext(source.slice(start, end), context);
