@@ -119,7 +119,12 @@ test('a search goes on for six hours, not two', () => {
   const later = route.continueFromLastSearch({ searchType: 'any', area: 'Kireka', maxBudgetUgx: 130000 }, brief(4), { now });
   assert.strictEqual(later.searchType, 'rent');
   assert.strictEqual(later.propertyType, 'single room');
-  const nextDay = route.continueFromLastSearch({ searchType: 'any', area: 'Kireka', maxBudgetUgx: 130000 }, brief(7), { now });
+  // Past the six hours only the market goes on, for a day (28 Nov 2026,
+  // whatsapp-chats-1128): renting stays renting; the single room does not.
+  const later7 = route.continueFromLastSearch({ searchType: 'any', area: 'Kireka', maxBudgetUgx: 130000 }, brief(7), { now });
+  assert.strictEqual(later7.searchType, 'rent');
+  assert.ok(!later7.propertyType);
+  const nextDay = route.continueFromLastSearch({ searchType: 'any', area: 'Kireka', maxBudgetUgx: 130000 }, brief(25), { now });
   assert.strictEqual(nextDay.searchType, 'any');
   assert.ok(!nextDay.propertyType);
 });
