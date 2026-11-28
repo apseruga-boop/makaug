@@ -63,6 +63,22 @@ function looksLikeAutoReply(text = '') {
   return AUTO_REPLY_PATTERNS.some((re) => re.test(t));
 }
 
+/*
+ * An away message can come hours after our message, when the phone it was
+ * sent to comes back online. 27 Nov 2026: "Thank you for your message. We're
+ * unavailable right now, but will respond as soon as possible ..." arrived
+ * five hours after ours and was answered with "Welcome back, do you want to
+ * carry on". Said in two or more of the ways only a machine answers, it is
+ * one whenever it comes, within a day of our last message.
+ */
+const AWAY_MESSAGE_WINDOW_SECONDS = 24 * 60 * 60;
+
+function looksLikeAwayMessage(text = '') {
+  const t = normalise(text);
+  if (!t || t.length > 500) return false;
+  return AUTO_REPLY_PATTERNS.filter((re) => re.test(t)).length >= 2;
+}
+
 // --- What a reply is ----------------------------------------------------------
 const POLITE = '(?:SO MUCH|VERY MUCH|A LOT|LOTS|MUCH|SANA|NNYO|KO|BRO|BOSS|SIR|MADAM|DEAR|MAN|BRA|TEAM|MAKAUG|PHILLIP|RONALD|GUYS|FRIEND|BROTHER|SISTER|AGAIN|INDEED|NOTED|RECEIVED|OK|OKAY)';
 const THANKS_FOR = '(?: FOR (?:THE |THIS |THAT |YOUR )?(?:INFO|INFORMATION|UPDATE|MESSAGE|LINK|VIDEO|FILM|BRIEF|NEWS|FEEDBACK|REMINDER|HELP|SUPPORT))?';
@@ -328,6 +344,8 @@ module.exports = {
   AUTO_REPLY_WINDOW_SECONDS,
   normalise,
   looksLikeAutoReply,
+  looksLikeAwayMessage,
+  AWAY_MESSAGE_WINDOW_SECONDS,
   replyKind,
   asksSomething,
   makaugLinkIn,
